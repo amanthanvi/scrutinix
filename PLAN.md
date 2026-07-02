@@ -1,8 +1,8 @@
 # PLAN.md
 
 Living execution plan for Scrutinix. This file reflects the implemented ship
-state plus the 2026-03-23 public-repo polish follow-up after the rename
-cleanup.
+state through the P19 audit remediation pass plus the 2026-07-02 spec
+reconciliation.
 
 ## Status Legend
 
@@ -13,8 +13,8 @@ cleanup.
 
 ## Current Snapshot
 
-- Date: 2026-05-01
-- Execution status: `P18 completed and verified`
+- Date: 2026-07-02
+- Execution status: `P20 completed and verified`
 - Platform:
   - Next.js `16.2.4`
   - React `19.2.x`
@@ -47,6 +47,8 @@ Completed local verification:
 - `npm run build`
 - `npm audit`
 - `npm run lighthouse`
+- `npx --yes prettier@3.8.1 --check --no-config SPEC.md PLAN.md`
+- `git diff --check`
 
 Completed deployment verification:
 
@@ -97,7 +99,7 @@ Observed results:
 - [x] Add Vitest for unit and integration coverage.
 - [x] Add MSW for network-backed integration tests.
 - [x] Add Playwright for E2E smoke and UI regressions.
-- [x] Add Lighthouse CI for performance/accessibility gatekeeping.
+- [x] Add direct Lighthouse automation for performance/accessibility gatekeeping.
 
 ### P04 Define the core domain and config contracts
 
@@ -223,6 +225,12 @@ Observed results:
 - [x] Add a minimal GitHub Actions CI workflow for install, audit, lint, typecheck, unit/integration tests, and build.
 - [x] Run focused checks on each branch, external PR review loops, Vercel previews, and a final merged verification pass.
 
+### P20 Reconcile SPEC with shipped repo state
+
+- [x] Update `SPEC.md` version and freshness metadata against `package.json` and `package-lock.json`.
+- [x] Reflect the minimal GitHub Actions CI workflow separately from local/release verification.
+- [x] Refresh stale SPEC API-event, cache-policy, active-probe, VT-rate-limit, and Lighthouse wording against the live repo.
+
 ## Notes / Discoveries
 
 - 2026-03-06: Next.js `16.1.6` deprecates the `middleware.ts` convention in favor of `proxy.ts`; the rebuilt app follows the new convention while preserving the same request-gating role.
@@ -258,3 +266,4 @@ Observed results:
 - 2026-05-01: Active network probes must validate every resolved address and pin outbound sockets to the validated public address; checking only the hostname or first DNS answer leaves room for private-address redirects and rebinding.
 - 2026-05-01: Cache only complete non-error analysis results; a clean verdict with provider partial failures can otherwise mask upstream outages for the full cache TTL.
 - 2026-05-01: Keeping parallel PRs out of `PLAN.md` avoided artificial merge conflicts; use one consolidated plan update after the code branches land.
+- 2026-07-02: `SPEC.md` must distinguish the minimal GitHub Actions workflow from the broader local/release verification chain; CI currently runs install, audit, lint, typecheck, unit/integration tests, and build only.

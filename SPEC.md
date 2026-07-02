@@ -4,7 +4,7 @@
 
 - Status update: the current implementation is live, verified locally, and deployed to Vercel preview and production.
 - Rationale: the audit confirmed meaningful drift between docs and code, including missing batch API support, no test harness, vulnerable production dependencies, missing metadata assets, and misleading error-to-threat behavior.
-- Toolchain decision: the current implementation targets `next@16.1.6`, `react@19.2.4`, and Node `22.x` for engines and CI so Vercel stays on the Node 22 major line without auto-upgrading to a future major.
+- Toolchain decision: the current implementation targets `next@16.2.4`, `react@19.2.4`, and Node `22.x` for engines and CI so Vercel stays on the Node 22 major line without auto-upgrading to a future major.
 - Linting decision: use ESLint directly from npm scripts; do not use `next lint`.
 - Streaming decision: API responses stream `application/x-ndjson` over `fetch`, not SSE.
 - Framework decision: Next.js 16 deprecates `middleware.ts`, so request gating is implemented in `proxy.ts`.
@@ -21,6 +21,8 @@
 - Testing decision: harness-first is required; Vitest, MSW, Playwright, and Lighthouse land before large feature clusters.
 - Tooling decision:
   - Replace `@lhci/cli` with a direct `lighthouse` + `chrome-launcher` script so the verification path does not carry stale vulnerable transitive dependencies.
+  - Keep GitHub Actions CI intentionally minimal on Node 22: `npm ci`, `npm audit --audit-level=moderate`, lint, typecheck, unit tests, integration tests, and build. Format, E2E smoke, Lighthouse, and deployment checks remain local/release verification unless the workflow is expanded.
+  - Keep npm `overrides` for audited vulnerable transitive leaf packages while upstream parent packages still pin stale ranges.
 - UI decision:
   - Preserve the custom Scrutinix visual identity, but standardize reusable controls on selective shadcn/ui primitives with Tailwind v4 CSS variables, `next-themes`, and `sonner`.
   - Treat the pulled shadcn preset `b1D24VYe` as the actual public-site baseline: neutral `radix-mira` tokens, compact controls, and small radii adapted into Scrutinix-specific layouts instead of a loose visual interpretation.
@@ -32,8 +34,11 @@
   - Favicons and manifest are served from checked-in `public/` assets with explicit metadata links instead of a generated icon route.
 - Verdict decision:
   - Clean verdict confidence must be capped when a primary reputation source such as VirusTotal, Google Safe Browsing, or threat feeds does not complete, even if the remaining signals stay clean.
-- Security decision: ship CSP and related browser hardening headers from `next.config.ts` in production responses.
+- Security decision: ship CSP and related browser hardening headers from `next.config.ts` in production responses; active network probes also validate resolved addresses before connecting and block private, local, reserved, rebinding, IPv4-mapped, and private NAT64 targets.
+- Runtime safety decision: normalize streamed events and persisted history through runtime schemas/sanitizers at the client boundary so stale IndexedDB entries or malformed upstream payloads cannot crash UI reads.
+- Cache decision: cache only complete, non-error, non-partial analysis results; provider partial failures should be visible on the next scan instead of masked for the cache TTL.
 - Verification note: local verification passed for lint, format, typecheck, unit, integration, E2E smoke, production build, audit, and Lighthouse, and Vercel preview/production deployments were verified with `vercel inspect` plus a public production API smoke.
+- Repository CI note: `.github/workflows/ci.yml` currently verifies install, audit, lint, typecheck, unit/integration tests, and build on pull requests, pushes to `main`, and manual dispatch.
 - Documentation decision: `PLAN.md` is the live execution tracker and must stay in sync with this spec.
 
 ## 0) Metadata
@@ -41,8 +46,9 @@
 - **Title:** Scrutinix
 - **Owner (DRI):** Aman Thanvi (@amanthanvi)
 - **Stakeholders:** Aman Thanvi
+- **Package version:** 3.0.0
 - **Status:** Deployed on Vercel preview and production
-- **Last updated:** 2026-03-23
+- **Last updated:** 2026-07-02
 - **Shipping model:** Continuous delivery
 - **Links:** [GitHub](https://github.com/amanthanvi/scrutinix)
 
@@ -69,7 +75,7 @@ and privacy-aware defaults.
 - **Guardrails:**
   - API quota usage stays within free-tier limits under normal usage
   - Zero known security vulnerabilities in dependencies on the default branch
-  - Full test pyramid passing in CI
+  - Minimal GitHub Actions CI passes install, audit, lint, typecheck, unit/integration tests, and build; full local/release verification additionally covers format, E2E smoke, Lighthouse, deployment inspection, and production smoke tests
 - **"Done means":**
   - A user can paste any URL, see a streaming multi-signal threat report within
     10 seconds for first evidence, toggle between summary and full report
@@ -226,7 +232,6 @@ Both personas use the same tool. A **view mode toggle** (Summary / Full Report) 
 interface AnalysisResult {
   id: string; // unique scan ID (nanoid)
   url: string; // normalized input URL
-  timestamp: string; // ISO 8601
   verdict: Verdict; // computed overall verdict
   signals: SignalResults; // per-source results
   threatInfo: ThreatInfo | null; // only populated when verdict != 'safe'
@@ -254,6 +259,16 @@ interface SignalResult<T> {
   error: string | null;
   durationMs: number;
 }
+
+interface ScanMetadata {
+  scanId: string;
+  startedAt: string; // ISO 8601
+  completedAt: string; // ISO 8601
+  cacheHit: boolean;
+  partialFailure: boolean;
+  signalCount: number;
+  durationMs: number;
+}
 ```
 
 **Invariants:**
@@ -261,7 +276,7 @@ interface SignalResult<T> {
 - `id` is unique per scan (not per URL — rescanning generates new ID)
 - `verdict` is always computed from available signals, never null
 - `signals` always contains all 8 keys, even if `status: 'error'`
-- `timestamp` is server-generated, never client-provided
+- `metadata.startedAt` and `metadata.completedAt` are server-generated, never client-provided
 
 ### 4.3 Interfaces / API contracts
 
@@ -269,10 +284,13 @@ interface SignalResult<T> {
 
 ```
 Request:  { url: string }
-Response: ReadableStream<SignalUpdate | FinalResult>
+Response: ReadableStream<AnalyzeEvent>
 
-SignalUpdate: { type: 'signal', name: string, result: SignalResult<T> }
-FinalResult: { type: 'complete', result: AnalysisResult }
+AnalyzeEvent =
+  | { type: 'scan_started', scanId: string, url: string, cached: boolean, startedAt: string }
+  | { type: 'signal_result', name: SignalName, result: SignalResult<unknown> }
+  | { type: 'scan_complete', result: AnalysisResult }
+  | { type: 'scan_error', error: ApiError }
 ```
 
 Implementation note: wire format is newline-delimited JSON (`application/x-ndjson`) with discrete event envelopes such as `scan_started`, `signal_result`, `scan_complete`, and `scan_error`.
@@ -281,24 +299,28 @@ Implementation note: wire format is newline-delimited JSON (`application/x-ndjso
 
 ```
 Request:  { urls: string[] }  // max 10
-Response: ReadableStream<BatchUpdate>
+Response: ReadableStream<BatchEvent>
 
-BatchUpdate: { type: 'url_complete', url: string, result: AnalysisResult }
-           | { type: 'batch_complete', results: AnalysisResult[] }
+BatchEvent =
+  | { type: 'batch_started', total: number, startedAt: string }
+  | { type: 'url_started', index: number, url: string }
+  | { type: 'url_complete', index: number, url: string, result: AnalysisResult }
+  | { type: 'batch_complete', results: AnalysisResult[] }
+  | { type: 'batch_error', error: ApiError }
 ```
 
 Implementation note: batch streams also emit `batch_started`, `url_started`, and `batch_error`, with a concurrency limit of 3 URLs in flight.
 
 - **Error model:** `{ error: { code: string, message: string, retryable: boolean } }`
-- **Idempotency:** Cache-keyed by normalized URL. Same URL within TTL returns cached result (but new scan ID)
+- **Idempotency:** Cache-keyed by normalized URL. Same URL within TTL returns a cached complete result with a new scan ID
 - **Rate limits:** 10 req/min per IP, 50 req/day per IP (enforced in `proxy.ts` before analysis work starts)
 
 ### 4.4 State, caching, concurrency
 
 - **Source of truth:** Each scan is ephemeral server-side (computed, cached briefly, not persisted). Client-side IndexedDB is the only persistence layer
-- **Server cache:** LRU cache (200 items, 15-min TTL) keyed by normalized URL. Cache hit returns immediately, cache miss triggers full pipeline
+- **Server cache:** LRU cache (200 items, 15-min TTL) keyed by normalized URL. Cache hit returns immediately, cache miss triggers the full pipeline, and only complete non-error results without partial provider failures are cached
 - **Concurrency:** Enrichment pipeline runs all 8 sources via `Promise.allSettled()`. Batch mode uses a concurrency limiter (max 3 URLs in-flight simultaneously to stay within API quotas)
-- **Hazards:** VT rate limit (4 req/min on free tier) — queue VT calls with backoff. HuggingFace inference can be slow on cold start — set 30s timeout
+- **Hazards:** VT rate limit (4 req/min on free tier) - retry `429` responses with `Retry-After` or bounded backoff, then surface unavailable coverage if still exhausted. Hugging Face inference can be slow on cold start - set bounded timeouts and fall back to lexical ML coverage.
 
 ### 4.5 Performance targets
 
@@ -329,12 +351,12 @@ Implementation note: batch streams also emit `batch_started`, `url_started`, and
 - **Public disclosure:** `/privacy` explains local history, hashed server logging, and client-only share links; `/about` explains the scoring and signal model
 - **Abuse cases + mitigations:**
 
-| Abuse case                                       | Mitigation                                                            |
-| ------------------------------------------------ | --------------------------------------------------------------------- |
-| API quota exhaustion via flood                   | IP-based rate limiting (10/min, 50/day)                               |
-| Scanning internal/private URLs                   | URL validation rejects private IP ranges (10.x, 192.168.x, localhost) |
-| Using tool to enumerate which URLs are malicious | Rate limiting + no bulk API access                                    |
-| XSS via crafted URL display                      | Sanitize all URL rendering, never inject raw HTML                     |
+| Abuse case                                       | Mitigation                                                                                                       |
+| ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
+| API quota exhaustion via flood                   | IP-based rate limiting (10/min, 50/day)                                                                          |
+| Scanning internal/private URLs                   | URL validation rejects obvious private/local targets, and active probes revalidate DNS answers before connecting |
+| Using tool to enumerate which URLs are malicious | Rate limiting + no bulk API access                                                                               |
+| XSS via crafted URL display                      | Sanitize all URL rendering, never inject raw HTML                                                                |
 
 - **Audit/logging policy:** Log scan requests (URL hash only, not full URL) + response status + timing. Never log full URLs server-side (could contain PII in query params)
 
@@ -423,7 +445,7 @@ Then all 3 scans appear in the history panel (sourced from IndexedDB)
 **AC-7: Export**
 Given completed batch results
 When the user clicks Export CSV
-Then a CSV file downloads with URL, verdict, timestamp, and signal summary for each URL
+Then a CSV file downloads with URL, verdict, completed time, and signal summary for each URL
 
 **AC-8: Theme support**
 Given the app is loaded
@@ -460,7 +482,7 @@ Then all content is readable and interactive without horizontal scrolling
   - Error/degraded states where providers are unavailable
 
 - **Performance:**
-  - Lighthouse CI (Performance > 90, Accessibility > 95)
+  - Local Lighthouse audit via `npm run lighthouse` (Performance > 90, Accessibility > 95)
   - Bundle size monitoring (< 200kb JS initial load)
 
 - **Security:**
@@ -476,25 +498,29 @@ Then all content is readable and interactive without horizontal scrolling
 
 ## 10) Decision Log
 
-| Date       | Decision                                                                                  | Alternatives                              | Rationale                                                                                                      | Consequences                                                                   |
-| ---------- | ----------------------------------------------------------------------------------------- | ----------------------------------------- | -------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| 2026-03-04 | Complete greenfield rewrite                                                               | Incremental upgrade                       | Starting fresh reduced risk versus carrying forward broken assumptions and stale dependencies                  | Lose git history of old code                                                   |
-| 2026-03-04 | Next.js + Vercel (web-first)                                                              | SPA + separate API; Astro; Remix          | Web-first product, Vercel free tier fits budget, familiar ecosystem                                            | API not independently consumable                                               |
-| 2026-03-04 | Multi-model ML ensemble + threat feeds                                                    | Single model; drop ML; train own          | Multiple signals = higher confidence. Feeds catch known-bad URLs                                               | Higher aggregation complexity                                                  |
-| 2026-03-04 | Free APIs + self-computed enrichment                                                      | Premium threat intel APIs                 | Keeps the default deployment public, low-cost, and easy to self-host                                           | Less reliable data sources                                                     |
-| 2026-03-04 | IP-based rate limiting                                                                    | Token bucket + fingerprint; auth-based    | Simple, effective, no auth needed                                                                              | Shared IP could hit limits unfairly                                            |
-| 2026-03-04 | IndexedDB for history                                                                     | localStorage; server-side DB              | Richer than localStorage, no server cost, privacy-friendly                                                     | More complex, but idb library helps                                            |
-| 2026-03-04 | Streaming results                                                                         | Wait for all; polling                     | Best UX — data within seconds vs 30s+ wait                                                                     | More complex client/server impl                                                |
-| 2026-03-04 | Single-release initial launch                                                             | Phased; MVP + fast follow                 | Reduced coordination overhead while the public product surface was still being finalized                       | Longer time to first deploy                                                    |
-| 2026-03-04 | Modern bold aesthetic                                                                     | Dark hacker; clinical; brutalist          | Stands out, avoids AI-slop, signals quality                                                                    | Need custom design investment                                                  |
-| 2026-03-04 | Full test pyramid                                                                         | E2E only; unit + integration; minimal     | Security tool demands confidence                                                                               | More upfront test writing                                                      |
-| 2026-03-06 | Upgrade to the latest stable Next/React baseline                                          | Stay on Next 14.1                         | Existing baseline was already stale and carried known vulnerabilities plus removed tooling assumptions         | Re-scaffold was required                                                       |
-| 2026-03-06 | Use NDJSON over fetch for streaming contracts                                             | SSE; wait-for-all JSON                    | Works cleanly with App Router route handlers and shared client parsers                                         | Client needs a stream reader                                                   |
-| 2026-03-06 | Keep public `whois` signal name but implement via RDAP-style registration data            | Raw WHOIS only; rename the signal         | Preserves the user-facing contract while avoiding brittle raw WHOIS assumptions                                | UI copy should mention registration lookup rather than raw WHOIS where needed  |
-| 2026-03-06 | Add Upstash-backed `proxy.ts` rate limiting with an in-memory degraded fallback           | Dev/prod in-memory only                   | Shared state is preferred for deployed abuse controls, but the app should remain usable when Redis is absent   | Multi-instance deployments lose shared rate-limit state until Upstash is set   |
-| 2026-03-06 | Add production security headers in `next.config.ts`                                       | no CSP; reverse-proxy-only hardening      | The app renders untrusted URL text and should ship browser-enforced guardrails alongside safe React rendering  | CSP must allow Next runtime scripts and local dev websocket connections        |
-| 2026-03-06 | Switch hosted classifier to Hugging Face router + `DunnBC22/codebert-base-Malicious_URLs` | Keep retired endpoint/model; lexical only | The old Hugging Face inference host was retired and the previous model was not served on the supported router  | Hosted ML depends on a currently routed third-party model                      |
-| 2026-03-09 | Add onboarding/trust surfaces on `/`, `/about`, and `/privacy`                            | Tool-only landing page                    | The UI audit showed that first-time visitors lacked value framing, methodology context, and privacy disclosure | Slightly larger static surface area that must stay aligned with implementation |
+| Date       | Decision                                                                                  | Alternatives                                                | Rationale                                                                                                           | Consequences                                                                   |
+| ---------- | ----------------------------------------------------------------------------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| 2026-03-04 | Complete greenfield rewrite                                                               | Incremental upgrade                                         | Starting fresh reduced risk versus carrying forward broken assumptions and stale dependencies                       | Lose git history of old code                                                   |
+| 2026-03-04 | Next.js + Vercel (web-first)                                                              | SPA + separate API; Astro; Remix                            | Web-first product, Vercel free tier fits budget, familiar ecosystem                                                 | API not independently consumable                                               |
+| 2026-03-04 | Multi-model ML ensemble + threat feeds                                                    | Single model; drop ML; train own                            | Multiple signals = higher confidence. Feeds catch known-bad URLs                                                    | Higher aggregation complexity                                                  |
+| 2026-03-04 | Free APIs + self-computed enrichment                                                      | Premium threat intel APIs                                   | Keeps the default deployment public, low-cost, and easy to self-host                                                | Less reliable data sources                                                     |
+| 2026-03-04 | IP-based rate limiting                                                                    | Token bucket + fingerprint; auth-based                      | Simple, effective, no auth needed                                                                                   | Shared IP could hit limits unfairly                                            |
+| 2026-03-04 | IndexedDB for history                                                                     | localStorage; server-side DB                                | Richer than localStorage, no server cost, privacy-friendly                                                          | More complex, but idb library helps                                            |
+| 2026-03-04 | Streaming results                                                                         | Wait for all; polling                                       | Best UX — data within seconds vs 30s+ wait                                                                          | More complex client/server impl                                                |
+| 2026-03-04 | Single-release initial launch                                                             | Phased; MVP + fast follow                                   | Reduced coordination overhead while the public product surface was still being finalized                            | Longer time to first deploy                                                    |
+| 2026-03-04 | Modern bold aesthetic                                                                     | Dark hacker; clinical; brutalist                            | Stands out, avoids AI-slop, signals quality                                                                         | Need custom design investment                                                  |
+| 2026-03-04 | Full test pyramid                                                                         | E2E only; unit + integration; minimal                       | Security tool demands confidence                                                                                    | More upfront test writing                                                      |
+| 2026-03-06 | Upgrade to the latest stable Next/React baseline                                          | Stay on Next 14.1                                           | Existing baseline was already stale and carried known vulnerabilities plus removed tooling assumptions              | Re-scaffold was required                                                       |
+| 2026-03-06 | Use NDJSON over fetch for streaming contracts                                             | SSE; wait-for-all JSON                                      | Works cleanly with App Router route handlers and shared client parsers                                              | Client needs a stream reader                                                   |
+| 2026-03-06 | Keep public `whois` signal name but implement via RDAP-style registration data            | Raw WHOIS only; rename the signal                           | Preserves the user-facing contract while avoiding brittle raw WHOIS assumptions                                     | UI copy should mention registration lookup rather than raw WHOIS where needed  |
+| 2026-03-06 | Add Upstash-backed `proxy.ts` rate limiting with an in-memory degraded fallback           | Dev/prod in-memory only                                     | Shared state is preferred for deployed abuse controls, but the app should remain usable when Redis is absent        | Multi-instance deployments lose shared rate-limit state until Upstash is set   |
+| 2026-03-06 | Add production security headers in `next.config.ts`                                       | no CSP; reverse-proxy-only hardening                        | The app renders untrusted URL text and should ship browser-enforced guardrails alongside safe React rendering       | CSP must allow Next runtime scripts and local dev websocket connections        |
+| 2026-03-06 | Switch hosted classifier to Hugging Face router + `DunnBC22/codebert-base-Malicious_URLs` | Keep retired endpoint/model; lexical only                   | The old Hugging Face inference host was retired and the previous model was not served on the supported router       | Hosted ML depends on a currently routed third-party model                      |
+| 2026-03-09 | Add onboarding/trust surfaces on `/`, `/about`, and `/privacy`                            | Tool-only landing page                                      | The UI audit showed that first-time visitors lacked value framing, methodology context, and privacy disclosure      | Slightly larger static surface area that must stay aligned with implementation |
+| 2026-05-01 | Refresh to Next `16.2.4` and keep audited npm overrides                                   | Stay on earlier Next 16 patch; remove overrides immediately | The patch refresh resolves direct advisories, while upstream parent packages still pin some stale transitive ranges | Override block must be revisited as upstream dependencies catch up             |
+| 2026-05-01 | Cache only complete non-partial scan results                                              | Cache every non-error verdict                               | Partial provider outages should remain visible on a fresh scan instead of being hidden for the cache TTL            | More repeated provider calls during outages, but more truthful results         |
+| 2026-05-01 | Harden active probes against private and rebinding targets                                | Rely only on input URL validation                           | DNS answers and redirects can resolve to private or reserved networks after initial URL validation                  | TLS and redirect probes may return unavailable coverage instead of connecting  |
+| 2026-05-01 | Add minimal GitHub Actions CI                                                             | Run the full local release chain in CI                      | Install, audit, lint, typecheck, unit/integration tests, and build catch the main regressions quickly               | E2E, format, Lighthouse, and deployment checks remain separate verification    |
 
 ## 11) Assumptions, Open Questions, Risks
 
