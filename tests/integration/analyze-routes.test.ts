@@ -180,6 +180,59 @@ describe("analysis routes", () => {
     ).toHaveLength(8);
   });
 
+  it("replays signal_result events and sets cached on cache hits", async () => {
+    const { POST } = await import("@/app/api/analyze/route");
+    installHandlers();
+
+    const requestBody = JSON.stringify({ url: "cache-hit.example" });
+    const firstResponse = await POST(
+      new Request("http://localhost/api/analyze", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: requestBody,
+      }),
+    );
+    const firstEvents = await parseNdjsonEvents(firstResponse);
+    const secondResponse = await POST(
+      new Request("http://localhost/api/analyze", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: requestBody,
+      }),
+    );
+    const secondEvents = await parseNdjsonEvents(secondResponse);
+
+    expect(firstEvents[0]).toMatchObject({
+      type: "scan_started",
+      cached: false,
+    });
+    expect(firstEvents.at(-1)?.result).toMatchObject({
+      metadata: {
+        cacheHit: false,
+      },
+    });
+
+    expect(secondEvents[0]).toMatchObject({
+      type: "scan_started",
+      cached: true,
+    });
+    expect(
+      secondEvents.filter((event) => event.type === "signal_result"),
+    ).toHaveLength(8);
+    expect(secondEvents.at(-1)).toMatchObject({
+      type: "scan_complete",
+      result: {
+        metadata: {
+          cacheHit: true,
+        },
+      },
+    });
+  });
+
   it("streams batch analysis events", async () => {
     const { POST } = await import("@/app/api/analyze/batch/route");
     installHandlers();
@@ -301,6 +354,7 @@ async function parseNdjsonEvents(response: Response) {
       (line) =>
         JSON.parse(line) as {
           type: string;
+          cached?: boolean;
           result?: {
             metadata?: { cacheHit?: boolean; partialFailure?: boolean };
           };
