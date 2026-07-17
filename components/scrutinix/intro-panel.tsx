@@ -113,15 +113,15 @@ export function IntroPanel({ dock }: IntroPanelProps) {
           <div className="min-w-0 lg:pr-2">
             <div className="sx-home-brand space-y-6">
               <div className="space-y-4">
-                <p className="sx-folio-stamp">Public scanner</p>
+                <p className="sx-label">Public scanner</p>
                 <h1
                   id="scrutinix-intro-heading"
                   className="text-[2.75rem] leading-[0.95] font-semibold tracking-[-0.03em] text-balance text-[var(--sx-text)] sm:text-6xl lg:text-[4.25rem]"
                 >
                   Scrutinix
                 </h1>
-                <p className="max-w-[18ch] text-xl leading-snug font-medium tracking-[-0.02em] text-[var(--sx-text)] sm:text-2xl">
-                  Evidence before you click.
+                <p className="max-w-[22ch] text-xl leading-snug font-medium tracking-[-0.02em] text-[var(--sx-text)] sm:text-2xl">
+                  Check a link before you forward it.
                 </p>
               </div>
 
@@ -148,7 +148,7 @@ export function HomeSupportSection() {
       <h2 id="home-support-heading" className="sr-only">
         Method and reference
       </h2>
-      <div className="sx-ledger border-border grid gap-px overflow-hidden rounded-md border bg-[var(--sx-border)] sm:grid-cols-2 lg:grid-cols-3">
+      <div className="sx-surface-block border-border grid gap-px overflow-hidden rounded-md border bg-[var(--sx-border)] sm:grid-cols-2 lg:grid-cols-3">
         {referenceCards.map(({ body, cta, href, icon: Icon, title, tone }) => (
           <div key={title} className="bg-[var(--sx-surface)] px-4 py-4">
             <div className="flex items-start gap-2.5">

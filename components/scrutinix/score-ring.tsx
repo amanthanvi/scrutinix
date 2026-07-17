@@ -22,8 +22,8 @@ interface ScoreRingProps {
 }
 
 /**
- * Precision instrument dial: clean track + verdict arc.
- * Streaming uses an indeterminate dash, not a radar sweep.
+ * Score readout: clean track + progress arc.
+ * Streaming uses an indeterminate dash for coverage progress.
  */
 export function ScoreRing({
   score,
@@ -47,7 +47,6 @@ export function ScoreRing({
         aria-hidden="true"
         className="block"
       >
-        {/* Track */}
         <circle
           cx={CENTER}
           cy={CENTER}
@@ -59,26 +58,6 @@ export function ScoreRing({
           transform={`rotate(-90 ${CENTER} ${CENTER})`}
         />
 
-        {/* Inner tick marks — instrument feel */}
-        {[0, 25, 50, 75].map((tick) => {
-          const angle = ((tick / 100) * 360 - 90) * (Math.PI / 180);
-          const inner = RADIUS - STROKE / 2 - 4;
-          const outer = RADIUS - STROKE / 2 - 10;
-          return (
-            <line
-              key={tick}
-              x1={CENTER + Math.cos(angle) * inner}
-              y1={CENTER + Math.sin(angle) * inner}
-              x2={CENTER + Math.cos(angle) * outer}
-              y2={CENTER + Math.sin(angle) * outer}
-              stroke="var(--sx-border-muted)"
-              strokeWidth={1.25}
-              opacity={isIdle ? 0.35 : 0.55}
-            />
-          );
-        })}
-
-        {/* Streaming indeterminate arc */}
         {isStreaming ? (
           <circle
             cx={CENTER}
@@ -90,11 +69,10 @@ export function ScoreRing({
             strokeLinecap="round"
             strokeDasharray={`${CIRCUMFERENCE * 0.22} ${CIRCUMFERENCE * 0.78}`}
             transform={`rotate(-90 ${CENTER} ${CENTER})`}
-            className="sx-dial-live"
+            className="sx-score-live"
           />
         ) : null}
 
-        {/* Result score arc */}
         {!isIdle && !isStreaming ? (
           <circle
             cx={CENTER}
@@ -111,7 +89,6 @@ export function ScoreRing({
           />
         ) : null}
 
-        {/* Center readout */}
         {!isIdle ? (
           <text
             x={CENTER}
@@ -135,7 +112,7 @@ export function ScoreRing({
             fill="var(--sx-text-soft)"
             fontSize={14}
             fontWeight={500}
-            letterSpacing="0.08em"
+            letterSpacing="0.04em"
           >
             —
           </text>

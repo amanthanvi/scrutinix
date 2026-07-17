@@ -1,19 +1,17 @@
-# Shape brief — Home `/` + public docs (scanner dashboard)
+# Shape brief — Home `/` + public docs (Daylight Desk)
 
-**Status:** SUPERSEDED 2026-07-17. Instrument Casefile rejected in grilling.  
-**Use instead:** `DESIGN-REDIRECTION.md` (locked brief for `$impeccable shape /`).  
+**Status:** Active — locked by `$impeccable shape /` 2026-07-17.  
 **Register:** Product (tool).  
-**IA:** Scanner-first **kept** (narrow brand column + wide scan console). Not reopened.
+**IA:** Scanner-first **kept** (narrow brand column + wide scan console). Not reopened.  
+**Supersedes:** Instrument Casefile (historical text removed; see git history / `DESIGN-REDIRECTION.md`).
 
-> Historical Casefile shape below — do not execute. Kept for audit trail only.
-
-Visual direction probes: **skipped** — harness has image gen, but this run commits to one lane for sequential overdrive (no pick gate).
+**Probes:** `design/probes/probe-daylight-desk.png` (chosen), `probe-ink-margin.png` (rejected — navy-security second-order), `probe-soft-blotter.png` (rejected — stationery costume).
 
 ---
 
 ## 1. Feature Summary
 
-Scrutinix home is the public threat scanner: paste a URL (or short batch), watch eight signals stream, read a verdict with confidence and caveats, optionally reopen history. Redesign tears down terminal/radar/glow theater and installs a distinctive **instrument casefile** visual system that still serves hurried link-checking. `/about` and `/privacy` share the same folio / ledger materials.
+Scrutinix home is the public URL threat scanner for someone about to forward mail: paste a link (or short batch), watch eight signals stream, read a verdict with confidence and caveats, optionally reopen on-device history. This shape replaces the rejected Casefile costume with **Daylight Desk** — a sharp everyday product tool under bright window light. `/about` and `/privacy` share the same materials (no dossier cosplay).
 
 ## 2. Primary User Action
 
@@ -21,83 +19,87 @@ Paste a URL and start a scan — the console is the product; brand and support o
 
 ## 3. Design Direction
 
-- **Color strategy:** Full palette for verdict semantics (safe / suspicious / malicious / critical); brand chrome stays **Restrained** cool steel ink. Accent only on primary analyze CTA, live stream, and active verdict.
-- **Scene sentence:** Mid-afternoon at a bright desk under cool daylight, someone pastes a suspicious link before forwarding mail — anxious, needs calm certainty in seconds, not a cyberpunk cockpit. → Dual theme kept; **cool steel neutrals** (hue ~235–250), not warm cream and not CRT green.
-- **Named anchors:** (1) forensic evidence ledger / casefile stamp, (2) precision lab instrument dials (clean arcs, no sonar), (3) Linear-grade density for controls — familiar affordances, distinctive materials.
-- **Lane name:** Instrument Casefile.
+- **Color strategy:** Brand chrome **Restrained**; verdict semantics **Full palette** (safe / suspicious / malicious / critical). Accent only on Analyze CTA, live stream, and active verdict.
+- **Scene sentence:** Mid-afternoon at a bright ordinary desk under cool window daylight; someone pastes a sketchy link before forwarding mail — anxious, needs calm certainty in seconds. → Dual theme kept (`next-themes`); **default read is light daylight**, dark is evening desk — not SOC vault.
+- **Named anchors:** (1) Linear — control density and familiar affordances, (2) Apple Mail compose under window light — calm bright intake, clear primary action, (3) a physical highlighter mark on a white desk blotter — type weight contrast and accent-as-tool-mark, **without** becoming stationery theater.
+- **Lane name:** **Daylight Desk**.
+
+### Why this escapes second-order traps
+
+| Reflex | Trap if “avoided badly” | Daylight Desk escape |
+| --- | --- | --- |
+| Security tool → CRT/cyberpunk | Cool steel lab dials / neon cockpit | Scene is ordinary desk light, not a vault or SOC |
+| Security tool → dossier | Editorial “trust brochure” / navy shield SaaS | No folio/stamp/exhibit props; materials from daylight + density, not seriousness metaphors |
+| Not cream SaaS | Purple-indigo or parchment | Cool sky-tinted neutrals (OKLCH, chroma toward ~220–235), ink accent — not warm cream, not purple |
+
+Grounding is the **mail-forwarder desk scene**, not a new “security seriousness” costume class.
 
 ### Keep
 
 - Scanner-first intro grid (narrow story / wide console)
 - Summary ↔ Full labelled `role="switch"`
-- Compact support reference grid job (no long accordion essays)
+- Compact support reference grid job
 - `globals.css` tokens vs `scrutinix.css` effects seam
-- Branded scrutinix components (no broad shadcnization)
-- Semantic verdict tokens and advisor correctness (plans 001–006)
+- Branded `components/scrutinix/*` (no broad shadcnization)
+- Semantic verdict tokens and advisor correctness
 
 ### Kill
 
-- Radar watermark + score-ring sonar/sweep
-- Decorative LED glow, scan-line chrome, stage-in page theater as identity
-- Side-stripe severity edges (`inset 3px left`) — replace with top rail / surface tint (impeccable ban)
-- Terminal “hacker green glow” as brand signature
-- **Footer marquee ticker** — replaced with a single quiet static status line
-- Accent-tinted page wash / atmosphere overlays on public docs
-
-### Anti-goals
-
-- Generic SaaS cream / purple-indigo
-- Second-order “editorial magazine security” or “cyberpunk neon”
-- Particles / WebGL for wow (wrong register)
+- CRT / radar / glow / scan-line theater
+- Folio / ledger / stamp / dossier / exhibit / instrument-dial costume
+- Side-stripe severity edges (keep top rail + surface tint)
+- Footer marquee (stay quiet static status)
+- Cream/sand body; purple SaaS; WebGL wow
 
 ## 4. Scope
 
 - **Fidelity:** Production-ready
-- **Breadth:** Home `/`, `/about`, `/privacy`, shared footer chrome
+- **Breadth:** Home `/`, `/about`, `/privacy`, shared chrome
 - **Interactivity:** Shipped components
-- **Time intent:** Overdrive → quieter → distill to shippable polish
+- **Time intent:** `$impeccable craft /` then polish as needed — not full overdrive unless asked
 
 ## 5. Layout Strategy
 
-1. Header: quiet chrome + threat progress rail when active
-2. Hero band: brand wordmark + one line + **dominant intake panel**
-3. Workspace: verdict casefile → signal lanes (Summary/Full) → history rail
-4. Support: tight ledger reference grid below
-5. Docs (`/about`, `/privacy`): folio masthead + exhibit index + dossier body  
-   Rhythm: calm empty → taut live stream → decisive verdict stamp
+1. Header: quiet chrome + threat progress when active
+2. Hero band: brand wordmark (hero-level) + one line + **dominant intake console**
+3. Workspace: verdict reading surface → signal lanes (Summary/Full) → history rail
+4. Support: tight reference grid below
+5. Docs: same materials — page title + highlights rail + body; no exhibit index theater  
+   Rhythm: calm empty → taut live stream → decisive verdict chip (not rubber stamp)
 
 ## 6. Key States
 
-| State                                     | Feel / show                                               |
-| ----------------------------------------- | --------------------------------------------------------- |
-| Idle                                      | Quiet instrument; empty verdict invites paste             |
-| Streaming                                 | Solid coverage meter; signal rows resolve; no radar sweep |
-| Result safe/suspicious/malicious/critical | Verdict stamp + score dial; accent follows verdict        |
-| Error / rate limit                        | Clear inline error; no false malicious                    |
-| Empty history                             | Teach “scans stay on device”                              |
-| Reduced motion                            | Instant state, no sweep/shimmer                           |
+| State | Feel / show |
+| --- | --- |
+| Idle | Quiet desk tool; empty verdict invites paste |
+| Streaming | Solid coverage meter; signal rows resolve; score ring is progress readout, not dial theater |
+| Result (any verdict) | Verdict chip + score; accent follows verdict |
+| Error / rate limit | Clear inline error; no false malicious |
+| Empty history | Teach “scans stay on device” |
+| Reduced motion | Instant state; no shimmer/sweep |
 
 ## 7. Interaction Model
 
-URL → Analyze (Enter icon) → NDJSON stream fills verdict + signals → Summary/Full toggles density → export/share/rescan → support links for method/privacy. Motion = state only (150–250ms; `@property` verdict color; optional `@starting-style` on signal resolve).
+URL → Analyze (Enter icon) → NDJSON stream fills verdict + signals → Summary/Full density → export/share/rescan → support links. Motion = state only (150–250ms).
 
 ## 8. Content Requirements
 
-Keep existing product copy density; trim redundant theater labels. Support cards unchanged in job. No new marketing stats strip in hero. Public docs use shorter folio titles; exhibit index carries proof points.
+Product copy density kept; Casefile vocabulary stripped (“casefile”, “exhibit”, “evidence surface” as costume). Tagline grounded in forward-before-you-open. Support cards keep their job. No marketing stats strip in hero.
 
 ## 9. Recommended References (impl)
 
-`product.md` (loaded), `overdrive.md` / `quieter.md` / `distill.md` (in spirit), skill contrast rules.
+`product.md` (loaded), skill color/contrast rules, `typeset.md` / `layout.md` during craft for type contrast + scanner-first rhythm.
 
-## 10. Token strategy
+## 10. Token / effects strategy
 
-- Retint `--sx-*` toward cool steel (slight chroma on brand hue)
-- Keep verdict semantics as full-palette; tune for contrast on new surfaces
-- Effects layer: casefile stamp (`.sx-folio-stamp`), ledger (`.sx-ledger`), top severity rails, instrument dial
-- Skip `palette.mjs` seed — deliberate retint of committed `--sx-*` system
+- Retint `--sx-*` toward **daylight desk**: cool sky neutrals (not cream L/C band, not steel-instrument chrome)
+- Verdict semantics remain full-palette; verify contrast on new surfaces
+- Effects: quiet labels, panels, coverage meter, score arc (functional), verdict **badge** — no stamp-in, no dial ticks as identity
+- Skip `palette.mjs` — deliberate retint of committed `--sx-*` system
 
 ## Decisions locked
 
-- Light vs dark default: system/`next-themes` (scene allows both).
-- **Footer:** marquee **cut**; single static status line (latest signal note, or idle/stream).
-- About/privacy: same Instrument Casefile system (folio + exhibit ledger), not leftover terminal aesthetic.
+- Light vs dark: system / `next-themes`; scene favors bright daylight as the primary identity read
+- Footer: quiet static status line
+- About/privacy: Daylight Desk materials, not Casefile leftovers
+- Baseline after this shape commit: Casefile chrome **discarded** so craft does not polish dossier UI

@@ -12,4 +12,4 @@ A sharp everyday **product tool** (impeccable product register): bold visual ide
 
 ## Locked redesign constraints
 
-See `DESIGN-REDIRECTION.md` and `CONTEXT.md`. Casefile / dossier / terminal cosplay are out of bounds for the next shape.
+See `DESIGN-REDIRECTION.md`, `CONTEXT.md`, and `DESIGN-HOME-SHAPE.md` (Daylight Desk). Casefile / dossier / terminal cosplay are out of bounds.

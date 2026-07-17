@@ -1,18 +1,22 @@
-# DESIGN.md — Scrutinix (post-grill redirection)
+# DESIGN.md — Scrutinix (Daylight Desk)
 
 **Register:** Product (tool UI).  
-**Status:** Instrument Casefile **rejected** (2026-07-17 grilling). Do not extend folio / ledger / stamp materials.
+**Status:** Instrument Casefile **rejected**. Active lane: **Daylight Desk** (`DESIGN-HOME-SHAPE.md`).
 
-## Source of truth for the next shape
+## Source of truth
 
-→ **`DESIGN-REDIRECTION.md`** — locked scene, keep/kill, radical axes, IA, anti-references.
+| Doc | Role |
+| --- | --- |
+| `DESIGN-REDIRECTION.md` | Grill locks (scene, IA, keep/kill, anti-references) |
+| `DESIGN-HOME-SHAPE.md` | Shape brief for home + public docs |
+| `PRODUCT.md` / `CONTEXT.md` | Product register + vocabulary |
 
 ## Surfaces (jobs)
 
 | Route | Role |
 | --- | --- |
 | `/` | Scanner-first intake + results workspace |
-| `/about` | Method / trust (product materials, not dossier costume) |
+| `/about` | Method / trust (product materials, not costume) |
 | `/privacy` | Privacy boundaries (same materials) |
 
 ## Standing product constraints
@@ -21,8 +25,12 @@
 - Summary ↔ Full labelled switch; compact support section
 - No broad shadcnization; branded components under `components/scrutinix/*`
 - Motion: state-only, 150–250ms; honor `prefers-reduced-motion`
-- Tokens in `app/globals.css`; effects in `app/scrutinix.css` — retarget both away from Casefile costume
+- Tokens in `app/globals.css`; effects in `app/scrutinix.css` — Daylight Desk, not Casefile
 
 ## Ban list (short)
 
-No CRT/radar/glow cosplay. No forensic/casefile/dossier/ledger/stamp cosplay. No second-order “security seriousness” costume.
+No CRT/radar/glow. No forensic/casefile/dossier/ledger/stamp. No cream/sand body or purple SaaS. No second-order “security seriousness” costume.
+
+## Next
+
+`$impeccable craft /` — implement Daylight Desk against the shape brief.

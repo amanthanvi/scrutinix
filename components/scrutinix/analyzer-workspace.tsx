@@ -210,7 +210,7 @@ export function AnalyzerWorkspace() {
               Every queued URL can finish cleanly, fail independently, or
               surface a verdict error without aborting the rest of the batch.
               Pick any completed item in the stream table to open its full
-              evidence surface in single-scan mode.
+              result in single-scan mode.
             </p>
           </div>
         )}

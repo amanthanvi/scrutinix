@@ -71,9 +71,9 @@ export function VerdictHero({
       >
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_18rem] lg:items-center">
           <div className="space-y-5">
-            <p className="sx-folio-stamp">Casefile empty</p>
+            <p className="sx-label">No scan yet</p>
             <h2 className="max-w-2xl text-2xl font-semibold tracking-[-0.02em] text-balance text-[var(--sx-text)]">
-              Run a link to open the evidence surface.
+              Paste a link above to start.
             </h2>
             <p className="max-w-2xl text-sm leading-6 text-[var(--sx-text-muted)] sm:text-base">
               The verdict area stays calm until a scan starts. Once the stream
@@ -102,7 +102,7 @@ export function VerdictHero({
       >
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_18rem] lg:items-end">
           <div className="space-y-5">
-            <p className="sx-pulse sx-folio-stamp text-[var(--sx-accent)]">
+            <p className="sx-pulse sx-label text-[var(--sx-accent)]">
               Stream in progress
             </p>
             <h2 className="truncate text-2xl font-semibold tracking-[-0.02em] text-[var(--sx-text)] sm:text-3xl">
@@ -225,7 +225,7 @@ export function VerdictHero({
                 </span>
                 {result ? (
                   <span
-                    className="sx-verdict-stamp"
+                    className="sx-verdict-badge"
                     style={{
                       color: verdictInk(result.verdict),
                       borderColor: color,
@@ -236,7 +236,7 @@ export function VerdictHero({
                   </span>
                 ) : sharedVerdict ? (
                   <span
-                    className="sx-verdict-stamp"
+                    className="sx-verdict-badge"
                     style={{
                       color: verdictInk(sharedVerdict),
                       borderColor: verdictColor(sharedVerdict),

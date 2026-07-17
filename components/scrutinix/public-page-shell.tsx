@@ -15,7 +15,7 @@ interface ProofRow {
 }
 
 interface PublicPageShellProps {
-  /** Folio stamp, e.g. "Method" or "Privacy" */
+  /** Quiet section label, e.g. "Method" or "Privacy" */
   eyebrow: string;
   title: string;
   lead: string;
@@ -31,7 +31,7 @@ export function PublicPageShell({
   children,
 }: PublicPageShellProps) {
   return (
-    <div className="sx-casefile flex min-h-screen flex-col">
+    <div className="relative flex min-h-screen flex-col">
       <AppHeader />
 
       <main id="main-content" className="relative z-10 flex-1 pb-12">
@@ -46,7 +46,7 @@ export function PublicPageShell({
 
             <div className="mt-10 grid gap-10 lg:grid-cols-[minmax(0,1.15fr)_minmax(16rem,0.7fr)] lg:items-end lg:gap-14">
               <div className="min-w-0 space-y-5">
-                <p className="sx-folio-stamp">{eyebrow}</p>
+                <p className="sx-label">{eyebrow}</p>
                 <h1 className="max-w-[18ch] text-[2.25rem] leading-[1.12] font-semibold tracking-[-0.03em] text-balance text-[var(--sx-text)] sm:text-5xl lg:text-[3.25rem]">
                   {title}
                 </h1>
@@ -56,26 +56,18 @@ export function PublicPageShell({
               </div>
 
               <aside
-                aria-label={`${eyebrow} exhibits`}
-                className="sx-ledger border-border overflow-hidden rounded-md border"
+                aria-label={`${eyebrow} highlights`}
+                className="sx-surface-block border-border overflow-hidden rounded-md border"
               >
                 <div className="border-border border-b bg-[color-mix(in_srgb,var(--sx-border-muted)_10%,transparent)] px-4 py-2.5">
-                  <p className="sx-font-hack text-[10px] tracking-[0.14em] text-[var(--sx-text-soft)] uppercase">
-                    Exhibit index
-                  </p>
+                  <p className="sx-label">Highlights</p>
                 </div>
                 <ul className="divide-border divide-y">
-                  {proofRows.map((row, index) => {
+                  {proofRows.map((row) => {
                     const Icon = row.icon;
                     return (
                       <li key={row.label} className="px-4 py-4">
                         <div className="flex items-start gap-3">
-                          <span
-                            className="sx-font-hack mt-0.5 w-6 shrink-0 text-[10px] text-[var(--sx-text-soft)] tabular-nums"
-                            aria-hidden="true"
-                          >
-                            {String(index + 1).padStart(2, "0")}
-                          </span>
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-2">
                               {Icon ? (

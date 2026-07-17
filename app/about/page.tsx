@@ -13,11 +13,11 @@ export default function AboutPage() {
   return (
     <PublicPageShell
       eyebrow="Method"
-      title="One evidence surface for link triage."
+      title="How a scan becomes a verdict."
       lead="A scan combines high-confidence reputation checks with resilient local signals so the output stays useful even when one provider is degraded. Each signal resolves independently, and verdict confidence explains how much clean or risky coverage actually supported the final score."
       proofRows={[
         {
-          label: "Evidence model",
+          label: "Scoring model",
           value: "Weighted first",
           body: "Browser-protection lists, threat feeds, and multi-engine detections outweigh softer context like domain age or redirect complexity.",
           icon: Scale,
@@ -38,8 +38,8 @@ export default function AboutPage() {
     >
       <div className="grid gap-12 xl:grid-cols-[minmax(0,1.1fr)_minmax(17rem,0.85fr)] xl:gap-16">
         <section className="space-y-10">
-          <div className="sx-dossier-block">
-            <p className="sx-folio-stamp">Scoring approach</p>
+          <div className="sx-prose-block">
+            <p className="sx-label">Scoring approach</p>
             <h2 className="mt-3 max-w-[28ch] text-2xl font-semibold tracking-[-0.02em] text-balance text-[var(--sx-text)] sm:text-[1.75rem]">
               High-confidence evidence moves the verdict most.
             </h2>
@@ -94,8 +94,8 @@ export default function AboutPage() {
         </section>
 
         <aside className="space-y-6">
-          <div className="sx-ledger border-border rounded-md border px-5 py-5">
-            <p className="sx-folio-stamp">Confidence behavior</p>
+          <div className="sx-surface-block border-border rounded-md border px-5 py-5">
+            <p className="sx-label">Confidence behavior</p>
             <p className="mt-3 text-lg font-semibold tracking-[-0.015em] text-[var(--sx-text)]">
               Coverage-aware, not just score bands.
             </p>
@@ -106,8 +106,8 @@ export default function AboutPage() {
             </p>
           </div>
 
-          <div className="sx-ledger border-border rounded-md border px-5 py-5">
-            <p className="sx-folio-stamp">Score bands</p>
+          <div className="sx-surface-block border-border rounded-md border px-5 py-5">
+            <p className="sx-label">Score bands</p>
             <dl className="mt-4 space-y-0">
               {[
                 { range: "0–24", label: "Safe", color: "var(--sx-safe)" },

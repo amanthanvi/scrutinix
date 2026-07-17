@@ -1,9 +1,9 @@
 # Locked brief — Scrutinix home redesign (post-grill)
 
-**Status:** Grilling complete 2026-07-17. Ready for `$impeccable shape /`.  
+**Status:** Shape locked 2026-07-17 — **Daylight Desk**. Ready for `$impeccable craft /`.  
 **Register:** Product (tool UI).  
 **Branch:** `design/overdrive-home`  
-**Supersedes:** Instrument Casefile (`DESIGN.md` Casefile lane, `DESIGN-HOME-SHAPE.md`).
+**Supersedes:** Instrument Casefile (`DESIGN.md` Casefile lane; historical shape in git).
 
 ---
 
@@ -91,4 +91,4 @@ If a direction smells like any of these, stop and pick another lane:
 - **Scanner-first** — narrow story + wide console IA.
 ---
 
-**Next:** `$impeccable shape /` after discarding or explicitly superseding Casefile UI (see commit note / executor plan). Do not implement until shape locks a new non-costume lane.
+**Next:** Shape locked — **Daylight Desk** (`DESIGN-HOME-SHAPE.md`). Casefile chrome discarded on this branch. Proceed with `$impeccable craft /`.
