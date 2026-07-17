@@ -81,7 +81,7 @@ export function SingleInput({
             placeholder="https://example.com"
             aria-label="URL to analyze"
             aria-invalid={Boolean(error)}
-            aria-describedby={error ? "sx-url-error" : "sx-url-hint"}
+            aria-describedby={error ? "sx-url-error" : undefined}
             className="h-11 border-0 bg-transparent px-0 text-[var(--sx-text)] shadow-none"
           />
         </div>
@@ -107,11 +107,7 @@ export function SingleInput({
         <p id="sx-url-error" className="text-xs text-[var(--sx-suspicious)]">
           {error}
         </p>
-      ) : (
-        <p id="sx-url-hint" className="text-xs text-[var(--sx-text-soft)]">
-          Include http:// or https://
-        </p>
-      )}
+      ) : null}
 
       {(streaming || result) && (
         <div className="flex flex-wrap items-center gap-2">
