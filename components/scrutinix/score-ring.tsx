@@ -137,7 +137,7 @@ export function ScoreRing({
             fontWeight={500}
             letterSpacing="0.08em"
           >
-            IDLE
+            —
           </text>
         )}
       </svg>

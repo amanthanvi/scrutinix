@@ -71,9 +71,7 @@ export function VerdictHero({
       >
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_18rem] lg:items-center">
           <div className="space-y-5">
-            <p className="text-xs font-medium tracking-[0.04em] text-[var(--sx-text-muted)] uppercase">
-              Casefile empty
-            </p>
+            <p className="sx-folio-stamp">Casefile empty</p>
             <h2 className="max-w-2xl text-2xl font-semibold tracking-[-0.02em] text-balance text-[var(--sx-text)]">
               Run a link to open the evidence surface.
             </h2>
@@ -104,7 +102,7 @@ export function VerdictHero({
       >
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_18rem] lg:items-end">
           <div className="space-y-5">
-            <p className="sx-pulse text-xs font-medium tracking-[0.04em] text-[var(--sx-accent)] uppercase">
+            <p className="sx-pulse sx-folio-stamp text-[var(--sx-accent)]">
               Stream in progress
             </p>
             <h2 className="truncate text-2xl font-semibold tracking-[-0.02em] text-[var(--sx-text)] sm:text-3xl">

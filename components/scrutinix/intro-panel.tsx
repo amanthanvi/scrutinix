@@ -111,23 +111,21 @@ export function IntroPanel({ dock }: IntroPanelProps) {
       <div className="relative z-10 mx-auto max-w-[1520px] px-4 py-8 sm:px-6 sm:py-10 xl:px-8 xl:py-12">
         <div className="sx-home-hero grid gap-6 lg:grid-cols-[minmax(18rem,0.72fr)_minmax(0,1.08fr)] lg:items-start">
           <div className="min-w-0 lg:pr-2">
-            <div className="sx-home-brand space-y-5">
-              <div className="space-y-3">
-                <p className="text-xs font-medium tracking-[0.06em] text-[var(--sx-text-muted)] uppercase">
-                  Public URL threat analysis
-                </p>
+            <div className="sx-home-brand space-y-6">
+              <div className="space-y-4">
+                <p className="sx-folio-stamp">Public scanner</p>
                 <h1
                   id="scrutinix-intro-heading"
-                  className="text-4xl font-semibold tracking-[-0.03em] text-balance text-[var(--sx-text)] sm:text-5xl lg:text-6xl"
+                  className="text-[2.75rem] leading-[0.95] font-semibold tracking-[-0.03em] text-balance text-[var(--sx-text)] sm:text-6xl lg:text-[4.25rem]"
                 >
                   Scrutinix
                 </h1>
-                <p className="max-w-xl text-xl leading-tight font-medium text-[var(--sx-text)] sm:text-2xl">
+                <p className="max-w-[18ch] text-xl leading-snug font-medium tracking-[-0.02em] text-[var(--sx-text)] sm:text-2xl">
                   Evidence before you click.
                 </p>
               </div>
 
-              <p className="sx-home-secondary-copy max-w-xl text-sm leading-6 text-[var(--sx-text-muted)] sm:text-base">
+              <p className="sx-home-secondary-copy max-w-[42ch] text-sm leading-7 text-[var(--sx-text-muted)] sm:text-[0.95rem]">
                 Eight independent signals stream into one verdict — reputation,
                 ML, TLS, DNS, and more — with private on-device history.
               </p>
@@ -150,12 +148,9 @@ export function HomeSupportSection() {
       <h2 id="home-support-heading" className="sr-only">
         Method and reference
       </h2>
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="sx-ledger border-border grid gap-px overflow-hidden rounded-md border bg-[var(--sx-border)] sm:grid-cols-2 lg:grid-cols-3">
         {referenceCards.map(({ body, cta, href, icon: Icon, title, tone }) => (
-          <div
-            key={title}
-            className="sx-panel border-border rounded-lg border px-4 py-4"
-          >
+          <div key={title} className="bg-[var(--sx-surface)] px-4 py-4">
             <div className="flex items-start gap-2.5">
               <Icon
                 className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${iconToneClass(tone)}`}

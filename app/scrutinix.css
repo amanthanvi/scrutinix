@@ -9,13 +9,12 @@
   --sx-active-accent: var(--sx-accent);
   --sx-font-sans: var(--font-geist-sans), "Geist", system-ui, sans-serif;
   --sx-font-hack: var(--font-hack), "Hack", "IBM Plex Mono", monospace;
-  background:
-    linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--sx-bg-top) 92%, var(--sx-active-accent) 8%) 0%,
-      var(--sx-bg) 14rem,
-      var(--sx-bg-strong) 100%
-    );
+  background: linear-gradient(
+    180deg,
+    var(--sx-bg-top) 0%,
+    var(--sx-bg) 12rem,
+    var(--sx-bg-strong) 100%
+  );
   color: var(--sx-text);
   min-height: 100vh;
   font-family: var(--sx-font-sans);
@@ -24,19 +23,19 @@
   transition: background 220ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+/* Quiet steel wash — no accent glow theater */
 .scrutinix-theme::before {
   content: "";
   position: fixed;
   inset: 0;
   pointer-events: none;
   z-index: 0;
-  opacity: 0.55;
-  background:
-    radial-gradient(
-      70% 40% at 78% -8%,
-      color-mix(in srgb, var(--sx-active-accent) 12%, transparent),
-      transparent 70%
-    );
+  opacity: 0.35;
+  background: radial-gradient(
+    55% 32% at 88% -6%,
+    color-mix(in srgb, var(--sx-info) 5%, transparent),
+    transparent 68%
+  );
 }
 
 .scrutinix-theme::after {
@@ -44,25 +43,32 @@
 }
 
 .dark .scrutinix-theme::before {
-  opacity: 0.7;
+  opacity: 0.45;
 }
 
 .sx-casefile {
   position: relative;
 }
 
-.sx-atmosphere {
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 0;
-  background: radial-gradient(
-    ellipse 60% 40% at 12% 0%,
-    color-mix(in srgb, var(--sx-info) 6%, transparent),
-    transparent 65%
-  );
-  opacity: 0.4;
-  transition: opacity 220ms ease;
+/* Folio label — casefile language, not section eyebrows everywhere */
+.sx-folio-stamp {
+  font-family: var(--sx-font-hack), "Hack", "IBM Plex Mono", monospace;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  line-height: 1.2;
+  text-transform: uppercase;
+  color: var(--sx-text-soft);
+}
+
+.sx-ledger {
+  background: var(--sx-surface);
+}
+
+.sx-dossier-block {
+  max-width: 46rem;
+  padding-bottom: 0.25rem;
+  border-bottom: 1px solid var(--sx-border);
 }
 
 .sx-panel {
@@ -307,20 +313,6 @@
   transform: translateY(1px);
 }
 
-@keyframes sx-marquee {
-  from {
-    transform: translateX(0);
-  }
-  to {
-    transform: translateX(-50%);
-  }
-}
-
-.sx-marquee {
-  animation: sx-marquee 40s linear infinite;
-  opacity: 0.72;
-}
-
 @keyframes sx-shimmer {
   0% {
     background-position: -200% 0;
@@ -442,7 +434,6 @@
   .sx-led-pulse,
   .sx-status-pip-live,
   .sx-threat-fill,
-  .sx-marquee,
   .sx-shimmer,
   .sx-score-arc,
   .sx-dial-live,
