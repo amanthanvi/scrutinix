@@ -38,8 +38,8 @@ flowchart TD
 
 ## Execution order & status
 
-| Plan | Title                                  | Priority | Effort | Depends on | Status |
-| ---- | -------------------------------------- | -------- | ------ | ---------- | ------ |
+| Plan | Title                                  | Priority | Effort | Depends on | Status                                              |
+| ---- | -------------------------------------- | -------- | ------ | ---------- | --------------------------------------------------- |
 | 001  | Unify TargetSafety (URL + probe + DNS) | P1       | M      | —          | DONE (merged; CI/unit/integration cover acceptance) |
 | 002  | Fix cache-hit NDJSON contract          | P1       | S      | —          | DONE (merged; CI/unit/integration cover acceptance) |
 | 003  | Stream hook error recovery             | P1       | S      | —          | DONE (merged; CI/unit/integration cover acceptance) |

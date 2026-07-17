@@ -26,11 +26,11 @@ Paste a URL and start a scan — the console is the product; brand and support o
 
 ### Why this escapes second-order traps
 
-| Reflex | Trap if “avoided badly” | Daylight Desk escape |
-| --- | --- | --- |
-| Security tool → CRT/cyberpunk | Cool steel lab dials / neon cockpit | Scene is ordinary desk light, not a vault or SOC |
-| Security tool → dossier | Editorial “trust brochure” / navy shield SaaS | No folio/stamp/exhibit props; materials from daylight + density, not seriousness metaphors |
-| Not cream SaaS | Purple-indigo or parchment | Cool sky-tinted neutrals (OKLCH, chroma toward ~220–235), ink accent — not warm cream, not purple |
+| Reflex                        | Trap if “avoided badly”                       | Daylight Desk escape                                                                              |
+| ----------------------------- | --------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| Security tool → CRT/cyberpunk | Cool steel lab dials / neon cockpit           | Scene is ordinary desk light, not a vault or SOC                                                  |
+| Security tool → dossier       | Editorial “trust brochure” / navy shield SaaS | No folio/stamp/exhibit props; materials from daylight + density, not seriousness metaphors        |
+| Not cream SaaS                | Purple-indigo or parchment                    | Cool sky-tinted neutrals (OKLCH, chroma toward ~220–235), ink accent — not warm cream, not purple |
 
 Grounding is the **mail-forwarder desk scene**, not a new “security seriousness” costume class.
 
@@ -68,14 +68,14 @@ Grounding is the **mail-forwarder desk scene**, not a new “security seriousnes
 
 ## 6. Key States
 
-| State | Feel / show |
-| --- | --- |
-| Idle | Quiet desk tool; empty verdict invites paste |
-| Streaming | Solid coverage meter; signal rows resolve; score ring is progress readout, not dial theater |
-| Result (any verdict) | Verdict chip + score; accent follows verdict |
-| Error / rate limit | Clear inline error; no false malicious |
-| Empty history | Teach “scans stay on device” |
-| Reduced motion | Instant state; no shimmer/sweep |
+| State                | Feel / show                                                                                 |
+| -------------------- | ------------------------------------------------------------------------------------------- |
+| Idle                 | Quiet desk tool; empty verdict invites paste                                                |
+| Streaming            | Solid coverage meter; signal rows resolve; score ring is progress readout, not dial theater |
+| Result (any verdict) | Verdict chip + score; accent follows verdict                                                |
+| Error / rate limit   | Clear inline error; no false malicious                                                      |
+| Empty history        | Teach “scans stay on device”                                                                |
+| Reduced motion       | Instant state; no shimmer/sweep                                                             |
 
 ## 7. Interaction Model
 

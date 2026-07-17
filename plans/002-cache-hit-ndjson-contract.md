@@ -8,11 +8,12 @@
 > maintain the index.
 >
 > **Drift check (run first)**:
+>
 > 1. `git status --porcelain` (fail if dirty staged/unstaged/untracked in scope)
 > 2. `git diff --stat 76c4698..HEAD -- app/api/analyze/route.ts lib/server/analyze.ts hooks/use-scan-stream.ts tests/integration/analyze-routes.test.ts lib/domain/types.ts`
-> If any in-scope file changed since this plan was written, compare the file changed since this plan was written, compare the
-> "Current state" excerpts against the live code before proceeding; on a
-> mismatch, treat it as a STOP condition.
+>    If any in-scope file changed since this plan was written, compare the file changed since this plan was written, compare the
+>    "Current state" excerpts against the live code before proceeding; on a
+>    mismatch, treat it as a STOP condition.
 >
 > **Written against:** `76c4698`
 

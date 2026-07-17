@@ -163,10 +163,7 @@ export function useBatchStream(
     }));
   }, []);
 
-  const results = useMemo(
-    () => completedResults(state.items),
-    [state.items],
-  );
+  const results = useMemo(() => completedResults(state.items), [state.items]);
 
   return {
     state: {

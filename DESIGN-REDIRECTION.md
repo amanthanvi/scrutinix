@@ -13,11 +13,11 @@ Mid-afternoon at a bright ordinary desk — not a SOC, not a vault. Someone abou
 
 ## Tasteful radical
 
-| Radical (do) | Tasteful (do not invent) |
-| --- | --- |
-| Composition | Familiar paste / analyze / stream / history grammar |
-| Type scale and weight contrast | No invented controls or affordances |
-| Color conviction (surfaces + verdict) | No costume theater |
+| Radical (do)                          | Tasteful (do not invent)                            |
+| ------------------------------------- | --------------------------------------------------- |
+| Composition                           | Familiar paste / analyze / stream / history grammar |
+| Type scale and weight contrast        | No invented controls or affordances                 |
+| Color conviction (surfaces + verdict) | No costume theater                                  |
 
 **One line:** Bold identity; boring interaction grammar.
 
@@ -61,19 +61,19 @@ Also keep:
 
 If a direction smells like any of these, stop and pick another lane:
 
-1. Security tool → forensic dossier / casefile / evidence ledger  
-2. Security tool → cyberpunk / neon / CRT cockpit  
-3. Security tool → editorial magazine “trust brochure”  
-4. Generic SaaS cream / purple-indigo  
+1. Security tool → forensic dossier / casefile / evidence ledger
+2. Security tool → cyberpunk / neon / CRT cockpit
+3. Security tool → editorial magazine “trust brochure”
+4. Generic SaaS cream / purple-indigo
 5. Particles / WebGL wow (wrong register)
 
 ## Surfaces (job, not costume)
 
-| Route | Job |
-| --- | --- |
-| `/` | Scanner-first intake + live results workspace |
-| `/about` | Method / trust (same product materials as home — no dossier cosplay) |
-| `/privacy` | Privacy boundaries (same materials) |
+| Route      | Job                                                                  |
+| ---------- | -------------------------------------------------------------------- |
+| `/`        | Scanner-first intake + live results workspace                        |
+| `/about`   | Method / trust (same product materials as home — no dossier cosplay) |
+| `/privacy` | Privacy boundaries (same materials)                                  |
 
 ## Shape constraints for `$impeccable shape /`
 
@@ -89,6 +89,7 @@ If a direction smells like any of these, stop and pick another lane:
 - **Costume class** — banned metaphor theater (terminal, dossier, etc.).
 - **Tasteful radical** — bold identity axes; boring interaction grammar.
 - **Scanner-first** — narrow story + wide console IA.
+
 ---
 
 **Next:** Shape locked — **Daylight Desk** (`DESIGN-HOME-SHAPE.md`). Casefile chrome discarded on this branch. Proceed with `$impeccable craft /`.
