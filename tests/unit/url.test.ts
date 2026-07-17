@@ -22,6 +22,15 @@ describe("normalizeUrlInput", () => {
     expect(normalizeUrlInput("http://localhost").ok).toBe(false);
   });
 
+  it("rejects reserved, CGNAT, TEST-NET, and multicast destinations", () => {
+    expect(normalizeUrlInput("http://100.64.0.1").ok).toBe(false);
+    expect(normalizeUrlInput("http://192.0.2.1").ok).toBe(false);
+    expect(normalizeUrlInput("http://198.51.100.1").ok).toBe(false);
+    expect(normalizeUrlInput("http://203.0.113.1").ok).toBe(false);
+    expect(normalizeUrlInput("http://224.0.0.1").ok).toBe(false);
+    expect(normalizeUrlInput("http://[2001:db8::1]").ok).toBe(false);
+  });
+
   it("rejects unsupported protocols", () => {
     const result = normalizeUrlInput("ftp://example.com");
 

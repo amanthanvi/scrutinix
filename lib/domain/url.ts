@@ -1,3 +1,5 @@
+import { isBlockedHostname } from "@/lib/domain/blocked-address";
+
 export interface NormalizedUrl {
   input: string;
   normalizedUrl: string;
@@ -16,7 +18,6 @@ export type UrlValidationResult =
     };
 
 const MAX_URL_LENGTH = 2048;
-const PRIVATE_HOSTS = new Set(["localhost", "0.0.0.0", "::1"]);
 
 export function normalizeUrlInput(input: string): UrlValidationResult {
   const trimmed = input.trim();
@@ -106,62 +107,5 @@ export function simplifyUrlForMatching(url: string) {
 }
 
 export function isPrivateHostname(hostname: string) {
-  if (PRIVATE_HOSTS.has(hostname) || hostname.endsWith(".local")) {
-    return true;
-  }
-
-  const ipVersion = getIpVersion(hostname);
-
-  if (ipVersion === 4) {
-    return isPrivateIpv4(hostname);
-  }
-
-  if (ipVersion === 6) {
-    return isPrivateIpv6(hostname);
-  }
-
-  return false;
-}
-
-function isPrivateIpv4(hostname: string) {
-  const octets = hostname.split(".").map((segment) => Number(segment));
-
-  if (octets.length !== 4 || octets.some((value) => Number.isNaN(value))) {
-    return false;
-  }
-
-  const [first, second] = octets;
-  if (first === undefined || second === undefined) {
-    return false;
-  }
-
-  return (
-    first === 10 ||
-    first === 127 ||
-    (first === 169 && second === 254) ||
-    (first === 172 && second >= 16 && second <= 31) ||
-    (first === 192 && second === 168)
-  );
-}
-
-function isPrivateIpv6(hostname: string) {
-  const normalized = hostname.toLowerCase();
-  return (
-    normalized === "::1" ||
-    normalized.startsWith("fc") ||
-    normalized.startsWith("fd") ||
-    normalized.startsWith("fe80:")
-  );
-}
-
-function getIpVersion(hostname: string) {
-  if (/^(\d{1,3}\.){3}\d{1,3}$/.test(hostname)) {
-    return 4;
-  }
-
-  if (hostname.includes(":")) {
-    return 6;
-  }
-
-  return 0;
+  return isBlockedHostname(hostname);
 }
