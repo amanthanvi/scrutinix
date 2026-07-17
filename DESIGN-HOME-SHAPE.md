@@ -1,8 +1,11 @@
 # Shape brief — Home `/` + public docs (scanner dashboard)
 
-**Status:** Extended Instrument Casefile (2026-07-17). About/privacy + footer quiet pass.  
+**Status:** SUPERSEDED 2026-07-17. Instrument Casefile rejected in grilling.  
+**Use instead:** `DESIGN-REDIRECTION.md` (locked brief for `$impeccable shape /`).  
 **Register:** Product (tool).  
 **IA:** Scanner-first **kept** (narrow brand column + wide scan console). Not reopened.
+
+> Historical Casefile shape below — do not execute. Kept for audit trail only.
 
 Visual direction probes: **skipped** — harness has image gen, but this run commits to one lane for sequential overdrive (no pick gate).
 

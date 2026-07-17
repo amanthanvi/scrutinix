@@ -1,30 +1,28 @@
-# DESIGN.md — Scrutinix Instrument Casefile
+# DESIGN.md — Scrutinix (post-grill redirection)
 
 **Register:** Product (tool UI).  
-**Lane:** Instrument Casefile — cool steel forensic ledger, not CRT terminal.
+**Status:** Instrument Casefile **rejected** (2026-07-17 grilling). Do not extend folio / ledger / stamp materials.
 
-## Surfaces
+## Source of truth for the next shape
 
-| Route      | Role                                            |
-| ---------- | ----------------------------------------------- |
-| `/`        | Scanner-first intake + evidence workspace       |
-| `/about`   | Method dossier (folio masthead + exhibit index) |
-| `/privacy` | Privacy dossier (same materials)                |
+→ **`DESIGN-REDIRECTION.md`** — locked scene, keep/kill, radical axes, IA, anti-references.
 
-## Materials
+## Surfaces (jobs)
 
-- Tokens: `app/globals.css` (`--sx-*` cool steel neutrals + verdict semantics)
-- Effects: `app/scrutinix.css` (folio stamp, ledger, verdict stamp, dial, severity top rails)
-- No footer marquee; quiet static status line only
-- No radar / scan-line / accent-glow identity
+| Route | Role |
+| --- | --- |
+| `/` | Scanner-first intake + results workspace |
+| `/about` | Method / trust (product materials, not dossier costume) |
+| `/privacy` | Privacy boundaries (same materials) |
 
-## Type
+## Standing product constraints
 
-- Geist Sans for UI; Hack for folio stamps, tabs, tabular data
-- Product scale (fixed rem steps); display tracking ≥ −0.03em on brand wordmark
+- Scanner-first IA (narrow story + wide console)
+- Summary ↔ Full labelled switch; compact support section
+- No broad shadcnization; branded components under `components/scrutinix/*`
+- Motion: state-only, 150–250ms; honor `prefers-reduced-motion`
+- Tokens in `app/globals.css`; effects in `app/scrutinix.css` — retarget both away from Casefile costume
 
-## Motion
+## Ban list (short)
 
-State-only, 150–250ms, `prefers-reduced-motion` honored. No page-load stage theater on docs.
-
-For the home shape brief and kill list, see `DESIGN-HOME-SHAPE.md`.
+No CRT/radar/glow cosplay. No forensic/casefile/dossier/ledger/stamp cosplay. No second-order “security seriousness” costume.
