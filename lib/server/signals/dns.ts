@@ -9,8 +9,12 @@ import {
 } from "node:dns/promises";
 import { isIP } from "node:net";
 
+import { isBlockedNetworkAddress } from "@/lib/domain/blocked-address";
 import type { DNSData } from "@/lib/domain/types";
 import { withTimeout } from "@/lib/server/http";
+
+const REDACTED_ADDRESS_OBSERVATION =
+  "Private or reserved addresses were omitted from the DNS result.";
 
 export async function runDnsSignal(url: string): Promise<DNSData> {
   const hostname = new URL(url).hostname;
@@ -22,21 +26,28 @@ export async function runDnsSignal(url: string): Promise<DNSData> {
     const reverseHostnames =
       reverseLookup[0]?.status === "fulfilled" ? reverseLookup[0].value : [];
 
+    const { publicAddresses, blockedCount } = partitionAddresses([hostname]);
+    const observations = [
+      "DNS zone records do not apply to literal IP targets.",
+      ...(reverseHostnames.length > 0
+        ? [`Reverse DNS returned ${reverseHostnames.join(", ")}.`]
+        : ["No reverse DNS hostnames were returned for the IP address."]),
+    ];
+
+    if (blockedCount > 0) {
+      observations.push(REDACTED_ADDRESS_OBSERVATION);
+    }
+
     return {
       subjectType: "ip",
-      addresses: [hostname],
+      addresses: publicAddresses,
       cnames: [],
       mx: [],
       txt: [],
       nameservers: [],
       reverseHostnames,
       anomalies: [],
-      observations: [
-        "DNS zone records do not apply to literal IP targets.",
-        ...(reverseHostnames.length > 0
-          ? [`Reverse DNS returned ${reverseHostnames.join(", ")}.`]
-          : ["No reverse DNS hostnames were returned for the IP address."]),
-      ],
+      observations,
     };
   }
 
@@ -60,6 +71,7 @@ export async function runDnsSignal(url: string): Promise<DNSData> {
     ...(ipv4Addresses.status === "fulfilled" ? ipv4Addresses.value : []),
     ...(ipv6Addresses.status === "fulfilled" ? ipv6Addresses.value : []),
   ]);
+  const { publicAddresses, blockedCount } = partitionAddresses(addressList);
   const cnameList = cnames.status === "fulfilled" ? cnames.value : [];
   const mxList =
     mxRecords.status === "fulfilled"
@@ -79,7 +91,7 @@ export async function runDnsSignal(url: string): Promise<DNSData> {
     anomalies.push("The hostname uses punycode encoding.");
   }
 
-  if (addressList.length >= 6) {
+  if (publicAddresses.length >= 6) {
     anomalies.push(
       "The hostname resolves to an unusually high number of address records.",
     );
@@ -91,9 +103,13 @@ export async function runDnsSignal(url: string): Promise<DNSData> {
     );
   }
 
+  if (blockedCount > 0) {
+    observations.push(REDACTED_ADDRESS_OBSERVATION);
+  }
+
   return {
     subjectType: "hostname",
-    addresses: addressList,
+    addresses: publicAddresses,
     cnames: cnameList,
     mx: mxList,
     txt: txtList,
@@ -102,6 +118,22 @@ export async function runDnsSignal(url: string): Promise<DNSData> {
     anomalies,
     observations,
   };
+}
+
+function partitionAddresses(addresses: string[]) {
+  const publicAddresses: string[] = [];
+  let blockedCount = 0;
+
+  for (const address of addresses) {
+    if (isBlockedNetworkAddress(address)) {
+      blockedCount += 1;
+      continue;
+    }
+
+    publicAddresses.push(address);
+  }
+
+  return { publicAddresses, blockedCount };
 }
 
 function unique(values: string[]) {

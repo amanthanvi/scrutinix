@@ -40,12 +40,13 @@ flowchart TD
 
 | Plan | Title | Priority | Effort | Depends on | Status |
 |------|-------|----------|--------|------------|--------|
-| 001 | Unify TargetSafety (URL + probe + DNS) | P1 | M | — | TODO |
+| 001 | Unify TargetSafety (URL + probe + DNS) | P1 | M | — | DONE |
 | 002 | Fix cache-hit NDJSON contract | P1 | S | — | TODO |
 | 003 | Stream hook error recovery | P1 | S | — | TODO |
-| 004 | Next bump + rate-limit identity | P1 | S | — | DONE |
+| 004 | Next bump + rate-limit identity | P1 | S | — | TODO |
 | 005 | CI pyramid + adapter tests | P2 | M | — | TODO |
 | 006 | CSP nonce + connect-src | P2 | M | 004 | DONE |
+
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) | REJECTED (with one-line rationale)
 
