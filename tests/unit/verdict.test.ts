@@ -601,7 +601,9 @@ describe("classifyConsensus", () => {
     );
 
     expect(result.label).toBe("benign");
-    expect(result.reasons.join(" ")).toMatch(/agreed on the classification direction/i);
+    expect(result.reasons.join(" ")).toMatch(
+      /agreed on the classification direction/i,
+    );
   });
 
   it("uses reduced-certainty wording when models disagree without benign-hosted lexical boost", () => {

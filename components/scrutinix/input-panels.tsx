@@ -46,9 +46,7 @@ export function SingleInput({
     <div className="space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="space-y-2">
-          <h2 className="text-xs text-[var(--sx-text-muted)]">
-            Single target
-          </h2>
+          <h2 className="text-xs text-[var(--sx-text-muted)]">Single target</h2>
           <p className="max-w-lg text-sm leading-6 text-[var(--sx-text-muted)]">
             Run one URL, then keep the result open for export or share.
           </p>
@@ -63,7 +61,7 @@ export function SingleInput({
         URL to analyze
       </label>
       <div
-        className={`sx-input-glow flex items-center gap-3 rounded-lg border bg-card px-4 transition-[border-color,box-shadow] duration-200${streaming ? " sx-scan-line" : ""}`}
+        className={`sx-input-glow bg-card flex items-center gap-3 rounded-lg border px-4 transition-[border-color,box-shadow] duration-200${streaming ? "sx-scan-line" : ""}`}
         style={{
           borderColor: error
             ? "var(--sx-suspicious)"
@@ -72,7 +70,10 @@ export function SingleInput({
               : "var(--sx-border)",
         }}
       >
-        <Search className="h-4 w-4 shrink-0 text-[var(--sx-text-soft)]" aria-hidden="true" />
+        <Search
+          className="h-4 w-4 shrink-0 text-[var(--sx-text-soft)]"
+          aria-hidden="true"
+        />
         <Input
           id="sx-url-input"
           type="text"
@@ -174,9 +175,7 @@ export function BatchInput({
     <div className="space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="space-y-2">
-          <h2 className="text-xs text-[var(--sx-text-muted)]">
-            Batch queue
-          </h2>
+          <h2 className="text-xs text-[var(--sx-text-muted)]">Batch queue</h2>
           <p className="max-w-lg text-sm leading-6 text-[var(--sx-text-muted)]">
             Queue up to 10 URLs. Scrutinix runs 3 in parallel and isolates
             failures per row.
@@ -193,7 +192,7 @@ export function BatchInput({
         URLs to analyze (one per line)
       </label>
       <div
-        className={`sx-input-glow rounded-lg border bg-card px-4 pt-3 pb-1 transition-[border-color,box-shadow] duration-200${streaming ? " sx-scan-line" : ""}`}
+        className={`sx-input-glow bg-card rounded-lg border px-4 pt-3 pb-1 transition-[border-color,box-shadow] duration-200${streaming ? "sx-scan-line" : ""}`}
         style={{
           borderColor: error
             ? "var(--sx-suspicious)"
@@ -260,8 +259,7 @@ export function BatchInput({
       </div>
 
       <p className="text-xs leading-5 text-[var(--sx-text-soft)]">
-        Press Cmd/Ctrl+Enter to start. Export the finished batch to CSV or
-        JSON.
+        Press Cmd/Ctrl+Enter to start. Export the finished batch to CSV or JSON.
       </p>
     </div>
   );

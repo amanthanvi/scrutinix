@@ -150,12 +150,12 @@ export type AnalyzeEvent =
 
 ## Commands you will need
 
-| Purpose | Command | Expected on success |
-|---------|---------|---------------------|
-| Integration | `npm run test:integration -- --run` | exit 0 |
-| Unit | `npm run test:unit -- --run` | exit 0 |
-| Typecheck | `npm run typecheck` | exit 0 |
-| Lint | `npm run lint` | exit 0 |
+| Purpose     | Command                             | Expected on success |
+| ----------- | ----------------------------------- | ------------------- |
+| Integration | `npm run test:integration -- --run` | exit 0              |
+| Unit        | `npm run test:unit -- --run`        | exit 0              |
+| Typecheck   | `npm run typecheck`                 | exit 0              |
+| Lint        | `npm run lint`                      | exit 0              |
 
 ## Scope
 
@@ -189,7 +189,7 @@ export type AnalyzeEvent =
 1. Set `scan_started.cached` from `outcome.cached` (move `scan_started` to **after** `runAnalysis` **or** buffer/rewrite — see note).
 2. On `outcome.ok && outcome.cached`, before `scan_complete`, iterate `signalNames` / `outcome.result.signals` and `writer.send({ type: "signal_result", name, result })` for each signal.
 
-**Ordering constraint:** Today `scan_started` is sent *before* `runAnalysis`, so `cached` is unknown. Fix by either:
+**Ordering constraint:** Today `scan_started` is sent _before_ `runAnalysis`, so `cached` is unknown. Fix by either:
 
 - **A1:** Call `runAnalysis` first (without streaming), then send `scan_started` with correct `cached`, then replay `signal_result`s (from live `onSignal` collection or from final result), then `scan_complete`; **or**
 - **A2:** Keep early `scan_started` but only after a cheap cache peek; **or**

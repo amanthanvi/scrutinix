@@ -95,14 +95,14 @@ In-memory path already uses `globalThis.__devRateLimitStore` — mirror that sin
 
 ## Commands you will need
 
-| Purpose | Command | Expected on success |
-|---------|---------|---------------------|
-| Audit (Next-related) | `npm audit` | no Next high/critical in prod path (or document residual) |
-| Lint | `npm run lint` | exit 0 |
-| Typecheck | `npm run typecheck` | exit 0 |
-| Unit | `npm run test:unit -- --run` | exit 0 |
-| Integration | `npm run test:integration -- --run` | exit 0 |
-| Build | `npm run build` | exit 0 |
+| Purpose              | Command                             | Expected on success                                       |
+| -------------------- | ----------------------------------- | --------------------------------------------------------- |
+| Audit (Next-related) | `npm audit`                         | no Next high/critical in prod path (or document residual) |
+| Lint                 | `npm run lint`                      | exit 0                                                    |
+| Typecheck            | `npm run typecheck`                 | exit 0                                                    |
+| Unit                 | `npm run test:unit -- --run`        | exit 0                                                    |
+| Integration          | `npm run test:integration -- --run` | exit 0                                                    |
+| Build                | `npm run build`                     | exit 0                                                    |
 
 ## Scope
 
@@ -187,7 +187,7 @@ Replace first-hop `X-Forwarded-For` as sole identity.
 Extract pure function for tests:
 
 ```ts
-export function getClientRateLimitId(headers: Headers): string
+export function getClientRateLimitId(headers: Headers): string;
 ```
 
 Add unit tests:
@@ -257,12 +257,12 @@ Update `plans/README.md` 004 → DONE. Note residual audit issues that are tooli
 
 ## Test plan
 
-| Case | Where |
-|------|-------|
-| Next builds after bump | `npm run build` |
-| Rate-limit identity prefers trusted hop | `tests/unit/rate-limit.test.ts` (new cases) |
-| In-memory limiter still works in test/dev | existing rate-limit tests |
-| Singleton does not break limit math | existing tests + optional smoke |
+| Case                                      | Where                                       |
+| ----------------------------------------- | ------------------------------------------- |
+| Next builds after bump                    | `npm run build`                             |
+| Rate-limit identity prefers trusted hop   | `tests/unit/rate-limit.test.ts` (new cases) |
+| In-memory limiter still works in test/dev | existing rate-limit tests                   |
+| Singleton does not break limit math       | existing tests + optional smoke             |
 
 ## Done criteria
 

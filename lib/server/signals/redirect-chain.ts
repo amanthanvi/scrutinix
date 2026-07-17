@@ -94,7 +94,8 @@ async function requestRedirectHop(
 
   if (addresses.length === 0) {
     return {
-      error: "The hostname did not resolve to an address for the redirect probe.",
+      error:
+        "The hostname did not resolve to an address for the redirect probe.",
     };
   }
 

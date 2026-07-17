@@ -49,7 +49,9 @@ export function ScoreRing({
   const ringOpacity = isIdle ? 0.1 : 0.18;
 
   return (
-    <div className={clsx("relative inline-flex flex-col items-center", className)}>
+    <div
+      className={clsx("relative inline-flex flex-col items-center", className)}
+    >
       <svg
         viewBox={`0 0 ${SIZE} ${SIZE}`}
         width={SIZE}
@@ -75,8 +77,18 @@ export function ScoreRing({
         {/* ── Idle crosshair ── */}
         {isIdle ? (
           <g stroke="var(--sx-border-muted)" strokeWidth={0.75} opacity={0.25}>
-            <line x1={CENTER} y1={CENTER - CROSSHAIR} x2={CENTER} y2={CENTER + CROSSHAIR} />
-            <line x1={CENTER - CROSSHAIR} y1={CENTER} x2={CENTER + CROSSHAIR} y2={CENTER} />
+            <line
+              x1={CENTER}
+              y1={CENTER - CROSSHAIR}
+              x2={CENTER}
+              y2={CENTER + CROSSHAIR}
+            />
+            <line
+              x1={CENTER - CROSSHAIR}
+              y1={CENTER}
+              x2={CENTER + CROSSHAIR}
+              y2={CENTER}
+            />
           </g>
         ) : null}
 

@@ -7,7 +7,7 @@ interface AppFooterProps {
 
 export function AppFooter({ children }: AppFooterProps) {
   return (
-    <footer className="relative z-10 border-t border-border bg-transparent">
+    <footer className="border-border relative z-10 border-t bg-transparent">
       <div className="absolute top-0 right-0 left-0 h-px bg-gradient-to-r from-transparent via-[var(--sx-active-accent)] to-transparent opacity-20" />
       <div className="mx-auto flex max-w-[1520px] flex-col gap-3 px-4 py-4 sm:px-6 xl:px-8">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center">

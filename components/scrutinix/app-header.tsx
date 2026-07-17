@@ -28,7 +28,7 @@ export function AppHeader({
 
   const brand = (
     <>
-      <span className="relative flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border bg-card">
+      <span className="border-border bg-card relative flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg border">
         <Image
           src="/favicon.ico"
           alt=""
@@ -50,7 +50,7 @@ export function AppHeader({
   );
 
   return (
-    <header className="relative z-20 border-b border-border bg-background/90 backdrop-blur">
+    <header className="border-border bg-background/90 relative z-20 border-b backdrop-blur">
       <div className="mx-auto flex max-w-[1520px] flex-wrap items-center gap-4 px-4 py-4 sm:px-6 xl:px-8">
         <div className="flex min-w-0 items-center gap-4">
           {isHome ? (
@@ -83,7 +83,7 @@ export function AppHeader({
                 <Link
                   key={href}
                   href={href}
-                  className={`sx-btn-press flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm transition-colors ${active ? "text-[var(--sx-text)]" : "text-[var(--sx-text-muted)] hover:bg-muted hover:text-[var(--sx-text)]"}`}
+                  className={`sx-btn-press flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm transition-colors ${active ? "text-[var(--sx-text)]" : "hover:bg-muted text-[var(--sx-text-muted)] hover:text-[var(--sx-text)]"}`}
                 >
                   {label}
                   {active ? (
@@ -120,7 +120,9 @@ export function AppHeader({
       <div
         className="absolute bottom-0 left-0 h-[2px] transition-[width,background-color,opacity] duration-500 ease-out"
         style={{
-          width: hasActivity ? `${Math.min(Math.max(threatScore, 0), 100)}%` : "0%",
+          width: hasActivity
+            ? `${Math.min(Math.max(threatScore, 0), 100)}%`
+            : "0%",
           backgroundColor: scoreColor ?? "var(--sx-active-accent)",
           opacity: hasActivity ? 1 : 0,
         }}

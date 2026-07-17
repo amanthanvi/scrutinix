@@ -10,10 +10,7 @@ import {
 } from "@/lib/client/export";
 import { formatDisplayUrl } from "@/lib/domain/url";
 import type { HistoryEntry, Verdict } from "@/lib/domain/types";
-import {
-  verdictColor,
-  verdictInk,
-} from "@/components/shared/scrutinix-types";
+import { verdictColor, verdictInk } from "@/components/shared/scrutinix-types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -115,11 +112,11 @@ export function HistoryPanel({
 
   return (
     <section
-      className="sx-panel flex h-full max-h-[calc(100vh-7.5rem)] min-h-[24rem] flex-col overflow-hidden rounded-xl border border-border"
+      className="sx-panel border-border flex h-full max-h-[calc(100vh-7.5rem)] min-h-[24rem] flex-col overflow-hidden rounded-xl border"
       aria-label="Scan history"
       role="region"
     >
-      <div className="border-b border-border px-5 py-5">
+      <div className="border-border border-b px-5 py-5">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="space-y-3">
             <div className="flex items-center gap-2">
@@ -232,7 +229,10 @@ export function HistoryPanel({
       <div className="min-h-0 flex-1 px-4 py-4">
         {entries.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-[var(--sx-border-muted)] px-5 py-8 text-center">
-            <Database className="h-6 w-6 text-[var(--sx-border-muted)]" aria-hidden="true" />
+            <Database
+              className="h-6 w-6 text-[var(--sx-border-muted)]"
+              aria-hidden="true"
+            />
             <p className="text-sm leading-6 text-[var(--sx-text-soft)]">
               {historyQuery || filterVerdict !== "all"
                 ? "No scans match the current filter."
@@ -249,7 +249,7 @@ export function HistoryPanel({
                   key={entry.id}
                   type="button"
                   onClick={() => onSelect(entry)}
-                  className="group w-full rounded-lg border border-border bg-card px-4 py-4 text-left transition hover:border-[var(--sx-active-accent)] hover:bg-muted/40"
+                  className="group border-border bg-card hover:bg-muted/40 w-full rounded-lg border px-4 py-4 text-left transition hover:border-[var(--sx-active-accent)]"
                 >
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <span className="text-xs text-[var(--sx-text-muted)]">

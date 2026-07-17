@@ -33,7 +33,8 @@ export async function assertPublicNetworkTarget(
   if (!hostname) {
     return {
       ok: false,
-      error: "The active network probe was blocked because the target hostname is empty.",
+      error:
+        "The active network probe was blocked because the target hostname is empty.",
     };
   }
 
@@ -57,7 +58,8 @@ export async function assertPublicNetworkTarget(
   if (addresses.length === 0) {
     return {
       ok: false,
-      error: "The hostname did not resolve to an address for the active network probe.",
+      error:
+        "The hostname did not resolve to an address for the active network probe.",
     };
   }
 

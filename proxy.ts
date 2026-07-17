@@ -1,14 +1,8 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-import {
-  buildContentSecurityPolicy,
-  createCspNonce,
-} from "@/lib/server/csp";
-import {
-  applyRateLimit,
-  getClientRateLimitId,
-} from "@/lib/server/rate-limit";
+import { buildContentSecurityPolicy, createCspNonce } from "@/lib/server/csp";
+import { applyRateLimit, getClientRateLimitId } from "@/lib/server/rate-limit";
 
 export async function proxy(request: NextRequest) {
   if (request.nextUrl.pathname.startsWith("/api/analyze")) {

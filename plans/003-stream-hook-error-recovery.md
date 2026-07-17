@@ -85,12 +85,12 @@ Do **not** change `readNdjsonStream` to swallow errors unless necessary — hook
 
 ## Commands you will need
 
-| Purpose | Command | Expected on success |
-|---------|---------|---------------------|
-| Typecheck | `npm run typecheck` | exit 0 |
-| Lint | `npm run lint` | exit 0 |
-| Unit | `npm run test:unit -- --run` | exit 0 |
-| E2E smoke (optional if unit covers hooks) | `npm run test:e2e -- --grep @smoke` | exit 0 |
+| Purpose                                   | Command                             | Expected on success |
+| ----------------------------------------- | ----------------------------------- | ------------------- |
+| Typecheck                                 | `npm run typecheck`                 | exit 0              |
+| Lint                                      | `npm run lint`                      | exit 0              |
+| Unit                                      | `npm run test:unit -- --run`        | exit 0              |
+| E2E smoke (optional if unit covers hooks) | `npm run test:e2e -- --grep @smoke` | exit 0              |
 
 ## Suggested executor toolkit
 
@@ -99,7 +99,7 @@ Do **not** change `readNdjsonStream` to swallow errors unless necessary — hook
 **Preferred lazy approach:** do not add RTL. In the catch block, set state inline; add a unit test for `readNdjsonStream` throwing + document hook behavior; optionally extract:
 
 ```ts
-export function streamFailureApiError(error: unknown): ApiError
+export function streamFailureApiError(error: unknown): ApiError;
 ```
 
 in the hook file or `lib/client/` and unit-test that + assert hooks call `setState` with `isStreaming: false` via a minimal pattern already used in the repo.

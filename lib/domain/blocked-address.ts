@@ -124,9 +124,7 @@ function ipv4ToInt(address: string) {
   const octets = address.split(".").map((part) => Number(part));
   if (
     octets.length !== 4 ||
-    octets.some(
-      (octet) => !Number.isInteger(octet) || octet < 0 || octet > 255,
-    )
+    octets.some((octet) => !Number.isInteger(octet) || octet < 0 || octet > 255)
   ) {
     return null;
   }
@@ -257,9 +255,7 @@ function parseEmbeddedIpv4(value: string) {
   const octets = value.split(".").map((part) => Number(part));
   if (
     octets.length !== 4 ||
-    octets.some(
-      (octet) => !Number.isInteger(octet) || octet < 0 || octet > 255,
-    )
+    octets.some((octet) => !Number.isInteger(octet) || octet < 0 || octet > 255)
   ) {
     return null;
   }

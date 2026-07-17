@@ -32,7 +32,10 @@ export function BatchPanel({
   if (items.length === 0) {
     return (
       <section className="sx-panel flex flex-col items-center gap-3 rounded-xl border border-dashed border-[var(--sx-border-muted)] px-6 py-10 text-center">
-        <Layers className="h-6 w-6 text-[var(--sx-border-muted)]" aria-hidden="true" />
+        <Layers
+          className="h-6 w-6 text-[var(--sx-border-muted)]"
+          aria-hidden="true"
+        />
         <h2 className="text-xs text-[var(--sx-text-muted)]">
           Batch results will appear here
         </h2>
@@ -50,14 +53,12 @@ export function BatchPanel({
   return (
     <section
       aria-label="Batch scan results"
-      className="sx-panel overflow-hidden rounded-xl border border-border"
+      className="sx-panel border-border overflow-hidden rounded-xl border"
     >
-      <div className="border-b border-border px-5 py-5">
+      <div className="border-border border-b px-5 py-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="space-y-3">
-            <p className="text-xs text-[var(--sx-text-muted)]">
-              Batch stream
-            </p>
+            <p className="text-xs text-[var(--sx-text-muted)]">Batch stream</p>
             <h2 className="sx-font-sans text-2xl font-semibold text-[var(--sx-text)]">
               {results.length}/{items.length} complete
             </h2>
@@ -83,7 +84,7 @@ export function BatchPanel({
 
       <ScrollArea className="w-full">
         <div className="min-w-[720px]">
-          <div className="grid grid-cols-[60px_minmax(0,1fr)_110px_130px_120px] gap-3 border-b border-border px-5 py-3 text-xs font-medium text-[var(--sx-text-muted)]">
+          <div className="border-border grid grid-cols-[60px_minmax(0,1fr)_110px_130px_120px] gap-3 border-b px-5 py-3 text-xs font-medium text-[var(--sx-text-muted)]">
             <span>#</span>
             <span>URL</span>
             <span>Status</span>
@@ -91,11 +92,11 @@ export function BatchPanel({
             <span>Action</span>
           </div>
 
-          <div className="divide-y divide-border">
+          <div className="divide-border divide-y">
             {items.map((item) => (
               <div
                 key={`${item.index}-${item.url}`}
-                className="grid grid-cols-[60px_minmax(0,1fr)_110px_130px_120px] items-center gap-3 px-5 py-4 text-sm transition hover:bg-muted/40"
+                className="hover:bg-muted/40 grid grid-cols-[60px_minmax(0,1fr)_110px_130px_120px] items-center gap-3 px-5 py-4 text-sm transition"
               >
                 <span className="sx-font-hack text-[var(--sx-text-soft)]">
                   {item.index + 1}

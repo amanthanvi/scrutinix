@@ -28,12 +28,12 @@ describe("streamFailureApiError", () => {
   });
 
   it("uses the fallback when the thrown value has no message", () => {
-    expect(streamFailureApiError({}, "The scan stream failed unexpectedly.")).toEqual(
-      {
-        code: "unexpected_error",
-        message: "The scan stream failed unexpectedly.",
-        retryable: false,
-      },
-    );
+    expect(
+      streamFailureApiError({}, "The scan stream failed unexpectedly."),
+    ).toEqual({
+      code: "unexpected_error",
+      message: "The scan stream failed unexpectedly.",
+      retryable: false,
+    });
   });
 });

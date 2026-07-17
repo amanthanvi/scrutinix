@@ -145,6 +145,8 @@ function readEntity(value: unknown): RdapEntity | null {
     roles: Array.isArray(record.roles)
       ? record.roles.filter((role): role is string => typeof role === "string")
       : undefined,
-    vcardArray: Array.isArray(record.vcardArray) ? record.vcardArray : undefined,
+    vcardArray: Array.isArray(record.vcardArray)
+      ? record.vcardArray
+      : undefined,
   };
 }

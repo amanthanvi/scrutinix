@@ -4,7 +4,7 @@
 **Commit:** `76c4698` (`76c4698cb72f090fea04a6da2a3ca566efd988e4`)  
 **Branch:** `main` (= `origin/main`, clean tree at audit time)  
 **Date:** 2026-07-17  
-**Stack:** TypeScript 5.9 · Next.js 16 App Router (Node runtime) · React 19 · Vitest/Playwright · Vercel-oriented deploy  
+**Stack:** TypeScript 5.9 · Next.js 16 App Router (Node runtime) · React 19 · Vitest/Playwright · Vercel-oriented deploy
 
 **Skills / references:** `/security-best-practices` against  
 `javascript-typescript-nextjs-web-server-security.md`,  
@@ -26,28 +26,28 @@ Scrutinix has solid baseline controls: security headers (CSP, clickjacking defen
 
 ## Severity overview
 
-| Severity | IDs |
-|----------|-----|
-| High | SBP-01, SBP-02, SBP-03 |
-| Medium | SBP-04, SBP-05, SBP-06 |
-| Low | SBP-07, SBP-08 |
+| Severity | IDs                    |
+| -------- | ---------------------- |
+| High     | SBP-01, SBP-02, SBP-03 |
+| Medium   | SBP-04, SBP-05, SBP-06 |
+| Low      | SBP-07, SBP-08         |
 
 ---
 
 ## Positive controls (compliant / risk-accepted)
 
-| Control | Evidence |
-|---------|----------|
-| Security headers (CSP, `frame-ancestors 'none'`, `X-Frame-Options: DENY`, nosniff, referrer policy) | `next.config.ts` lines 9–70 |
-| No `dangerouslySetInnerHTML` / `innerHTML` / `eval` sinks in app code | Repo grep at audit time (React default escaping) |
-| Server logs hash URLs | `lib/server/logger.ts` — `hashUrlForLogs`, `createSafeLogContext` |
-| Active probes pin/block private targets after DNS | `lib/server/public-network-target.ts` + usage in `lib/server/signals/ssl.ts`, `redirect-chain.ts` |
-| Untrusted stream/history JSON sanitized at client boundary | `lib/domain/runtime-safety.ts` |
-| Only `NEXT_PUBLIC_APP_URL` public; provider keys server-side | `lib/config/env.ts` |
-| No cookie session auth → classic CSRF on cookie mutations largely N/A; analyze routes are same-origin `fetch` POSTs | Architecture / AGENTS.md |
-| CORS not enabled on API routes (Next default same-origin) | NEXT-CORS-001 OK |
-| Rate limiting present for analyze routes | `proxy.ts` + `lib/server/rate-limit.ts` (identity issue tracked as SBP-04) |
-| In-memory rate-limit degrade when Redis missing | Documented fail-open for deployability (by design; see rejected) |
+| Control                                                                                                             | Evidence                                                                                          |
+| ------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| Security headers (CSP, `frame-ancestors 'none'`, `X-Frame-Options: DENY`, nosniff, referrer policy)                 | `next.config.ts` lines 9–70                                                                       |
+| No `dangerouslySetInnerHTML` / `innerHTML` / `eval` sinks in app code                                               | Repo grep at audit time (React default escaping)                                                  |
+| Server logs hash URLs                                                                                               | `lib/server/logger.ts` — `hashUrlForLogs`, `createSafeLogContext`                                 |
+| Active probes pin/block private targets after DNS                                                                   | `lib/server/public-network-target.ts` + usage in `lib/server/signals/ssl.ts`, `redirect-chain.ts` |
+| Untrusted stream/history JSON sanitized at client boundary                                                          | `lib/domain/runtime-safety.ts`                                                                    |
+| Only `NEXT_PUBLIC_APP_URL` public; provider keys server-side                                                        | `lib/config/env.ts`                                                                               |
+| No cookie session auth → classic CSRF on cookie mutations largely N/A; analyze routes are same-origin `fetch` POSTs | Architecture / AGENTS.md                                                                          |
+| CORS not enabled on API routes (Next default same-origin)                                                           | NEXT-CORS-001 OK                                                                                  |
+| Rate limiting present for analyze routes                                                                            | `proxy.ts` + `lib/server/rate-limit.ts` (identity issue tracked as SBP-04)                        |
+| In-memory rate-limit degrade when Redis missing                                                                     | Documented fail-open for deployability (by design; see rejected)                                  |
 
 ---
 
@@ -55,7 +55,7 @@ Scrutinix has solid baseline controls: security headers (CSP, clickjacking defen
 
 ### SBP-01 — High — NEXT-SSRF-001 — Split private-network policy
 
-**Location:** `lib/domain/url.ts` ~108–155 vs `lib/server/public-network-target.ts` ~24–56, ~101–118  
+**Location:** `lib/domain/url.ts` ~108–155 vs `lib/server/public-network-target.ts` ~24–56, ~101–118
 
 **Impact:** Request validation’s `isPrivateIpv4` / `isPrivateIpv6` cover classic RFC1918/loopback/link-local only. Probe policy uses a broader Node `BlockList` (CGNAT `100.64.0.0/10`, TEST-NET, multicast, documentation IPv6, embedded IPv4-in-IPv6, etc.). Literal reserved hosts can pass `normalizeUrlInput` and still drive VT / GSB / HF / DNS / WHOIS outbound work while SSL/redirect refuse them.
 
@@ -88,7 +88,7 @@ for (const [range, prefix] of [
 
 ### SBP-02 — High — NEXT-SSRF-001 (info disclosure) — DNS returns private addresses
 
-**Location:** `lib/server/signals/dns.ts` ~59–104 (hostname path); literal IP path ~18–40  
+**Location:** `lib/server/signals/dns.ts` ~59–104 (hostname path); literal IP path ~18–40
 
 **Impact:** Resolved private/reserved A/AAAA records (and literal private IP subjects) are returned to clients in NDJSON `DNSData.addresses`, enabling split-horizon / internal network recon via the public analyzer API.
 
@@ -113,7 +113,7 @@ for (const [range, prefix] of [
 
 ### SBP-03 — High — Dependency / proxy bypass — Next 16.2.4
 
-**Location:** `package.json` `next@16.2.4`; rate-limit matcher `proxy.ts` ~38–40  
+**Location:** `package.json` `next@16.2.4`; rate-limit matcher `proxy.ts` ~38–40
 
 **Impact:** `npm audit` at audit time reported Next in range `16.0.0–16.2.5` with multiple GHSA entries, including Middleware/Proxy bypass via segment-prefetch (incomplete fix follow-up) and DoS classes. Analyze rate limiting is enforced only in `proxy.ts` for `/api/analyze/:path*`. A proxy bypass may skip that gate.
 
@@ -137,7 +137,7 @@ export const config = {
 
 ### SBP-04 — Medium — Rate-limit identity from first XFF hop
 
-**Location:** `proxy.ts` ~11–12  
+**Location:** `proxy.ts` ~11–12
 
 **Impact:** Client-supplied `X-Forwarded-For` first hop used as limiter ID. If the edge does not overwrite/append trusted hops, attackers can rotate spoofed identities and bypass effective limits.
 
@@ -156,7 +156,7 @@ async function enforceRateLimit(request: NextRequest) {
 
 ### SBP-05 — Medium — NEXT-CSP-001 — Production `script-src 'unsafe-inline'`
 
-**Location:** `next.config.ts` ~30–31  
+**Location:** `next.config.ts` ~30–31
 
 **Impact:** XSS containment weaker than nonce/hash-based CSP. Inline script injection (if ever achieved) is more likely to execute.
 
@@ -173,7 +173,7 @@ async function enforceRateLimit(request: NextRequest) {
 
 ### SBP-06 — Medium — Error hygiene — raw exception messages to clients
 
-**Location:** `app/api/analyze/route.ts` ~71–80; related signal/provider error strings streamed into history  
+**Location:** `app/api/analyze/route.ts` ~71–80; related signal/provider error strings streamed into history
 
 **Impact:** Ops/provider detail leakage to browser and IndexedDB history via `scan_error` / signal `error` fields.
 
@@ -200,7 +200,7 @@ async function enforceRateLimit(request: NextRequest) {
 
 ### SBP-07 — Low — CSP least-privilege — browser `connect-src` third parties
 
-**Location:** `next.config.ts` ~16–22  
+**Location:** `next.config.ts` ~16–22
 
 **Impact:** Browser CSP allows connect to VT/GSB/URLHaus/OpenPhish/HF/RDAP though the client only needs `'self'` (`/api/*`). Unnecessary egress channel if XSS lands.
 
@@ -227,7 +227,7 @@ async function enforceRateLimit(request: NextRequest) {
 
 ### SBP-08 — Low — Tooling dependency advisories (vite / ws via Lighthouse tree)
 
-**Location:** `npm audit` transitive via `lighthouse` / related dev tooling  
+**Location:** `npm audit` transitive via `lighthouse` / related dev tooling
 
 **Impact:** Not on the production Next server runtime path for Scrutinix analyze; CI/local tooling risk only.
 
@@ -237,13 +237,13 @@ async function enforceRateLimit(request: NextRequest) {
 
 ## Rejected / by-design under SBP
 
-| Topic | Rationale |
-|-------|-----------|
-| GSB API key in query string | Google Lookup API v4 documents `?key=`; rotate keys + scrub logs; do not “fix” to a header without docs support |
-| Redirect probes with relaxed TLS validation | Documented: SSL signal owns certificate truth (PLAN/AGENTS) |
-| In-memory rate-limit when Redis missing | Documented fail-open for deployability (not fail-closed) |
-| No HSTS recommendation | SBP skill override: do not push HSTS without full understanding of HTTPS-only topology |
-| `/review-security` empty diff | Not a finding — no branch delta on `main` @ `76c4698` |
+| Topic                                       | Rationale                                                                                                       |
+| ------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| GSB API key in query string                 | Google Lookup API v4 documents `?key=`; rotate keys + scrub logs; do not “fix” to a header without docs support |
+| Redirect probes with relaxed TLS validation | Documented: SSL signal owns certificate truth (PLAN/AGENTS)                                                     |
+| In-memory rate-limit when Redis missing     | Documented fail-open for deployability (not fail-closed)                                                        |
+| No HSTS recommendation                      | SBP skill override: do not push HSTS without full understanding of HTTPS-only topology                          |
+| `/review-security` empty diff               | Not a finding — no branch delta on `main` @ `76c4698`                                                           |
 
 ---
 
@@ -251,11 +251,11 @@ async function enforceRateLimit(request: NextRequest) {
 
 Tracked in plans 002–003 and 005; included for traceability:
 
-| Advisory # | Issue | Plan |
-|------------|-------|------|
-| 3 | Cache hits skip `signal_result` + lie about `cached` | [`002-cache-hit-ndjson-contract.md`](./002-cache-hit-ndjson-contract.md) |
-| 4 | Stream hooks leave `isStreaming: true` on parse/network errors | [`003-stream-hook-error-recovery.md`](./003-stream-hook-error-recovery.md) |
-| 8–9 | CI ≠ pyramid; missing DNS/GSB unit tests | [`005-ci-pyramid-and-adapter-tests.md`](./005-ci-pyramid-and-adapter-tests.md) |
+| Advisory # | Issue                                                          | Plan                                                                           |
+| ---------- | -------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| 3          | Cache hits skip `signal_result` + lie about `cached`           | [`002-cache-hit-ndjson-contract.md`](./002-cache-hit-ndjson-contract.md)       |
+| 4          | Stream hooks leave `isStreaming: true` on parse/network errors | [`003-stream-hook-error-recovery.md`](./003-stream-hook-error-recovery.md)     |
+| 8–9        | CI ≠ pyramid; missing DNS/GSB unit tests                       | [`005-ci-pyramid-and-adapter-tests.md`](./005-ci-pyramid-and-adapter-tests.md) |
 
 ---
 

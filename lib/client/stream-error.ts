@@ -7,9 +7,7 @@ export function streamFailureApiError(
   fallbackMessage: string,
 ): ApiError {
   const message =
-    error instanceof Error && error.message
-      ? error.message
-      : fallbackMessage;
+    error instanceof Error && error.message ? error.message : fallbackMessage;
 
   return sanitizeApiErrorResponse(null, message);
 }

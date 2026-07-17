@@ -139,25 +139,25 @@ Literal-IP path also returns `addresses: [hostname]` unchecked (lines 18–40).
 
 Literal hosts that **currently pass** `normalizeUrlInput` but **fail** `assertPublicNetworkTarget`:
 
-| Input | Why blocked by probe policy |
-|-------|-----------------------------|
-| `http://100.64.0.1` | CGNAT 100.64.0.0/10 |
-| `http://192.0.2.1` | TEST-NET-1 192.0.2.0/24 |
-| `http://198.51.100.1` | TEST-NET-2 |
-| `http://203.0.113.1` | TEST-NET-3 |
-| `http://224.0.0.1` | multicast 224.0.0.0/4 |
-| `http://[2001:db8::1]` | documentation IPv6 |
+| Input                  | Why blocked by probe policy |
+| ---------------------- | --------------------------- |
+| `http://100.64.0.1`    | CGNAT 100.64.0.0/10         |
+| `http://192.0.2.1`     | TEST-NET-1 192.0.2.0/24     |
+| `http://198.51.100.1`  | TEST-NET-2                  |
+| `http://203.0.113.1`   | TEST-NET-3                  |
+| `http://224.0.0.1`     | multicast 224.0.0.0/4       |
+| `http://[2001:db8::1]` | documentation IPv6          |
 
 ## Commands you will need
 
-| Purpose | Command | Expected on success |
-|---------|---------|---------------------|
-| Drift | `git diff --stat 76c4698..HEAD -- lib/domain/url.ts lib/server/public-network-target.ts lib/server/signals/dns.ts` | empty or reviewed |
-| Unit (URL + probe + new DNS) | `npm run test:unit -- --run tests/unit/url.test.ts tests/unit/public-network-target.test.ts` | exit 0 |
-| Unit all | `npm run test:unit -- --run` | exit 0 |
-| Integration | `npm run test:integration -- --run` | exit 0 |
-| Typecheck | `npm run typecheck` | exit 0 |
-| Lint | `npm run lint` | exit 0 |
+| Purpose                      | Command                                                                                                            | Expected on success |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------ | ------------------- |
+| Drift                        | `git diff --stat 76c4698..HEAD -- lib/domain/url.ts lib/server/public-network-target.ts lib/server/signals/dns.ts` | empty or reviewed   |
+| Unit (URL + probe + new DNS) | `npm run test:unit -- --run tests/unit/url.test.ts tests/unit/public-network-target.test.ts`                       | exit 0              |
+| Unit all                     | `npm run test:unit -- --run`                                                                                       | exit 0              |
+| Integration                  | `npm run test:integration -- --run`                                                                                | exit 0              |
+| Typecheck                    | `npm run typecheck`                                                                                                | exit 0              |
+| Lint                         | `npm run lint`                                                                                                     | exit 0              |
 
 ## Suggested executor toolkit
 
@@ -295,14 +295,14 @@ Update `plans/README.md` status for 001 → DONE.
 
 ## Test plan
 
-| Case | File | Assert |
-|------|------|--------|
-| CGNAT / TEST-NET / multicast literals rejected at normalize | `tests/unit/url.test.ts` | `ok === false` |
-| Existing private/localhost still rejected | same | unchanged |
-| Probe BlockList behavior unchanged | `tests/unit/public-network-target.test.ts` | all pass |
-| DNS hostname resolution with private A record | `tests/unit/dns-signal.test.ts` | private IP absent from `addresses` |
-| DNS literal private IP | same | no private IP in payload |
-| No regression on analyze routes | `npm run test:integration -- --run` | all pass |
+| Case                                                        | File                                       | Assert                             |
+| ----------------------------------------------------------- | ------------------------------------------ | ---------------------------------- |
+| CGNAT / TEST-NET / multicast literals rejected at normalize | `tests/unit/url.test.ts`                   | `ok === false`                     |
+| Existing private/localhost still rejected                   | same                                       | unchanged                          |
+| Probe BlockList behavior unchanged                          | `tests/unit/public-network-target.test.ts` | all pass                           |
+| DNS hostname resolution with private A record               | `tests/unit/dns-signal.test.ts`            | private IP absent from `addresses` |
+| DNS literal private IP                                      | same                                       | no private IP in payload           |
+| No regression on analyze routes                             | `npm run test:integration -- --run`        | all pass                           |
 
 Structural pattern: `tests/unit/public-network-target.test.ts` for DNS mocks; `tests/unit/url.test.ts` for normalize cases.
 

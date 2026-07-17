@@ -74,13 +74,13 @@ Positive controls already present: `frame-ancestors 'none'`, `X-Frame-Options: D
 
 ## Commands you will need
 
-| Purpose | Command | Expected on success |
-|---------|---------|---------------------|
-| Dev smoke | `npm run dev` | app loads; console CSP errors absent for normal scan |
-| Build | `npm run build` | exit 0 |
-| Typecheck / lint | `npm run typecheck` / `npm run lint` | exit 0 |
-| Unit / integration | `npm run test:unit -- --run` / `test:integration -- --run` | exit 0 |
-| E2E smoke | `npm run test:e2e -- --grep @smoke` | exit 0 |
+| Purpose            | Command                                                    | Expected on success                                  |
+| ------------------ | ---------------------------------------------------------- | ---------------------------------------------------- |
+| Dev smoke          | `npm run dev`                                              | app loads; console CSP errors absent for normal scan |
+| Build              | `npm run build`                                            | exit 0                                               |
+| Typecheck / lint   | `npm run typecheck` / `npm run lint`                       | exit 0                                               |
+| Unit / integration | `npm run test:unit -- --run` / `test:integration -- --run` | exit 0                                               |
+| E2E smoke          | `npm run test:e2e -- --grep @smoke`                        | exit 0                                               |
 
 ## Suggested executor toolkit
 
@@ -122,7 +122,7 @@ In `next.config.ts`, change production `connect-src` to `'self'` only (keep dev 
   isDevelopment
     ? "http://127.0.0.1:* http://localhost:* ws://127.0.0.1:* ws://localhost:*"
     : "",
-]
+];
 ```
 
 Remove VT/GSB/URLHaus/OpenPhish/HF/RDAP from browser CSP.
@@ -187,11 +187,11 @@ Update `plans/README.md` 006 → DONE.
 
 ## Test plan
 
-| Check | How |
-|-------|-----|
-| Browser cannot `fetch` VT directly under CSP | Optional DevTools snippet expectation / document manual check |
-| App + analyze still work | e2e `@smoke` + manual scan |
-| Production script-src lacks unsafe-inline | Assert header in a small node script fetching `next start`, or document `curl -I` check |
+| Check                                        | How                                                                                     |
+| -------------------------------------------- | --------------------------------------------------------------------------------------- |
+| Browser cannot `fetch` VT directly under CSP | Optional DevTools snippet expectation / document manual check                           |
+| App + analyze still work                     | e2e `@smoke` + manual scan                                                              |
+| Production script-src lacks unsafe-inline    | Assert header in a small node script fetching `next start`, or document `curl -I` check |
 
 Example manual header check:
 

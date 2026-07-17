@@ -45,7 +45,9 @@ export async function runThreatFeedsProvider(
   }
 
   if (urlhausResult.status === "rejected") {
-    warnings.push(getErrorMessage(urlhausResult.reason, "URLhaus lookup failed."));
+    warnings.push(
+      getErrorMessage(urlhausResult.reason, "URLhaus lookup failed."),
+    );
   }
 
   if (openPhishResult.status === "rejected") {

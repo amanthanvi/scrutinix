@@ -109,13 +109,13 @@ Note: `test:e2e` already runs `build` first — CI already builds; accept double
 
 ## Commands you will need
 
-| Purpose | Command | Expected on success |
-|---------|---------|---------------------|
-| Format | `npm run format -- --check .` | exit 0 |
-| Unit | `npm run test:unit -- --run` | exit 0 |
-| Integration | `npm run test:integration -- --run` | exit 0 |
-| E2E smoke | `npm run test:e2e -- --grep @smoke` | exit 0 |
-| Lint / typecheck / build | `npm run lint` / `typecheck` / `build` | exit 0 |
+| Purpose                  | Command                                | Expected on success |
+| ------------------------ | -------------------------------------- | ------------------- |
+| Format                   | `npm run format -- --check .`          | exit 0              |
+| Unit                     | `npm run test:unit -- --run`           | exit 0              |
+| Integration              | `npm run test:integration -- --run`    | exit 0              |
+| E2E smoke                | `npm run test:e2e -- --grep @smoke`    | exit 0              |
+| Lint / typecheck / build | `npm run lint` / `typecheck` / `build` | exit 0              |
 
 ## Scope
 
@@ -147,8 +147,8 @@ Note: `test:e2e` already runs `build` first — CI already builds; accept double
 In `.github/workflows/ci.yml`, after Install (or after Lint), add:
 
 ```yaml
-      - name: Format
-        run: npm run format -- --check .
+- name: Format
+  run: npm run format -- --check .
 ```
 
 Locally ensure it passes:
@@ -166,15 +166,15 @@ If it fails, run `npm run format -- --write .` and include formatting fixes in t
 Add a job step after Build **or** a separate job that needs the build artifact. Simplest:
 
 ```yaml
-      - name: E2E smoke
-        run: npm run test:e2e -- --grep @smoke
+- name: E2E smoke
+  run: npm run test:e2e -- --grep @smoke
 ```
 
 Ensure Playwright browsers are installed — read `scripts/run-e2e.mjs` and existing docs; if CI needs:
 
 ```yaml
-      - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium
+- name: Install Playwright browsers
+  run: npx playwright install --with-deps chromium
 ```
 
 place it before e2e (only if the script doesn’t install them). Inspect the script first; do not guess.
@@ -245,11 +245,11 @@ Update `plans/README.md` 005 → DONE.
 
 ## Test plan
 
-| Gap | Test |
-|-----|------|
-| Format drift | CI `format -- --check .` |
-| Smoke regressions | CI `test:e2e -- --grep @smoke` |
-| DNS enrichment | `tests/unit/dns-signal.test.ts` |
+| Gap                  | Test                                               |
+| -------------------- | -------------------------------------------------- |
+| Format drift         | CI `format -- --check .`                           |
+| Smoke regressions    | CI `test:e2e -- --grep @smoke`                     |
+| DNS enrichment       | `tests/unit/dns-signal.test.ts`                    |
 | GSB parsing / errors | `tests/unit/google-safe-browsing-provider.test.ts` |
 
 ## Done criteria
