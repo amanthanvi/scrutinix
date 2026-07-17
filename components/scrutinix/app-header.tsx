@@ -50,7 +50,7 @@ export function AppHeader({
   );
 
   return (
-    <header className="border-border bg-background/90 relative z-20 border-b backdrop-blur">
+    <header className="border-border bg-[color-mix(in_srgb,var(--sx-bg-top)_88%,transparent)] relative z-20 border-b backdrop-blur-md">
       <div className="mx-auto flex max-w-[1520px] flex-wrap items-center gap-4 px-4 py-4 sm:px-6 xl:px-8">
         <div className="flex min-w-0 items-center gap-4">
           {isHome ? (
@@ -83,21 +83,10 @@ export function AppHeader({
                 <Link
                   key={href}
                   href={href}
-                  className={`sx-btn-press flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm transition-colors ${active ? "text-[var(--sx-text)]" : "hover:bg-muted text-[var(--sx-text-muted)] hover:text-[var(--sx-text)]"}`}
+                  className={`sx-btn-press rounded-md px-2.5 py-1.5 text-sm transition-colors ${active ? "bg-muted font-medium text-[var(--sx-text)]" : "hover:bg-muted/70 text-[var(--sx-text-muted)] hover:text-[var(--sx-text)]"}`}
+                  aria-current={active ? "page" : undefined}
                 >
                   {label}
-                  {active ? (
-                    <span
-                      className="sx-led"
-                      style={{
-                        width: 6,
-                        height: 6,
-                        backgroundColor: hasActivity
-                          ? "var(--sx-active-accent)"
-                          : "var(--sx-border-muted)",
-                      }}
-                    />
-                  ) : null}
                 </Link>
               );
             })}

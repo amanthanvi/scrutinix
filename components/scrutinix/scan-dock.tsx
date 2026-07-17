@@ -39,17 +39,18 @@ export function ScanDock() {
   return (
     <section
       id="scan-console"
-      className="sx-stage-in sx-panel border-border flex flex-col overflow-hidden rounded-xl border"
-      data-delay="3"
+      className="sx-panel border-border flex flex-col overflow-hidden rounded-lg border"
       aria-labelledby="scan-dock-heading"
     >
-      <div className="flex flex-col p-6 sm:p-8">
+      <div className="flex flex-col p-5 sm:p-7">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="space-y-2">
-            <p className="text-xs text-[var(--sx-text-muted)]">Scan console</p>
+            <p className="text-xs font-medium tracking-[0.04em] text-[var(--sx-text-muted)] uppercase">
+              Scan console
+            </p>
             <h2
               id="scan-dock-heading"
-              className="text-xl font-semibold text-[var(--sx-text)]"
+              className="text-xl font-semibold tracking-[-0.02em] text-[var(--sx-text)]"
             >
               Scan one link or a short batch.
             </h2>

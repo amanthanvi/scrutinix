@@ -11,7 +11,6 @@ import {
 import type { LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
-import { RadarWatermark } from "@/components/scrutinix/radar-watermark";
 import { Button } from "@/components/ui/button";
 
 interface IntroPanelProps {
@@ -96,6 +95,10 @@ function iconToneClass(tone: ReferenceTone) {
       return "text-[var(--sx-info)]";
     case "suspicious":
       return "text-[var(--sx-suspicious)]";
+    default: {
+      const _exhaustive: never = tone;
+      return _exhaustive;
+    }
   }
 }
 
@@ -105,26 +108,28 @@ export function IntroPanel({ dock }: IntroPanelProps) {
       aria-labelledby="scrutinix-intro-heading"
       className="border-border relative overflow-hidden border-b"
     >
-      <RadarWatermark />
       <div className="relative z-10 mx-auto max-w-[1520px] px-4 py-8 sm:px-6 sm:py-10 xl:px-8 xl:py-12">
         <div className="sx-home-hero grid gap-6 lg:grid-cols-[minmax(18rem,0.72fr)_minmax(0,1.08fr)] lg:items-start">
           <div className="min-w-0 lg:pr-2">
-            <div className="sx-home-brand sx-stage-in space-y-5" data-delay="0">
+            <div className="sx-home-brand space-y-5">
               <div className="space-y-3">
+                <p className="text-xs font-medium tracking-[0.06em] text-[var(--sx-text-muted)] uppercase">
+                  Public URL threat analysis
+                </p>
                 <h1
                   id="scrutinix-intro-heading"
-                  className="text-4xl font-semibold tracking-[-0.04em] text-[var(--sx-text)] sm:text-5xl lg:text-6xl"
+                  className="text-4xl font-semibold tracking-[-0.03em] text-balance text-[var(--sx-text)] sm:text-5xl lg:text-6xl"
                 >
                   Scrutinix
                 </h1>
                 <p className="max-w-xl text-xl leading-tight font-medium text-[var(--sx-text)] sm:text-2xl">
-                  Vigilance on demand.
+                  Evidence before you click.
                 </p>
               </div>
 
               <p className="sx-home-secondary-copy max-w-xl text-sm leading-6 text-[var(--sx-text-muted)] sm:text-base">
-                Unified threat intelligence with automated batch processing,
-                private logging, and integrated reporting controls.
+                Eight independent signals stream into one verdict — reputation,
+                ML, TLS, DNS, and more — with private on-device history.
               </p>
             </div>
           </div>
@@ -149,7 +154,7 @@ export function HomeSupportSection() {
         {referenceCards.map(({ body, cta, href, icon: Icon, title, tone }) => (
           <div
             key={title}
-            className="sx-panel border-border rounded-xl border px-4 py-4"
+            className="sx-panel border-border rounded-lg border px-4 py-4"
           >
             <div className="flex items-start gap-2.5">
               <Icon

@@ -66,15 +66,15 @@ export function VerdictHero({
   if (!result && !isStreaming && !sharedSnapshot) {
     return (
       <section
-        className="sx-panel rounded-xl border border-dashed border-[var(--sx-border-muted)] px-6 py-8 sm:px-8"
+        className="sx-panel rounded-lg border border-dashed border-[var(--sx-border-muted)] px-6 py-8 sm:px-8"
         aria-label="Awaiting target URL"
       >
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_18rem] lg:items-center">
           <div className="space-y-5">
-            <p className="text-xs text-[var(--sx-text-muted)]">
-              Awaiting target
+            <p className="text-xs font-medium tracking-[0.04em] text-[var(--sx-text-muted)] uppercase">
+              Casefile empty
             </p>
-            <h2 className="max-w-2xl text-2xl font-semibold tracking-[-0.03em] text-[var(--sx-text)]">
+            <h2 className="max-w-2xl text-2xl font-semibold tracking-[-0.02em] text-balance text-[var(--sx-text)]">
               Run a link to open the evidence surface.
             </h2>
             <p className="max-w-2xl text-sm leading-6 text-[var(--sx-text-muted)] sm:text-base">
@@ -86,7 +86,6 @@ export function VerdictHero({
 
           <div className="flex flex-col items-center gap-3">
             <ScoreRing score={0} color="var(--sx-border-muted)" isIdle />
-            <p className="text-xs text-[var(--sx-text-soft)]">Idle</p>
           </div>
         </div>
       </section>
@@ -99,16 +98,16 @@ export function VerdictHero({
 
     return (
       <section
-        className="sx-panel sx-scan-line rounded-xl border border-[var(--sx-accent)] px-6 py-6 sm:px-8"
+        className="sx-panel rounded-lg border border-[var(--sx-accent)] px-6 py-6 sm:px-8"
         aria-label="Scanning URL"
         aria-live="polite"
       >
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_18rem] lg:items-end">
           <div className="space-y-5">
-            <p className="sx-pulse text-xs text-[var(--sx-accent)]">
+            <p className="sx-pulse text-xs font-medium tracking-[0.04em] text-[var(--sx-accent)] uppercase">
               Stream in progress
             </p>
-            <h2 className="truncate text-2xl font-semibold text-[var(--sx-text)] sm:text-3xl">
+            <h2 className="truncate text-2xl font-semibold tracking-[-0.02em] text-[var(--sx-text)] sm:text-3xl">
               {displayUrl}
             </h2>
             <p className="max-w-2xl text-sm leading-6 text-[var(--sx-text-muted)]">
@@ -119,13 +118,13 @@ export function VerdictHero({
             <div className="max-w-xl">
               <div className="flex items-center justify-between gap-3 text-xs text-[var(--sx-text-muted)]">
                 <span>Signal coverage</span>
-                <span>
+                <span className="sx-font-hack tabular-nums">
                   {completedSignals}/{SIGNAL_COUNT} complete
                 </span>
               </div>
-              <div className="mt-2 h-2.5 overflow-hidden rounded-full bg-[var(--sx-border)]">
+              <div className="mt-2 h-2 overflow-hidden rounded-full bg-[var(--sx-border)]">
                 <div
-                  className="sx-threat-fill h-full rounded-full bg-[var(--sx-accent)] transition-[width] duration-500"
+                  className="h-full rounded-full bg-[var(--sx-active-accent)] transition-[width] duration-[420ms] ease-[cubic-bezier(0.16,1,0.3,1)]"
                   style={{ width: `${progress}%` }}
                 />
               </div>
@@ -211,7 +210,7 @@ export function VerdictHero({
   return (
     <section
       className={clsx(
-        "sx-panel rounded-xl border p-6 transition-all duration-200 sm:p-8",
+        "sx-panel rounded-lg border p-6 transition-all duration-200 sm:p-8",
         isMalicious
           ? "border-[var(--sx-malicious)]"
           : "border-[var(--sx-border)]",
@@ -221,27 +220,29 @@ export function VerdictHero({
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1.08fr)_minmax(18rem,0.72fr)]">
         <div className="space-y-6">
           <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="space-y-2">
+            <div className="space-y-3">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="border-border bg-card rounded-md border px-2.5 py-1 text-[0.65rem] font-medium tracking-[0.08em] text-[var(--sx-text-muted)] uppercase">
+                <span className="border-border bg-card rounded-md border px-2.5 py-1 text-[0.65rem] font-medium tracking-[0.06em] text-[var(--sx-text-muted)] uppercase">
                   {result ? "Live result" : "Shared snapshot"}
                 </span>
                 {result ? (
                   <span
-                    className="rounded-md px-2.5 py-1 text-[0.65rem] font-medium tracking-[0.08em] uppercase"
+                    className="sx-verdict-stamp"
                     style={{
                       color: verdictInk(result.verdict),
-                      backgroundColor: `color-mix(in_srgb, ${color} 12%, transparent)`,
+                      borderColor: color,
+                      backgroundColor: `color-mix(in_srgb, ${color} 10%, transparent)`,
                     }}
                   >
                     {result.verdict}
                   </span>
                 ) : sharedVerdict ? (
                   <span
-                    className="rounded-md px-2.5 py-1 text-[0.65rem] font-medium tracking-[0.08em] uppercase"
+                    className="sx-verdict-stamp"
                     style={{
                       color: verdictInk(sharedVerdict),
-                      backgroundColor: `color-mix(in_srgb, ${verdictColor(sharedVerdict)} 12%, transparent)`,
+                      borderColor: verdictColor(sharedVerdict),
+                      backgroundColor: `color-mix(in_srgb, ${verdictColor(sharedVerdict)} 10%, transparent)`,
                     }}
                   >
                     {sharedVerdict}
@@ -254,7 +255,7 @@ export function VerdictHero({
                 ) : null}
               </div>
 
-              <h2 className="text-2xl font-semibold tracking-[-0.03em] break-all text-[var(--sx-text)] sm:text-3xl">
+              <h2 className="text-2xl font-semibold tracking-[-0.02em] break-all text-[var(--sx-text)] sm:text-3xl">
                 {displayUrl}
               </h2>
             </div>

@@ -3,24 +3,18 @@ import { clsx } from "clsx";
 /* ── Geometry ─────────────────────────────────── */
 const SIZE = 160;
 const CENTER = SIZE / 2;
-const STROKE = 7;
-const RADIUS = 68;
-const CIRCUMFERENCE = 2 * Math.PI * RADIUS; // ≈ 427.26
-
-/* Background ring radii (concentric sonar circles) */
-const RING_RADII = [54, 40, 26];
-
-/* Crosshair arm length from center */
-const CROSSHAIR = 24;
+const STROKE = 8;
+const RADIUS = 62;
+const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 
 interface ScoreRingProps {
   /** 0–100 threat score */
   score: number;
   /** CSS color value, e.g. "var(--sx-safe)" */
   color: string;
-  /** Show active scanning sweep animation */
+  /** Show active scanning indeterminate arc */
   isStreaming?: boolean;
-  /** Dormant idle state — faint rings, crosshair, no arc */
+  /** Dormant idle state — track only */
   isIdle?: boolean;
   /** Label below score number, e.g. "Minimal risk" */
   bandLabel?: string;
@@ -28,13 +22,8 @@ interface ScoreRingProps {
 }
 
 /**
- * SVG circular score gauge with concentric sonar rings,
- * a verdict-colored arc, and an optional sweep line during streaming.
- *
- * Three visual states:
- * - **idle**: faint rings + crosshair, no arc or score
- * - **streaming**: rings pulse + sweep line rotates, count in center
- * - **result**: arc fills to score %, score number in center
+ * Precision instrument dial: clean track + verdict arc.
+ * Streaming uses an indeterminate dash, not a radar sweep.
  */
 export function ScoreRing({
   score,
@@ -46,7 +35,6 @@ export function ScoreRing({
 }: ScoreRingProps) {
   const clampedScore = Math.min(100, Math.max(0, score));
   const offset = CIRCUMFERENCE * (1 - clampedScore / 100);
-  const ringOpacity = isIdle ? 0.1 : 0.18;
 
   return (
     <div
@@ -59,81 +47,54 @@ export function ScoreRing({
         aria-hidden="true"
         className="block"
       >
-        {/* ── Concentric sonar rings ── */}
-        {RING_RADII.map((r) => (
-          <circle
-            key={r}
-            cx={CENTER}
-            cy={CENTER}
-            r={r}
-            fill="none"
-            stroke="var(--sx-border-muted)"
-            strokeWidth={0.75}
-            opacity={ringOpacity}
-            className="sx-radar-ring"
-          />
-        ))}
+        {/* Track */}
+        <circle
+          cx={CENTER}
+          cy={CENTER}
+          r={RADIUS}
+          fill="none"
+          stroke="var(--sx-border-muted)"
+          strokeWidth={STROKE}
+          opacity={isIdle ? 0.35 : 0.45}
+          transform={`rotate(-90 ${CENTER} ${CENTER})`}
+        />
 
-        {/* ── Idle crosshair ── */}
-        {isIdle ? (
-          <g stroke="var(--sx-border-muted)" strokeWidth={0.75} opacity={0.25}>
+        {/* Inner tick marks — instrument feel */}
+        {[0, 25, 50, 75].map((tick) => {
+          const angle = ((tick / 100) * 360 - 90) * (Math.PI / 180);
+          const inner = RADIUS - STROKE / 2 - 4;
+          const outer = RADIUS - STROKE / 2 - 10;
+          return (
             <line
-              x1={CENTER}
-              y1={CENTER - CROSSHAIR}
-              x2={CENTER}
-              y2={CENTER + CROSSHAIR}
+              key={tick}
+              x1={CENTER + Math.cos(angle) * inner}
+              y1={CENTER + Math.sin(angle) * inner}
+              x2={CENTER + Math.cos(angle) * outer}
+              y2={CENTER + Math.sin(angle) * outer}
+              stroke="var(--sx-border-muted)"
+              strokeWidth={1.25}
+              opacity={isIdle ? 0.35 : 0.55}
             />
-            <line
-              x1={CENTER - CROSSHAIR}
-              y1={CENTER}
-              x2={CENTER + CROSSHAIR}
-              y2={CENTER}
-            />
-          </g>
-        ) : null}
+          );
+        })}
 
-        {/* ── Streaming sweep line ── */}
+        {/* Streaming indeterminate arc */}
         {isStreaming ? (
-          <g className="sx-radar-sweep-fast">
-            <line
-              x1={CENTER}
-              y1={CENTER}
-              x2={CENTER}
-              y2={CENTER - RADIUS - 4}
-              stroke={color}
-              strokeWidth={1.5}
-              opacity={0.55}
-              strokeLinecap="round"
-            />
-            {/* Sweep trail — faint wedge via gradient */}
-            <circle
-              cx={CENTER}
-              cy={CENTER}
-              r={RADIUS - 2}
-              fill="none"
-              stroke={color}
-              strokeWidth={RADIUS}
-              strokeDasharray={`${CIRCUMFERENCE * 0.08} ${CIRCUMFERENCE * 0.92}`}
-              opacity={0.06}
-            />
-          </g>
-        ) : null}
-
-        {/* ── Track ring (subtle background for the arc) ── */}
-        {!isIdle ? (
           <circle
             cx={CENTER}
             cy={CENTER}
             r={RADIUS}
             fill="none"
-            stroke="var(--sx-border-muted)"
+            stroke={color}
             strokeWidth={STROKE}
-            opacity={0.12}
+            strokeLinecap="round"
+            strokeDasharray={`${CIRCUMFERENCE * 0.22} ${CIRCUMFERENCE * 0.78}`}
             transform={`rotate(-90 ${CENTER} ${CENTER})`}
+            className="sx-dial-live"
           />
         ) : null}
 
-        {/* ── Score arc (result state only, on top of track) ── */}
+        {/* Result score arc */}
         {!isIdle && !isStreaming ? (
           <circle
             cx={CENTER}
@@ -150,7 +111,7 @@ export function ScoreRing({
           />
         ) : null}
 
-        {/* ── Center text ── */}
+        {/* Center readout */}
         {!isIdle ? (
           <text
             x={CENTER}
@@ -159,15 +120,28 @@ export function ScoreRing({
             dominantBaseline="central"
             className="sx-font-hack"
             fill={isStreaming ? "var(--sx-text)" : color}
-            fontSize={isStreaming ? 36 : 44}
+            fontSize={isStreaming ? 32 : 40}
             fontWeight={600}
           >
             {isStreaming ? score : clampedScore}
           </text>
-        ) : null}
+        ) : (
+          <text
+            x={CENTER}
+            y={CENTER}
+            textAnchor="middle"
+            dominantBaseline="central"
+            className="sx-font-hack"
+            fill="var(--sx-text-soft)"
+            fontSize={14}
+            fontWeight={500}
+            letterSpacing="0.08em"
+          >
+            IDLE
+          </text>
+        )}
       </svg>
 
-      {/* ── Band label below ring ── */}
       {bandLabel && !isIdle ? (
         <p className="mt-2 text-center text-sm text-[var(--sx-text-soft)]">
           {bandLabel}

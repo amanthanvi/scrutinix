@@ -61,7 +61,7 @@ export function SingleInput({
         URL to analyze
       </label>
       <div
-        className={`sx-input-glow bg-card flex items-center gap-3 rounded-lg border px-4 transition-[border-color,box-shadow] duration-200${streaming ? "sx-scan-line" : ""}`}
+        className={`sx-input-glow bg-card flex items-center gap-3 rounded-lg border px-4 transition-[border-color,box-shadow] duration-200${streaming ? "ring-1 ring-[color-mix(in_srgb,var(--sx-active-accent)_35%,transparent)]" : ""}`}
         style={{
           borderColor: error
             ? "var(--sx-suspicious)"
@@ -192,7 +192,7 @@ export function BatchInput({
         URLs to analyze (one per line)
       </label>
       <div
-        className={`sx-input-glow bg-card rounded-lg border px-4 pt-3 pb-1 transition-[border-color,box-shadow] duration-200${streaming ? "sx-scan-line" : ""}`}
+        className={`sx-input-glow bg-card rounded-lg border px-4 pt-3 pb-1 transition-[border-color,box-shadow] duration-200${streaming ? "ring-1 ring-[color-mix(in_srgb,var(--sx-active-accent)_35%,transparent)]" : ""}`}
         style={{
           borderColor: error
             ? "var(--sx-suspicious)"

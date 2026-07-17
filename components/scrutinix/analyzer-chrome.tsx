@@ -11,7 +11,7 @@ export function AnalyzerChrome({ children }: { children: ReactNode }) {
   return (
     <div
       className={clsx(
-        "sx-radar-bg flex min-h-screen flex-col",
+        "sx-casefile flex min-h-screen flex-col",
         isMalicious && "sx-alert",
       )}
       style={{ "--sx-active-accent": accentColor } as CSSProperties}

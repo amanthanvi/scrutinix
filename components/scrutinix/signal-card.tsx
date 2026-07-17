@@ -241,22 +241,22 @@ function SignalCardInner({
   return (
     <article
       style={{
-        transitionDelay: index > 0 ? `${index * 60}ms` : undefined,
+        transitionDelay: index > 0 ? `${index * 40}ms` : undefined,
       }}
       className={clsx(
-        "sx-panel border-border h-full rounded-xl border px-6 py-6 transition-[border-color,box-shadow,transform] duration-200",
+        "sx-panel sx-signal-enter border-border h-full rounded-lg border px-5 py-5 transition-[border-color,box-shadow,transform] duration-200",
         edgeClass,
         isActivelyScanning && "sx-pending-scan",
-        "hover:-translate-y-0.5 hover:border-[var(--sx-active-accent)] hover:shadow-[0_8px_24px_-12px_color-mix(in_srgb,var(--sx-active-accent)_18%,transparent)]",
+        "hover:border-[color-mix(in_srgb,var(--sx-active-accent)_45%,var(--sx-border))]",
       )}
       aria-label={`${signalLabels[name]} signal: ${result.status}`}
     >
       <div className="flex items-start gap-3">
         <span
           className={clsx(
-            "sx-led mt-1.5",
-            isActivelyScanning && "sx-led-pulse",
-            isError && "sx-led-pulse",
+            "sx-status-pip mt-1.5",
+            isActivelyScanning && "sx-status-pip-live",
+            isError && "sx-status-pip-live",
           )}
           style={{ backgroundColor: ledColor, color: ledColor }}
           aria-hidden="true"
