@@ -13,10 +13,10 @@ cleanup.
 
 ## Current Snapshot
 
-- Date: 2026-05-01
-- Execution status: `P18 completed and verified`
+- Date: 2026-07-17
+- Execution status: P20 advisory wave 001-006 merged locally
 - Platform:
-  - Next.js `16.2.4`
+  - Next.js `16.2.10`
   - React `19.2.x`
   - Node `22 LTS`
   - NDJSON streaming over `fetch`
