@@ -1,15 +1,18 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-import { applyRateLimit } from "@/lib/server/rate-limit";
+import {
+  applyRateLimit,
+  getClientRateLimitId,
+} from "@/lib/server/rate-limit";
 
 export function proxy(request: NextRequest) {
   return enforceRateLimit(request);
 }
 
 async function enforceRateLimit(request: NextRequest) {
-  const forwardedFor = request.headers.get("x-forwarded-for");
-  const identifier = forwardedFor?.split(",")[0]?.trim() ?? "unknown";
+  // Identity trusts platform/proxy headers; see getClientRateLimitId.
+  const identifier = getClientRateLimitId(request.headers);
   const limit = await applyRateLimit(identifier);
 
   if (!limit.success) {

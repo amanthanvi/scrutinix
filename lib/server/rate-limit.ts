@@ -24,10 +24,72 @@ type WindowRecord = {
 
 declare global {
   var __devRateLimitStore: Map<string, WindowRecord> | undefined;
+  var __scrutinixRateLimiters:
+    | { minute: Ratelimit; day: Ratelimit }
+    | undefined;
 }
 
 const MINUTE_LIMIT = 10;
 const DAY_LIMIT = 50;
+
+/**
+ * Rate-limit identity from request headers.
+ *
+ * The leftmost X-Forwarded-For hop is client-supplied and untrusted when the
+ * edge does not overwrite the header. Prefer platform IPs (Vercel sets
+ * x-real-ip / x-vercel-forwarded-for). Otherwise use the rightmost XFF hop
+ * (typically appended by a trusted reverse proxy). Residual risk: without a
+ * header-overwriting edge, clients can still spoof identity.
+ */
+export function getClientRateLimitId(headers: Headers): string {
+  const realIp = headers.get("x-real-ip")?.trim();
+  if (realIp) {
+    return realIp;
+  }
+
+  const vercelForwarded = headers.get("x-vercel-forwarded-for")?.trim();
+  if (vercelForwarded) {
+    const hop = lastForwardedHop(vercelForwarded);
+    if (hop) {
+      return hop;
+    }
+  }
+
+  const forwardedFor = headers.get("x-forwarded-for");
+  const hop = lastForwardedHop(forwardedFor);
+  return hop ?? "unknown";
+}
+
+function lastForwardedHop(value: string | null): string | undefined {
+  if (!value) {
+    return undefined;
+  }
+
+  const hops = value
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean);
+  return hops.at(-1);
+}
+
+function getUpstashLimiters(redisUrl: string, redisToken: string) {
+  if (!globalThis.__scrutinixRateLimiters) {
+    const redis = new Redis({ url: redisUrl, token: redisToken });
+    globalThis.__scrutinixRateLimiters = {
+      minute: new Ratelimit({
+        redis,
+        limiter: Ratelimit.slidingWindow(MINUTE_LIMIT, "1 m"),
+        prefix: "mud:minute",
+      }),
+      day: new Ratelimit({
+        redis,
+        limiter: Ratelimit.slidingWindow(DAY_LIMIT, "1 d"),
+        prefix: "mud:day",
+      }),
+    };
+  }
+  return globalThis.__scrutinixRateLimiters;
+}
 
 export async function applyRateLimit(identifier: string): Promise<LimitResult> {
   if (
@@ -53,20 +115,10 @@ export async function applyRateLimit(identifier: string): Promise<LimitResult> {
     return applyInMemoryLimit(identifier);
   }
 
-  const redis = new Redis({
-    url: redisUrl,
-    token: redisToken,
-  });
-  const minuteLimiter = new Ratelimit({
-    redis,
-    limiter: Ratelimit.slidingWindow(MINUTE_LIMIT, "1 m"),
-    prefix: "mud:minute",
-  });
-  const dayLimiter = new Ratelimit({
-    redis,
-    limiter: Ratelimit.slidingWindow(DAY_LIMIT, "1 d"),
-    prefix: "mud:day",
-  });
+  const { minute: minuteLimiter, day: dayLimiter } = getUpstashLimiters(
+    redisUrl,
+    redisToken,
+  );
 
   const [minute, day] = await Promise.all([
     minuteLimiter.limit(identifier),
