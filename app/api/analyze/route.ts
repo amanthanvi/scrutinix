@@ -1,12 +1,14 @@
-import { normalizeUrlInput } from "@/lib/domain/url";
+import { createCacheKey, normalizeUrlInput } from "@/lib/domain/url";
 import { runAnalysis } from "@/lib/server/analyze";
 import { createApiError } from "@/lib/server/api-error";
+import { analysisCache } from "@/lib/server/cache";
+import { readJsonBody } from "@/lib/server/request-body";
 import { createNdjsonResponse } from "@/lib/server/stream";
 
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
-  const body = await readJsonBody(request);
+  const body = await readJsonBody<{ url?: unknown }>(request);
   if (!body || typeof body.url !== "string") {
     return Response.json(
       {
@@ -33,13 +35,15 @@ export async function POST(request: Request) {
 
   const scanId = crypto.randomUUID();
   const startedAt = new Date().toISOString();
+  const cacheKey = createCacheKey(validation.value.normalizedUrl);
+  const cacheHit = Boolean(analysisCache.get(cacheKey));
 
   return createNdjsonResponse(async (writer) => {
     writer.send({
       type: "scan_started",
       scanId,
       url: validation.value.normalizedUrl,
-      cached: false,
+      cached: cacheHit,
       startedAt,
     });
 
@@ -81,12 +85,4 @@ export async function POST(request: Request) {
       });
     }
   });
-}
-
-async function readJsonBody(request: Request) {
-  try {
-    return (await request.json()) as { url?: unknown } | null;
-  } catch {
-    return null;
-  }
 }

@@ -68,6 +68,10 @@ export async function runAnalysis(input: string, options: AnalyzeOptions = {}) {
       },
     } satisfies AnalysisResult;
 
+    for (const name of signalNames) {
+      options.onSignal?.({ name, result: cachedResult.signals[name] });
+    }
+
     return {
       ok: true as const,
       result: cachedResult,
