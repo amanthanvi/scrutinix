@@ -78,12 +78,10 @@ Observed results:
 
 ## Work Items
 
-
 ### P20 Advisory wave execute (001-006)
 
 - [x] Merged local advisor branches on dvisor/execute-all-merge: 006 (incl. 004), 001, 002, 003, 005.
 - See plans/README.md for DONE status and per-plan detail.
-
 
 ### P01 Reset the baseline and living docs
 
