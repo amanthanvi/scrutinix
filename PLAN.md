@@ -14,7 +14,7 @@ cleanup.
 ## Current Snapshot
 
 - Date: 2026-07-17
-- Execution status: P20 advisory wave 001-006 merged locally
+- Execution status: `P20 advisory wave 001-006 merged locally`
 - Platform:
   - Next.js `16.2.10`
   - React `19.2.x`
