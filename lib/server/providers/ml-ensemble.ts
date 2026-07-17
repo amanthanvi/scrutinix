@@ -6,6 +6,7 @@ import { getUrlStructureRisk } from "@/lib/domain/url-structure-risk";
 import { classifyConsensus } from "@/lib/domain/verdict";
 import { normalizeUrlInput } from "@/lib/domain/url";
 import { fetchWithTimeout } from "@/lib/server/http";
+import { getErrorMessage } from "@/lib/server/signal-error";
 
 const HUGGING_FACE_ROUTER_BASE =
   "https://router.huggingface.co/hf-inference/models";
@@ -55,9 +56,7 @@ export async function runMlEnsembleProvider(
   try {
     hostedModel = await runHostedModel(url);
   } catch (error) {
-    warnings.push(
-      error instanceof Error ? error.message : "Hosted classifier failed.",
-    );
+    warnings.push(getErrorMessage(error, "Hosted classifier failed."));
   }
 
   const consensus = classifyConsensus(hostedModel, lexicalModel);

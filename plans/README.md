@@ -42,7 +42,7 @@ flowchart TD
 |------|-------|----------|--------|------------|--------|
 | 001 | Unify TargetSafety (URL + probe + DNS) | P1 | M | - | DONE |
 | 002 | Fix cache-hit NDJSON contract | P1 | S | - | DONE |
-| 003 | Stream hook error recovery | P1 | S | - | TODO |
+| 003 | Stream hook error recovery | P1 | S | - | DONE |
 | 004 | Next bump + rate-limit identity | P1 | S | - | DONE |
 | 005 | CI pyramid + adapter tests | P2 | M | - | TODO |
 | 006 | CSP nonce + connect-src | P2 | M | 004 | DONE |
