@@ -3,6 +3,7 @@
 import { useCallback, useRef, useState } from "react";
 
 import { readNdjsonStream } from "@/lib/client/ndjson";
+import { streamFailureApiError } from "@/lib/client/stream-error";
 import {
   createPendingSignalResults,
   type AnalysisResult,
@@ -127,10 +128,21 @@ export function useScanStream(onComplete?: (result: AnalysisResult) => void) {
           controller.signal.aborted ||
           (error instanceof DOMException && error.name === "AbortError")
         ) {
+          setState((previous) => ({
+            ...previous,
+            isStreaming: false,
+          }));
           return;
         }
 
-        throw error;
+        setState((previous) => ({
+          ...previous,
+          isStreaming: false,
+          error: streamFailureApiError(
+            error,
+            "The scan stream failed unexpectedly.",
+          ),
+        }));
       }
     },
     [onComplete],
