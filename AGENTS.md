@@ -77,7 +77,7 @@ Project-local operating notes for agents working in this repository. Keep this f
 
 - Keep the home layout scanner-first: brand column and scan console placement should match the current intro grid (narrow story column, wide console column) unless a redesign explicitly changes it.
 - Remove redundant marketing and spec microcopy when the same facts already appear next to the scan workflow (for example duplicate signal counts, batch limits, or NDJSON lines in both the hero and the scan-console footer).
-- Prefer compact, scannable support content: small reference cards or a tight grid over long introductory paragraphs or accordions for method and caveats on the home page.
+- Keep method/caveat reference content on `/about` (compact definition list or grouped notes), not as a support card grid under the home scanner.
 - For Summary versus Full signal lanes, use an accessible labelled control (for example a `role="switch"` with visible Summary and Full labels) instead of only icon buttons.
 - Prefer non-verbal affordances for common actions when copy would repeat (for example an Enter-style icon on Analyze instead of a separate line saying Press Enter to scan).
 

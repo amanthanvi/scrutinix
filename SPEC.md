@@ -27,7 +27,7 @@
   - Restore dark/light theme support through the shared semantic token layer in `app/globals.css` while keeping `app/scrutinix.css` for the branded motion/effects layer.
   - When a theme toggle sits inside a server-rendered header, gate any `resolvedTheme`-dependent icon or label behind a mount-safe client snapshot to avoid hydration mismatches.
   - Keep the top header metrics truthful in idle state: the threat meter stays visually inert and the coverage badge reads as idle until a scan actually runs.
-  - The public site now uses a dashboard-first home route: a compact scanner-first top band on `/`, a calmer two-column operational workspace with a sticky history rail, and a clearly separated support/method section below, with matching editorial shells for `/about` and `/privacy`, all expressed through the preset-aligned neutral system.
+  - The public site now uses a dashboard-first home route: a compact scanner-first top band on `/`, a calmer two-column operational workspace with a sticky history rail, and method/caveat detail on `/about` and `/privacy`, all expressed through the preset-aligned neutral system.
   - Sans-serif typography is the default reading mode; mono is reserved for telemetry, timings, hashes, and other code-like labels.
   - Favicons and manifest are served from checked-in `public/` assets with explicit metadata links instead of a generated icon route.
 - Verdict decision:
@@ -124,7 +124,7 @@ Both personas use the same tool. A **view mode toggle** (Summary / Full Report) 
 ### 2.3 UX states checklist
 
 - **Loading/streaming:** Skeleton cards per enrichment source. Each card populates independently as its API resolves. Progress indicator shows which sources are still pending
-- **Empty:** Dashboard-first landing state with the scanner dock, brief product framing, and direct links to privacy/methodology context; deeper explanation stays in a separate support band below
+- **Empty:** Dashboard-first landing state with the scanner dock, brief product framing, and chrome links to privacy/methodology; deeper explanation lives on `/about` and `/privacy`
 - **Error (partial):** Failed or non-applicable sources show "failed", "caveat", or "n/a" state with the reason surfaced inline. Verdict is computed from available data, safe-result confidence is capped when primary reputation coverage is missing, and the user can rerun the full scan from the primary controls
 - **Error (total):** All sources failed — show error message with "Retry All" button and suggestion to check network
 - **Offline/degraded:** N/A (server-side tool, requires network). Client-side history remains accessible offline via IndexedDB

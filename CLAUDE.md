@@ -40,7 +40,7 @@ components/
     input-panels.tsx      # shadcn-backed input/textarea/button controls
     history-panel.tsx     # search, verdict filters, export, history drill-down
     batch-panel.tsx       # Batch results data table
-    intro-panel.tsx       # Hero + HomeSupportSection reference card grid
+    intro-panel.tsx       # Scanner-first hero (brand + dock)
     loading-skeleton.tsx  # Initial page load skeleton
     error-boundary.tsx    # Class-based error boundary
   shared/

@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { Scale, Zap, BarChart3, ShieldAlert, Activity } from "lucide-react";
+import type { ReactNode } from "react";
 
 import { PublicPageShell } from "@/components/scrutinix/public-page-shell";
 
@@ -8,6 +10,48 @@ export const metadata: Metadata = {
   description:
     "How Scrutinix evaluates URLs with streamed multi-signal evidence and confidence scoring.",
 };
+
+const consoleNotes: ReadonlyArray<{ title: string; body: ReactNode }> = [
+  {
+    title: "Summary vs full",
+    body: "Summary prioritizes the highest-impact lanes; full shows every outcome, including caveats.",
+  },
+  {
+    title: "Batch stays isolated",
+    body: (
+      <>
+        Queue short lists, then open any finished row in single-scan mode from
+        the{" "}
+        <Link
+          href="/#scan-console"
+          className="text-[var(--sx-text)] underline decoration-[var(--sx-border)] underline-offset-2 hover:decoration-[var(--sx-text-muted)]"
+        >
+          scan console
+        </Link>
+        .
+      </>
+    ),
+  },
+  {
+    title: "Browser-only history",
+    body: (
+      <>
+        Saved scans stay on-device unless you export or share them. See{" "}
+        <Link
+          href="/privacy"
+          className="text-[var(--sx-text)] underline decoration-[var(--sx-border)] underline-offset-2 hover:decoration-[var(--sx-text-muted)]"
+        >
+          privacy
+        </Link>{" "}
+        for what the server still processes.
+      </>
+    ),
+  },
+  {
+    title: "Feed hits need the full URL",
+    body: "URLhaus and OpenPhish match the exact IOC string you paste — not browse pages like urlhaus.abuse.ch/browse/.",
+  },
+];
 
 export default function AboutPage() {
   return (
@@ -90,6 +134,28 @@ export default function AboutPage() {
                 <li>Redirect-chain hops and terminal reachability</li>
               </ul>
             </div>
+          </div>
+
+          <div className="sx-prose-block">
+            <p className="sx-label">Using the console</p>
+            <h2 className="mt-3 max-w-[28ch] text-2xl font-semibold tracking-[-0.02em] text-balance text-[var(--sx-text)] sm:text-[1.75rem]">
+              How to read lanes, batches, and feeds.
+            </h2>
+            <dl className="border-border mt-6 divide-y divide-[var(--sx-border)] overflow-hidden rounded-md border">
+              {consoleNotes.map(({ title, body }) => (
+                <div
+                  key={title}
+                  className="grid gap-2 bg-[var(--sx-surface)] px-5 py-4 sm:grid-cols-[minmax(10rem,14rem)_minmax(0,1fr)] sm:gap-6"
+                >
+                  <dt className="text-sm font-medium text-[var(--sx-text)]">
+                    {title}
+                  </dt>
+                  <dd className="text-sm leading-7 text-[var(--sx-text-muted)]">
+                    {body}
+                  </dd>
+                </div>
+              ))}
+            </dl>
           </div>
         </section>
 

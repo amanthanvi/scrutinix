@@ -30,7 +30,7 @@
 ## Standing product constraints
 
 - Scanner-first IA (narrow story + wide console) — probe sidebar was atmosphere only, not IA
-- Summary ↔ Full labelled switch; compact support section
+- Summary ↔ Full labelled switch; method notes live on `/about`
 - No broad shadcnization; branded components under `components/scrutinix/*`
 - Motion: state-only, 150–250ms; honor `prefers-reduced-motion`
 - Tokens in `app/globals.css`; effects in `app/scrutinix.css`

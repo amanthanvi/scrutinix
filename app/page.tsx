@@ -8,10 +8,7 @@ import {
   ShellHeader,
 } from "@/components/scrutinix/analyzer-app";
 import { ScrutinixErrorBoundary } from "@/components/scrutinix/error-boundary";
-import {
-  HomeSupportSection,
-  IntroPanel,
-} from "@/components/scrutinix/intro-panel";
+import { IntroPanel } from "@/components/scrutinix/intro-panel";
 
 export default function HomePage() {
   return (
@@ -34,10 +31,6 @@ export default function HomePage() {
                 </div>
               </ScrutinixErrorBoundary>
             </div>
-
-            <ScrutinixErrorBoundary>
-              <HomeSupportSection />
-            </ScrutinixErrorBoundary>
           </div>
         </main>
 

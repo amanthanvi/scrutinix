@@ -38,7 +38,7 @@ Grounding is the **mail-forwarder desk scene**, not a new “security seriousnes
 
 - Scanner-first intro grid (narrow story / wide console)
 - Summary ↔ Full labelled `role="switch"`
-- Compact support reference grid job
+- Method/caveat notes on `/about` (not a home card grid)
 - `globals.css` tokens vs `scrutinix.css` effects seam
 - Branded `components/scrutinix/*` (no broad shadcnization)
 - Semantic verdict tokens and advisor correctness
@@ -63,8 +63,7 @@ Grounding is the **mail-forwarder desk scene**, not a new “security seriousnes
 1. Header: quiet chrome + threat progress when active
 2. Hero band: brand wordmark (hero-level) + one line + **dominant intake console**
 3. Workspace: verdict reading surface → signal lanes (Summary/Full) → history rail
-4. Support: tight reference grid below
-5. Docs: same materials — page title + highlights rail + body; no exhibit index theater  
+4. Docs: `/about` + `/privacy` carry method and caveats; home stays scanner-only below the workspace
    Rhythm: calm empty → taut live stream → decisive verdict chip (not rubber stamp)
 
 ## 6. Key States
@@ -80,11 +79,11 @@ Grounding is the **mail-forwarder desk scene**, not a new “security seriousnes
 
 ## 7. Interaction Model
 
-URL → Analyze (Enter icon) → NDJSON stream fills verdict + signals → Summary/Full density → export/share/rescan → support links. Motion = state only (150–250ms).
+URL → Analyze (Enter icon) → NDJSON stream fills verdict + signals → Summary/Full density → export/share/rescan → Method/Privacy in chrome. Motion = state only (150–250ms).
 
 ## 8. Content Requirements
 
-Product copy density kept; Casefile vocabulary stripped (“casefile”, “exhibit”, “evidence surface” as costume). Tagline grounded in forward-before-you-open. Support cards keep their job. No marketing stats strip in hero.
+Product copy density kept; Casefile vocabulary stripped (“casefile”, “exhibit”, “evidence surface” as costume). Tagline grounded in forward-before-you-open. Console method notes live on `/about`. No marketing stats strip in hero.
 
 ## 9. Recommended References (impl)
 
