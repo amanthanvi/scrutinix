@@ -1,7 +1,7 @@
 /* ── Scrutinix effects — Daylight Desk ── */
 @property --sx-meter {
   syntax: "<percentage>";
-  inherits: false;
+  inherits: true;
   initial-value: 0%;
 }
 
@@ -9,6 +9,7 @@
   --sx-active-accent: var(--sx-accent);
   --sx-font-sans: var(--font-geist-sans), "Geist", system-ui, sans-serif;
   --sx-font-hack: var(--font-hack), "Hack", "IBM Plex Mono", monospace;
+
   background: linear-gradient(
     180deg,
     var(--sx-bg-top) 0%,
@@ -173,6 +174,7 @@
 
 .sx-coverage-meter {
   --sx-meter: 0%;
+
   height: 0.5rem;
   overflow: hidden;
   border-radius: 999px;
@@ -208,7 +210,7 @@
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
-  border: 1px solid currentColor;
+  border: 1px solid currentcolor;
   border-radius: 0.375rem;
   padding: 0.3rem 0.65rem;
   font-size: 0.7rem;
@@ -217,9 +219,10 @@
   text-transform: uppercase;
 }
 
+/* Matches score-ring RADIUS=62 → circumference ≈ 389.56 */
 @keyframes sx-score-arc {
   from {
-    stroke-dashoffset: 427.26;
+    stroke-dashoffset: 389.56;
   }
 }
 
@@ -229,10 +232,10 @@
 
 @keyframes sx-score-indeterminate {
   0% {
-    stroke-dashoffset: 80;
+    stroke-dashoffset: 78;
   }
   100% {
-    stroke-dashoffset: -347;
+    stroke-dashoffset: -389.56;
   }
 }
 

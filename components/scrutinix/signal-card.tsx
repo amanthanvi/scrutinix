@@ -256,7 +256,6 @@ function SignalCardInner({
           className={clsx(
             "sx-status-pip mt-1.5",
             isActivelyScanning && "sx-status-pip-live",
-            isError && "sx-status-pip-live",
           )}
           style={{ backgroundColor: ledColor, color: ledColor }}
           aria-hidden="true"

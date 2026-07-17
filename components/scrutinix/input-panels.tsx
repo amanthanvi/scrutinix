@@ -53,7 +53,7 @@ export function SingleInput({
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-stretch">
         <div
-          className={`sx-input-glow bg-card flex min-w-0 flex-1 items-center gap-3 rounded-md border px-3.5 transition-[border-color,box-shadow] duration-200${streaming ? "ring-1 ring-[color-mix(in_srgb,var(--sx-active-accent)_28%,transparent)]" : ""}`}
+          className={`sx-input-glow bg-card flex min-w-0 flex-1 items-center gap-3 rounded-md border px-3.5 transition-[border-color,box-shadow] duration-200${streaming ? " ring-1 ring-[color-mix(in_srgb,var(--sx-active-accent)_28%,transparent)]" : ""}`}
           style={{
             borderColor: error
               ? "var(--sx-suspicious)"
@@ -195,7 +195,7 @@ export function BatchInput({
       </div>
 
       <div
-        className={`sx-input-glow bg-card rounded-md border px-3.5 pt-3 pb-1 transition-[border-color,box-shadow] duration-200${streaming ? "ring-1 ring-[color-mix(in_srgb,var(--sx-active-accent)_28%,transparent)]" : ""}`}
+        className={`sx-input-glow bg-card rounded-md border px-3.5 pt-3 pb-1 transition-[border-color,box-shadow] duration-200${streaming ? " ring-1 ring-[color-mix(in_srgb,var(--sx-active-accent)_28%,transparent)]" : ""}`}
         style={{
           borderColor: error
             ? "var(--sx-suspicious)"

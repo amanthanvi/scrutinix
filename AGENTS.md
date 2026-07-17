@@ -25,7 +25,7 @@ Project-local operating notes for agents working in this repository. Keep this f
   - The hosted classifier uses the Hugging Face router endpoint with the default model `DunnBC22/codebert-base-Malicious_URLs`.
   - Threat feeds use URLhaus with the documented `Auth-Key` header plus cached OpenPhish community feed data; do not reintroduce the removed PhishTank adapter.
   - The branded UI lives under `components/scrutinix/*`; shared shadcn/ui primitives live under `components/ui/*`.
-  - Production responses ship security headers from `next.config.ts`, including CSP and related browser hardening headers.
+  - Production responses ship browser-hardening headers from `next.config.ts`. Per-request CSP (nonce `script-src`, narrow `connect-src`) is applied in `proxy.ts` via `lib/server/csp.ts` so document responses get fresh nonces; do not reintroduce a static CSP-only approach in `next.config.ts` without an equivalent nonce path.
 
 ## Proven Commands
 

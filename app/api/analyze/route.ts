@@ -1,7 +1,6 @@
-import { createCacheKey, normalizeUrlInput } from "@/lib/domain/url";
+import { normalizeUrlInput } from "@/lib/domain/url";
 import { runAnalysis } from "@/lib/server/analyze";
 import { createApiError } from "@/lib/server/api-error";
-import { analysisCache } from "@/lib/server/cache";
 import { readJsonBody } from "@/lib/server/request-body";
 import { createNdjsonResponse } from "@/lib/server/stream";
 
@@ -35,22 +34,21 @@ export async function POST(request: Request) {
 
   const scanId = crypto.randomUUID();
   const startedAt = new Date().toISOString();
-  const cacheKey = createCacheKey(validation.value.normalizedUrl);
-  const cacheHit = Boolean(analysisCache.get(cacheKey));
 
   return createNdjsonResponse(async (writer) => {
-    writer.send({
-      type: "scan_started",
-      scanId,
-      url: validation.value.normalizedUrl,
-      cached: cacheHit,
-      startedAt,
-    });
-
     try {
       const outcome = await runAnalysis(url, {
         scanId,
         startedAt,
+        onScanReady: ({ cached, normalizedUrl }) => {
+          writer.send({
+            type: "scan_started",
+            scanId,
+            url: normalizedUrl,
+            cached,
+            startedAt,
+          });
+        },
         onSignal: ({ name, result }) => {
           writer.send({
             type: "signal_result",

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 
 import { readNdjsonStream } from "@/lib/client/ndjson";
 import { streamFailureApiError } from "@/lib/client/stream-error";
@@ -163,10 +163,15 @@ export function useBatchStream(
     }));
   }, []);
 
+  const results = useMemo(
+    () => completedResults(state.items),
+    [state.items],
+  );
+
   return {
     state: {
       ...state,
-      results: completedResults(state.items),
+      results,
     },
     startBatch,
     cancelBatch,

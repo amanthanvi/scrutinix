@@ -28,8 +28,17 @@ type SignalListener = (payload: {
   result: SignalResults[SignalName];
 }) => void;
 
+type ScanReadyListener = (payload: {
+  cached: boolean;
+  scanId: string;
+  startedAt: string;
+  normalizedUrl: string;
+}) => void;
+
 interface AnalyzeOptions {
   onSignal?: SignalListener;
+  /** Fired once after the cache decision, before any signal_result events. */
+  onScanReady?: ScanReadyListener;
   scanId?: string;
   startedAt?: string;
 }
@@ -54,8 +63,17 @@ export async function runAnalysis(input: string, options: AnalyzeOptions = {}) {
   const scanId = options.scanId ?? crypto.randomUUID();
   const cacheKey = createCacheKey(normalized.value.normalizedUrl);
   const cached = analysisCache.get(cacheKey);
+  const normalizedUrl = normalized.value.normalizedUrl;
+
+  options.onScanReady?.({
+    cached: Boolean(cached),
+    scanId,
+    startedAt,
+    normalizedUrl,
+  });
 
   if (cached) {
+    const completedAt = new Date().toISOString();
     const cachedResult = {
       ...cached,
       id: scanId,
@@ -64,7 +82,9 @@ export async function runAnalysis(input: string, options: AnalyzeOptions = {}) {
         scanId,
         cacheHit: true,
         startedAt,
-        completedAt: new Date().toISOString(),
+        completedAt,
+        durationMs:
+          new Date(completedAt).getTime() - new Date(startedAt).getTime(),
       },
     } satisfies AnalysisResult;
 
@@ -78,7 +98,7 @@ export async function runAnalysis(input: string, options: AnalyzeOptions = {}) {
       scanId,
       startedAt,
       cached: true,
-      normalizedUrl: normalized.value.normalizedUrl,
+      normalizedUrl,
     };
   }
 

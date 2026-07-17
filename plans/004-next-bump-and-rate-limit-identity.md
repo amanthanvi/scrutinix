@@ -8,8 +8,9 @@
 > maintain the index.
 >
 > **Drift check (run first)**:
-> `git diff --stat 76c4698..HEAD -- package.json package-lock.json proxy.ts lib/server/rate-limit.ts tests/unit/rate-limit.test.ts`
-> If any in-scope file changed since this plan was written, compare the
+> 1. `git status --porcelain` (fail if dirty staged/unstaged/untracked in scope)
+> 2. `git diff --stat 76c4698..HEAD -- package.json package-lock.json proxy.ts lib/server/rate-limit.ts tests/unit/rate-limit.test.ts`
+> If any in-scope file changed since this plan was written, compare the file changed since this plan was written, compare the
 > "Current state" excerpts against the live code before proceeding; on a
 > mismatch, treat it as a STOP condition.
 >

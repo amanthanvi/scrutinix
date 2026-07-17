@@ -93,7 +93,6 @@ export function VerdictHero({
       <section
         className="sx-panel rounded-lg border border-[var(--sx-accent)] px-6 py-6 sm:px-8"
         aria-label="Scanning URL"
-        aria-live="polite"
       >
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_18rem] lg:items-end">
           <div className="space-y-5">

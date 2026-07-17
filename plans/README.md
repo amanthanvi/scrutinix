@@ -40,12 +40,12 @@ flowchart TD
 
 | Plan | Title                                  | Priority | Effort | Depends on | Status |
 | ---- | -------------------------------------- | -------- | ------ | ---------- | ------ |
-| 001  | Unify TargetSafety (URL + probe + DNS) | P1       | M      | —          | DONE   |
-| 002  | Fix cache-hit NDJSON contract          | P1       | S      | —          | DONE   |
-| 003  | Stream hook error recovery             | P1       | S      | —          | DONE   |
-| 004  | Next bump + rate-limit identity        | P1       | S      | —          | DONE   |
-| 005  | CI pyramid + adapter tests             | P2       | M      | —          | DONE   |
-| 006  | CSP nonce + connect-src                | P2       | M      | 004        | DONE   |
+| 001  | Unify TargetSafety (URL + probe + DNS) | P1       | M      | —          | DONE (merged; CI/unit/integration cover acceptance) |
+| 002  | Fix cache-hit NDJSON contract          | P1       | S      | —          | DONE (merged; CI/unit/integration cover acceptance) |
+| 003  | Stream hook error recovery             | P1       | S      | —          | DONE (merged; CI/unit/integration cover acceptance) |
+| 004  | Next bump + rate-limit identity        | P1       | S      | —          | DONE (merged; CI/unit/integration cover acceptance) |
+| 005  | CI pyramid + adapter tests             | P2       | M      | —          | DONE (merged; CI/unit/integration cover acceptance) |
+| 006  | CSP nonce + connect-src                | P2       | M      | 004        | DONE (merged; CI/unit/integration cover acceptance) |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) | REJECTED (with one-line rationale)
 

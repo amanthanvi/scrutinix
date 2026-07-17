@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { isBlockedNetworkAddress } from "@/lib/domain/blocked-address";
 import {
   createCacheKey,
   normalizeUrlInput,
@@ -25,10 +26,20 @@ describe("normalizeUrlInput", () => {
   it("rejects reserved, CGNAT, TEST-NET, and multicast destinations", () => {
     expect(normalizeUrlInput("http://100.64.0.1").ok).toBe(false);
     expect(normalizeUrlInput("http://192.0.2.1").ok).toBe(false);
+    expect(normalizeUrlInput("http://192.88.99.1").ok).toBe(false);
     expect(normalizeUrlInput("http://198.51.100.1").ok).toBe(false);
     expect(normalizeUrlInput("http://203.0.113.1").ok).toBe(false);
     expect(normalizeUrlInput("http://224.0.0.1").ok).toBe(false);
     expect(normalizeUrlInput("http://[2001:db8::1]").ok).toBe(false);
+    expect(normalizeUrlInput("http://[fec0::1]").ok).toBe(false);
+    expect(normalizeUrlInput("http://[3fff::1]").ok).toBe(false);
+    expect(normalizeUrlInput("http://[5f00::1]").ok).toBe(false);
+    expect(normalizeUrlInput("http://[100:0:0:1::1]").ok).toBe(false);
+  });
+
+  it("treats IPv6 zone IDs as blocked link-local addresses", () => {
+    expect(isBlockedNetworkAddress("fe80::1%eth0")).toBe(true);
+    expect(isBlockedNetworkAddress("fe80::1%25eth0")).toBe(true);
   });
 
   it("rejects unsupported protocols", () => {

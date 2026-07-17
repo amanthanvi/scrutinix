@@ -9,6 +9,7 @@ const IPV4_BLOCKED_SUBNETS = [
   ["172.16.0.0", 12],
   ["192.0.0.0", 24],
   ["192.0.2.0", 24],
+  ["192.88.99.0", 24],
   ["192.168.0.0", 16],
   ["198.18.0.0", 15],
   ["198.51.100.0", 24],
@@ -22,11 +23,15 @@ const IPV6_BLOCKED_SUBNETS = [
   ["::1", 128],
   ["64:ff9b:1::", 48],
   ["100::", 64],
+  ["100:0:0:1::", 64],
   ["2001::", 23],
   ["2001:db8::", 32],
   ["2002::", 16],
+  ["3fff::", 20],
+  ["5f00::", 16],
   ["fc00::", 7],
   ["fe80::", 10],
+  ["fec0::", 10],
   ["ff00::", 8],
 ] as const;
 
@@ -146,9 +151,15 @@ function getIpVersion(hostname: string) {
 }
 
 function normalizeHostname(hostname: string) {
-  const trimmed = hostname.trim().toLowerCase().replace(/\.$/, "");
+  let trimmed = hostname.trim().toLowerCase().replace(/\.$/, "");
   if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
-    return trimmed.slice(1, -1);
+    trimmed = trimmed.slice(1, -1);
+  }
+
+  // Strip IPv6 zone IDs (`fe80::1%eth0` / `fe80::1%25eth0`) before parsing.
+  const zoneIndex = trimmed.indexOf("%");
+  if (zoneIndex !== -1) {
+    trimmed = trimmed.slice(0, zoneIndex);
   }
 
   return trimmed;

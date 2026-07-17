@@ -8,8 +8,9 @@
 > maintain the index.
 >
 > **Drift check (run first)**:
-> `git diff --stat 76c4698..HEAD -- lib/domain/url.ts lib/server/public-network-target.ts lib/server/signals/dns.ts lib/server/signals/ssl.ts lib/server/signals/redirect-chain.ts tests/unit/url.test.ts tests/unit/public-network-target.test.ts`
-> If any in-scope file changed since this plan was written, compare the
+> 1. `git status --porcelain` (fail if dirty staged/unstaged/untracked in scope)
+> 2. `git diff --stat 76c4698..HEAD -- lib/domain/url.ts lib/server/public-network-target.ts lib/server/signals/dns.ts lib/server/signals/ssl.ts lib/server/signals/redirect-chain.ts tests/unit/url.test.ts tests/unit/public-network-target.test.ts`
+> If any in-scope file changed since this plan was written, compare the file changed since this plan was written, compare the
 > "Current state" excerpts against the live code before proceeding; on a
 > mismatch, treat it as a STOP condition.
 >
@@ -152,7 +153,8 @@ Literal hosts that **currently pass** `normalizeUrlInput` but **fail** `assertPu
 
 | Purpose                      | Command                                                                                                            | Expected on success |
 | ---------------------------- | ------------------------------------------------------------------------------------------------------------------ | ------------------- |
-| Drift                        | `git diff --stat 76c4698..HEAD -- lib/domain/url.ts lib/server/public-network-target.ts lib/server/signals/dns.ts` | empty or reviewed   |
+| Drift                        | `git status --porcelain
+git diff --stat 76c4698..HEAD -- lib/domain/url.ts lib/server/public-network-target.ts lib/server/signals/dns.ts` | empty or reviewed   |
 | Unit (URL + probe + new DNS) | `npm run test:unit -- --run tests/unit/url.test.ts tests/unit/public-network-target.test.ts`                       | exit 0              |
 | Unit all                     | `npm run test:unit -- --run`                                                                                       | exit 0              |
 | Integration                  | `npm run test:integration -- --run`                                                                                | exit 0              |
