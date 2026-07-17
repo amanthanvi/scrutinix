@@ -43,18 +43,13 @@ export function ScanDock() {
       aria-labelledby="scan-dock-heading"
     >
       <div className="flex flex-col p-5 sm:p-6">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="space-y-1.5">
-            <h2
-              id="scan-dock-heading"
-              className="text-2xl font-semibold tracking-[-0.02em] text-[var(--sx-text)]"
-            >
-              Scan
-            </h2>
-            <p className="max-w-xl text-sm leading-6 text-[var(--sx-text-muted)]">
-              Paste a URL below to analyze for potential threats.
-            </p>
-          </div>
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <h2
+            id="scan-dock-heading"
+            className="text-2xl font-semibold tracking-[-0.02em] text-[var(--sx-text)]"
+          >
+            Scan
+          </h2>
 
           <Badge
             variant={
@@ -77,7 +72,7 @@ export function ScanDock() {
             setActiveTab(value as Tab);
             setFormError(null);
           }}
-          className="mt-6 gap-4"
+          className="mt-4 gap-4"
         >
           <TabsList
             aria-label="Scan mode"
