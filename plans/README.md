@@ -45,7 +45,7 @@ flowchart TD
 | 003 | Stream hook error recovery | P1 | S | — | TODO |
 | 004 | Next bump + rate-limit identity | P1 | S | — | DONE |
 | 005 | CI pyramid + adapter tests | P2 | M | — | TODO |
-| 006 | CSP nonce + connect-src | P2 | M | 004 | TODO |
+| 006 | CSP nonce + connect-src | P2 | M | 004 | DONE |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) | REJECTED (with one-line rationale)
 

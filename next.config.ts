@@ -4,39 +4,10 @@ import { fileURLToPath } from "node:url";
 import type { NextConfig } from "next";
 
 const rootDir = path.dirname(fileURLToPath(import.meta.url));
-const isDevelopment = process.env.NODE_ENV !== "production";
 
-const contentSecurityPolicy = [
-  "default-src 'self'",
-  "base-uri 'self'",
-  "font-src 'self' data:",
-  "form-action 'self'",
-  "frame-ancestors 'none'",
-  "img-src 'self' data: blob:",
-  [
-    "connect-src 'self'",
-    "https://www.virustotal.com",
-    "https://safebrowsing.googleapis.com",
-    "https://urlhaus-api.abuse.ch",
-    "https://openphish.com",
-    "https://router.huggingface.co",
-    "https://rdap.org",
-    isDevelopment
-      ? "http://127.0.0.1:* http://localhost:* ws://127.0.0.1:* ws://localhost:*"
-      : "",
-  ]
-    .filter(Boolean)
-    .join(" "),
-  `script-src 'self' 'unsafe-inline'${isDevelopment ? " 'unsafe-eval'" : ""}`,
-  "style-src 'self' 'unsafe-inline'",
-  "object-src 'none'",
-].join("; ");
-
+// CSP (script-src nonce + narrow connect-src) is set per-request in proxy.ts.
+// Static headers() cannot supply a fresh nonce, so CSP lives only there.
 const securityHeaders = [
-  {
-    key: "Content-Security-Policy",
-    value: contentSecurityPolicy.replace(/\s{2,}/g, " ").trim(),
-  },
   {
     key: "Permissions-Policy",
     value: "camera=(), geolocation=(), microphone=()",
