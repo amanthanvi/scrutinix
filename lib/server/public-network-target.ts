@@ -67,7 +67,8 @@ export async function assertPublicNetworkTarget(
   if (!hostname) {
     return {
       ok: false,
-      error: "The active network probe was blocked because the target hostname is empty.",
+      error:
+        "The active network probe was blocked because the target hostname is empty.",
     };
   }
 
@@ -91,7 +92,8 @@ export async function assertPublicNetworkTarget(
   if (addresses.length === 0) {
     return {
       ok: false,
-      error: "The hostname did not resolve to an address for the active network probe.",
+      error:
+        "The hostname did not resolve to an address for the active network probe.",
     };
   }
 
@@ -272,9 +274,7 @@ function parseEmbeddedIpv4(value: string) {
   const octets = value.split(".").map((part) => Number(part));
   if (
     octets.length !== 4 ||
-    octets.some(
-      (octet) => !Number.isInteger(octet) || octet < 0 || octet > 255,
-    )
+    octets.some((octet) => !Number.isInteger(octet) || octet < 0 || octet > 255)
   ) {
     return null;
   }

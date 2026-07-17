@@ -32,7 +32,7 @@ export function HeaderMetrics() {
           <span className="text-xs text-[var(--sx-text-muted)]">
             Threat score
           </span>
-          <span className="sx-font-hack tabular-nums text-xs text-[var(--sx-text)]">
+          <span className="sx-font-hack text-xs text-[var(--sx-text)] tabular-nums">
             {meterLabel}
           </span>
         </div>
@@ -45,7 +45,8 @@ export function HeaderMetrics() {
           aria-valuetext={meterValueText}
           className={clsx(
             "relative mt-2 h-2.5 w-full overflow-hidden rounded-full bg-[var(--sx-border)]",
-            !hasActivity && "ring-1 ring-dashed ring-[var(--sx-border-muted)] ring-inset",
+            !hasActivity &&
+              "ring-dashed ring-1 ring-[var(--sx-border-muted)] ring-inset",
           )}
         >
           <div
@@ -61,13 +62,13 @@ export function HeaderMetrics() {
       </div>
 
       <div
-        className="hidden w-px shrink-0 bg-border sm:block sm:self-stretch"
+        className="bg-border hidden w-px shrink-0 sm:block sm:self-stretch"
         aria-hidden="true"
       />
 
       <div className="flex flex-wrap items-center gap-2 sm:min-w-[11rem] sm:flex-none sm:justify-end sm:self-center sm:pl-6">
         <Badge variant={readinessVariant}>{readinessLabel}</Badge>
-        <span className="sx-font-hack tabular-nums text-xs tracking-[0.08em] text-[var(--sx-text-muted)]">
+        <span className="sx-font-hack text-xs tracking-[0.08em] text-[var(--sx-text-muted)] tabular-nums">
           {coverageText}
         </span>
       </div>

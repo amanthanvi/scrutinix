@@ -237,7 +237,9 @@ test("single scan flow @smoke", async ({ page }) => {
   const singleUrlInput = page.getByRole("textbox", {
     name: /url to analyze/i,
   });
-  await expect(page.getByRole("meter", { name: /threat score/i })).toBeVisible();
+  await expect(
+    page.getByRole("meter", { name: /threat score/i }),
+  ).toBeVisible();
   await expect(page.getByRole("tab", { name: /single scan/i })).toBeVisible();
   await expect(singleUrlInput).toBeVisible();
   await expect(page.getByRole("button", { name: /^analyze$/i })).toBeVisible();

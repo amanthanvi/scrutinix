@@ -3,13 +3,12 @@
   --sx-active-accent: var(--sx-accent);
   --sx-font-sans: var(--font-geist-sans), "Geist", system-ui, sans-serif;
   --sx-font-hack: var(--font-hack), "Hack", "IBM Plex Mono", monospace;
-  background:
-    linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--sx-bg-top) 97%, var(--sx-active-accent) 3%) 0%,
-      var(--sx-bg) 18rem,
-      var(--sx-bg-strong) 100%
-    );
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--sx-bg-top) 97%, var(--sx-active-accent) 3%) 0%,
+    var(--sx-bg) 18rem,
+    var(--sx-bg-strong) 100%
+  );
   color: var(--sx-text);
   min-height: 100vh;
   font-family: var(--sx-font-sans);
@@ -24,12 +23,11 @@
   pointer-events: none;
   z-index: 0;
   opacity: 1;
-  background:
-    linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--sx-active-accent) 6%, transparent),
-      transparent 20rem
-    );
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--sx-active-accent) 6%, transparent),
+    transparent 20rem
+  );
   mask-image: linear-gradient(
     180deg,
     rgba(0, 0, 0, 0.95) 0%,
@@ -55,12 +53,11 @@
   inset: 0;
   pointer-events: none;
   z-index: 0;
-  background:
-    radial-gradient(
-      ellipse at top,
-      color-mix(in srgb, var(--sx-active-accent) 7%, transparent),
-      transparent 60%
-    );
+  background: radial-gradient(
+    ellipse at top,
+    color-mix(in srgb, var(--sx-active-accent) 7%, transparent),
+    transparent 60%
+  );
   opacity: 0.28;
   transition: opacity 320ms ease;
 }
@@ -324,7 +321,8 @@
 
 .sx-input-glow:focus,
 .sx-input-glow:focus-within {
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--sx-active-accent) 14%, transparent);
+  box-shadow: 0 0 0 3px
+    color-mix(in srgb, var(--sx-active-accent) 14%, transparent);
 }
 
 .sx-btn-press {

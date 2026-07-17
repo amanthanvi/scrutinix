@@ -137,7 +137,7 @@ export function AnalyzerWorkspace() {
                     setViewMode(viewMode === "summary" ? "full" : "summary")
                   }
                   className={clsx(
-                    "relative inline-block h-7 w-12 shrink-0 cursor-pointer rounded-full border border-border transition-colors",
+                    "border-border relative inline-block h-7 w-12 shrink-0 cursor-pointer rounded-full border transition-colors",
                     "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--sx-active-accent)]",
                     viewMode === "full"
                       ? "bg-[color-mix(in_srgb,var(--sx-active-accent)_22%,transparent)]"

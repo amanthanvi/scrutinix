@@ -233,7 +233,7 @@ function SignalCardInner({
     : isError
       ? result.error
       : isSkipped
-        ? result.error ?? "This signal does not apply to the current target."
+        ? (result.error ?? "This signal does not apply to the current target.")
         : result.data
           ? getSignalSummary(name, result.data)
           : null;
@@ -244,7 +244,7 @@ function SignalCardInner({
         transitionDelay: index > 0 ? `${index * 60}ms` : undefined,
       }}
       className={clsx(
-        "sx-panel h-full rounded-xl border border-border px-6 py-6 transition-[border-color,box-shadow,transform] duration-200",
+        "sx-panel border-border h-full rounded-xl border px-6 py-6 transition-[border-color,box-shadow,transform] duration-200",
         edgeClass,
         isActivelyScanning && "sx-pending-scan",
         "hover:-translate-y-0.5 hover:border-[var(--sx-active-accent)] hover:shadow-[0_8px_24px_-12px_color-mix(in_srgb,var(--sx-active-accent)_18%,transparent)]",
@@ -278,7 +278,7 @@ function SignalCardInner({
             </div>
 
             {result.durationMs > 0 ? (
-              <span className="sx-font-hack shrink-0 tabular-nums text-xs text-[var(--sx-text-soft)]">
+              <span className="sx-font-hack shrink-0 text-xs text-[var(--sx-text-soft)] tabular-nums">
                 {result.durationMs}ms
               </span>
             ) : null}
@@ -324,7 +324,7 @@ function SignalCardInner({
           if (!details) return null;
 
           return (
-            <details className="mt-5 border-t border-border pt-4" open>
+            <details className="border-border mt-5 border-t pt-4" open>
               <summary className="cursor-pointer text-xs text-[var(--sx-info)]">
                 Full evidence
               </summary>

@@ -103,7 +103,7 @@ export function IntroPanel({ dock }: IntroPanelProps) {
   return (
     <section
       aria-labelledby="scrutinix-intro-heading"
-      className="relative overflow-hidden border-b border-border"
+      className="border-border relative overflow-hidden border-b"
     >
       <RadarWatermark />
       <div className="relative z-10 mx-auto max-w-[1520px] px-4 py-8 sm:px-6 sm:py-10 xl:px-8 xl:py-12">
@@ -140,43 +140,41 @@ export function HomeSupportSection() {
   return (
     <section
       aria-labelledby="home-support-heading"
-      className="border-t border-border pt-8"
+      className="border-border border-t pt-8"
     >
       <h2 id="home-support-heading" className="sr-only">
         Method and reference
       </h2>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {referenceCards.map(
-          ({ body, cta, href, icon: Icon, title, tone }) => (
-            <div
-              key={title}
-              className="sx-panel rounded-xl border border-border px-4 py-4"
-            >
-              <div className="flex items-start gap-2.5">
-                <Icon
-                  className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${iconToneClass(tone)}`}
-                  aria-hidden="true"
-                />
-                <div className="min-w-0 space-y-1.5">
-                  <h3 className="text-sm font-medium leading-snug text-[var(--sx-text)]">
-                    {title}
-                  </h3>
-                  <p className="text-xs leading-relaxed text-[var(--sx-text-muted)]">
-                    {body}
-                  </p>
-                  <Button
-                    asChild
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 px-2 text-xs"
-                  >
-                    <Link href={href}>{cta}</Link>
-                  </Button>
-                </div>
+        {referenceCards.map(({ body, cta, href, icon: Icon, title, tone }) => (
+          <div
+            key={title}
+            className="sx-panel border-border rounded-xl border px-4 py-4"
+          >
+            <div className="flex items-start gap-2.5">
+              <Icon
+                className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${iconToneClass(tone)}`}
+                aria-hidden="true"
+              />
+              <div className="min-w-0 space-y-1.5">
+                <h3 className="text-sm leading-snug font-medium text-[var(--sx-text)]">
+                  {title}
+                </h3>
+                <p className="text-xs leading-relaxed text-[var(--sx-text-muted)]">
+                  {body}
+                </p>
+                <Button
+                  asChild
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 px-2 text-xs"
+                >
+                  <Link href={href}>{cta}</Link>
+                </Button>
               </div>
             </div>
-          ),
-        )}
+          </div>
+        ))}
       </div>
     </section>
   );

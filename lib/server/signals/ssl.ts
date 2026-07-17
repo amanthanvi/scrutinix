@@ -8,7 +8,10 @@ import {
 } from "@/lib/server/public-network-target";
 
 /** Resolves host/port for the TLS probe (exported for unit tests). */
-export function getTlsProbeTarget(url: string): { hostname: string; port: number } {
+export function getTlsProbeTarget(url: string): {
+  hostname: string;
+  port: number;
+} {
   const target = new URL(url);
   const hostname = target.hostname;
   const defaultPort = target.protocol === "https:" ? 443 : 80;
@@ -45,9 +48,7 @@ export async function runSslSignal(url: string): Promise<SSLData> {
 
   return (
     lastResult ??
-    createUnavailableSslData(
-      "The TLS probe failed for every resolved address.",
-    )
+    createUnavailableSslData("The TLS probe failed for every resolved address.")
   );
 }
 

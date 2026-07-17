@@ -331,8 +331,7 @@ function useCreateAnalyzerRuntime() {
   }, [batch, batchInput]);
 
   const shareResult = useCallback(async (result: AnalysisResult) => {
-    const capturedAt =
-      result.metadata?.completedAt ?? new Date().toISOString();
+    const capturedAt = result.metadata?.completedAt ?? new Date().toISOString();
     const payload = JSON.stringify({
       verdict: result.verdict,
       url: result.url,

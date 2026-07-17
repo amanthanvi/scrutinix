@@ -36,8 +36,8 @@ export function PublicPageShell({
       <main id="main-content" className="relative z-10 flex-1 pb-10">
         <div className="sx-atmosphere" />
 
-        <section className="border-b border-border">
-          <div className="relative z-10 mx-auto max-w-[1520px] px-4 pb-8 pt-6 sm:px-6 sm:pb-10 xl:px-8 xl:pt-8">
+        <section className="border-border border-b">
+          <div className="relative z-10 mx-auto max-w-[1520px] px-4 pt-6 pb-8 sm:px-6 sm:pb-10 xl:px-8 xl:pt-8">
             <div className="sx-stage-in" data-delay="0">
               <Button asChild variant="ghost" className="h-8 px-3">
                 <Link href="/">
@@ -60,17 +60,23 @@ export function PublicPageShell({
                 </p>
               </div>
 
-              <div className="sx-stage-in grid gap-3 md:grid-cols-3 lg:grid-cols-1" data-delay="2">
+              <div
+                className="sx-stage-in grid gap-3 md:grid-cols-3 lg:grid-cols-1"
+                data-delay="2"
+              >
                 {proofRows.map((row) => {
                   const Icon = row.icon;
                   return (
                     <div
                       key={row.label}
-                      className="rounded-lg border border-border bg-card px-4 py-4 transition-[border-color,transform] duration-200 hover:-translate-y-0.5 hover:border-[var(--sx-active-accent)]"
+                      className="border-border bg-card rounded-lg border px-4 py-4 transition-[border-color,transform] duration-200 hover:-translate-y-0.5 hover:border-[var(--sx-active-accent)]"
                     >
                       <div className="flex items-start gap-3">
                         {Icon ? (
-                          <Icon className="mt-0.5 h-4 w-4 shrink-0 text-[var(--sx-accent)]" aria-hidden="true" />
+                          <Icon
+                            className="mt-0.5 h-4 w-4 shrink-0 text-[var(--sx-accent)]"
+                            aria-hidden="true"
+                          />
                         ) : null}
                         <div>
                           <p className="text-xs text-[var(--sx-text-muted)]">

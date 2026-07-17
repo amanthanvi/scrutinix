@@ -294,18 +294,18 @@ async function parseNdjsonEvents(response: Response) {
   return text.trim().length === 0
     ? []
     : text
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map(
-      (line) =>
-        JSON.parse(line) as {
-          type: string;
-          result?: {
-            metadata?: { cacheHit?: boolean; partialFailure?: boolean };
-          };
-        },
-    );
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .map(
+          (line) =>
+            JSON.parse(line) as {
+              type: string;
+              result?: {
+                metadata?: { cacheHit?: boolean; partialFailure?: boolean };
+              };
+            },
+        );
 }
 
 function installHandlers(

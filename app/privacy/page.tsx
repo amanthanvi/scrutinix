@@ -1,5 +1,12 @@
 import type { Metadata } from "next";
-import { Database, FileText, Link2, Server, Eraser, Share2 } from "lucide-react";
+import {
+  Database,
+  FileText,
+  Link2,
+  Server,
+  Eraser,
+  Share2,
+} from "lucide-react";
 
 import { PublicPageShell } from "@/components/scrutinix/public-page-shell";
 
@@ -38,7 +45,7 @@ export default function PrivacyPage() {
     >
       <div className="grid gap-8 xl:grid-cols-[minmax(0,1.05fr)_minmax(18rem,0.95fr)]">
         <section className="space-y-6">
-          <div className="border-b border-border pb-6">
+          <div className="border-border border-b pb-6">
             <p className="text-xs text-[var(--sx-text-muted)]">
               What stays local
             </p>
@@ -53,9 +60,12 @@ export default function PrivacyPage() {
             </p>
           </div>
 
-          <div className="sx-edge-neutral rounded-lg border border-border bg-card px-5 py-5">
+          <div className="sx-edge-neutral border-border bg-card rounded-lg border px-5 py-5">
             <div className="flex items-center gap-2">
-              <Server className="h-4 w-4 shrink-0 text-[var(--sx-info)]" aria-hidden="true" />
+              <Server
+                className="h-4 w-4 shrink-0 text-[var(--sx-info)]"
+                aria-hidden="true"
+              />
               <p className="text-xs text-[var(--sx-text-muted)]">
                 What the server still does
               </p>
@@ -69,9 +79,12 @@ export default function PrivacyPage() {
         </section>
 
         <section className="grid gap-4">
-          <div className="sx-edge-safe rounded-lg border border-border bg-card px-5 py-5">
+          <div className="sx-edge-safe border-border bg-card rounded-lg border px-5 py-5">
             <div className="flex items-center gap-2">
-              <FileText className="h-4 w-4 shrink-0 text-[var(--sx-safe)]" aria-hidden="true" />
+              <FileText
+                className="h-4 w-4 shrink-0 text-[var(--sx-safe)]"
+                aria-hidden="true"
+              />
               <p className="text-xs text-[var(--sx-text-muted)]">
                 Logging boundary
               </p>
@@ -82,9 +95,12 @@ export default function PrivacyPage() {
             </p>
           </div>
 
-          <div className="sx-edge-safe rounded-lg border border-border bg-card px-5 py-5">
+          <div className="sx-edge-safe border-border bg-card rounded-lg border px-5 py-5">
             <div className="flex items-center gap-2">
-              <Eraser className="h-4 w-4 shrink-0 text-[var(--sx-safe)]" aria-hidden="true" />
+              <Eraser
+                className="h-4 w-4 shrink-0 text-[var(--sx-safe)]"
+                aria-hidden="true"
+              />
               <p className="text-xs text-[var(--sx-text-muted)]">
                 Local clearing
               </p>
@@ -96,9 +112,12 @@ export default function PrivacyPage() {
             </p>
           </div>
 
-          <div className="sx-edge-neutral rounded-lg border border-border bg-card px-5 py-5">
+          <div className="sx-edge-neutral border-border bg-card rounded-lg border px-5 py-5">
             <div className="flex items-center gap-2">
-              <Share2 className="h-4 w-4 shrink-0 text-[var(--sx-info)]" aria-hidden="true" />
+              <Share2
+                className="h-4 w-4 shrink-0 text-[var(--sx-info)]"
+                aria-hidden="true"
+              />
               <p className="text-xs text-[var(--sx-text-muted)]">
                 Shared links
               </p>

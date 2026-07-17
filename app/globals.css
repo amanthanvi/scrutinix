@@ -61,12 +61,21 @@
     var(--sx-critical) 68%,
     var(--foreground) 32%
   );
-  --sx-error-ink: color-mix(in srgb, var(--sx-error) 70%, var(--foreground) 30%);
+  --sx-error-ink: color-mix(
+    in srgb,
+    var(--sx-error) 70%,
+    var(--foreground) 30%
+  );
   --sx-info-ink: color-mix(in srgb, var(--sx-info) 64%, var(--foreground) 36%);
-  --sx-shadow-soft: 0 1px 2px 0 rgb(0 0 0 / 0.04), 0 10px 26px -20px rgb(0 0 0 / 0.18);
+  --sx-shadow-soft:
+    0 1px 2px 0 rgb(0 0 0 / 0.04), 0 10px 26px -20px rgb(0 0 0 / 0.18);
   --sx-shadow-strong: 0 16px 38px -24px rgb(0 0 0 / 0.24);
   --sx-ring-safe: color-mix(in srgb, var(--sx-safe) 18%, transparent);
-  --sx-ring-suspicious: color-mix(in srgb, var(--sx-suspicious) 18%, transparent);
+  --sx-ring-suspicious: color-mix(
+    in srgb,
+    var(--sx-suspicious) 18%,
+    transparent
+  );
   --sx-ring-malicious: color-mix(in srgb, var(--sx-malicious) 18%, transparent);
   --sx-ring-critical: color-mix(in srgb, var(--sx-critical) 18%, transparent);
 }
@@ -119,10 +128,15 @@
   --sx-critical-ink: var(--sx-critical);
   --sx-error-ink: var(--sx-error);
   --sx-info-ink: var(--sx-info);
-  --sx-shadow-soft: 0 1px 2px 0 rgb(0 0 0 / 0.22), 0 12px 30px -22px rgb(0 0 0 / 0.52);
+  --sx-shadow-soft:
+    0 1px 2px 0 rgb(0 0 0 / 0.22), 0 12px 30px -22px rgb(0 0 0 / 0.52);
   --sx-shadow-strong: 0 18px 40px -26px rgb(0 0 0 / 0.58);
   --sx-ring-safe: color-mix(in srgb, var(--sx-safe) 22%, transparent);
-  --sx-ring-suspicious: color-mix(in srgb, var(--sx-suspicious) 22%, transparent);
+  --sx-ring-suspicious: color-mix(
+    in srgb,
+    var(--sx-suspicious) 22%,
+    transparent
+  );
   --sx-ring-malicious: color-mix(in srgb, var(--sx-malicious) 22%, transparent);
   --sx-ring-critical: color-mix(in srgb, var(--sx-critical) 22%, transparent);
 }
