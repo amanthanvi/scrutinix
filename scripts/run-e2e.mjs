@@ -82,6 +82,9 @@ async function waitForServer() {
         headers: {
           accept: "text/html",
         },
+        // Cap each poll so a stalled accept-without-response cannot outlive
+        // the outer TIMEOUT_MS loop (OS socket timeouts can be ~75s).
+        signal: AbortSignal.timeout(2_000),
       });
 
       if (response.ok || response.status >= 400) {
