@@ -39,18 +39,18 @@ export function AppHeader({
         />
       </span>
       <span className="flex min-w-0 flex-col gap-0.5">
-        <span className="sx-font-sans text-sm font-semibold text-[var(--sx-text)]">
+        <span className="sx-font-sans text-sm font-semibold tracking-[-0.01em] text-[var(--sx-text)]">
           Scrutinix
         </span>
         <span className="sx-font-sans text-xs text-[var(--sx-text-muted)]">
-          Public threat analysis
+          Check before you click
         </span>
       </span>
     </>
   );
 
   return (
-    <header className="border-border bg-[color-mix(in_srgb,var(--sx-bg-top)_88%,transparent)] relative z-20 border-b backdrop-blur-md">
+    <header className="border-border relative z-20 border-b bg-[color-mix(in_srgb,var(--sx-bg-top)_88%,transparent)] backdrop-blur-md">
       <div className="mx-auto flex max-w-[1520px] flex-wrap items-center gap-4 px-4 py-4 sm:px-6 xl:px-8">
         <div className="flex min-w-0 items-center gap-4">
           {isHome ? (

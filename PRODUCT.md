@@ -10,6 +10,10 @@ Someone at an ordinary desk about to forward mail — not a SOC analyst in a vau
 
 A sharp everyday **product tool** (impeccable product register): bold visual identity, boring interaction grammar. Scanner-first home. No costume theater.
 
+## Visual lane
+
+**Daylight Desk** — cool sky neutrals, ink-blue Analyze tool-mark, heavy brand wordmark, Mail-compose intake. See `DESIGN.md` / `DESIGN-HOME-SHAPE.md`.
+
 ## Locked redesign constraints
 
 See `DESIGN-REDIRECTION.md`, `CONTEXT.md`, and `DESIGN-HOME-SHAPE.md` (Daylight Desk). Casefile / dossier / terminal cosplay are out of bounds.

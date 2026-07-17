@@ -71,14 +71,13 @@ export function VerdictHero({
       >
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_18rem] lg:items-center">
           <div className="space-y-5">
-            <p className="sx-label">No scan yet</p>
+            <p className="sx-label">Waiting</p>
             <h2 className="max-w-2xl text-2xl font-semibold tracking-[-0.02em] text-balance text-[var(--sx-text)]">
               Paste a link above to start.
             </h2>
             <p className="max-w-2xl text-sm leading-6 text-[var(--sx-text-muted)] sm:text-base">
-              The verdict area stays calm until a scan starts. Once the stream
-              begins, this section becomes the main reading surface for score,
-              confidence, caveats, and next actions.
+              This area stays quiet until a scan begins. Then it becomes the
+              reading surface for score, confidence, caveats, and next steps.
             </p>
           </div>
 
@@ -109,9 +108,8 @@ export function VerdictHero({
               {displayUrl}
             </h2>
             <p className="max-w-2xl text-sm leading-6 text-[var(--sx-text-muted)]">
-              Signals are resolving independently. The working surface below
-              will fill as each provider completes, errors, or marks itself
-              not-applicable.
+              Signals resolve independently. Cards below fill as each provider
+              completes, errors, or marks itself not-applicable.
             </p>
             <div className="max-w-xl">
               <div className="flex items-center justify-between gap-3 text-xs text-[var(--sx-text-muted)]">
@@ -489,7 +487,7 @@ export function VerdictHero({
                 </div>
                 <div>
                   <p className="text-xs text-[var(--sx-text-muted)]">
-                    Evidence balance
+                    Signal balance
                   </p>
                   <p className="mt-2 text-sm leading-6 text-[var(--sx-text-muted)]">
                     {threatInfo?.hasPositiveEvidence

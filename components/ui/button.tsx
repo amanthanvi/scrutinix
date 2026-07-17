@@ -11,8 +11,8 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        terminal:
-          "bg-[var(--sx-active-accent)] text-white dark:text-black hover:opacity-90",
+        primary:
+          "bg-[var(--sx-active-accent)] text-[var(--sx-accent-fg)] hover:opacity-90",
         ghost:
           "text-[var(--sx-text-muted)] hover:bg-muted hover:text-foreground dark:hover:bg-muted/60",
         subtle:

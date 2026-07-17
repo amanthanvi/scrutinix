@@ -6,7 +6,7 @@ import {
   Brain,
   Globe,
   Lock,
-  Radar,
+  Network,
   Rss,
   Search,
   Shield,
@@ -41,7 +41,7 @@ const signalIconMap = {
   threatFeeds: Rss,
   ssl: Lock,
   whois: Globe,
-  dns: Radar,
+  dns: Network,
   redirectChain: ArrowRightLeft,
 } satisfies Record<SignalName, ComponentType<{ className?: string }>>;
 

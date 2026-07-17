@@ -67,8 +67,8 @@
 }
 
 .sx-panel {
-  background: var(--sx-surface);
-  box-shadow: var(--sx-shadow-soft);
+  background: var(--sx-surface-strong);
+  box-shadow: none;
 }
 
 .sx-font-sans {
