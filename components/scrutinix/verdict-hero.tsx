@@ -70,15 +70,11 @@ export function VerdictHero({
         aria-label="Awaiting target URL"
       >
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_18rem] lg:items-center">
-          <div className="space-y-5">
+          <div className="space-y-3">
             <p className="sx-label">Waiting</p>
             <h2 className="max-w-2xl text-2xl font-semibold tracking-[-0.02em] text-balance text-[var(--sx-text)]">
               Paste a link above to start.
             </h2>
-            <p className="max-w-2xl text-sm leading-6 text-[var(--sx-text-muted)] sm:text-base">
-              This area stays quiet until a scan begins. Then it becomes the
-              reading surface for score, confidence, caveats, and next steps.
-            </p>
           </div>
 
           <div className="flex flex-col items-center gap-3">
