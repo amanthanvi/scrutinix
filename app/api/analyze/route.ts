@@ -1,12 +1,13 @@
 import { normalizeUrlInput } from "@/lib/domain/url";
 import { runAnalysis } from "@/lib/server/analyze";
 import { createApiError } from "@/lib/server/api-error";
+import { readJsonBody } from "@/lib/server/request-body";
 import { createNdjsonResponse } from "@/lib/server/stream";
 
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
-  const body = await readJsonBody(request);
+  const body = await readJsonBody<{ url?: unknown }>(request);
   if (!body || typeof body.url !== "string") {
     return Response.json(
       {
@@ -35,18 +36,19 @@ export async function POST(request: Request) {
   const startedAt = new Date().toISOString();
 
   return createNdjsonResponse(async (writer) => {
-    writer.send({
-      type: "scan_started",
-      scanId,
-      url: validation.value.normalizedUrl,
-      cached: false,
-      startedAt,
-    });
-
     try {
       const outcome = await runAnalysis(url, {
         scanId,
         startedAt,
+        onScanReady: ({ cached, normalizedUrl }) => {
+          writer.send({
+            type: "scan_started",
+            scanId,
+            url: normalizedUrl,
+            cached,
+            startedAt,
+          });
+        },
         onSignal: ({ name, result }) => {
           writer.send({
             type: "signal_result",
@@ -81,12 +83,4 @@ export async function POST(request: Request) {
       });
     }
   });
-}
-
-async function readJsonBody(request: Request) {
-  try {
-    return (await request.json()) as { url?: unknown } | null;
-  } catch {
-    return null;
-  }
 }

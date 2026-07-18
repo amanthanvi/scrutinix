@@ -30,11 +30,48 @@ vi.mock("@upstash/ratelimit", () => {
   };
 });
 
-import { applyRateLimit, getRedisRestConfig } from "@/lib/server/rate-limit";
+import {
+  applyRateLimit,
+  getClientRateLimitId,
+  getRedisRestConfig,
+} from "@/lib/server/rate-limit";
+
+describe("getClientRateLimitId", () => {
+  it("prefers x-real-ip over forwarded-for", () => {
+    const headers = new Headers({
+      "x-real-ip": "203.0.113.50",
+      "x-forwarded-for": "1.1.1.1, 2.2.2.2",
+    });
+
+    expect(getClientRateLimitId(headers)).toBe("203.0.113.50");
+  });
+
+  it("uses the rightmost x-forwarded-for hop when platform headers are absent", () => {
+    const headers = new Headers({
+      "x-forwarded-for": "1.1.1.1, 2.2.2.2",
+    });
+
+    expect(getClientRateLimitId(headers)).toBe("2.2.2.2");
+  });
+
+  it("does not treat a spoofed first XFF hop as identity when a later hop exists", () => {
+    const headers = new Headers({
+      "x-forwarded-for": "198.51.100.1, 203.0.113.9",
+    });
+
+    expect(getClientRateLimitId(headers)).toBe("203.0.113.9");
+  });
+
+  it("falls back to unknown when no client IP headers are present", () => {
+    expect(getClientRateLimitId(new Headers())).toBe("unknown");
+  });
+});
 
 describe("applyRateLimit", () => {
   beforeEach(() => {
     redisConstructor.mockClear();
+    globalThis.__scrutinixRateLimiters = undefined;
+    globalThis.__devRateLimitStore = undefined;
   });
 
   it("enforces the per-minute limit in development mode", async () => {
@@ -92,5 +129,20 @@ describe("applyRateLimit", () => {
       url: "https://example-kv.upstash.io",
       token: "kv-token",
     });
+  });
+
+  it("reuses a singleton Redis client across production rate-limit calls", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    delete process.env.UPSTASH_REDIS_REST_URL;
+    delete process.env.UPSTASH_REDIS_REST_TOKEN;
+    vi.stubEnv("KV_REST_API_URL", "https://example-kv.upstash.io");
+    vi.stubEnv("KV_REST_API_TOKEN", "kv-token");
+
+    const first = await applyRateLimit("203.0.113.30");
+    const second = await applyRateLimit("203.0.113.31");
+
+    expect(first.success).toBe(true);
+    expect(second.success).toBe(true);
+    expect(redisConstructor).toHaveBeenCalledTimes(1);
   });
 });

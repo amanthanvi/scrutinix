@@ -13,10 +13,10 @@ cleanup.
 
 ## Current Snapshot
 
-- Date: 2026-05-01
-- Execution status: `P18 completed and verified`
+- Date: 2026-07-17
+- Execution status: `P20 advisory wave 001-006 merged locally`
 - Platform:
-  - Next.js `16.2.4`
+  - Next.js `16.2.10`
   - React `19.2.x`
   - Node `22 LTS`
   - NDJSON streaming over `fetch`
@@ -24,7 +24,7 @@ cleanup.
   - `proxy.ts` enforces rate limits on `/api/analyze` request paths.
   - Node.js route handlers orchestrate eight signals and stream normalized results.
   - IndexedDB stores client-only history, export state, and re-scan sources.
-  - The home page now renders scanner-first: a compact top band with the scan dock and minimal product framing, a calmer two-column operational workspace, a sticky history rail, and a clearly separate support/method section below the functional surface.
+  - The home page now renders scanner-first: a compact top band with the scan dock and minimal product framing, a calmer two-column operational workspace, and a sticky history rail. Method and caveat notes live on `/about`, not under the home workspace.
   - The public site now shares one editorial shell across `/`, `/about`, and `/privacy`, so the trust, methodology, and privacy surfaces stay visually aligned with the scanner.
   - The UI now uses the actual pulled shadcn preset `b1D24VYe` as its baseline language: neutral `radix-mira` tokens, compact controls, and smaller radii adapted onto the branded `components/scrutinix/*` surface.
   - Dark/light theme tokens stay in `app/globals.css`, while `app/scrutinix.css` is now limited to the lighter motion/effects layer needed for live scan states.
@@ -77,6 +77,11 @@ Observed results:
 - Fresh local matrix verification on 2026-03-09 confirmed the UI and verdict semantics across `example.com`, `neverssl.com`, `expired.badssl.com`, and a known-malicious IP sample; clean verdict confidence now drops to `moderate` when a primary reputation source times out instead of staying misleadingly high.
 
 ## Work Items
+
+### P20 Advisory wave execute (001-006)
+
+- [x] Merged local advisor branches on dvisor/execute-all-merge: 006 (incl. 004), 001, 002, 003, 005.
+- See plans/README.md for DONE status and per-plan detail.
 
 ### P01 Reset the baseline and living docs
 
@@ -252,7 +257,8 @@ Observed results:
 - 2026-03-23: Public repo polish still mattered after the rename; the README needed to lead with product value, and the repo needed explicit `CONTRIBUTING.md` plus `SECURITY.md` entry points for external users.
 - 2026-03-23: The public-site redesign is easiest to keep coherent when the hero, scanner dock, workspace, and trust pages all share one token system and shell language; partial restyles drift quickly.
 - 2026-03-23: When a redesign is supposed to follow a shadcn preset, pull the generated preset first; matching the real token scale and control density matters more than loosely matching the mood.
-- 2026-03-23: The home route works better as a scanner-first dashboard than as a text-heavy hero; keeping the support/method layer below the workspace preserves readability on short laptop windows and mobile screens.
+- 2026-03-23: The home route works better as a scanner-first dashboard than as a text-heavy hero; method and caveat notes moved to `/about` so the home workspace stays scanner-focused.
+- 2026-07-17: Removed the home support card grid; `/about` now carries a compact “Using the console” definition list (lanes, batch, history, feed matching) and keeps weighted scoring / confidence in the existing method sections.
 - 2026-03-24: IndexedDB history and streamed NDJSON events need runtime normalization at the client boundary; stale stored entries and malformed upstream payloads can still bypass TypeScript and crash direct `.metadata`, `.signals`, `.length`, `.map`, or string-method reads.
 - 2026-05-01: Next `16.2.4` resolves the direct Next advisories but still pins vulnerable `postcss`; keep the npm `overrides` block until upstream package pins move past the audited vulnerable leaves.
 - 2026-05-01: Active network probes must validate every resolved address and pin outbound sockets to the validated public address; checking only the hostname or first DNS answer leaves room for private-address redirects and rebinding.

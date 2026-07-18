@@ -43,7 +43,8 @@ function readStats(value: unknown): VirusTotalStatsPayload {
       typeof record?.malicious === "number" ? record.malicious : undefined,
     suspicious:
       typeof record?.suspicious === "number" ? record.suspicious : undefined,
-    harmless: typeof record?.harmless === "number" ? record.harmless : undefined,
+    harmless:
+      typeof record?.harmless === "number" ? record.harmless : undefined,
     undetected:
       typeof record?.undetected === "number" ? record.undetected : undefined,
     timeout: typeof record?.timeout === "number" ? record.timeout : undefined,
@@ -216,8 +217,9 @@ async function submitAndPollAnalysis(
     }
 
     const analysisPayload = await analysisResponse.json();
-    const status = asRecord(asRecord(asRecord(analysisPayload)?.data)?.attributes)
-      ?.status;
+    const status = asRecord(
+      asRecord(asRecord(analysisPayload)?.data)?.attributes,
+    )?.status;
     if (status === "completed") {
       return parseVirusTotalAnalysis(analysisPayload, urlId);
     }

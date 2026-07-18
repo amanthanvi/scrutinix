@@ -43,96 +43,104 @@ export function SingleInput({
   const hasUrl = url.trim().length > 0;
 
   return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="space-y-2">
-          <h2 className="text-xs text-[var(--sx-text-muted)]">
-            Single target
-          </h2>
-          <p className="max-w-lg text-sm leading-6 text-[var(--sx-text-muted)]">
-            Run one URL, then keep the result open for export or share.
-          </p>
-        </div>
-
-        <Badge variant={streaming ? "active" : hasUrl ? "neutral" : "safe"}>
-          {streaming ? "Streaming" : hasUrl ? "Ready" : "Paste URL"}
-        </Badge>
-      </div>
-
-      <label htmlFor="sx-url-input" className="sr-only">
+    <div className="space-y-4">
+      <label
+        htmlFor="sx-url-input"
+        className="text-sm font-medium text-[var(--sx-text)]"
+      >
         URL to analyze
       </label>
-      <div
-        className={`sx-input-glow flex items-center gap-3 rounded-lg border bg-card px-4 transition-[border-color,box-shadow] duration-200${streaming ? " sx-scan-line" : ""}`}
-        style={{
-          borderColor: error
-            ? "var(--sx-suspicious)"
-            : streaming
-              ? "var(--sx-active-accent)"
-              : "var(--sx-border)",
-        }}
-      >
-        <Search className="h-4 w-4 shrink-0 text-[var(--sx-text-soft)]" aria-hidden="true" />
-        <Input
-          id="sx-url-input"
-          type="text"
-          value={url}
-          onChange={(e) => onUrlChange(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Escape" && streaming) {
-              onCancel();
-              return;
-            }
-            if (e.key === "Enter" && !streaming) onSubmit();
+
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-stretch">
+        <div
+          className={`sx-input-glow bg-card flex min-w-0 flex-1 items-center gap-3 rounded-md border px-3.5 transition-[border-color,box-shadow] duration-200 ${streaming ? "ring-1 ring-[color-mix(in_srgb,var(--sx-active-accent)_28%,transparent)]" : ""}`}
+          style={{
+            borderColor: error
+              ? "var(--sx-suspicious)"
+              : streaming
+                ? "var(--sx-active-accent)"
+                : "var(--sx-border)",
           }}
-          placeholder="https://example.com/suspicious"
-          aria-label="URL to analyze"
-          aria-invalid={Boolean(error)}
-          aria-describedby={error ? "sx-url-error" : undefined}
-          className="h-12 border-0 bg-transparent px-0 text-[var(--sx-text)] shadow-none"
-        />
-      </div>
+        >
+          <Search
+            className="h-4 w-4 shrink-0 text-[var(--sx-text-soft)]"
+            aria-hidden="true"
+          />
+          <Input
+            id="sx-url-input"
+            type="text"
+            value={url}
+            onChange={(e) => onUrlChange(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Escape" && streaming) {
+                onCancel();
+                return;
+              }
+              if (e.key === "Enter" && !streaming) onSubmit();
+            }}
+            placeholder="https://example.com"
+            aria-label="URL to analyze"
+            aria-invalid={Boolean(error)}
+            aria-describedby={error ? "sx-url-error" : undefined}
+            className="h-11 border-0 bg-transparent px-0 text-[var(--sx-text)] shadow-none"
+          />
+        </div>
 
-      {error && (
-        <p id="sx-url-error" className="text-xs text-[var(--sx-suspicious)]">
-          {error}
-        </p>
-      )}
-
-      <div className="flex flex-wrap items-center gap-2">
         <Button
           type="button"
           onClick={onSubmit}
           disabled={streaming || !hasUrl}
-          variant="terminal"
+          variant="primary"
           aria-label={streaming ? "Analyzing" : "Analyze URL, or press Enter"}
+          className="h-11 shrink-0 gap-2 px-4 text-sm font-semibold sm:min-w-[8.5rem]"
         >
           {streaming ? (
-            <RefreshCw className="h-3 w-3 animate-spin" />
+            <RefreshCw className="h-3.5 w-3.5 animate-spin" />
           ) : (
-            <CornerDownLeft className="h-3 w-3" aria-hidden />
+            <CornerDownLeft className="h-3.5 w-3.5" aria-hidden />
           )}
           Analyze
         </Button>
-        {streaming && (
-          <Button type="button" onClick={onCancel} variant="ghost" size="sm">
-            Cancel
-          </Button>
-        )}
-        {result && (
-          <>
-            <Button type="button" onClick={onExport} variant="ghost" size="sm">
-              <Download className="h-3 w-3" /> JSON
-            </Button>
-            <Button type="button" onClick={onShare} variant="ghost" size="sm">
-              <Link2 className="h-3 w-3" /> Share
-            </Button>
-            <Button type="button" onClick={onRescan} variant="ghost" size="sm">
-              <RefreshCw className="h-3 w-3" /> Re-scan
-            </Button>
-          </>
-        )}
       </div>
+
+      {error ? (
+        <p id="sx-url-error" className="text-xs text-[var(--sx-suspicious)]">
+          {error}
+        </p>
+      ) : null}
+
+      {(streaming || result) && (
+        <div className="flex flex-wrap items-center gap-2">
+          {streaming && (
+            <Button type="button" onClick={onCancel} variant="ghost" size="sm">
+              Cancel
+            </Button>
+          )}
+          {result && (
+            <>
+              <Button
+                type="button"
+                onClick={onExport}
+                variant="ghost"
+                size="sm"
+              >
+                <Download className="h-3 w-3" /> JSON
+              </Button>
+              <Button type="button" onClick={onShare} variant="ghost" size="sm">
+                <Link2 className="h-3 w-3" /> Share
+              </Button>
+              <Button
+                type="button"
+                onClick={onRescan}
+                variant="ghost"
+                size="sm"
+              >
+                <RefreshCw className="h-3 w-3" /> Re-scan
+              </Button>
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -171,17 +179,14 @@ export function BatchInput({
   const hasUrls = value.trim().length > 0;
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="space-y-2">
-          <h2 className="text-xs text-[var(--sx-text-muted)]">
-            Batch queue
-          </h2>
-          <p className="max-w-lg text-sm leading-6 text-[var(--sx-text-muted)]">
-            Queue up to 10 URLs. Scrutinix runs 3 in parallel and isolates
-            failures per row.
-          </p>
-        </div>
+        <label
+          htmlFor="sx-batch-input"
+          className="text-sm font-medium text-[var(--sx-text)]"
+        >
+          URLs to analyze
+        </label>
         {urlCount > 0 && (
           <Badge variant={streaming ? "active" : "neutral"}>
             {urlCount} URL{urlCount !== 1 ? "s" : ""}
@@ -189,11 +194,8 @@ export function BatchInput({
         )}
       </div>
 
-      <label htmlFor="sx-batch-input" className="sr-only">
-        URLs to analyze (one per line)
-      </label>
       <div
-        className={`sx-input-glow rounded-lg border bg-card px-4 pt-3 pb-1 transition-[border-color,box-shadow] duration-200${streaming ? " sx-scan-line" : ""}`}
+        className={`sx-input-glow bg-card rounded-md border px-3.5 pt-3 pb-1 transition-[border-color,box-shadow] duration-200 ${streaming ? "ring-1 ring-[color-mix(in_srgb,var(--sx-active-accent)_28%,transparent)]" : ""}`}
         style={{
           borderColor: error
             ? "var(--sx-suspicious)"
@@ -218,29 +220,35 @@ export function BatchInput({
           placeholder={"https://example.com\nhttps://malicious.test"}
           aria-label="URLs to analyze, one per line"
           aria-invalid={Boolean(error)}
-          aria-describedby={error ? "sx-batch-error" : undefined}
+          aria-describedby={error ? "sx-batch-error" : "sx-batch-hint"}
           className="min-h-0 resize-none border-0 bg-transparent px-0 pb-3 text-[var(--sx-text)] shadow-none"
         />
       </div>
 
-      {error && (
+      {error ? (
         <p id="sx-batch-error" className="text-xs text-[var(--sx-suspicious)]">
           {error}
         </p>
+      ) : (
+        <p id="sx-batch-hint" className="text-xs text-[var(--sx-text-soft)]">
+          One URL per line · up to 10 · Cmd/Ctrl+Enter to start
+        </p>
       )}
+
       <div className="flex flex-wrap items-center gap-2">
         <Button
           type="button"
           onClick={onSubmit}
           disabled={streaming || !hasUrls}
-          variant="terminal"
+          variant="primary"
+          className="h-10 gap-2 px-4 text-sm font-semibold"
         >
           {streaming ? (
-            <RefreshCw className="h-3 w-3 animate-spin" />
+            <RefreshCw className="h-3.5 w-3.5 animate-spin" />
           ) : (
-            <ArrowRight className="h-3 w-3" />
+            <ArrowRight className="h-3.5 w-3.5" />
           )}
-          Start Batch
+          Start batch
         </Button>
         {streaming && (
           <Button type="button" onClick={onCancel} variant="ghost" size="sm">
@@ -258,11 +266,6 @@ export function BatchInput({
           </>
         )}
       </div>
-
-      <p className="text-xs leading-5 text-[var(--sx-text-soft)]">
-        Press Cmd/Ctrl+Enter to start. Export the finished batch to CSV or
-        JSON.
-      </p>
     </div>
   );
 }

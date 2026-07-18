@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
+import { headers } from "next/headers";
 import { GeistSans } from "geist/font/sans";
 
 import "@/app/globals.css";
@@ -62,16 +63,19 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: [
-    { media: "(prefers-color-scheme: dark)", color: "#0a0a0a" },
-    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+    { media: "(prefers-color-scheme: dark)", color: "#1a2030" },
+    { media: "(prefers-color-scheme: light)", color: "#f4f7fb" },
   ],
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // Reading headers forces dynamic render so Next can apply the proxy nonce.
+  const nonce = (await headers()).get("x-nonce") ?? undefined;
+
   return (
     <html lang="en" suppressHydrationWarning>
       <body
@@ -82,9 +86,10 @@ export default function RootLayout({
         </a>
         <ThemeProvider
           attribute="class"
-          defaultTheme="system"
+          defaultTheme="light"
           enableSystem
           disableTransitionOnChange
+          nonce={nonce}
         >
           <div className="scrutinix-theme">{children}</div>
           <AppToaster />

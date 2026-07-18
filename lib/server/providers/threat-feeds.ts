@@ -3,6 +3,7 @@ import type { ThreatFeedsData } from "@/lib/domain/types";
 import { simplifyUrlForMatching } from "@/lib/domain/url";
 import { fetchWithTimeout } from "@/lib/server/http";
 import { checkOpenPhishFeed } from "@/lib/server/providers/openphish-feed";
+import { getErrorMessage } from "@/lib/server/signal-error";
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -45,17 +46,13 @@ export async function runThreatFeedsProvider(
 
   if (urlhausResult.status === "rejected") {
     warnings.push(
-      urlhausResult.reason instanceof Error
-        ? urlhausResult.reason.message
-        : "URLhaus lookup failed.",
+      getErrorMessage(urlhausResult.reason, "URLhaus lookup failed."),
     );
   }
 
   if (openPhishResult.status === "rejected") {
     warnings.push(
-      openPhishResult.reason instanceof Error
-        ? openPhishResult.reason.message
-        : "OpenPhish lookup failed.",
+      getErrorMessage(openPhishResult.reason, "OpenPhish lookup failed."),
     );
   }
 

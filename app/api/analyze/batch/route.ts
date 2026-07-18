@@ -1,6 +1,7 @@
 import { normalizeUrlInput } from "@/lib/domain/url";
 import { runAnalysis } from "@/lib/server/analyze";
 import { createApiError } from "@/lib/server/api-error";
+import { readJsonBody } from "@/lib/server/request-body";
 import { createNdjsonResponse } from "@/lib/server/stream";
 import {
   createPendingSignalResults,
@@ -14,7 +15,7 @@ const MAX_BATCH_SIZE = 10;
 const CONCURRENCY = 3;
 
 export async function POST(request: Request) {
-  const body = await readJsonBody(request);
+  const body = await readJsonBody<{ urls?: unknown[] }>(request);
   if (!body || !Array.isArray(body.urls)) {
     return Response.json(
       {
@@ -150,14 +151,6 @@ export async function POST(request: Request) {
       });
     }
   });
-}
-
-async function readJsonBody(request: Request) {
-  try {
-    return (await request.json()) as { urls?: unknown[] } | null;
-  } catch {
-    return null;
-  }
 }
 
 async function mapWithConcurrency<T, R>(

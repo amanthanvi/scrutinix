@@ -96,12 +96,12 @@ export function AnalyzerWorkspace() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="space-y-2">
             <p className="text-xs text-[var(--sx-text-muted)]">
-              {activeTab === "single" ? "Signal surface" : "Batch inspection"}
+              {activeTab === "single" ? "Signals" : "Batch"}
             </p>
-            <h2 className="text-2xl font-semibold text-[var(--sx-text)]">
+            <h2 className="text-xl font-semibold tracking-[-0.02em] text-[var(--sx-text)] sm:text-2xl">
               {activeTab === "single"
-                ? "Evidence arrives in independent lanes."
-                : "Keep the queue moving, inspect a finished row when it matters."}
+                ? "Each signal resolves on its own."
+                : "Inspect a finished row when it matters."}
             </h2>
           </div>
 
@@ -111,7 +111,7 @@ export function AnalyzerWorkspace() {
                 className="text-xs font-medium text-[var(--sx-text-muted)]"
                 id="signal-lanes-view-label"
               >
-                Signal lanes
+                View
               </span>
               <div
                 className="flex items-center gap-2"
@@ -137,7 +137,7 @@ export function AnalyzerWorkspace() {
                     setViewMode(viewMode === "summary" ? "full" : "summary")
                   }
                   className={clsx(
-                    "relative inline-block h-7 w-12 shrink-0 cursor-pointer rounded-full border border-border transition-colors",
+                    "border-border relative inline-block h-7 w-12 shrink-0 cursor-pointer rounded-full border transition-colors",
                     "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--sx-active-accent)]",
                     viewMode === "full"
                       ? "bg-[color-mix(in_srgb,var(--sx-active-accent)_22%,transparent)]"
@@ -190,27 +190,26 @@ export function AnalyzerWorkspace() {
                 ))}
               </div>
             ) : (
-              <div className="sx-panel rounded-xl border border-dashed border-[var(--sx-border-muted)] px-6 py-14 text-center">
-                <p className="text-xs text-[var(--sx-text-muted)]">
-                  Awaiting scan
+              <div className="sx-panel rounded-lg border border-dashed border-[var(--sx-border-muted)] px-6 py-14 text-center">
+                <p className="text-sm font-medium text-[var(--sx-text)]">
+                  No signals yet
                 </p>
-                <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-[var(--sx-text-muted)]">
-                  Enter a target above to start the stream. Completed signals
-                  will take over this surface as soon as providers resolve.
+                <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[var(--sx-text-muted)]">
+                  Paste a URL above to start. Cards appear here as each provider
+                  finishes.
                 </p>
               </div>
             )}
           </div>
         ) : (
-          <div className="sx-panel rounded-xl border border-dashed border-[var(--sx-border-muted)] px-6 py-14 text-center">
-            <p className="text-xs text-[var(--sx-text-muted)]">
+          <div className="sx-panel rounded-lg border border-dashed border-[var(--sx-border-muted)] px-6 py-14 text-center">
+            <p className="text-sm font-medium text-[var(--sx-text)]">
               Batch rows stay isolated
             </p>
-            <p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-[var(--sx-text-muted)]">
-              Every queued URL can finish cleanly, fail independently, or
-              surface a verdict error without aborting the rest of the batch.
-              Pick any completed item in the stream table to open its full
-              evidence surface in single-scan mode.
+            <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-[var(--sx-text-muted)]">
+              Each queued URL can finish, fail, or error without stopping the
+              rest. Open any completed row in single-scan mode for the full
+              result.
             </p>
           </div>
         )}

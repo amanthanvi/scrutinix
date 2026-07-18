@@ -1,5 +1,12 @@
 import type { Metadata } from "next";
-import { Database, FileText, Link2, Server, Eraser, Share2 } from "lucide-react";
+import {
+  Database,
+  FileText,
+  Link2,
+  Server,
+  Eraser,
+  Share2,
+} from "lucide-react";
 
 import { PublicPageShell } from "@/components/scrutinix/public-page-shell";
 
@@ -12,8 +19,8 @@ export const metadata: Metadata = {
 export default function PrivacyPage() {
   return (
     <PublicPageShell
-      eyebrow="Privacy posture"
-      title="Scrutinix keeps history in the browser and avoids storing raw URLs in server logs."
+      eyebrow="Privacy"
+      title="History stays in the browser."
       lead="The server still has to process submitted URLs to query providers and complete a live analysis, but the application is designed so your saved history and shareable snapshots remain client-side wherever possible."
       proofRows={[
         {
@@ -36,16 +43,14 @@ export default function PrivacyPage() {
         },
       ]}
     >
-      <div className="grid gap-8 xl:grid-cols-[minmax(0,1.05fr)_minmax(18rem,0.95fr)]">
-        <section className="space-y-6">
-          <div className="border-b border-border pb-6">
-            <p className="text-xs text-[var(--sx-text-muted)]">
-              What stays local
-            </p>
-            <h2 className="mt-3 text-2xl font-semibold text-[var(--sx-text)]">
+      <div className="grid gap-12 xl:grid-cols-[minmax(0,1.1fr)_minmax(17rem,0.85fr)] xl:gap-16">
+        <section className="space-y-10">
+          <div className="sx-prose-block">
+            <p className="sx-label">What stays local</p>
+            <h2 className="mt-3 max-w-[28ch] text-2xl font-semibold tracking-[-0.02em] text-balance text-[var(--sx-text)] sm:text-[1.75rem]">
               History and shared snapshots are client-managed.
             </h2>
-            <p className="mt-4 text-sm leading-7 text-[var(--sx-text-muted)]">
+            <p className="mt-4 max-w-[62ch] text-sm leading-7 text-[var(--sx-text-muted)] sm:text-[0.95rem]">
               Completed scans are stored in IndexedDB on your device only.
               Shareable links are generated in the browser by encoding a small
               snapshot into the URL itself, so there is no server-side share
@@ -53,12 +58,13 @@ export default function PrivacyPage() {
             </p>
           </div>
 
-          <div className="sx-edge-neutral rounded-lg border border-border bg-card px-5 py-5">
+          <div className="sx-edge-neutral sx-surface-block rounded-md border border-[var(--sx-border)] px-5 py-5">
             <div className="flex items-center gap-2">
-              <Server className="h-4 w-4 shrink-0 text-[var(--sx-info)]" aria-hidden="true" />
-              <p className="text-xs text-[var(--sx-text-muted)]">
-                What the server still does
-              </p>
+              <Server
+                className="h-4 w-4 shrink-0 text-[var(--sx-info)]"
+                aria-hidden="true"
+              />
+              <p className="sx-label">What the server still does</p>
             </div>
             <p className="mt-3 text-sm leading-7 text-[var(--sx-text-muted)]">
               Submitted URLs must still be processed on the server to query
@@ -68,13 +74,14 @@ export default function PrivacyPage() {
           </div>
         </section>
 
-        <section className="grid gap-4">
-          <div className="sx-edge-safe rounded-lg border border-border bg-card px-5 py-5">
+        <aside className="sx-surface-block border-border divide-border divide-y overflow-hidden rounded-md border">
+          <div className="sx-edge-safe px-5 py-5">
             <div className="flex items-center gap-2">
-              <FileText className="h-4 w-4 shrink-0 text-[var(--sx-safe)]" aria-hidden="true" />
-              <p className="text-xs text-[var(--sx-text-muted)]">
-                Logging boundary
-              </p>
+              <FileText
+                className="h-4 w-4 shrink-0 text-[var(--sx-safe)]"
+                aria-hidden="true"
+              />
+              <p className="sx-label">Logging boundary</p>
             </div>
             <p className="mt-3 text-sm leading-7 text-[var(--sx-text-muted)]">
               Operational logs capture scan identifiers, cache behavior, timing,
@@ -82,12 +89,13 @@ export default function PrivacyPage() {
             </p>
           </div>
 
-          <div className="sx-edge-safe rounded-lg border border-border bg-card px-5 py-5">
+          <div className="sx-edge-safe px-5 py-5">
             <div className="flex items-center gap-2">
-              <Eraser className="h-4 w-4 shrink-0 text-[var(--sx-safe)]" aria-hidden="true" />
-              <p className="text-xs text-[var(--sx-text-muted)]">
-                Local clearing
-              </p>
+              <Eraser
+                className="h-4 w-4 shrink-0 text-[var(--sx-safe)]"
+                aria-hidden="true"
+              />
+              <p className="sx-label">Local clearing</p>
             </div>
             <p className="mt-3 text-sm leading-7 text-[var(--sx-text-muted)]">
               Clearing history removes the browser-side archive. The UI exposes
@@ -96,12 +104,13 @@ export default function PrivacyPage() {
             </p>
           </div>
 
-          <div className="sx-edge-neutral rounded-lg border border-border bg-card px-5 py-5">
+          <div className="sx-edge-neutral px-5 py-5">
             <div className="flex items-center gap-2">
-              <Share2 className="h-4 w-4 shrink-0 text-[var(--sx-info)]" aria-hidden="true" />
-              <p className="text-xs text-[var(--sx-text-muted)]">
-                Shared links
-              </p>
+              <Share2
+                className="h-4 w-4 shrink-0 text-[var(--sx-info)]"
+                aria-hidden="true"
+              />
+              <p className="sx-label">Shared links</p>
             </div>
             <p className="mt-3 text-sm leading-7 text-[var(--sx-text-muted)]">
               Shared links are convenient, but they represent a snapshot taken
@@ -109,7 +118,7 @@ export default function PrivacyPage() {
               the target against current provider responses.
             </p>
           </div>
-        </section>
+        </aside>
       </div>
     </PublicPageShell>
   );

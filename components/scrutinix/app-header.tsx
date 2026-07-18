@@ -28,7 +28,7 @@ export function AppHeader({
 
   const brand = (
     <>
-      <span className="relative flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border bg-card">
+      <span className="border-border bg-card relative flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg border">
         <Image
           src="/favicon.ico"
           alt=""
@@ -39,18 +39,18 @@ export function AppHeader({
         />
       </span>
       <span className="flex min-w-0 flex-col gap-0.5">
-        <span className="sx-font-sans text-sm font-semibold text-[var(--sx-text)]">
+        <span className="sx-font-sans text-sm font-semibold tracking-[-0.01em] text-[var(--sx-text)]">
           Scrutinix
         </span>
         <span className="sx-font-sans text-xs text-[var(--sx-text-muted)]">
-          Public threat analysis
+          Check before you click
         </span>
       </span>
     </>
   );
 
   return (
-    <header className="relative z-20 border-b border-border bg-background/90 backdrop-blur">
+    <header className="border-border relative z-20 border-b bg-[color-mix(in_srgb,var(--sx-bg-top)_88%,transparent)] backdrop-blur-md">
       <div className="mx-auto flex max-w-[1520px] flex-wrap items-center gap-4 px-4 py-4 sm:px-6 xl:px-8">
         <div className="flex min-w-0 items-center gap-4">
           {isHome ? (
@@ -83,21 +83,10 @@ export function AppHeader({
                 <Link
                   key={href}
                   href={href}
-                  className={`sx-btn-press flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm transition-colors ${active ? "text-[var(--sx-text)]" : "text-[var(--sx-text-muted)] hover:bg-muted hover:text-[var(--sx-text)]"}`}
+                  className={`sx-btn-press rounded-md px-2.5 py-1.5 text-sm transition-colors ${active ? "bg-muted font-medium text-[var(--sx-text)]" : "hover:bg-muted/70 text-[var(--sx-text-muted)] hover:text-[var(--sx-text)]"}`}
+                  aria-current={active ? "page" : undefined}
                 >
                   {label}
-                  {active ? (
-                    <span
-                      className="sx-led"
-                      style={{
-                        width: 6,
-                        height: 6,
-                        backgroundColor: hasActivity
-                          ? "var(--sx-active-accent)"
-                          : "var(--sx-border-muted)",
-                      }}
-                    />
-                  ) : null}
                 </Link>
               );
             })}
@@ -120,7 +109,9 @@ export function AppHeader({
       <div
         className="absolute bottom-0 left-0 h-[2px] transition-[width,background-color,opacity] duration-500 ease-out"
         style={{
-          width: hasActivity ? `${Math.min(Math.max(threatScore, 0), 100)}%` : "0%",
+          width: hasActivity
+            ? `${Math.min(Math.max(threatScore, 0), 100)}%`
+            : "0%",
           backgroundColor: scoreColor ?? "var(--sx-active-accent)",
           opacity: hasActivity ? 1 : 0,
         }}

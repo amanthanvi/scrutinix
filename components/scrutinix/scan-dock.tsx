@@ -39,26 +39,17 @@ export function ScanDock() {
   return (
     <section
       id="scan-console"
-      className="sx-stage-in sx-panel flex flex-col overflow-hidden rounded-xl border border-border"
-      data-delay="3"
+      className="sx-panel border-border flex flex-col overflow-hidden rounded-lg border"
       aria-labelledby="scan-dock-heading"
     >
-      <div className="flex flex-col p-6 sm:p-8">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="space-y-2">
-            <p className="text-xs text-[var(--sx-text-muted)]">
-              Scan console
-            </p>
-            <h2
-              id="scan-dock-heading"
-              className="text-xl font-semibold text-[var(--sx-text)]"
-            >
-              Scan one link or a short batch.
-            </h2>
-            <p className="max-w-xl text-sm leading-6 text-[var(--sx-text-muted)]">
-              Results stream into the workspace below as providers resolve.
-            </p>
-          </div>
+      <div className="flex flex-col p-5 sm:p-6">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <h2
+            id="scan-dock-heading"
+            className="text-2xl font-semibold tracking-[-0.02em] text-[var(--sx-text)]"
+          >
+            Scan
+          </h2>
 
           <Badge
             variant={
@@ -81,14 +72,14 @@ export function ScanDock() {
             setActiveTab(value as Tab);
             setFormError(null);
           }}
-          className="mt-7 gap-4"
+          className="mt-4 gap-4"
         >
           <TabsList
             aria-label="Scan mode"
             className="w-full justify-start sm:w-fit"
           >
-            <TabsTrigger value="single">Single Scan</TabsTrigger>
-            <TabsTrigger value="batch">Batch Scan</TabsTrigger>
+            <TabsTrigger value="single">Single</TabsTrigger>
+            <TabsTrigger value="batch">Batch</TabsTrigger>
           </TabsList>
 
           <TabsContent value="single" className="mt-0">
@@ -149,23 +140,18 @@ export function ScanDock() {
         </Tabs>
 
         {scan.state.error && (
-          <div className="mt-4 rounded-lg border border-[var(--sx-malicious)] bg-[color-mix(in_srgb,var(--sx-malicious)_8%,transparent)] px-4 py-3 text-xs text-[var(--sx-malicious)]">
+          <div className="mt-4 rounded-md border border-[var(--sx-malicious)] bg-[color-mix(in_srgb,var(--sx-malicious)_8%,transparent)] px-4 py-3 text-xs text-[var(--sx-malicious)]">
             {scan.state.error.message}
           </div>
         )}
         {batch.state.error && (
-          <div className="mt-4 rounded-lg border border-[var(--sx-malicious)] bg-[color-mix(in_srgb,var(--sx-malicious)_8%,transparent)] px-4 py-3 text-xs text-[var(--sx-malicious)]">
+          <div className="mt-4 rounded-md border border-[var(--sx-malicious)] bg-[color-mix(in_srgb,var(--sx-malicious)_8%,transparent)] px-4 py-3 text-xs text-[var(--sx-malicious)]">
             {batch.state.error.message}
           </div>
         )}
       </div>
 
-      <footer className="mt-auto border-t border-border bg-[color-mix(in_srgb,var(--sx-border-muted)_12%,transparent)] px-6 py-4 sm:px-8">
-        <div className="mb-3 flex flex-wrap gap-x-4 gap-y-2 text-[0.68rem] text-[var(--sx-text-soft)]">
-          <span>8 live signals</span>
-          <span>NDJSON stream</span>
-          <span>Browser-only history</span>
-        </div>
+      <footer className="border-border mt-auto border-t bg-[color-mix(in_srgb,var(--sx-border-muted)_10%,transparent)] px-5 py-4 sm:px-6">
         <HeaderMetrics />
       </footer>
     </section>

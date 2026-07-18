@@ -15,6 +15,7 @@ interface ProofRow {
 }
 
 interface PublicPageShellProps {
+  /** Quiet section label, e.g. "Method" or "Privacy" */
   eyebrow: string;
   title: string;
   lead: string;
@@ -30,81 +31,81 @@ export function PublicPageShell({
   children,
 }: PublicPageShellProps) {
   return (
-    <div className="flex min-h-screen flex-col">
+    <div className="relative flex min-h-screen flex-col">
       <AppHeader />
 
-      <main id="main-content" className="relative z-10 flex-1 pb-10">
-        <div className="sx-atmosphere" />
+      <main id="main-content" className="relative z-10 flex-1 pb-12">
+        <header className="border-border border-b">
+          <div className="mx-auto max-w-[1520px] px-4 pt-6 pb-10 sm:px-6 sm:pb-12 xl:px-8 xl:pt-8">
+            <Button asChild variant="ghost" className="h-8 px-3">
+              <Link href="/">
+                <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
+                Back to scanner
+              </Link>
+            </Button>
 
-        <section className="border-b border-border">
-          <div className="relative z-10 mx-auto max-w-[1520px] px-4 pb-8 pt-6 sm:px-6 sm:pb-10 xl:px-8 xl:pt-8">
-            <div className="sx-stage-in" data-delay="0">
-              <Button asChild variant="ghost" className="h-8 px-3">
-                <Link href="/">
-                  <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
-                  Back to scanner
-                </Link>
-              </Button>
-            </div>
-
-            <div className="mt-8 grid gap-8 lg:grid-cols-[minmax(0,1.05fr)_minmax(18rem,0.75fr)] lg:items-start">
-              <div className="sx-stage-in space-y-5" data-delay="1">
-                <p className="text-sm font-medium text-[var(--sx-accent)]">
-                  {eyebrow}
-                </p>
-                <h1 className="max-w-4xl text-4xl font-semibold tracking-[-0.04em] text-[var(--sx-text)] sm:text-5xl lg:text-6xl">
+            <div className="mt-10 grid gap-10 lg:grid-cols-[minmax(0,1.15fr)_minmax(16rem,0.7fr)] lg:items-end lg:gap-14">
+              <div className="min-w-0 space-y-5">
+                <p className="sx-label">{eyebrow}</p>
+                <h1 className="max-w-[18ch] text-[2.25rem] leading-[1.12] font-semibold tracking-[-0.03em] text-balance text-[var(--sx-text)] sm:text-5xl lg:text-[3.25rem]">
                   {title}
                 </h1>
-                <p className="max-w-3xl text-base leading-8 text-[var(--sx-text-muted)]">
+                <p className="max-w-[62ch] text-base leading-7 text-[var(--sx-text-muted)] sm:text-[1.05rem] sm:leading-8">
                   {lead}
                 </p>
               </div>
 
-              <div className="sx-stage-in grid gap-3 md:grid-cols-3 lg:grid-cols-1" data-delay="2">
-                {proofRows.map((row) => {
-                  const Icon = row.icon;
-                  return (
-                    <div
-                      key={row.label}
-                      className="rounded-lg border border-border bg-card px-4 py-4 transition-[border-color,transform] duration-200 hover:-translate-y-0.5 hover:border-[var(--sx-active-accent)]"
-                    >
-                      <div className="flex items-start gap-3">
-                        {Icon ? (
-                          <Icon className="mt-0.5 h-4 w-4 shrink-0 text-[var(--sx-accent)]" aria-hidden="true" />
-                        ) : null}
-                        <div>
-                          <p className="text-xs text-[var(--sx-text-muted)]">
-                            {row.label}
-                          </p>
-                          <p className="mt-2 text-xl font-semibold text-[var(--sx-text)]">
-                            {row.value}
-                          </p>
-                          <p className="mt-2 text-sm leading-6 text-[var(--sx-text-muted)]">
-                            {row.body}
-                          </p>
+              <aside
+                aria-label={`${eyebrow} highlights`}
+                className="sx-surface-block border-border overflow-hidden rounded-md border"
+              >
+                <div className="border-border border-b bg-[color-mix(in_srgb,var(--sx-border-muted)_10%,transparent)] px-4 py-2.5">
+                  <p className="sx-label">Highlights</p>
+                </div>
+                <ul className="divide-border divide-y">
+                  {proofRows.map((row) => {
+                    const Icon = row.icon;
+                    return (
+                      <li key={row.label} className="px-4 py-4">
+                        <div className="flex items-start gap-3">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              {Icon ? (
+                                <Icon
+                                  className="h-3.5 w-3.5 shrink-0 text-[var(--sx-text-soft)]"
+                                  aria-hidden="true"
+                                />
+                              ) : null}
+                              <p className="text-xs text-[var(--sx-text-muted)]">
+                                {row.label}
+                              </p>
+                            </div>
+                            <p className="mt-1.5 text-base font-semibold tracking-[-0.015em] text-[var(--sx-text)]">
+                              {row.value}
+                            </p>
+                            <p className="mt-1.5 text-sm leading-6 text-[var(--sx-text-muted)]">
+                              {row.body}
+                            </p>
+                          </div>
                         </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </aside>
             </div>
           </div>
-        </section>
+        </header>
 
-        <section className="mx-auto max-w-[1520px] px-4 py-8 sm:px-6 xl:px-8 xl:py-10">
+        <div className="mx-auto max-w-[1520px] px-4 py-10 sm:px-6 xl:px-8 xl:py-12">
           {children}
-        </section>
+        </div>
       </main>
 
       <AppFooter>
-        <div className="flex w-full flex-wrap items-center justify-end gap-x-5 gap-y-1 text-[11px] text-[var(--sx-text-muted)]">
-          <span>Hash-only logs</span>
-          <span className="text-[var(--sx-border-muted)]">/</span>
-          <span>Browser-only history</span>
-          <span className="text-[var(--sx-border-muted)]">/</span>
-          <span>No share database</span>
-        </div>
+        <p className="sx-font-hack w-full text-right text-[11px] text-[var(--sx-text-soft)]">
+          Hash-only logs · Browser-only history · No share database
+        </p>
       </AppFooter>
     </div>
   );

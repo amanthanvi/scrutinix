@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { createRequire } from "node:module";
 
 const HOST = "127.0.0.1";
 const PORT = "3000";
@@ -6,11 +7,13 @@ const BASE_URL = `http://${HOST}:${PORT}/`;
 const TIMEOUT_MS = 60_000;
 const POLL_INTERVAL_MS = 1_000;
 
-const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
-const npxCommand = process.platform === "win32" ? "npx.cmd" : "npx";
+const require = createRequire(import.meta.url);
+const nextBin = require.resolve("next/dist/bin/next");
+const playwrightCli = require.resolve("@playwright/test/cli");
+
 const server = spawn(
-  npmCommand,
-  ["run", "start", "--", "--hostname", HOST, "--port", PORT],
+  process.execPath,
+  [nextBin, "start", "--hostname", HOST, "--port", PORT],
   {
     env: process.env,
     stdio: "inherit",
@@ -52,8 +55,8 @@ server.once("exit", (code) => {
 await waitForServer();
 
 const testRunner = spawn(
-  npxCommand,
-  ["playwright", "test", ...process.argv.slice(2)],
+  process.execPath,
+  [playwrightCli, "test", ...process.argv.slice(2)],
   {
     env: process.env,
     stdio: "inherit",
@@ -79,25 +82,23 @@ async function waitForServer() {
         headers: {
           accept: "text/html",
         },
+        // Cap each poll so a stalled accept-without-response cannot outlive
+        // the outer TIMEOUT_MS loop (OS socket timeouts can be ~75s).
         signal: AbortSignal.timeout(2_000),
       });
 
-      if (response.ok) {
+      if (response.ok || response.status >= 400) {
         return;
       }
     } catch {
-      // The server is still booting.
+      // Server not ready yet.
     }
 
-    await sleep(POLL_INTERVAL_MS);
+    await new Promise((resolve) => {
+      setTimeout(resolve, POLL_INTERVAL_MS);
+    });
   }
 
   cleanup();
-  throw new Error(`Timed out waiting for ${BASE_URL} after ${TIMEOUT_MS}ms.`);
-}
-
-function sleep(durationMs) {
-  return new Promise((resolve) => {
-    setTimeout(resolve, durationMs);
-  });
+  throw new Error(`Timed out waiting for ${BASE_URL}`);
 }

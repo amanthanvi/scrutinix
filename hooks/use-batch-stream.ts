@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 
 import { readNdjsonStream } from "@/lib/client/ndjson";
+import { streamFailureApiError } from "@/lib/client/stream-error";
 import {
   sanitizeApiErrorResponse,
   sanitizeBatchEvent,
@@ -20,7 +21,10 @@ interface BatchState {
   items: BatchItem[];
   isStreaming: boolean;
   error: ApiError | null;
-  results: AnalysisResult[];
+}
+
+function completedResults(items: BatchItem[]): AnalysisResult[] {
+  return items.flatMap((item) => (item.result ? [item.result] : []));
 }
 
 export function useBatchStream(
@@ -30,7 +34,6 @@ export function useBatchStream(
     items: [],
     isStreaming: false,
     error: null,
-    results: [],
   });
   const abortRef = useRef<AbortController | null>(null);
 
@@ -49,7 +52,6 @@ export function useBatchStream(
         })),
         isStreaming: true,
         error: null,
-        results: [],
       });
 
       try {
@@ -95,12 +97,6 @@ export function useBatchStream(
                     }
                   : item,
               ),
-              results: [
-                ...previous.results.filter(
-                  (result) => result.id !== event.result.id,
-                ),
-                event.result,
-              ],
             }));
             onUrlComplete?.(event.result);
           }
@@ -109,7 +105,19 @@ export function useBatchStream(
             setState((previous) => ({
               ...previous,
               isStreaming: false,
-              results: event.results,
+              items: previous.items.map((item) => {
+                const fromEvent = event.results[item.index];
+                if (!fromEvent) {
+                  return item;
+                }
+
+                return {
+                  ...item,
+                  url: fromEvent.url,
+                  status: "complete",
+                  result: fromEvent,
+                };
+              }),
             }));
           }
 
@@ -126,10 +134,21 @@ export function useBatchStream(
           controller.signal.aborted ||
           (error instanceof DOMException && error.name === "AbortError")
         ) {
+          setState((previous) => ({
+            ...previous,
+            isStreaming: false,
+          }));
           return;
         }
 
-        throw error;
+        setState((previous) => ({
+          ...previous,
+          isStreaming: false,
+          error: streamFailureApiError(
+            error,
+            "The batch request stream failed unexpectedly.",
+          ),
+        }));
       }
     },
     [onUrlComplete],
@@ -144,8 +163,13 @@ export function useBatchStream(
     }));
   }, []);
 
+  const results = useMemo(() => completedResults(state.items), [state.items]);
+
   return {
-    state,
+    state: {
+      ...state,
+      results,
+    },
     startBatch,
     cancelBatch,
   };

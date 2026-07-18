@@ -6,7 +6,9 @@ describe("getUrlStructureRisk", () => {
   it("detects script extensions and non-standard https port on literal IP", () => {
     const risk = getUrlStructureRisk("https://15.58.86.110:38376/bin.sh");
     expect(risk.scoreDelta).toBeGreaterThan(0);
-    expect(risk.reasons.join(" ")).toMatch(/script or shell|non-standard HTTPS port/i);
+    expect(risk.reasons.join(" ")).toMatch(
+      /script or shell|non-standard HTTPS port/i,
+    );
   });
 
   it("returns empty delta for a normal https URL", () => {
@@ -16,7 +18,11 @@ describe("getUrlStructureRisk", () => {
   });
 
   it("does not treat ccTLDs in the hostname as script extensions", () => {
-    for (const host of ["https://news.pl/", "https://example.py/", "https://nic.sh/"]) {
+    for (const host of [
+      "https://news.pl/",
+      "https://example.py/",
+      "https://nic.sh/",
+    ]) {
       const risk = getUrlStructureRisk(host);
       expect(risk.reasons.join(" ")).not.toMatch(/script or shell/i);
       expect(risk.reasons.some((r) => r.includes(".pl"))).toBe(false);

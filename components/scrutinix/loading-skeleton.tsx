@@ -28,9 +28,6 @@ export function LoadingSkeleton() {
           <Block className="h-36 rounded-xl" delay={360} />
           <Block className="h-36 rounded-xl" delay={480} />
         </div>
-
-        {/* Education / support section */}
-        <Block className="h-20 rounded-xl" delay={600} />
       </div>
 
       {/* History rail skeleton */}

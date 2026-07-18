@@ -75,7 +75,8 @@ function readVerdict(value: unknown, fallback: Verdict = "error"): Verdict {
 }
 
 function readSignalStatus(value: unknown): SignalStatus {
-  return typeof value === "string" && validSignalStatuses.has(value as SignalStatus)
+  return typeof value === "string" &&
+    validSignalStatuses.has(value as SignalStatus)
     ? (value as SignalStatus)
     : "pending";
 }
@@ -136,15 +137,17 @@ function sanitizeVirusTotalData(
 function sanitizeMlSignalData(
   value: Record<string, unknown>,
 ): SignalPayloadMap["mlEnsemble"] {
-  const lexicalModel =
-    readClassificationFinding(value.lexicalModel) ?? {
-      label: "benign",
-      score: 0,
-      reasons: [],
-      model: "lexical-heuristic",
-    };
+  const lexicalModel = readClassificationFinding(value.lexicalModel) ?? {
+    label: "benign",
+    score: 0,
+    reasons: [],
+    model: "lexical-heuristic",
+  };
   const hostedModel = readClassificationFinding(value.hostedModel);
-  const rawConsensusLabel = readString(value.consensusLabel, lexicalModel.label);
+  const rawConsensusLabel = readString(
+    value.consensusLabel,
+    lexicalModel.label,
+  );
   const consensusLabel: ClassificationFinding["label"] =
     rawConsensusLabel === "malicious" ||
     rawConsensusLabel === "risky" ||
@@ -156,7 +159,10 @@ function sanitizeMlSignalData(
     hostedModel,
     lexicalModel,
     consensusLabel,
-    consensusScore: Math.min(Math.max(readNumber(value.consensusScore, 0), 0), 1),
+    consensusScore: Math.min(
+      Math.max(readNumber(value.consensusScore, 0), 0),
+      1,
+    ),
     reasons: readStringArray(value.reasons),
     warnings: readStringArray(value.warnings),
   };
@@ -425,10 +431,7 @@ function sanitizeSignalResults(value: unknown): SignalResults {
     ssl: sanitizeSignalResult("ssl", record?.ssl),
     whois: sanitizeSignalResult("whois", record?.whois),
     dns: sanitizeSignalResult("dns", record?.dns),
-    redirectChain: sanitizeSignalResult(
-      "redirectChain",
-      record?.redirectChain,
-    ),
+    redirectChain: sanitizeSignalResult("redirectChain", record?.redirectChain),
   };
 }
 
@@ -474,7 +477,10 @@ function sanitizeMetadata(
     completedAt,
     cacheHit: readBoolean(record?.cacheHit, false),
     partialFailure: readBoolean(record?.partialFailure, false),
-    signalCount: Math.max(0, readNumber(record?.signalCount, signalNames.length)),
+    signalCount: Math.max(
+      0,
+      readNumber(record?.signalCount, signalNames.length),
+    ),
     durationMs: Math.max(0, readNumber(record?.durationMs, 0)),
   };
 }
