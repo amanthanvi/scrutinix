@@ -7,7 +7,6 @@ import type {
   SignalPayloadMap,
   SSLData,
   ThreatFeedsData,
-  Verdict,
   VirusTotalData,
   WhoisData,
 } from "@/lib/domain/types";
@@ -279,22 +278,5 @@ export function getSignalDetailEntries(
     }
     default:
       return [];
-  }
-}
-
-export function verdictToTone(
-  verdict: Verdict | string,
-): "safe" | "suspicious" | "malicious" | "critical" | "error" {
-  switch (verdict) {
-    case "safe":
-      return "safe";
-    case "suspicious":
-      return "suspicious";
-    case "malicious":
-      return "malicious";
-    case "critical":
-      return "critical";
-    default:
-      return "error";
   }
 }

@@ -14,21 +14,6 @@ export interface SharedSnapshot {
   capturedAt: string;
 }
 
-export function verdictColor(verdict: Verdict | string): string {
-  switch (verdict) {
-    case "safe":
-      return "var(--sx-safe)";
-    case "suspicious":
-      return "var(--sx-suspicious)";
-    case "malicious":
-      return "var(--sx-malicious)";
-    case "critical":
-      return "var(--sx-critical)";
-    default:
-      return "var(--sx-error)";
-  }
-}
-
 /** AA-contrast text color for a stated verdict. */
 export function verdictFg(verdict: Verdict | string): string {
   switch (verdict) {
@@ -43,11 +28,6 @@ export function verdictFg(verdict: Verdict | string): string {
     default:
       return "var(--sx-error-fg)";
   }
-}
-
-/** Legacy alias — last consumers die in redesign step 7. */
-export function verdictInk(verdict: Verdict | string): string {
-  return verdictFg(verdict);
 }
 
 export type Severity =

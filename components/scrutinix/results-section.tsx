@@ -8,16 +8,16 @@ import { VerdictPanel } from "@/components/scrutinix/verdict-panel";
 import { SIGNAL_COUNT } from "@/components/shared/scrutinix-types";
 import { signalNames } from "@/lib/domain/types";
 
-const BatchPanel = dynamic(
+const BatchTable = dynamic(
   () =>
-    import("@/components/scrutinix/batch-panel").then(
-      (module) => module.BatchPanel,
+    import("@/components/scrutinix/batch-table").then(
+      (module) => module.BatchTable,
     ),
   {
     loading: () => (
-      <div className="border-border rounded-lg border px-4 py-6 text-xs text-[var(--sx-text-muted)]">
+      <p className="text-[0.8125rem] text-[var(--sx-text-soft)]">
         Loading batch results…
-      </div>
+      </p>
     ),
   },
 );
@@ -69,7 +69,7 @@ export function ResultsSection() {
           }
         />
       ) : (
-        <BatchPanel
+        <BatchTable
           items={batch.state.items}
           isStreaming={batch.state.isStreaming}
           results={batch.state.results}

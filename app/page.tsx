@@ -2,7 +2,7 @@ import { AnalyzerRuntimeProvider } from "@/components/scrutinix/analyzer-runtime
 import { AppFooter } from "@/components/scrutinix/app-footer";
 import { AppHeader } from "@/components/scrutinix/app-header";
 import { ScrutinixErrorBoundary } from "@/components/scrutinix/error-boundary";
-import { HistoryRail } from "@/components/scrutinix/history-rail";
+import { HistorySection } from "@/components/scrutinix/history-section";
 import { ResultsSection } from "@/components/scrutinix/results-section";
 import { ScanForm } from "@/components/scrutinix/scan-form";
 
@@ -33,7 +33,7 @@ export default function HomePage() {
             </ScrutinixErrorBoundary>
 
             <ScrutinixErrorBoundary>
-              <HistoryRail />
+              <HistorySection />
             </ScrutinixErrorBoundary>
           </div>
         </main>
