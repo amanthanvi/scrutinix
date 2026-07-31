@@ -1,19 +1,15 @@
-import {
-  AnalyzerChrome,
-  AnalyzerRuntimeProvider,
-  AnalyzerWorkspace,
-  FooterTicker,
-  HistoryRail,
-  ScanDock,
-  ShellHeader,
-} from "@/components/scrutinix/analyzer-app";
+import { AnalyzerRuntimeProvider } from "@/components/scrutinix/analyzer-runtime";
+import { AnalyzerWorkspace } from "@/components/scrutinix/analyzer-workspace";
 import { ScrutinixErrorBoundary } from "@/components/scrutinix/error-boundary";
+import { ShellHeader } from "@/components/scrutinix/header-metrics";
+import { HistoryRail } from "@/components/scrutinix/history-rail";
 import { IntroPanel } from "@/components/scrutinix/intro-panel";
+import { ScanDock } from "@/components/scrutinix/scan-dock";
 
 export default function HomePage() {
   return (
     <AnalyzerRuntimeProvider>
-      <AnalyzerChrome>
+      <div className="relative flex min-h-screen flex-col">
         <ShellHeader />
 
         <main id="main-content" className="relative z-10 flex-1 pb-10">
@@ -33,9 +29,7 @@ export default function HomePage() {
             </div>
           </div>
         </main>
-
-        <FooterTicker />
-      </AnalyzerChrome>
+      </div>
     </AnalyzerRuntimeProvider>
   );
 }
