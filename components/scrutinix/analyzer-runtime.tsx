@@ -12,13 +12,11 @@ import {
 import { toast } from "sonner";
 
 import {
-  getActiveAccent,
   getSignalSeverity,
   type SharedSnapshot,
 } from "@/components/shared/scrutinix-types";
 import { useBatchStream } from "@/hooks/use-batch-stream";
 import { useScanStream } from "@/hooks/use-scan-stream";
-import { threatScoreToVerdict } from "@/lib/domain/score-bands";
 import type { HistoryEntry } from "@/lib/domain/types";
 import {
   signalNames,
@@ -152,8 +150,6 @@ function useCreateAnalyzerRuntime() {
   const signals = active?.signals ?? scan.state.signals;
 
   const live = scan.state.isStreaming || batch.state.isStreaming;
-  const score = active?.threatInfo?.score ?? 0;
-  const scoreColor = getActiveAccent(threatScoreToVerdict(score));
 
   const done = useMemo(
     () =>
@@ -281,8 +277,6 @@ function useCreateAnalyzerRuntime() {
     historyEvent,
     live,
     scan,
-    score,
-    scoreColor,
     selectedResult,
     setActiveTab,
     setBatchInput,

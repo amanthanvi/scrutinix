@@ -6,7 +6,6 @@ import {
   type Tab,
   useAnalyzerRuntime,
 } from "@/components/scrutinix/analyzer-runtime";
-import { HeaderMetrics } from "@/components/scrutinix/header-metrics";
 import { BatchInput, SingleInput } from "@/components/scrutinix/input-panels";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -150,10 +149,6 @@ export function ScanDock() {
           </div>
         )}
       </div>
-
-      <footer className="border-border mt-auto border-t bg-[color-mix(in_srgb,var(--sx-border-muted)_10%,transparent)] px-5 py-4 sm:px-6">
-        <HeaderMetrics />
-      </footer>
     </section>
   );
 }
