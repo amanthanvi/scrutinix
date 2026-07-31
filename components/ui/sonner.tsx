@@ -15,11 +15,11 @@ export function AppToaster() {
       toastOptions={{
         classNames: {
           toast:
-            "sx-font-sans rounded-xl border border-[var(--sx-border)] bg-[var(--sx-surface)] text-[var(--sx-text)] shadow-lg",
-          title: "text-sm font-semibold text-[var(--sx-text)]",
+            "rounded-lg border border-[var(--sx-border)] bg-[var(--sx-surface)] text-[var(--sx-text)] shadow-lg",
+          title: "text-sm font-medium text-[var(--sx-text)]",
           description: "text-xs text-[var(--sx-text-muted)]",
           actionButton:
-            "rounded-md bg-[var(--sx-active-accent)] text-[var(--sx-accent-fg)]",
+            "rounded-md bg-[var(--sx-accent)] text-[var(--sx-accent-fg)]",
           cancelButton:
             "rounded-md border border-[var(--sx-border)] bg-transparent text-[var(--sx-text)]",
         },
