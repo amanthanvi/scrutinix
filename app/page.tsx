@@ -1,10 +1,10 @@
 import { AnalyzerRuntimeProvider } from "@/components/scrutinix/analyzer-runtime";
-import { AnalyzerWorkspace } from "@/components/scrutinix/analyzer-workspace";
 import { AppFooter } from "@/components/scrutinix/app-footer";
 import { AppHeader } from "@/components/scrutinix/app-header";
 import { ScrutinixErrorBoundary } from "@/components/scrutinix/error-boundary";
 import { HistoryRail } from "@/components/scrutinix/history-rail";
-import { ScanDock } from "@/components/scrutinix/scan-dock";
+import { ResultsSection } from "@/components/scrutinix/results-section";
+import { ScanForm } from "@/components/scrutinix/scan-form";
 
 export default function HomePage() {
   return (
@@ -27,8 +27,8 @@ export default function HomePage() {
           <div className="mt-8 flex flex-col gap-10">
             <ScrutinixErrorBoundary>
               <div className="flex flex-col gap-6">
-                <ScanDock />
-                <AnalyzerWorkspace />
+                <ScanForm />
+                <ResultsSection />
               </div>
             </ScrutinixErrorBoundary>
 

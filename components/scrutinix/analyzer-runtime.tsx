@@ -11,10 +11,7 @@ import {
 } from "react";
 import { toast } from "sonner";
 
-import {
-  getSignalSeverity,
-  type SharedSnapshot,
-} from "@/components/shared/scrutinix-types";
+import { type SharedSnapshot } from "@/components/shared/scrutinix-types";
 import { useBatchStream } from "@/hooks/use-batch-stream";
 import { useScanStream } from "@/hooks/use-scan-stream";
 import type { HistoryEntry } from "@/lib/domain/types";
@@ -26,23 +23,11 @@ import {
 import { normalizeUrlInput } from "@/lib/domain/url";
 
 export type Tab = "single" | "batch";
-export type ViewMode = "summary" | "full";
 
 interface HistoryEvent {
   nonce: number;
   result: AnalysisResult;
 }
-
-const summarySignalOrder = [
-  "googleSafeBrowsing",
-  "threatFeeds",
-  "virusTotal",
-  "mlEnsemble",
-  "ssl",
-  "redirectChain",
-  "whois",
-  "dns",
-] as const;
 
 function readSnapshot(): SharedSnapshot | null {
   if (typeof window === "undefined") return null;
@@ -106,19 +91,8 @@ function readSnapshot(): SharedSnapshot | null {
   }
 }
 
-const severityRank = {
-  malicious: 5,
-  suspicious: 4,
-  error: 3,
-  neutral: 2,
-  skipped: 1,
-  safe: 0,
-  pending: -1,
-} as const;
-
 function useCreateAnalyzerRuntime() {
   const [activeTab, setActiveTab] = useState<Tab>("single");
-  const [viewMode, setViewMode] = useState<ViewMode>("summary");
   const [singleUrl, setSingleUrl] = useState("");
   const [batchInput, setBatchInput] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
@@ -161,34 +135,6 @@ function useCreateAnalyzerRuntime() {
       ).length,
     [signals],
   );
-
-  const summarySignals = useMemo(
-    () =>
-      [...summarySignalOrder]
-        .filter((signalName) => signals[signalName].status !== "pending")
-        .sort((left, right) => {
-          const leftSeverity = getSignalSeverity(
-            signals[left].status,
-            signals[left].data,
-            left,
-          );
-          const rightSeverity = getSignalSeverity(
-            signals[right].status,
-            signals[right].data,
-            right,
-          );
-          return severityRank[rightSeverity] - severityRank[leftSeverity];
-        })
-        .slice(0, 3),
-    [signals],
-  );
-  const hasActivity = live || active !== null;
-  const visibleSignals =
-    viewMode === "summary" && summarySignals.length > 0
-      ? summarySignals
-      : hasActivity
-        ? signalNames
-        : [];
 
   const startSingleScan = useCallback(async () => {
     setFormError(null);
@@ -273,7 +219,6 @@ function useCreateAnalyzerRuntime() {
     batchInput,
     done,
     formError,
-    hasActivity,
     historyEvent,
     live,
     scan,
@@ -283,16 +228,12 @@ function useCreateAnalyzerRuntime() {
     setFormError,
     setSelectedResult,
     setSingleUrl,
-    setViewMode,
     shareResult,
     sharedSnapshot,
     signals,
     singleUrl,
     startBatchScan,
     startSingleScan,
-    summarySignals,
-    viewMode,
-    visibleSignals,
     rescanUrl,
     selectHistoryEntry,
   };
