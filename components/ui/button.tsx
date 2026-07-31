@@ -16,12 +16,6 @@ const buttonVariants = cva(
         ghost:
           "text-[var(--sx-text-muted)] hover:bg-muted hover:text-foreground",
         outline: "border-border text-foreground hover:bg-muted",
-        /* legacy variants — last consumers die in redesign step 7 */
-        subtle: "bg-secondary text-secondary-foreground hover:opacity-90",
-        danger: "border-border text-[var(--sx-malicious-fg)] hover:bg-muted",
-        dangerSolid:
-          "bg-[var(--sx-malicious)] text-destructive-foreground hover:opacity-90",
-        view: "text-[var(--sx-text-muted)] hover:bg-muted hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground",
       },
       size: {
         default: "h-8 px-3",

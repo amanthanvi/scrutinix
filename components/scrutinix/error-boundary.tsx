@@ -24,28 +24,23 @@ export class ScrutinixErrorBoundary extends Component<
   render() {
     if (this.state.hasError) {
       return (
-        <div className="flex min-h-[50vh] items-center justify-center">
-          <div className="sx-panel max-w-md rounded-xl border border-[var(--sx-malicious)] p-6 text-center">
-            <p className="text-sm font-semibold text-[var(--sx-malicious)]">
-              Workspace fault
-            </p>
-            <p className="mt-3 text-xs leading-relaxed text-[var(--sx-text-muted)]">
-              {this.state.error?.message ?? "An unexpected error occurred."}
-            </p>
-            <p className="mt-2 text-xs leading-relaxed text-[var(--sx-text-muted)]">
-              Reload the workspace to recover the scanner shell, then retry the
-              scan that failed.
-            </p>
-            <button
-              type="button"
-              onClick={() => {
-                window.location.reload();
-              }}
-              className="sx-btn-press mt-4 inline-flex h-8 items-center justify-center rounded-md border border-[var(--sx-accent)] bg-[var(--sx-accent)] px-3 text-xs font-medium text-[var(--sx-accent-fg)]"
-            >
-              Reload Workspace
-            </button>
-          </div>
+        <div className="border-border rounded-lg border bg-[var(--sx-surface)] p-5">
+          <p className="text-sm font-medium text-[var(--sx-text)]">
+            Something went wrong.
+          </p>
+          <p className="mt-1.5 text-[0.8125rem] leading-6 text-[var(--sx-text-muted)]">
+            {this.state.error?.message ?? "An unexpected error occurred."}{" "}
+            Reload the page and retry the scan.
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              window.location.reload();
+            }}
+            className="sx-btn-press mt-3 inline-flex h-8 items-center justify-center rounded-md bg-[var(--sx-accent)] px-3 text-[0.8125rem] font-medium text-[var(--sx-accent-fg)] hover:opacity-90"
+          >
+            Reload
+          </button>
         </div>
       );
     }

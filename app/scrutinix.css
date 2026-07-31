@@ -117,122 +117,14 @@
   transform: translateY(0);
 }
 
-/*
- * --- Migration shims -----------------------------------------------------
- * Legacy classes still referenced by components rewritten in later redesign
- * steps. Delete this whole block in step 8.
- */
-
-.scrutinix-theme {
-  --sx-active-accent: var(--sx-accent);
-  --sx-font-sans: var(--font-geist-sans), "Geist", system-ui, sans-serif;
-  --sx-font-hack: var(--font-geist-mono), monospace;
-}
-
-.sx-label {
-  font-size: 0.75rem;
-  font-weight: 500;
-  line-height: 1.3;
-  color: var(--sx-text-soft);
-}
-
-.sx-surface-block,
-.sx-panel {
-  background: var(--sx-surface);
-}
-
-.sx-prose-block {
-  max-width: 46rem;
-  padding-bottom: 0.25rem;
-  border-bottom: 1px solid var(--sx-border);
-}
-
-.sx-font-sans {
-  font-family: var(--sx-font-sans);
-}
-
-.sx-font-hack {
-  font-family: var(--sx-font-hack);
-}
-
-.sx-pulse,
-.sx-alert {
-  animation: none;
-}
-
-.sx-status-pip {
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  border-radius: 2px;
-  flex-shrink: 0;
-}
-
-.sx-status-pip-live {
-  animation: sx-live 1.4s ease-in-out infinite;
-}
-
-.sx-verdict-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  border: 1px solid currentcolor;
-  border-radius: var(--radius);
-  padding: 0.3rem 0.65rem;
-  font-size: 0.7rem;
-  font-weight: 600;
-}
-
-.sx-score-arc,
-.sx-score-live,
-.sx-threat-fill {
-  animation: none;
-}
-
-.sx-edge-safe,
-.sx-edge-neutral,
-.sx-edge-suspicious,
-.sx-edge-malicious,
-.sx-edge-critical,
-.sx-edge-error,
-.sx-edge-pending,
-.sx-edge-skipped {
-  background: var(--sx-surface);
-}
-
-.sx-input-glow:focus,
-.sx-input-glow:focus-within {
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--sx-accent) 22%, transparent);
-}
-
-.sx-signal-enter {
-  opacity: 1;
-  transform: translateY(0);
-  transition:
-    opacity 200ms var(--sx-ease),
-    transform 200ms var(--sx-ease);
-}
-
-@starting-style {
-  .sx-signal-enter {
-    opacity: 0;
-    transform: translateY(4px);
-  }
-}
-
-/* --- End migration shims ------------------------------------------------- */
-
 @media (prefers-reduced-motion: reduce) {
-  .sx-enter,
-  .sx-signal-enter {
+  .sx-enter {
     transition-property: opacity;
     transition-duration: 150ms;
     translate: none;
-    transform: none;
   }
 
-  .sx-live,
-  .sx-status-pip-live {
+  .sx-live {
     animation: none;
   }
 

@@ -115,39 +115,3 @@ body {
     border-color: var(--border);
   }
 }
-
-/*
- * --- Migration shims -----------------------------------------------------
- * Aliases for tokens whose consumers are rewritten in later redesign steps.
- * Delete this whole block (and the matching @theme lines below) in step 8.
- */
-:root,
-.dark {
-  --sx-safe-ink: var(--sx-safe-fg);
-  --sx-suspicious-ink: var(--sx-suspicious-fg);
-  --sx-malicious-ink: var(--sx-malicious-fg);
-  --sx-critical-ink: var(--sx-critical-fg);
-  --sx-error-ink: var(--sx-error-fg);
-  --sx-info-ink: var(--sx-info-fg);
-  --sx-border-muted: var(--border);
-  --sx-bg-top: var(--background);
-  --sx-bg-strong: var(--muted);
-  --sx-surface-strong: var(--card);
-  --sx-surface-elevated: var(--card);
-  --sx-active-accent: var(--sx-accent);
-  --secondary: var(--muted);
-  --secondary-foreground: var(--foreground);
-  --accent: var(--muted);
-  --accent-foreground: var(--foreground);
-  --destructive: var(--sx-malicious);
-  --destructive-foreground: oklch(0.99 0 0);
-}
-
-@theme inline {
-  --color-secondary: var(--secondary);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-accent: var(--accent);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-destructive: var(--destructive);
-  --color-destructive-foreground: var(--destructive-foreground);
-}
