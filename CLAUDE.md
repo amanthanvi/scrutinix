@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-**Scrutinix** — a multi-signal URL threat analyzer. Streams 8 independent security signals (VirusTotal, Google Safe Browsing, threat feeds, ML ensemble, TLS, WHOIS, DNS, redirect chain) via NDJSON and renders a real-time threat dashboard. Dark-first terminal aesthetic with a supported light theme.
+**Scrutinix** — a multi-signal URL threat analyzer. Streams 8 independent security signals (VirusTotal, Google Safe Browsing, threat feeds, ML ensemble, TLS, WHOIS, DNS, redirect chain) via NDJSON and renders them in a minimal, single-column product UI. System-default theme; light and dark are designed to equal quality.
 
 ## Commands
 
@@ -21,36 +21,37 @@ npm run lighthouse   # Lighthouse audit
 
 ```
 app/
-  layout.tsx              # Root layout (ThemeProvider + Sonner + Geist Mono/Sans + Hack)
-  page.tsx                # Renders AnalyzerApp from components/scrutinix/
-  scrutinix.css           # Scrutinix motion/effects/utilities
-  globals.css             # Tailwind v4 + semantic theme tokens
+  layout.tsx              # Root layout (ThemeProvider + Sonner + Geist Sans/Mono)
+  page.tsx                # Single-column home: header, title, ScanForm, ResultsSection, HistorySection, footer
+  scrutinix.css           # Small CSS-only motion/utility layer (sx-* classes)
+  globals.css             # Tailwind v4 + semantic --sx-* theme tokens (OKLCH, both themes)
   api/analyze/            # POST NDJSON stream (single + batch routes)
-  icon.tsx                # Favicon (dark/green)
   opengraph-image.tsx     # OG card
 
 components/
-  ui/                     # Selective shadcn/ui primitives
+  ui/                     # Minimal primitives: button, input, textarea, tabs (Radix), sonner
   scrutinix/
-    analyzer-app.tsx      # Main orchestrator (~330 LOC)
-    app-header.tsx        # SCRUTINIX branding + threat elevation bar + theme toggle
-    app-footer.tsx        # Marquee ticker footer
-    verdict-hero.tsx      # Radar SVG, score ring, result display
-    signal-card.tsx       # Per-signal card with LED + edge severity
-    input-panels.tsx      # shadcn-backed input/textarea/button controls
-    history-panel.tsx     # search, verdict filters, export, history drill-down
-    batch-panel.tsx       # Batch results data table
-    intro-panel.tsx       # Scanner-first hero (brand + dock)
-    loading-skeleton.tsx  # Initial page load skeleton
+    analyzer-runtime.tsx  # Context provider: tabs, inputs, scan/batch streams, share/rescan/history
+    app-header.tsx        # h-14 header: wordmark, About/Privacy nav, theme toggle
+    app-footer.tsx        # One-line footer
+    scan-form.tsx         # Single/Batch tabs + inputs (id="scan-console")
+    input-panels.tsx      # SingleInput/BatchInput with export/share/rescan actions
+    results-section.tsx   # VerdictPanel or BatchTable + 8 SignalRows
+    verdict-panel.tsx     # One panel: verdict word, score meter, confidence, reasons, Details disclosure
+    signal-row.tsx        # Per-signal <details> row with severity dot + mono detail dl
+    batch-table.tsx       # Plain batch result list
+    history-section.tsx   # Dynamic-import wrapper (keeps idb off critical path)
+    history-panel.tsx     # Search, confirm-clear + undo, export, entry list
+    public-page-shell.tsx # Shared 44rem shell for /about and /privacy
     error-boundary.tsx    # Class-based error boundary
   shared/
-    scrutinix-types.ts    # Verdict colors, severity helpers, dynamic accent
-    signal-utils.ts       # Signal labels, summaries, detail entries
+    scrutinix-types.ts    # verdictFg, severityColor, getSignalSeverity
+    signal-utils.ts       # Signal summaries + detail entries (all signal copy)
 
 hooks/
   use-scan-stream.ts      # NDJSON consumer for single scan
   use-batch-stream.ts     # NDJSON consumer for batch scan
-  use-scan-history.ts     # IndexedDB-backed history with search/filter
+  use-scan-history.ts     # IndexedDB-backed history with search (matches URL, verdict, summary)
 
 lib/
   domain/                 # Types, URL validation, verdict logic
@@ -61,23 +62,24 @@ lib/
 tests/
   unit/                   # Vitest (cache, url, verdict, env, ml, redirect, rate-limit)
   integration/            # Vitest (analyze routes, threat feeds)
-  e2e/                    # Playwright (smoke, accessibility)
+  e2e/                    # Playwright (smoke, accessibility — axe zero violations)
 ```
 
 ## Key Patterns
 
 - **NDJSON streaming**: API routes stream signal results as they resolve. Client hooks consume via `ReadableStream`.
-- **8 security signals**: virusTotal, mlEnsemble, googleSafeBrowsing, threatFeeds, ssl, whois, dns, redirectChain.
-- **Dynamic accent color**: `--sx-active-accent` CSS var shifts based on active verdict (green → amber → red → magenta).
-- **Hybrid UI**: keep branded Scrutinix components, but use selective shadcn/ui primitives for reusable controls and accessibility-heavy widgets.
-- **CSS prefix**: All theme vars use `--sx-*`, all utility classes use `sx-*`.
-- **Font hierarchy**: Geist Mono (primary mono), Geist Sans (UI chrome/buttons/prose), Hack (data-dense details).
+- **8 security signals**: virusTotal, mlEnsemble, googleSafeBrowsing, threatFeeds, ssl, whois, dns, redirectChain. Rows render in fixed order and fill in place.
+- **One encoding per fact**: the threat score renders once (meter in VerdictPanel); severity renders once per signal (a single dot). Verdict text colors use the AA-safe `--sx-<verdict>-fg` tokens; graphic dots/bars use `--sx-<verdict>`.
+- **Static accent**: one blue `--sx-accent`; verdict colors appear only where a verdict is stated.
+- **CSS prefix**: theme vars use `--sx-*`, utility classes use `sx-*`.
+- **Motion**: CSS-only, <300ms, transform/opacity, custom ease-out (`--sx-ease`), `@starting-style` entries, `prefers-reduced-motion` honored. One infinite animation (live dot).
+- **Fonts**: Geist Sans (UI) + Geist Mono (URLs, scores, durations, detail data) — both from the `geist` package.
 
 ## Stack
 
 - Next.js 16, React 19, TypeScript 5.9 (strict + noUncheckedIndexedAccess)
 - Tailwind CSS v4 (CSS-first config via @tailwindcss/postcss)
-- Geist (Sans + Mono), Hack (self-hosted), Framer Motion, Lucide React, clsx, Zod, idb
+- Geist (Sans + Mono), Radix (slot, tabs), Lucide React, clsx, Zod, idb, sonner, next-themes
 - Vitest + Playwright + Lighthouse + axe-core
 
 ## Env

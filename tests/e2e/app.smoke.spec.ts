@@ -237,10 +237,7 @@ test("single scan flow @smoke", async ({ page }) => {
   const singleUrlInput = page.getByRole("textbox", {
     name: /url to analyze/i,
   });
-  await expect(
-    page.getByRole("meter", { name: /threat score/i }),
-  ).toBeVisible();
-  await expect(page.getByRole("tab", { name: /single scan/i })).toBeVisible();
+  await expect(page.getByRole("tab", { name: /^single$/i })).toBeVisible();
   await expect(singleUrlInput).toBeVisible();
   await expect(page.getByRole("button", { name: /^analyze$/i })).toBeVisible();
   await expect(
@@ -255,9 +252,9 @@ test("single scan flow @smoke", async ({ page }) => {
 
   await expect(page.getByText(/example\.com/i).first()).toBeVisible();
   await expect(page.getByLabel(/VirusTotal signal:/i)).toBeVisible();
-  await expect(
-    page.getByRole("banner").getByText(/8\/8 signals/i),
-  ).toBeVisible();
+  await expect(page.getByRole("meter", { name: /threat score/i })).toBeVisible({
+    timeout: 30_000,
+  });
   await expect(
     page.getByRole("region", { name: /scan history/i }),
   ).toBeVisible();
@@ -267,7 +264,7 @@ test("batch scan flow @smoke", async ({ page }) => {
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await page.waitForTimeout(1_000);
 
-  await page.getByRole("tab", { name: /batch scan/i }).click();
+  await page.getByRole("tab", { name: /^batch$/i }).click();
   const batchInput = page.getByRole("textbox", {
     name: /urls to analyze/i,
   });
@@ -300,9 +297,7 @@ test("history clear can be undone @smoke", async ({ page }) => {
     .getByRole("button", { name: /confirm clear all history/i })
     .click();
 
-  await expect(
-    historyRegion.getByText(/history cleared locally/i),
-  ).toBeVisible();
+  await expect(historyRegion.getByText(/history was cleared/i)).toBeVisible();
   await historyRegion.getByRole("button", { name: /undo clear/i }).click();
   await expect(historyRegion.getByText(/example\.com/i).first()).toBeVisible();
 });
