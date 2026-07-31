@@ -1,178 +1,101 @@
 @import "tailwindcss";
 @custom-variant dark (&:is(.dark *));
 
+/*
+ * Scrutinix tokens — minimal product tool.
+ * Achromatic surfaces, one blue accent, verdict hues only where a verdict is
+ * stated. Each verdict has a graphic token (dots, bars) and a -fg token that
+ * passes 4.5:1 as text on the theme background.
+ */
+
 :root {
   color-scheme: light;
-  --radius: 0.5rem;
+  --radius: 0.375rem;
 
-  /* Daylight desk neutrals — cool sky tint (~230), not cream, not steel vault */
-  --background: oklch(0.985 0.006 230);
-  --foreground: oklch(0.22 0.02 245);
-  --card: oklch(0.995 0.003 230);
-  --card-foreground: oklch(0.22 0.02 245);
-  --popover: oklch(0.995 0.003 230);
-  --popover-foreground: oklch(0.22 0.02 245);
-  --primary: oklch(0.3 0.05 245);
-  --primary-foreground: oklch(0.98 0.008 230);
-  --secondary: oklch(0.95 0.01 230);
-  --secondary-foreground: oklch(0.28 0.025 245);
-  --muted: oklch(0.95 0.01 230);
-  --muted-foreground: oklch(0.44 0.018 245);
-  --accent: oklch(0.95 0.012 230);
-  --accent-foreground: oklch(0.28 0.025 245);
-  --destructive: oklch(0.55 0.2 28);
-  --destructive-foreground: oklch(0.97 0.01 20);
-  --border: oklch(0.89 0.012 230);
-  --input: oklch(0.89 0.012 230);
-  --ring: oklch(0.5 0.07 245);
-  --sx-focus-ring: oklch(0.42 0.08 245);
+  --background: oklch(0.99 0 0);
+  --foreground: oklch(0.19 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: var(--foreground);
+  --muted: oklch(0.955 0 0);
+  --muted-foreground: oklch(0.45 0 0);
+  --border: oklch(0.92 0 0);
+  --input: oklch(0.92 0 0);
+  --ring: oklch(0.55 0.16 255);
 
-  --sx-bg: oklch(0.975 0.008 230);
-  --sx-bg-top: oklch(0.99 0.005 230);
-  --sx-bg-strong: oklch(0.955 0.01 230);
-  --sx-surface: oklch(0.995 0.003 230 / 0.98);
-  --sx-surface-strong: oklch(0.995 0.003 230);
-  --sx-surface-elevated: oklch(0.985 0.006 230);
+  --sx-bg: var(--background);
+  --sx-surface: var(--card);
   --sx-border: var(--border);
-  --sx-border-muted: oklch(0.86 0.014 230);
   --sx-text: var(--foreground);
   --sx-text-muted: var(--muted-foreground);
-  --sx-text-soft: oklch(0.5 0.018 245);
-  /* Ink tool-mark — functional blue, accent only on CTA / live / verdict */
-  --sx-accent: oklch(0.48 0.14 250);
-  --sx-accent-fg: oklch(0.99 0.004 230);
-  --sx-safe: oklch(0.52 0.12 160);
-  --sx-suspicious: oklch(0.62 0.14 70);
-  --sx-malicious: oklch(0.55 0.2 28);
-  --sx-critical: oklch(0.52 0.2 330);
-  --sx-error: oklch(0.5 0.1 20);
-  --sx-info: oklch(0.5 0.1 250);
-  --sx-safe-ink: color-mix(in srgb, var(--sx-safe) 58%, var(--foreground) 42%);
-  --sx-suspicious-ink: color-mix(
-    in srgb,
-    var(--sx-suspicious) 62%,
-    var(--foreground) 38%
-  );
-  --sx-malicious-ink: color-mix(
-    in srgb,
-    var(--sx-malicious) 65%,
-    var(--foreground) 35%
-  );
-  --sx-critical-ink: color-mix(
-    in srgb,
-    var(--sx-critical) 62%,
-    var(--foreground) 38%
-  );
-  --sx-error-ink: color-mix(
-    in srgb,
-    var(--sx-error) 65%,
-    var(--foreground) 35%
-  );
-  --sx-info-ink: color-mix(in srgb, var(--sx-info) 60%, var(--foreground) 40%);
-  /* Border-first depth — desk tool, not soft SaaS card stack */
-  --sx-shadow-soft: 0 1px 0 0 rgb(20 30 50 / 0.03);
-  --sx-shadow-strong: 0 6px 16px -12px rgb(20 30 50 / 0.14);
-  --sx-ring-safe: color-mix(in srgb, var(--sx-safe) 14%, transparent);
-  --sx-ring-suspicious: color-mix(
-    in srgb,
-    var(--sx-suspicious) 14%,
-    transparent
-  );
-  --sx-ring-malicious: color-mix(in srgb, var(--sx-malicious) 14%, transparent);
-  --sx-ring-critical: color-mix(in srgb, var(--sx-critical) 14%, transparent);
+  --sx-text-soft: oklch(0.52 0 0);
+
+  --sx-accent: oklch(0.55 0.16 255);
+  --sx-accent-fg: oklch(0.995 0 0);
+  --sx-focus-ring: var(--sx-accent);
+
+  --sx-safe: oklch(0.62 0.15 160);
+  --sx-safe-fg: oklch(0.46 0.11 160);
+  --sx-suspicious: oklch(0.72 0.14 70);
+  --sx-suspicious-fg: oklch(0.49 0.11 70);
+  --sx-malicious: oklch(0.58 0.19 28);
+  --sx-malicious-fg: oklch(0.49 0.17 28);
+  --sx-critical: oklch(0.56 0.19 330);
+  --sx-critical-fg: oklch(0.47 0.17 330);
+  --sx-error: oklch(0.55 0.08 20);
+  --sx-error-fg: oklch(0.47 0.08 20);
+  --sx-info: oklch(0.55 0.1 255);
+  --sx-info-fg: oklch(0.47 0.09 255);
 }
 
 .dark {
   color-scheme: dark;
-  --background: oklch(0.155 0.018 250);
-  --foreground: oklch(0.94 0.012 245);
-  --card: oklch(0.2 0.02 250);
-  --card-foreground: oklch(0.94 0.012 245);
-  --popover: oklch(0.2 0.02 250);
-  --popover-foreground: oklch(0.94 0.012 245);
-  --primary: oklch(0.88 0.02 245);
-  --primary-foreground: oklch(0.2 0.025 250);
-  --secondary: oklch(0.25 0.022 250);
-  --secondary-foreground: oklch(0.94 0.012 245);
-  --muted: oklch(0.25 0.022 250);
-  --muted-foreground: oklch(0.68 0.02 245);
-  --accent: oklch(0.25 0.022 250);
-  --accent-foreground: oklch(0.94 0.012 245);
-  --destructive: oklch(0.68 0.18 25);
-  --destructive-foreground: oklch(0.98 0.01 20);
-  --border: oklch(1 0.01 245 / 12%);
-  --input: oklch(1 0.01 245 / 14%);
-  --ring: oklch(0.55 0.06 245);
-  --sx-focus-ring: oklch(0.72 0.08 245);
 
-  --sx-bg: oklch(0.145 0.02 250);
-  --sx-bg-top: oklch(0.175 0.022 250);
-  --sx-bg-strong: oklch(0.12 0.018 250);
-  --sx-surface: oklch(0.2 0.02 250 / 0.96);
-  --sx-surface-strong: oklch(0.2 0.02 250);
-  --sx-surface-elevated: oklch(0.24 0.022 250);
-  --sx-border: var(--border);
-  --sx-border-muted: oklch(0.35 0.025 250);
-  --sx-text: var(--foreground);
-  --sx-text-muted: var(--muted-foreground);
-  --sx-text-soft: oklch(0.62 0.02 245);
-  --sx-accent: oklch(0.74 0.12 245);
-  --sx-accent-fg: oklch(0.14 0.02 250);
-  --sx-safe: oklch(0.72 0.13 160);
-  --sx-suspicious: oklch(0.78 0.13 75);
-  --sx-malicious: oklch(0.72 0.17 28);
-  --sx-critical: oklch(0.72 0.18 330);
-  --sx-error: oklch(0.7 0.08 20);
-  --sx-info: oklch(0.72 0.1 245);
-  --sx-safe-ink: var(--sx-safe);
-  --sx-suspicious-ink: var(--sx-suspicious);
-  --sx-malicious-ink: var(--sx-malicious);
-  --sx-critical-ink: var(--sx-critical);
-  --sx-error-ink: var(--sx-error);
-  --sx-info-ink: var(--sx-info);
-  --sx-shadow-soft:
-    0 1px 0 0 rgb(0 0 0 / 0.28), 0 10px 24px -16px rgb(0 0 0 / 0.5);
-  --sx-shadow-strong: 0 14px 32px -18px rgb(0 0 0 / 0.55);
-  --sx-ring-safe: color-mix(in srgb, var(--sx-safe) 18%, transparent);
-  --sx-ring-suspicious: color-mix(
-    in srgb,
-    var(--sx-suspicious) 18%,
-    transparent
-  );
-  --sx-ring-malicious: color-mix(in srgb, var(--sx-malicious) 18%, transparent);
-  --sx-ring-critical: color-mix(in srgb, var(--sx-critical) 18%, transparent);
+  --background: oklch(0.18 0.006 260);
+  --foreground: oklch(0.93 0.004 260);
+  --card: oklch(0.21 0.006 260);
+  --card-foreground: var(--foreground);
+  --muted: oklch(0.24 0.008 260);
+  --muted-foreground: oklch(0.7 0.008 260);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 12%);
+  --ring: oklch(0.72 0.11 255);
+
+  --sx-text-soft: oklch(0.65 0.008 260);
+
+  --sx-accent: oklch(0.72 0.11 255);
+  --sx-accent-fg: oklch(0.16 0.01 260);
+  --sx-focus-ring: var(--sx-accent);
+
+  --sx-safe: oklch(0.75 0.13 160);
+  --sx-safe-fg: oklch(0.75 0.13 160);
+  --sx-suspicious: oklch(0.79 0.13 75);
+  --sx-suspicious-fg: oklch(0.79 0.13 75);
+  --sx-malicious: oklch(0.72 0.16 28);
+  --sx-malicious-fg: oklch(0.72 0.16 28);
+  --sx-critical: oklch(0.74 0.16 330);
+  --sx-critical-fg: oklch(0.74 0.16 330);
+  --sx-error: oklch(0.7 0.07 20);
+  --sx-error-fg: oklch(0.7 0.07 20);
+  --sx-info: oklch(0.72 0.09 255);
+  --sx-info-fg: oklch(0.72 0.09 255);
 }
 
 @theme inline {
   --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-hack);
+  --font-mono: var(--font-geist-mono);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
   --color-card-foreground: var(--card-foreground);
-  --color-popover: var(--popover);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-primary: var(--primary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-secondary: var(--secondary);
-  --color-secondary-foreground: var(--secondary-foreground);
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
-  --color-accent: var(--accent);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-destructive: var(--destructive);
-  --color-destructive-foreground: var(--destructive-foreground);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
-  --radius-sm: calc(var(--radius) * 0.6);
-  --radius-md: calc(var(--radius) * 0.8);
+  --radius-sm: calc(var(--radius) * 0.667);
+  --radius-md: var(--radius);
   --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.4);
-}
-
-* {
-  box-sizing: border-box;
+  --radius-xl: calc(var(--radius) * 1.333);
 }
 
 html {
@@ -182,26 +105,49 @@ html {
 body {
   background: var(--sx-bg);
   color: var(--foreground);
-  font-family: var(--font-geist-sans), "Geist", system-ui, sans-serif;
   line-height: 1.5;
-  margin: 0;
   min-height: 100vh;
   text-rendering: optimizeLegibility;
 }
 
-button,
-input,
-textarea {
-  font: inherit;
-}
-
 @layer base {
-  :where(a) {
-    color: inherit;
-    text-decoration: none;
-  }
-
   * {
     border-color: var(--border);
   }
+}
+
+/*
+ * --- Migration shims -----------------------------------------------------
+ * Aliases for tokens whose consumers are rewritten in later redesign steps.
+ * Delete this whole block (and the matching @theme lines below) in step 8.
+ */
+:root,
+.dark {
+  --sx-safe-ink: var(--sx-safe-fg);
+  --sx-suspicious-ink: var(--sx-suspicious-fg);
+  --sx-malicious-ink: var(--sx-malicious-fg);
+  --sx-critical-ink: var(--sx-critical-fg);
+  --sx-error-ink: var(--sx-error-fg);
+  --sx-info-ink: var(--sx-info-fg);
+  --sx-border-muted: var(--border);
+  --sx-bg-top: var(--background);
+  --sx-bg-strong: var(--muted);
+  --sx-surface-strong: var(--card);
+  --sx-surface-elevated: var(--card);
+  --sx-active-accent: var(--sx-accent);
+  --secondary: var(--muted);
+  --secondary-foreground: var(--foreground);
+  --accent: var(--muted);
+  --accent-foreground: var(--foreground);
+  --destructive: var(--sx-malicious);
+  --destructive-foreground: oklch(0.99 0 0);
+}
+
+@theme inline {
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
 }
