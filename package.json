@@ -45,7 +45,6 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "geist": "^1.7.0",
-    "hack-font": "^3.3.0",
     "idb": "^8.0.3",
     "lucide-react": "^0.577.0",
     "next": "16.2.10",
