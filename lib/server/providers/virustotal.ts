@@ -8,11 +8,20 @@ const API_BASE = "https://www.virustotal.com/api/v3";
 
 /** Per-request ceiling; VT URL analyses often exceed the default 8s global budget. */
 const VT_FETCH_TIMEOUT_MS = 25_000;
-/** Wall-clock cap for submit + polling so scans cannot hang indefinitely. */
-const VT_SUBMIT_POLL_BUDGET_MS = 90_000;
+/**
+ * Wall-clock cap for the entire provider (report lookup, 429 retry sleeps,
+ * submit + polling). Without it, Retry-After sleeps alone could hold a scan
+ * open for minutes.
+ */
+const VT_PROVIDER_BUDGET_MS = 45_000;
 const VT_MAX_POLL_ATTEMPTS = 8;
 const VT_POLL_BASE_DELAY_MS = 2_000;
 const VT_429_MAX_RETRIES = 3;
+
+interface VtRequestContext {
+  signal?: AbortSignal;
+  deadline: number;
+}
 
 interface VirusTotalEngineResultPayload {
   category?: string;
@@ -110,6 +119,7 @@ function parseRetryAfterDelayMs(header: string | null): number | null {
 async function virusTotalFetch(
   url: string,
   apiKey: string,
+  context: VtRequestContext,
   init: RequestInit = {},
 ): Promise<Response> {
   const headers = new Headers(init.headers);
@@ -120,8 +130,8 @@ async function virusTotalFetch(
   for (let attempt = 0; attempt <= VT_429_MAX_RETRIES; attempt += 1) {
     const response = await fetchWithTimeout(
       url,
-      { ...init, headers },
-      VT_FETCH_TIMEOUT_MS,
+      { ...init, headers, signal: context.signal },
+      Math.min(VT_FETCH_TIMEOUT_MS, remainingBudget(context)),
     );
 
     if (response.status !== 429) {
@@ -137,14 +147,25 @@ async function virusTotalFetch(
     const delay =
       parseRetryAfterDelayMs(response.headers.get("retry-after")) ??
       (attempt + 1) * 2_000;
-    await sleep(delay);
+
+    // Never sleep past the provider deadline; return the 429 instead.
+    const remaining = remainingBudget(context);
+    if (delay >= remaining) {
+      return response;
+    }
+    await sleep(delay, context.signal);
   }
 
   return last429 ?? new Response(null, { status: 599 });
 }
 
+function remainingBudget(context: VtRequestContext) {
+  return Math.max(1, context.deadline - Date.now());
+}
+
 export async function runVirusTotalProvider(
   url: string,
+  signal?: AbortSignal,
 ): Promise<VirusTotalData> {
   const env = getEnv();
   const apiKey = env.VIRUSTOTAL_API_KEY;
@@ -153,10 +174,16 @@ export async function runVirusTotalProvider(
     throw new Error("VirusTotal API key is not configured.");
   }
 
+  const context: VtRequestContext = {
+    signal,
+    deadline: Date.now() + VT_PROVIDER_BUDGET_MS,
+  };
+
   const urlId = Buffer.from(url).toString("base64url");
   const reportResponse = await virusTotalFetch(
     `${API_BASE}/urls/${urlId}`,
     apiKey,
+    context,
   );
 
   if (reportResponse.ok) {
@@ -171,8 +198,8 @@ export async function runVirusTotalProvider(
   }
 
   return withTimeout(
-    submitAndPollAnalysis(url, urlId, apiKey),
-    VT_SUBMIT_POLL_BUDGET_MS,
+    submitAndPollAnalysis(url, urlId, apiKey, context),
+    remainingBudget(context),
     "VirusTotal submit/poll",
   );
 }
@@ -181,14 +208,20 @@ async function submitAndPollAnalysis(
   url: string,
   urlId: string,
   apiKey: string,
+  context: VtRequestContext,
 ): Promise<VirusTotalData> {
-  const submitResponse = await virusTotalFetch(`${API_BASE}/urls`, apiKey, {
-    method: "POST",
-    headers: {
-      "content-type": "application/x-www-form-urlencoded",
+  const submitResponse = await virusTotalFetch(
+    `${API_BASE}/urls`,
+    apiKey,
+    context,
+    {
+      method: "POST",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({ url }),
     },
-    body: new URLSearchParams({ url }),
-  });
+  );
 
   if (!submitResponse.ok) {
     throw new Error(
@@ -203,11 +236,16 @@ async function submitAndPollAnalysis(
   }
 
   for (let attempt = 0; attempt < VT_MAX_POLL_ATTEMPTS; attempt += 1) {
-    await sleep((attempt + 1) * VT_POLL_BASE_DELAY_MS);
+    const delay = (attempt + 1) * VT_POLL_BASE_DELAY_MS;
+    if (delay >= remainingBudget(context)) {
+      break;
+    }
+    await sleep(delay, context.signal);
 
     const analysisResponse = await virusTotalFetch(
       `${API_BASE}/analyses/${analysisId}`,
       apiKey,
+      context,
     );
 
     if (!analysisResponse.ok) {

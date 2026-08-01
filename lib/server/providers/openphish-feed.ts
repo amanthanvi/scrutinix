@@ -9,6 +9,7 @@ interface FeedCache {
 
 declare global {
   var __openPhishFeedCache: FeedCache | undefined;
+  var __openPhishFeedInflight: Promise<FeedCache> | undefined;
 }
 
 const TTL_MS = 1000 * 60 * 15;
@@ -35,6 +36,19 @@ async function getOpenPhishFeed() {
     return cached;
   }
 
+  // Single-flight: a cold cache plus a 10-URL batch must not trigger ten
+  // concurrent full-feed downloads. The download deliberately ignores
+  // per-scan abort signals - it is a shared resource with its own timeout.
+  if (!globalThis.__openPhishFeedInflight) {
+    globalThis.__openPhishFeedInflight = downloadOpenPhishFeed().finally(() => {
+      globalThis.__openPhishFeedInflight = undefined;
+    });
+  }
+
+  return globalThis.__openPhishFeedInflight;
+}
+
+async function downloadOpenPhishFeed(): Promise<FeedCache> {
   const env = getEnv();
   const response = await fetchWithTimeout(env.OPENPHISH_FEED_URL, {}, 8_000);
   if (!response.ok) {

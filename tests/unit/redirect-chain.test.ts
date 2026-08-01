@@ -103,7 +103,7 @@ function mockHttpResponse(statusCode: number, location?: string) {
     const response = {
       headers: location ? { location } : {},
       statusCode,
-      resume: vi.fn(),
+      destroy: vi.fn(),
     };
     const request = {
       once: vi.fn(),

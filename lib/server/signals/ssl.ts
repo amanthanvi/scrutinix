@@ -21,7 +21,14 @@ export function getTlsProbeTarget(url: string): {
   return { hostname, port };
 }
 
-export async function runSslSignal(url: string): Promise<SSLData> {
+/** Aggregate budget across every probed address. */
+const SSL_SIGNAL_BUDGET_MS = 12_000;
+const SSL_PROBE_TIMEOUT_MS = 8_000;
+
+export async function runSslSignal(
+  url: string,
+  signal?: AbortSignal,
+): Promise<SSLData> {
   const { hostname, port } = getTlsProbeTarget(url);
   const publicTarget = await assertPublicNetworkTarget(hostname);
 
@@ -36,10 +43,22 @@ export async function runSslSignal(url: string): Promise<SSLData> {
     );
   }
 
+  const deadline = Date.now() + SSL_SIGNAL_BUDGET_MS;
   let lastResult: SSLData | null = null;
 
   for (const probeAddress of probeAddresses) {
-    const result = await runSslProbe(hostname, port, probeAddress);
+    const remaining = deadline - Date.now();
+    if (remaining <= 0 || signal?.aborted) {
+      break;
+    }
+
+    const result = await runSslProbe(
+      hostname,
+      port,
+      probeAddress,
+      Math.min(SSL_PROBE_TIMEOUT_MS, remaining),
+      signal,
+    );
     if (result.available) {
       return result;
     }
@@ -56,6 +75,8 @@ function runSslProbe(
   hostname: string,
   port: number,
   probeAddress: string,
+  timeoutMs: number,
+  signal?: AbortSignal,
 ): Promise<SSLData> {
   return new Promise<SSLData>((resolve) => {
     const socket = tls.connect({
@@ -65,7 +86,20 @@ function runSslProbe(
       rejectUnauthorized: false,
     });
 
-    socket.setTimeout(8_000);
+    const onAbort = () => {
+      socket.destroy();
+      resolve(
+        createUnavailableSslData(
+          "The TLS probe was cancelled before it completed.",
+        ),
+      );
+    };
+    signal?.addEventListener("abort", onAbort, { once: true });
+    socket.once("close", () => {
+      signal?.removeEventListener("abort", onAbort);
+    });
+
+    socket.setTimeout(timeoutMs);
 
     socket.once("secureConnect", () => {
       const certificate = socket.getPeerCertificate();

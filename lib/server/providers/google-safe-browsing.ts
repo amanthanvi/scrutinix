@@ -12,6 +12,7 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 
 export async function runGoogleSafeBrowsingProvider(
   url: string,
+  signal?: AbortSignal,
 ): Promise<GoogleSafeBrowsingData> {
   const env = getEnv();
   const apiKey = env.GOOGLE_SAFE_BROWSING_API_KEY;
@@ -21,11 +22,14 @@ export async function runGoogleSafeBrowsingProvider(
   }
 
   const response = await fetchWithTimeout(
-    `https://safebrowsing.googleapis.com/v4/threatMatches:find?key=${apiKey}`,
+    "https://safebrowsing.googleapis.com/v4/threatMatches:find",
     {
       method: "POST",
+      signal,
       headers: {
         "content-type": "application/json",
+        // Header keeps the key out of proxy/CDN access logs.
+        "x-goog-api-key": apiKey,
       },
       body: JSON.stringify({
         client: {

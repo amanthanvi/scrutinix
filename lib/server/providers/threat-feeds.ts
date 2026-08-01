@@ -19,13 +19,14 @@ export const URLHAUS_NO_LISTING_OBSERVATION =
 
 export async function runThreatFeedsProvider(
   url: string,
+  signal?: AbortSignal,
 ): Promise<ThreatFeedsData> {
   const warnings: string[] = [];
   const observations: string[] = [];
   const matches: ThreatFeedsData["matches"] = [];
 
   const [urlhausResult, openPhishResult] = await Promise.allSettled([
-    checkUrlhaus(url),
+    checkUrlhaus(url, signal),
     checkOpenPhishFeed(url),
   ]);
 
@@ -68,7 +69,10 @@ export async function runThreatFeedsProvider(
   };
 }
 
-async function checkUrlhaus(url: string): Promise<{
+async function checkUrlhaus(
+  url: string,
+  signal?: AbortSignal,
+): Promise<{
   match: ThreatFeedsData["matches"][number] | null;
   noListingObservation: boolean;
 }> {
@@ -77,6 +81,7 @@ async function checkUrlhaus(url: string): Promise<{
     "https://urlhaus-api.abuse.ch/v1/url/",
     {
       method: "POST",
+      signal,
       headers: {
         accept: "application/json",
         "content-type": "application/x-www-form-urlencoded",

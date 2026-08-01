@@ -48,13 +48,14 @@ const RISKY_TLDS = new Set(["zip", "click", "top", "gq", "work", "country"]);
 
 export async function runMlEnsembleProvider(
   url: string,
+  signal?: AbortSignal,
 ): Promise<MLSignalData> {
   const lexicalModel = buildLexicalModel(url);
   const warnings: string[] = [];
   let hostedModel: ClassificationFinding | null = null;
 
   try {
-    hostedModel = await runHostedModel(url);
+    hostedModel = await runHostedModel(url, signal);
   } catch (error) {
     warnings.push(getErrorMessage(error, "Hosted classifier failed."));
   }
@@ -164,7 +165,10 @@ function buildLexicalModel(url: string): ClassificationFinding {
   };
 }
 
-async function runHostedModel(url: string): Promise<ClassificationFinding> {
+async function runHostedModel(
+  url: string,
+  signal?: AbortSignal,
+): Promise<ClassificationFinding> {
   const env = getEnv();
   if (!env.HUGGINGFACE_API_KEY) {
     throw new Error("Hugging Face API key is not configured.");
@@ -174,6 +178,7 @@ async function runHostedModel(url: string): Promise<ClassificationFinding> {
     `${HUGGING_FACE_ROUTER_BASE}/${env.HUGGINGFACE_URL_MODEL}`,
     {
       method: "POST",
+      signal,
       headers: {
         authorization: `Bearer ${env.HUGGINGFACE_API_KEY}`,
         "content-type": "application/json",

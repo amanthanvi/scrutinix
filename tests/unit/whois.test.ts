@@ -58,8 +58,30 @@ describe("runWhoisSignal", () => {
     expect(result.observations).toEqual([]);
   });
 
-  it("returns an unavailable registration signal when RDAP lookup fails", async () => {
-    vi.spyOn(globalThis, "fetch").mockRejectedValue("Timed out after 8000ms");
+  it("propagates network failures as signal errors instead of fake success", async () => {
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(
+      new Error("Timed out after 8000ms"),
+    );
+
+    await expect(runWhoisSignal("https://example.com")).rejects.toThrow(
+      "Timed out after 8000ms",
+    );
+  });
+
+  it("propagates RDAP server errors as signal errors", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(null, { status: 504 }),
+    );
+
+    await expect(runWhoisSignal("https://example.com")).rejects.toThrow(
+      "RDAP lookup failed with status 504.",
+    );
+  });
+
+  it("treats RDAP 404 as an honest no-record answer", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(null, { status: 404 }),
+    );
 
     const result = await runWhoisSignal("https://example.com");
 
@@ -73,7 +95,7 @@ describe("runWhoisSignal", () => {
     expect(result.observations[0]).toContain(
       "Registration data was unavailable for this scan.",
     );
-    expect(result.observations[0]).toContain("Timed out after 8000ms");
+    expect(result.observations[0]).toContain("no RDAP record");
   });
 
   it("marks literal IP targets as not applicable", async () => {

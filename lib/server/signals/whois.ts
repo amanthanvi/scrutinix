@@ -19,7 +19,10 @@ function asRecord(value: unknown): Record<string, unknown> | null {
   return value as Record<string, unknown>;
 }
 
-export async function runWhoisSignal(url: string): Promise<WhoisData> {
+export async function runWhoisSignal(
+  url: string,
+  signal?: AbortSignal,
+): Promise<WhoisData> {
   const hostname = new URL(url).hostname;
 
   if (isIP(hostname)) {
@@ -28,80 +31,100 @@ export async function runWhoisSignal(url: string): Promise<WhoisData> {
     );
   }
 
-  const rdapUrl = `https://rdap.org/domain/${hostname}`;
-  try {
-    const response = await fetchWithTimeout(
-      rdapUrl,
-      {
-        headers: {
-          accept: "application/rdap+json, application/json",
-        },
+  const rdapUrl = `https://rdap.org/domain/${encodeURIComponent(hostname)}`;
+  const response = await fetchWithTimeout(
+    rdapUrl,
+    {
+      signal,
+      headers: {
+        accept: "application/rdap+json, application/json",
       },
-      8_000,
-    );
+    },
+    8_000,
+  );
 
-    if (!response.ok) {
-      throw new Error(`RDAP lookup failed with status ${response.status}.`);
-    }
-
-    const payload = asRecord(await response.json());
-    const events = Array.isArray(payload?.events) ? payload.events : [];
-    const entities = Array.isArray(payload?.entities) ? payload.entities : [];
-    const links = Array.isArray(payload?.links) ? payload.links : [];
-    const registrationDate = getEventDate(events, "registration");
-    const updatedAt = getEventDate(events, "last changed");
-    const expiresAt = getEventDate(events, "expiration");
-    const registrarEntity = entities.find((entity) => {
-      const record = asRecord(entity);
-      return Array.isArray(record?.roles) && record.roles.includes("registrar");
-    });
-    const registrar = readVcardField(
-      readEntity(registrarEntity)?.vcardArray,
-      "fn",
-    );
-    const ageDays = registrationDate
-      ? Math.round(
-          (Date.now() - new Date(registrationDate).getTime()) /
-            (1000 * 60 * 60 * 24),
-        )
-      : null;
-
-    return {
-      subjectType: "domain",
-      available: true,
-      registrar,
-      registeredAt: registrationDate,
-      updatedAt,
-      expiresAt,
-      ageDays,
-      country: typeof payload?.country === "string" ? payload.country : null,
-      handle: typeof payload?.handle === "string" ? payload.handle : null,
-      rdapUrl: readHref(links[0]) ?? rdapUrl,
-      observations:
-        registrar === null
-          ? ["The RDAP response did not identify a registrar name."]
-          : [],
-    };
-  } catch (error) {
-    return {
-      subjectType: "domain",
-      available: false,
-      registrar: null,
-      registeredAt: null,
-      updatedAt: null,
-      expiresAt: null,
-      ageDays: null,
-      country: null,
-      handle: null,
+  // 404/422 are real answers ("no registration record"), reported as an
+  // unavailable-but-successful lookup. Network failures and server errors
+  // propagate as signal errors instead of being laundered into success -
+  // otherwise a degraded result gets cached and partialFailure stays false.
+  if (response.status === 404 || response.status === 422) {
+    return createUnavailableWhoisData(
       rdapUrl,
-      observations: [
-        `Registration data was unavailable for this scan. ${getErrorMessage(
-          error,
-          "The RDAP lookup failed.",
-        )}`,
-      ],
-    };
+      "The registry has no RDAP record for this domain.",
+    );
   }
+
+  if (!response.ok) {
+    throw new Error(`RDAP lookup failed with status ${response.status}.`);
+  }
+
+  let payload: Record<string, unknown> | null;
+  try {
+    payload = asRecord(await response.json());
+  } catch (error) {
+    throw new Error(
+      `The RDAP response could not be parsed: ${getErrorMessage(error)}`,
+    );
+  }
+
+  const events = Array.isArray(payload?.events) ? payload.events : [];
+  const entities = Array.isArray(payload?.entities) ? payload.entities : [];
+  const links = Array.isArray(payload?.links) ? payload.links : [];
+  const registrationDate = getEventDate(events, "registration");
+  const updatedAt = getEventDate(events, "last changed");
+  const expiresAt = getEventDate(events, "expiration");
+  const registrarEntity = entities.find((entity) => {
+    const record = asRecord(entity);
+    return Array.isArray(record?.roles) && record.roles.includes("registrar");
+  });
+  const registrar = readVcardField(
+    readEntity(registrarEntity)?.vcardArray,
+    "fn",
+  );
+  const ageDays = registrationDate
+    ? Math.round(
+        (Date.now() - new Date(registrationDate).getTime()) /
+          (1000 * 60 * 60 * 24),
+      )
+    : null;
+
+  return {
+    subjectType: "domain",
+    available: true,
+    registrar,
+    registeredAt: registrationDate,
+    updatedAt,
+    expiresAt,
+    ageDays,
+    country: typeof payload?.country === "string" ? payload.country : null,
+    handle: typeof payload?.handle === "string" ? payload.handle : null,
+    rdapUrl: readHref(links[0]) ?? rdapUrl,
+    observations:
+      registrar === null
+        ? ["The RDAP response did not identify a registrar name."]
+        : [],
+  };
+}
+
+function createUnavailableWhoisData(
+  rdapUrl: string,
+  reason: string,
+): WhoisData {
+  return {
+    subjectType: "domain",
+    available: false,
+    registrar: null,
+    registeredAt: null,
+    updatedAt: null,
+    expiresAt: null,
+    ageDays: null,
+    country: null,
+    handle: null,
+    rdapUrl,
+    observations: [
+      `Registration data was unavailable for this scan. ${reason}`,
+    ],
+  };
 }
 
 function getEventDate(events: unknown[], action: string) {

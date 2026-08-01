@@ -109,8 +109,15 @@ function normalizeHostname(hostname: string) {
   return trimmed;
 }
 
+/**
+ * Cap active probes at one IPv4 plus one IPv6 address. Hosts with many A
+ * records would otherwise multiply per-address timeouts into minutes of
+ * probing for no additional evidence.
+ */
 export function selectPublicProbeAddresses(
   resolution: PublicNetworkTargetResolution,
 ) {
-  return resolution.addresses;
+  const ipv4 = resolution.addresses.find((address) => isIP(address) === 4);
+  const ipv6 = resolution.addresses.find((address) => isIP(address) === 6);
+  return [ipv4, ipv6].filter((address): address is string => Boolean(address));
 }
