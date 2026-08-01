@@ -2,6 +2,9 @@ import { Ratelimit } from "@upstash/ratelimit";
 import { Redis } from "@upstash/redis";
 
 import { createApiError } from "@/lib/server/api-error";
+import { getRedisRestConfig } from "@/lib/server/redis-config";
+
+export { getRedisRestConfig };
 
 type LimitResult =
   | {
@@ -91,12 +94,15 @@ function getUpstashLimiters(redisUrl: string, redisToken: string) {
   return globalThis.__scrutinixRateLimiters;
 }
 
-export async function applyRateLimit(identifier: string): Promise<LimitResult> {
+export async function applyRateLimit(
+  identifier: string,
+  cost = 1,
+): Promise<LimitResult> {
   if (
     process.env.NODE_ENV === "development" ||
     process.env.NODE_ENV === "test"
   ) {
-    return applyInMemoryLimit(identifier);
+    return applyInMemoryLimit(identifier, cost);
   }
 
   const { url: redisUrl, token: redisToken } = getRedisRestConfig();
@@ -112,7 +118,7 @@ export async function applyRateLimit(identifier: string): Promise<LimitResult> {
       }),
     );
 
-    return applyInMemoryLimit(identifier);
+    return applyInMemoryLimit(identifier, cost);
   }
 
   const { minute: minuteLimiter, day: dayLimiter } = getUpstashLimiters(
@@ -121,8 +127,8 @@ export async function applyRateLimit(identifier: string): Promise<LimitResult> {
   );
 
   const [minute, day] = await Promise.all([
-    minuteLimiter.limit(identifier),
-    dayLimiter.limit(identifier),
+    minuteLimiter.limit(identifier, { rate: cost }),
+    dayLimiter.limit(identifier, { rate: cost }),
   ]);
 
   if (!minute.success || !day.success) {
@@ -147,19 +153,22 @@ export async function applyRateLimit(identifier: string): Promise<LimitResult> {
   };
 }
 
-export function getRedisRestConfig() {
-  return {
-    url: process.env.UPSTASH_REDIS_REST_URL ?? process.env.KV_REST_API_URL,
-    token:
-      process.env.UPSTASH_REDIS_REST_TOKEN ?? process.env.KV_REST_API_TOKEN,
-  };
-}
+/** Entry count that triggers a sweep of expired windows (one-off IPs otherwise accumulate forever). */
+const STORE_SWEEP_THRESHOLD = 5_000;
 
-function applyInMemoryLimit(identifier: string): LimitResult {
+function applyInMemoryLimit(identifier: string, cost: number): LimitResult {
   const store =
     globalThis.__devRateLimitStore ?? new Map<string, WindowRecord>();
   globalThis.__devRateLimitStore = store;
   const now = Date.now();
+
+  if (store.size > STORE_SWEEP_THRESHOLD) {
+    for (const [key, record] of store) {
+      if (record.resetAt <= now) {
+        store.delete(key);
+      }
+    }
+  }
 
   const minute = incrementWindow(
     store,
@@ -167,6 +176,7 @@ function applyInMemoryLimit(identifier: string): LimitResult {
     MINUTE_LIMIT,
     60_000,
     now,
+    cost,
   );
   const day = incrementWindow(
     store,
@@ -174,6 +184,7 @@ function applyInMemoryLimit(identifier: string): LimitResult {
     DAY_LIMIT,
     86_400_000,
     now,
+    cost,
   );
 
   if (!minute.success || !day.success) {
@@ -203,22 +214,23 @@ function incrementWindow(
   limit: number,
   windowMs: number,
   now: number,
+  cost: number,
 ) {
   const current = store.get(key);
   if (!current || current.resetAt <= now) {
     const next = {
-      count: 1,
+      count: cost,
       resetAt: now + windowMs,
     };
     store.set(key, next);
     return {
-      success: true,
-      remaining: limit - 1,
+      success: next.count <= limit,
+      remaining: Math.max(0, limit - next.count),
       reset: next.resetAt,
     };
   }
 
-  current.count += 1;
+  current.count += cost;
   store.set(key, current);
 
   return {

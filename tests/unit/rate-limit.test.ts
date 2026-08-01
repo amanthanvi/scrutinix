@@ -145,4 +145,34 @@ describe("applyRateLimit", () => {
     expect(second.success).toBe(true);
     expect(redisConstructor).toHaveBeenCalledTimes(1);
   });
+
+  it("charges the full batch cost against the window", async () => {
+    // A 10-URL batch consumes 10 of the 10-per-minute tokens in one call.
+    const batch = await applyRateLimit("198.51.100.1", 10);
+    expect(batch.success).toBe(true);
+    expect(batch.remaining).toBe(0);
+
+    const followUp = await applyRateLimit("198.51.100.1");
+    expect(followUp.success).toBe(false);
+  });
+
+  it("rejects a single request whose cost exceeds the window", async () => {
+    const result = await applyRateLimit("198.51.100.2", 11);
+    expect(result.success).toBe(false);
+  });
+
+  it("sweeps expired windows once the store grows large", async () => {
+    await applyRateLimit("198.51.100.3");
+    const store = globalThis.__devRateLimitStore;
+    expect(store).toBeDefined();
+
+    const expired = Date.now() - 60_000;
+    for (let i = 0; i < 5_001; i += 1) {
+      store?.set(`minute:one-shot-${i}`, { count: 1, resetAt: expired });
+    }
+
+    await applyRateLimit("198.51.100.4");
+
+    expect(store && store.size).toBeLessThan(100);
+  });
 });

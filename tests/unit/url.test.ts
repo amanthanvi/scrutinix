@@ -52,11 +52,23 @@ describe("normalizeUrlInput", () => {
   });
 
   it("builds stable cache and feed keys", () => {
-    expect(createCacheKey("HTTPS://Example.com/a")).toBe(
-      "https://example.com/a",
-    );
+    // normalizeUrlInput already lowercases scheme+host via the URL parser.
+    const normalized = normalizeUrlInput("HTTPS://Example.com/a");
+    expect(normalized.ok).toBe(true);
+    if (normalized.ok) {
+      expect(createCacheKey(normalized.value.normalizedUrl)).toBe(
+        "https://example.com/a",
+      );
+    }
+
     expect(simplifyUrlForMatching("https://example.com/")).toBe(
       "https://example.com",
+    );
+  });
+
+  it("keeps case-sensitive paths distinct in cache keys", () => {
+    expect(createCacheKey("https://example.com/AdminPanel")).not.toBe(
+      createCacheKey("https://example.com/adminpanel"),
     );
   });
 });

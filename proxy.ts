@@ -15,7 +15,7 @@ export async function proxy(request: NextRequest) {
 async function enforceRateLimit(request: NextRequest) {
   // Identity trusts platform/proxy headers; see getClientRateLimitId.
   const identifier = getClientRateLimitId(request.headers);
-  const limit = await applyRateLimit(identifier);
+  const limit = await applyRateLimit(identifier, await scanCost(request));
 
   if (!limit.success) {
     const retryAfter = Math.max(
@@ -38,6 +38,27 @@ async function enforceRateLimit(request: NextRequest) {
   const response = NextResponse.next();
   response.headers.set("X-RateLimit-Remaining", String(limit.remaining));
   return response;
+}
+
+/**
+ * A batch of N URLs consumes N rate-limit tokens; a malformed body costs 1
+ * (the route will 400 it anyway).
+ */
+async function scanCost(request: NextRequest): Promise<number> {
+  if (!request.nextUrl.pathname.startsWith("/api/analyze/batch")) {
+    return 1;
+  }
+
+  try {
+    const body = (await request.clone().json()) as { urls?: unknown };
+    if (Array.isArray(body.urls)) {
+      return Math.min(Math.max(body.urls.length, 1), 10);
+    }
+  } catch {
+    // Unreadable body; charge the minimum.
+  }
+
+  return 1;
 }
 
 function applyCspNonce(request: NextRequest) {
