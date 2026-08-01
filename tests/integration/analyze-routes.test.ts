@@ -3,6 +3,15 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { server } from "@/tests/setup/msw.server";
 
+// DNSBL lookups ride raw DNS, which MSW cannot intercept; stub them out.
+vi.mock("@/lib/server/providers/dnsbl", () => ({
+  queryDnsbls: vi.fn(async () => ({
+    matches: [],
+    warnings: [],
+    observations: [],
+  })),
+}));
+
 vi.mock("@/lib/server/signals/dns", () => ({
   runDnsSignal: vi.fn(async () => ({
     subjectType: "hostname",
@@ -441,6 +450,9 @@ function installHandlers(
       HttpResponse.json({ matches: [] }),
     ),
     http.post("https://urlhaus-api.abuse.ch/v1/url/", () =>
+      HttpResponse.json({ query_status: "no_results" }),
+    ),
+    http.post("https://urlhaus-api.abuse.ch/v1/host/", () =>
       HttpResponse.json({ query_status: "no_results" }),
     ),
     http.get(

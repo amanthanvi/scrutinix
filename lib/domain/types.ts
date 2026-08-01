@@ -9,6 +9,7 @@ export type {
   GoogleSafeBrowsingData,
   HistoryEntry,
   MLSignalData,
+  PageContentFindings,
   RedirectData,
   ScanMetadata,
   SharedSnapshot,

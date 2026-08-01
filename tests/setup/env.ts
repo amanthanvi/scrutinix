@@ -10,6 +10,9 @@ beforeEach(() => {
   analysisCache.clear();
   globalThis.__devRateLimitStore?.clear();
   globalThis.__openPhishFeedCache = undefined;
+  globalThis.__openPhishFeedInflight = undefined;
+  globalThis.__dnsblZoneHealth = undefined;
+  globalThis.__vtDomainReputationCache = undefined;
 });
 
 afterEach(() => {

@@ -176,4 +176,97 @@ describe("runVirusTotalProvider", () => {
     );
     expect(analysisPolls).toHaveLength(8);
   });
+
+  it("captures the analysis date and domain reputation on the report path", async () => {
+    const target = "https://evil.example/path";
+    const lastAnalysisUnix = 1_750_000_000;
+
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+
+      if (url.includes("/urls/")) {
+        return Response.json({
+          data: {
+            attributes: {
+              last_analysis_stats: {
+                malicious: 4,
+                suspicious: 1,
+                harmless: 60,
+                undetected: 10,
+                timeout: 0,
+              },
+              last_analysis_results: {},
+              last_analysis_date: lastAnalysisUnix,
+            },
+          },
+        });
+      }
+
+      if (url.includes("/domains/evil.example")) {
+        return Response.json({
+          data: {
+            attributes: {
+              last_analysis_stats: {
+                malicious: 6,
+                suspicious: 0,
+                harmless: 70,
+              },
+              reputation: -40,
+              categories: {
+                vendorA: "phishing",
+                vendorB: "phishing",
+                vendorC: "malware",
+              },
+            },
+          },
+        });
+      }
+
+      return new Response("unexpected", { status: 500 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await runVirusTotalProvider(target);
+
+    expect(result.lastAnalysisDate).toBe(
+      new Date(lastAnalysisUnix * 1000).toISOString(),
+    );
+    expect(result.domain).toEqual({
+      malicious: 6,
+      suspicious: 0,
+      harmless: 70,
+      reputation: -40,
+      categories: ["phishing", "malware"],
+    });
+
+    // A second scan of the same domain reuses the cached domain report.
+    await runVirusTotalProvider(target);
+    const domainCalls = fetchMock.mock.calls.filter(([arg]) =>
+      String(arg).includes("/domains/"),
+    );
+    expect(domainCalls).toHaveLength(1);
+  });
+
+  it("degrades domain enrichment to null when the endpoint errors", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/urls/")) {
+        return Response.json({
+          data: {
+            attributes: {
+              last_analysis_stats: { malicious: 0, harmless: 10 },
+              last_analysis_results: {},
+            },
+          },
+        });
+      }
+      return new Response("nope", { status: 503 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await runVirusTotalProvider("https://fine.example/");
+
+    expect(result.domain).toBeNull();
+    expect(result.malicious).toBe(0);
+  });
 });

@@ -1,8 +1,11 @@
 import { getEnv } from "@/lib/config/env";
+import { getRegistrableDomain } from "@/lib/domain/registrable-domain";
 import type { ThreatFeedsData } from "@/lib/domain/types";
 import { simplifyUrlForMatching } from "@/lib/domain/url";
 import { fetchWithTimeout } from "@/lib/server/http";
+import { queryDnsbls } from "@/lib/server/providers/dnsbl";
 import { checkOpenPhishFeed } from "@/lib/server/providers/openphish-feed";
+import { checkThreatFox } from "@/lib/server/providers/threatfox";
 import { getErrorMessage } from "@/lib/server/signal-error";
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -24,40 +27,68 @@ export async function runThreatFeedsProvider(
   const warnings: string[] = [];
   const observations: string[] = [];
   const matches: ThreatFeedsData["matches"] = [];
+  const registrableDomain = getRegistrableDomain(new URL(url).hostname);
 
-  const [urlhausResult, openPhishResult] = await Promise.allSettled([
-    checkUrlhaus(url, signal),
-    checkOpenPhishFeed(url),
-  ]);
+  const [urlhausResult, openPhishResult, threatFoxResult, dnsblResult] =
+    await Promise.allSettled([
+      checkUrlhaus(url, signal),
+      checkOpenPhishFeed(url),
+      checkThreatFox(registrableDomain, signal),
+      queryDnsbls(registrableDomain),
+    ]);
 
-  if (urlhausResult.status === "fulfilled" && urlhausResult.value.match) {
-    matches.push(urlhausResult.value.match);
-  }
-
-  if (
-    urlhausResult.status === "fulfilled" &&
-    urlhausResult.value.noListingObservation
-  ) {
-    observations.push(URLHAUS_NO_LISTING_OBSERVATION);
-  }
-
-  if (openPhishResult.status === "fulfilled" && openPhishResult.value) {
-    matches.push(openPhishResult.value);
-  }
-
-  if (urlhausResult.status === "rejected") {
+  if (urlhausResult.status === "fulfilled") {
+    if (urlhausResult.value.match) {
+      matches.push(urlhausResult.value.match);
+    }
+    if (urlhausResult.value.noListingObservation) {
+      observations.push(URLHAUS_NO_LISTING_OBSERVATION);
+    }
+  } else {
     warnings.push(
       getErrorMessage(urlhausResult.reason, "URLhaus lookup failed."),
     );
   }
 
-  if (openPhishResult.status === "rejected") {
+  if (openPhishResult.status === "fulfilled") {
+    if (openPhishResult.value) {
+      matches.push(openPhishResult.value);
+    }
+  } else {
     warnings.push(
       getErrorMessage(openPhishResult.reason, "OpenPhish lookup failed."),
     );
   }
 
-  if (matches.length === 0 && warnings.length === 2) {
+  if (threatFoxResult.status === "fulfilled") {
+    if (threatFoxResult.value.match) {
+      matches.push(threatFoxResult.value.match);
+    }
+    if (threatFoxResult.value.observation) {
+      observations.push(threatFoxResult.value.observation);
+    }
+  } else {
+    warnings.push(
+      getErrorMessage(threatFoxResult.reason, "ThreatFox lookup failed."),
+    );
+  }
+
+  if (dnsblResult.status === "fulfilled") {
+    matches.push(...dnsblResult.value.matches);
+    warnings.push(...dnsblResult.value.warnings);
+    observations.push(...dnsblResult.value.observations);
+  } else {
+    warnings.push(getErrorMessage(dnsblResult.reason, "DNSBL lookup failed."));
+  }
+
+  const rejectedCount = [
+    urlhausResult,
+    openPhishResult,
+    threatFoxResult,
+    dnsblResult,
+  ].filter((result) => result.status === "rejected").length;
+
+  if (matches.length === 0 && rejectedCount === 4) {
     throw new Error("All threat-feed lookups failed.");
   }
 
@@ -109,13 +140,69 @@ async function checkUrlhaus(
         matchedUrl: simplifyUrlForMatching(url),
         detail: threat ?? urlStatus ?? "listed in URLhaus",
         confidence: "high" as const,
+        matchType: "url" as const,
       },
       noListingObservation: false,
     };
   }
 
+  // Exact URL unknown; check whether the host itself carries listings.
+  if (queryStatus === "no_results") {
+    const hostMatch = await checkUrlhausHost(url, env.URLHAUS_AUTH_KEY, signal);
+    return {
+      match: hostMatch,
+      noListingObservation: hostMatch === null,
+    };
+  }
+
   return {
     match: null,
-    noListingObservation: queryStatus === "no_results",
+    noListingObservation: false,
   };
+}
+
+async function checkUrlhausHost(
+  url: string,
+  authKey: string | undefined,
+  signal?: AbortSignal,
+): Promise<ThreatFeedsData["matches"][number] | null> {
+  const hostname = new URL(url).hostname;
+  const response = await fetchWithTimeout(
+    "https://urlhaus-api.abuse.ch/v1/host/",
+    {
+      method: "POST",
+      signal,
+      headers: {
+        accept: "application/json",
+        "content-type": "application/x-www-form-urlencoded",
+        ...(authKey ? { "Auth-Key": authKey } : {}),
+      },
+      body: new URLSearchParams({ host: hostname }),
+    },
+  );
+
+  if (!response.ok) {
+    // The exact-URL lookup already succeeded; treat host-level errors softly.
+    return null;
+  }
+
+  const payload = asRecord(await response.json());
+  const queryStatus =
+    typeof payload?.query_status === "string" ? payload.query_status : null;
+  const urlCount =
+    typeof payload?.url_count === "number"
+      ? payload.url_count
+      : Number(payload?.url_count ?? 0);
+
+  if (queryStatus === "ok" && Number.isFinite(urlCount) && urlCount > 0) {
+    return {
+      feed: "urlhaus",
+      matchedUrl: hostname,
+      detail: `host has ${urlCount} malware URL listing${urlCount === 1 ? "" : "s"} in URLhaus`,
+      confidence: "medium",
+      matchType: "host",
+    };
+  }
+
+  return null;
 }

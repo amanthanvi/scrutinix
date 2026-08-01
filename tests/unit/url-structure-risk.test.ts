@@ -34,4 +34,56 @@ describe("getUrlStructureRisk", () => {
     expect(risk.reasons.join(" ")).toMatch(/script or shell/i);
     expect(risk.scoreDelta).toBeGreaterThan(0);
   });
+
+  it("flags domains one typo away from an impersonated brand", () => {
+    for (const url of [
+      "https://paypa1.com/login",
+      "https://payapl.com/",
+      "https://microsofl.com/",
+    ]) {
+      const risk = getUrlStructureRisk(url);
+      expect(risk.reasons.join(" ")).toMatch(/one typo away/i);
+      expect(risk.scoreDelta).toBeGreaterThanOrEqual(0.22);
+    }
+  });
+
+  it("flags brand names attached with affixes or buried in subdomains", () => {
+    const affix = getUrlStructureRisk("https://paypal-secure-login.example/");
+    expect(affix.reasons.join(" ")).toMatch(/extra words to "paypal"/i);
+
+    const subdomain = getUrlStructureRisk("https://paypal.com.evil.example/");
+    expect(subdomain.reasons.join(" ")).toMatch(/subdomain of an unrelated/i);
+  });
+
+  it("never flags the brand's own domains", () => {
+    for (const url of [
+      "https://www.paypal.com/",
+      "https://paypal.co.uk/signin",
+      "https://accounts.google.com/",
+      "https://github.com/user/repo",
+    ]) {
+      const risk = getUrlStructureRisk(url);
+      expect(risk.reasons.join(" ")).not.toMatch(
+        /typo|impersonation|subdomain/i,
+      );
+    }
+  });
+
+  it("does not false-positive on compound names without separators", () => {
+    const risk = getUrlStructureRisk("https://amazonaws.com/bucket");
+    expect(risk.reasons.join(" ")).not.toMatch(/typo|impersonation/i);
+  });
+
+  it("flags punycode hostnames mixing Latin with lookalike scripts", () => {
+    // xn--pypal-4ve.com decodes to pаypal.com with a Cyrillic "а".
+    const risk = getUrlStructureRisk("https://xn--pypal-4ve.com/");
+    expect(risk.reasons.join(" ")).toMatch(/homograph/i);
+    expect(risk.scoreDelta).toBeGreaterThanOrEqual(0.2);
+  });
+
+  it("leaves legitimate single-script internationalized domains alone", () => {
+    // xn--80akhbyknj4f (испытание) is fully Cyrillic but not Latin-lookalike.
+    const risk = getUrlStructureRisk("https://xn--80akhbyknj4f.com/");
+    expect(risk.reasons.join(" ")).not.toMatch(/homograph/i);
+  });
 });

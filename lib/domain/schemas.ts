@@ -100,6 +100,20 @@ export const virusTotalDataSchema = z.object({
     }),
   ),
   permalink: tolerantString(""),
+  /** ISO timestamp of the VT analysis this verdict is based on. */
+  lastAnalysisDate: z.string().nullable().optional().catch(undefined),
+  /** Registrable-domain reputation from VT's /domains endpoint. */
+  domain: z
+    .object({
+      malicious: finiteNumber(0),
+      suspicious: finiteNumber(0),
+      harmless: finiteNumber(0),
+      reputation: finiteNumber(0),
+      categories: stringArray,
+    })
+    .nullable()
+    .optional()
+    .catch(undefined),
 });
 
 export type VirusTotalData = z.infer<typeof virusTotalDataSchema>;
@@ -150,10 +164,18 @@ export const threatFeedsDataSchema = z.object({
   // Items with an unknown feed are dropped rather than coerced.
   matches: lenientArray(
     z.object({
-      feed: z.enum(["urlhaus", "openphish"]),
+      feed: z.enum([
+        "urlhaus",
+        "openphish",
+        "threatfox",
+        "spamhaus-dbl",
+        "surbl",
+      ]),
       matchedUrl: tolerantString(""),
       detail: tolerantString("listed"),
       confidence: z.enum(["medium", "high"]).catch("medium"),
+      /** "url" = exact listing, "host" = hostname-level listing. */
+      matchType: z.enum(["url", "host"]).optional().catch(undefined),
     }),
   ),
   /** Informational notes (e.g. URLhaus responded but this exact URL is not listed). */
@@ -213,6 +235,18 @@ export const dnsDataSchema = z.object({
 
 export type DNSData = z.infer<typeof dnsDataSchema>;
 
+export const pageContentFindingsSchema = z.object({
+  title: nullableString,
+  crossOriginFormHosts: stringArray,
+  passwordInputCount: finiteNumber(0).transform(nonNegative),
+  iframeCount: finiteNumber(0).transform(nonNegative),
+  hiddenIframeCount: finiteNumber(0).transform(nonNegative),
+  obfuscationHints: stringArray,
+  metaRefreshTarget: nullableString,
+});
+
+export type PageContentFindings = z.infer<typeof pageContentFindingsSchema>;
+
 export const redirectDataSchema = z.object({
   finalUrl: tolerantString(""),
   totalHops: finiteNumber(0).transform(nonNegative),
@@ -228,6 +262,8 @@ export const redirectDataSchema = z.object({
     }),
   ),
   observations: stringArray,
+  /** Lightweight analysis of the terminal page's HTML, when captured. */
+  content: pageContentFindingsSchema.nullable().optional().catch(undefined),
 });
 
 export type RedirectData = z.infer<typeof redirectDataSchema>;

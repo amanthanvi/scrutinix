@@ -1,6 +1,7 @@
 import { Buffer } from "node:buffer";
 
 import { getEnv } from "@/lib/config/env";
+import { getRegistrableDomain } from "@/lib/domain/registrable-domain";
 import type { VirusTotalData } from "@/lib/domain/types";
 import { fetchWithTimeout, sleep, withTimeout } from "@/lib/server/http";
 
@@ -188,7 +189,11 @@ export async function runVirusTotalProvider(
 
   if (reportResponse.ok) {
     const report = await reportResponse.json();
-    return parseVirusTotalReport(report, urlId);
+    const data = parseVirusTotalReport(report, urlId);
+    // Domain enrichment only on the cheap report path - the submit+poll
+    // path already spends 2+ requests of the 4/min free-tier quota.
+    data.domain = await fetchDomainReputation(url, apiKey, context);
+    return data;
   }
 
   if (reportResponse.status !== 404) {
@@ -202,6 +207,83 @@ export async function runVirusTotalProvider(
     remainingBudget(context),
     "VirusTotal submit/poll",
   );
+}
+
+type VirusTotalDomainData = NonNullable<VirusTotalData["domain"]>;
+
+interface DomainReputationCacheEntry {
+  fetchedAt: number;
+  data: VirusTotalDomainData | null;
+}
+
+declare global {
+  var __vtDomainReputationCache:
+    | Map<string, DomainReputationCacheEntry>
+    | undefined;
+}
+
+const DOMAIN_CACHE_TTL_MS = 1000 * 60 * 15;
+
+/** Best-effort /domains/{d} reputation; failures degrade to null silently. */
+async function fetchDomainReputation(
+  url: string,
+  apiKey: string,
+  context: VtRequestContext,
+): Promise<VirusTotalDomainData | null> {
+  let domain: string;
+  try {
+    domain = getRegistrableDomain(new URL(url).hostname);
+  } catch {
+    return null;
+  }
+
+  if (!domain || /^\d+\.\d+\.\d+\.\d+$/.test(domain)) {
+    return null;
+  }
+
+  const cache = (globalThis.__vtDomainReputationCache ??= new Map());
+  const cached = cache.get(domain);
+  if (cached && Date.now() - cached.fetchedAt < DOMAIN_CACHE_TTL_MS) {
+    return cached.data;
+  }
+
+  let data: VirusTotalDomainData | null = null;
+  try {
+    const response = await virusTotalFetch(
+      `${API_BASE}/domains/${encodeURIComponent(domain)}`,
+      apiKey,
+      context,
+    );
+
+    if (response.ok) {
+      const attributes = asRecord(
+        asRecord(asRecord(await response.json())?.data)?.attributes,
+      );
+      const stats = readStats(attributes?.last_analysis_stats);
+      const categoriesRecord = asRecord(attributes?.categories);
+      const categories = categoriesRecord
+        ? [...new Set(Object.values(categoriesRecord))]
+            .filter((value): value is string => typeof value === "string")
+            .slice(0, 5)
+        : [];
+
+      data = {
+        malicious: Number(stats.malicious ?? 0),
+        suspicious: Number(stats.suspicious ?? 0),
+        harmless: Number(stats.harmless ?? 0),
+        reputation:
+          typeof attributes?.reputation === "number"
+            ? attributes.reputation
+            : 0,
+        categories,
+      };
+    }
+  } catch {
+    // Enrichment is optional; never fail the signal for it.
+  }
+
+  cache.set(domain, { fetchedAt: Date.now(), data });
+  return data;
 }
 
 async function submitAndPollAnalysis(
@@ -275,6 +357,10 @@ function parseVirusTotalReport(
   const attributes = asRecord(asRecord(asRecord(payload)?.data)?.attributes);
   const stats = readStats(attributes?.last_analysis_stats);
   const results = readEngineResults(attributes?.last_analysis_results);
+  const lastAnalysisUnix =
+    typeof attributes?.last_analysis_date === "number"
+      ? attributes.last_analysis_date
+      : null;
 
   return {
     malicious: Number(stats.malicious ?? 0),
@@ -286,6 +372,9 @@ function parseVirusTotalReport(
       (entry) => entry.category !== "undetected",
     ),
     permalink: `https://www.virustotal.com/gui/url/${urlId}`,
+    lastAnalysisDate: lastAnalysisUnix
+      ? new Date(lastAnalysisUnix * 1000).toISOString()
+      : null,
   };
 }
 
@@ -305,6 +394,8 @@ function parseVirusTotalAnalysis(
     timeout: Number(stats.timeout ?? 0),
     results: parseVirusTotalResults(results),
     permalink: `https://www.virustotal.com/gui/url/${urlId}`,
+    // A freshly-completed analysis is by definition current.
+    lastAnalysisDate: new Date().toISOString(),
   };
 }
 

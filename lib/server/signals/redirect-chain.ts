@@ -1,6 +1,8 @@
 import http from "node:http";
 import https from "node:https";
+import type { IncomingMessage } from "node:http";
 
+import { analyzePageContent } from "@/lib/domain/content-analysis";
 import type { RedirectData } from "@/lib/domain/types";
 import {
   assertPublicNetworkTarget,
@@ -13,6 +15,9 @@ const MAX_REDIRECTS = 5;
 const REQUEST_TIMEOUT_MS = 8_000;
 /** Aggregate budget across the whole chain (all hops, all addresses). */
 const REDIRECT_SIGNAL_BUDGET_MS = 12_000;
+/** Cap on captured terminal-page HTML; enough for head, forms, and inline scripts. */
+const BODY_CAPTURE_LIMIT_BYTES = 64 * 1024;
+const BODY_CAPTURE_TIMEOUT_MS = 3_000;
 
 export async function runRedirectSignal(
   url: string,
@@ -24,6 +29,7 @@ export async function runRedirectSignal(
   let terminalStatus: number | null = null;
   let terminalError: string | null = null;
   let currentResolution: PublicNetworkTargetResolution | null = null;
+  let terminalBody: string | null = null;
   const observations: string[] = [];
   const deadline = Date.now() + REDIRECT_SIGNAL_BUDGET_MS;
 
@@ -68,6 +74,7 @@ export async function runRedirectSignal(
     });
 
     if (!location || !REDIRECT_STATUSES.has(status)) {
+      terminalBody = outcome.body ?? null;
       break;
     }
 
@@ -119,6 +126,7 @@ export async function runRedirectSignal(
     terminalError,
     hops,
     observations,
+    content: terminalBody ? analyzePageContent(terminalBody, currentUrl) : null,
   };
 }
 
@@ -179,7 +187,8 @@ async function requestRedirectHopAtAddress(
   signal?: AbortSignal,
 ) {
   return await new Promise<
-    { status: number; location: string | null } | { error: string }
+    | { status: number; location: string | null; body: string | null }
+    | { error: string }
   >((resolve) => {
     const request = client.request(
       {
@@ -200,11 +209,23 @@ async function requestRedirectHopAtAddress(
         const location = Array.isArray(locationHeader)
           ? (locationHeader[0] ?? null)
           : (locationHeader ?? null);
+        const status = response.statusCode ?? 0;
+        const contentType = response.headers["content-type"] ?? "";
+        const isTerminalHtml =
+          !(location && REDIRECT_STATUSES.has(status)) &&
+          typeof contentType === "string" &&
+          contentType.toLowerCase().includes("text/html");
 
-        resolve({
-          status: response.statusCode ?? 0,
-          location,
-        });
+        if (isTerminalHtml) {
+          // Capture a bounded slice of the final page for content analysis;
+          // the same response is already SSRF-gated, so no new fetch happens.
+          void captureBody(response).then((body) => {
+            resolve({ status, location, body });
+          });
+          return;
+        }
+
+        resolve({ status, location, body: null });
 
         // Headers are all we need; destroy instead of draining the body so
         // a link to a multi-gigabyte file doesn't transfer the whole thing.
@@ -235,6 +256,37 @@ async function requestRedirectHopAtAddress(
     });
 
     request.end();
+  });
+}
+
+/** Read up to BODY_CAPTURE_LIMIT_BYTES, then destroy the response. */
+function captureBody(response: IncomingMessage): Promise<string | null> {
+  return new Promise((resolve) => {
+    const chunks: Buffer[] = [];
+    let total = 0;
+    let settled = false;
+
+    const finish = () => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      clearTimeout(timer);
+      response.destroy();
+      resolve(total > 0 ? Buffer.concat(chunks).toString("utf8") : null);
+    };
+
+    const timer = setTimeout(finish, BODY_CAPTURE_TIMEOUT_MS);
+
+    response.on("data", (chunk: Buffer) => {
+      chunks.push(chunk);
+      total += chunk.length;
+      if (total >= BODY_CAPTURE_LIMIT_BYTES) {
+        finish();
+      }
+    });
+    response.once("end", finish);
+    response.once("error", finish);
   });
 }
 
