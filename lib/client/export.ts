@@ -11,7 +11,21 @@ export function downloadTextFile(
   anchor.href = href;
   anchor.download = filename;
   anchor.click();
-  URL.revokeObjectURL(href);
+  // Revoking synchronously races the download in some browsers; defer it.
+  setTimeout(() => URL.revokeObjectURL(href), 1_000);
+}
+
+/**
+ * Neutralize spreadsheet formula injection: a scanned URL is attacker-
+ * controlled text, and a cell starting with = + - @ (or a tab/CR smuggle)
+ * executes on open in Excel/Sheets.
+ */
+function escapeCsvCell(value: unknown): string {
+  let cell = String(value ?? "");
+  if (/^[=+\-@\t\r]/.test(cell)) {
+    cell = `'${cell}`;
+  }
+  return `"${cell.replaceAll('"', '""')}"`;
 }
 
 export function resultsToCsv(results: AnalysisResult[]) {
@@ -36,13 +50,8 @@ export function resultsToCsv(results: AnalysisResult[]) {
     ]),
   ];
 
-  return rows
-    .map((row) =>
-      row
-        .map((cell) => `"${String(cell ?? "").replaceAll('"', '""')}"`)
-        .join(","),
-    )
-    .join("\n");
+  // BOM keeps Excel from mangling UTF-8; CRLF is the RFC 4180 line ending.
+  return `﻿${rows.map((row) => row.map(escapeCsvCell).join(",")).join("\r\n")}`;
 }
 
 export function resultsToJson(results: AnalysisResult[]) {
