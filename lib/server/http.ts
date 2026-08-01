@@ -8,10 +8,16 @@ export async function fetchWithTimeout(
     controller.abort(new Error(`Timed out after ${timeoutMs}ms`));
   }, timeoutMs);
 
+  // Combine the caller's signal with the timeout instead of letting one
+  // silently disable the other.
+  const signal = init.signal
+    ? AbortSignal.any([init.signal, controller.signal])
+    : controller.signal;
+
   try {
     return await fetch(input, {
       ...init,
-      signal: init.signal ?? controller.signal,
+      signal,
       cache: "no-store",
     });
   } finally {
@@ -42,6 +48,31 @@ export async function withTimeout<T>(
   }
 }
 
-export function sleep(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+/** Sleep that rejects immediately when the signal aborts, so retry loops stop. */
+export function sleep(ms: number, signal?: AbortSignal) {
+  return new Promise<void>((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(abortReason(signal));
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
+
+    function onAbort() {
+      clearTimeout(timer);
+      reject(abortReason(signal));
+    }
+
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
+function abortReason(signal?: AbortSignal): Error {
+  const reason = signal?.reason as unknown;
+  return reason instanceof Error
+    ? reason
+    : new Error("The operation was aborted.");
 }

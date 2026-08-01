@@ -1,14 +1,19 @@
-import { normalizeUrlInput } from "@/lib/domain/url";
-import { runAnalysis } from "@/lib/server/analyze";
+import { runAnalysis, SCAN_BUDGET_MS } from "@/lib/server/analyze";
 import { createApiError } from "@/lib/server/api-error";
-import { readJsonBody } from "@/lib/server/request-body";
+import { parseScanRequest } from "@/lib/server/scan-request";
 import { createNdjsonResponse } from "@/lib/server/stream";
 
 export const runtime = "nodejs";
+export const maxDuration = 120;
 
 export async function POST(request: Request) {
-  const body = await readJsonBody<{ url?: unknown }>(request);
-  if (!body || typeof body.url !== "string") {
+  const parsed = await parseScanRequest(request, "single");
+  if (!parsed.ok) {
+    return parsed.response;
+  }
+
+  const target = parsed.targets[0];
+  if (!target) {
     return Response.json(
       {
         error: createApiError(
@@ -21,25 +26,22 @@ export async function POST(request: Request) {
     );
   }
 
-  const url = body.url;
-  const validation = normalizeUrlInput(url);
-  if (!validation.ok) {
-    return Response.json(
-      {
-        error: createApiError("invalid_url", validation.error, false),
-      },
-      { status: 400 },
-    );
-  }
-
   const scanId = crypto.randomUUID();
   const startedAt = new Date().toISOString();
 
-  return createNdjsonResponse(async (writer) => {
+  return createNdjsonResponse(async (writer, clientGone) => {
+    writer.startKeepalive();
+    const signal = AbortSignal.any([
+      request.signal,
+      clientGone,
+      AbortSignal.timeout(SCAN_BUDGET_MS),
+    ]);
+
     try {
-      const outcome = await runAnalysis(url, {
+      const result = await runAnalysis(target, {
         scanId,
         startedAt,
+        signal,
         onScanReady: ({ cached, normalizedUrl }) => {
           writer.send({
             type: "scan_started",
@@ -58,17 +60,9 @@ export async function POST(request: Request) {
         },
       });
 
-      if (!outcome.ok) {
-        writer.send({
-          type: "scan_error",
-          error: outcome.error,
-        });
-        return;
-      }
-
       writer.send({
         type: "scan_complete",
-        result: outcome.result,
+        result,
       });
     } catch (error) {
       writer.send({

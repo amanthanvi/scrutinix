@@ -77,18 +77,7 @@ describe("analysis routes", () => {
       }),
     );
 
-    const text = await response.text();
-    const events = text
-      .trim()
-      .split("\n")
-      .map(
-        (line) =>
-          JSON.parse(line) as {
-            type: string;
-            name?: string;
-            result?: { verdict?: string };
-          },
-      );
+    const events = await parseNdjsonEvents(response);
 
     expect(events[0]?.type).toBe("scan_started");
     expect(
@@ -97,7 +86,61 @@ describe("analysis routes", () => {
     expect(events.at(-1)?.type).toBe("scan_complete");
   });
 
-  it("degrades RDAP outages into whois caveats instead of hard signal errors", async () => {
+  it("rejects requests without a JSON content type", async () => {
+    const { POST } = await import("@/app/api/analyze/route");
+
+    const response = await POST(
+      new Request("http://localhost/api/analyze", {
+        method: "POST",
+        body: JSON.stringify({ url: "example.com" }),
+      }),
+    );
+
+    expect(response.status).toBe(415);
+    const body = (await response.json()) as { error?: { code?: string } };
+    expect(body.error?.code).toBe("unsupported_media_type");
+  });
+
+  it("rejects cross-origin scan requests", async () => {
+    const { POST } = await import("@/app/api/analyze/route");
+
+    const response = await POST(
+      new Request("http://localhost/api/analyze", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          origin: "https://evil.example",
+        },
+        body: JSON.stringify({ url: "example.com" }),
+      }),
+    );
+
+    expect(response.status).toBe(403);
+    const body = (await response.json()) as { error?: { code?: string } };
+    expect(body.error?.code).toBe("cross_origin_forbidden");
+  });
+
+  it("allows same-origin scan requests", async () => {
+    const { POST } = await import("@/app/api/analyze/route");
+    installHandlers();
+
+    const response = await POST(
+      new Request("http://localhost/api/analyze", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          origin: "http://localhost",
+        },
+        body: JSON.stringify({ url: "example.com" }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    // Drain the stream so the scan does not keep running into the next test.
+    await parseNdjsonEvents(response);
+  });
+
+  it("reports RDAP outages as whois signal errors and partial failure", async () => {
     const { POST } = await import("@/app/api/analyze/route");
     installHandlers({ rdapStatus: 504 });
 
@@ -111,14 +154,40 @@ describe("analysis routes", () => {
       }),
     );
 
-    const text = await response.text();
-    const events = text
-      .trim()
-      .split("\n")
-      .map((line) => JSON.parse(line) as { type: string; result?: unknown });
+    const events = await parseNdjsonEvents(response);
     const completion = events.at(-1);
 
     expect(completion?.type).toBe("scan_complete");
+    expect(completion?.result).toMatchObject({
+      signals: {
+        whois: {
+          status: "error",
+          data: null,
+        },
+      },
+      metadata: {
+        partialFailure: true,
+      },
+    });
+  });
+
+  it("treats an RDAP 404 as an honest no-record answer, not an error", async () => {
+    const { POST } = await import("@/app/api/analyze/route");
+    installHandlers({ rdapStatus: 404 });
+
+    const response = await POST(
+      new Request("http://localhost/api/analyze", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ url: "example.com" }),
+      }),
+    );
+
+    const events = await parseNdjsonEvents(response);
+    const completion = events.at(-1);
+
     expect(completion?.result).toMatchObject({
       signals: {
         whois: {
@@ -134,7 +203,7 @@ describe("analysis routes", () => {
     });
   });
 
-  it("does not cache partial-failure scan results", async () => {
+  it("caches partial-failure results briefly instead of re-running everything", async () => {
     const { POST } = await import("@/app/api/analyze/route");
     installHandlers({ virusTotalStatus: 503 });
 
@@ -148,6 +217,9 @@ describe("analysis routes", () => {
         body: requestBody,
       }),
     );
+    // Drain the first scan fully so its cache write lands before the retry.
+    const firstEvents = await parseNdjsonEvents(firstResponse);
+
     const secondResponse = await POST(
       new Request("http://localhost/api/analyze", {
         method: "POST",
@@ -157,8 +229,6 @@ describe("analysis routes", () => {
         body: requestBody,
       }),
     );
-
-    const firstEvents = await parseNdjsonEvents(firstResponse);
     const secondEvents = await parseNdjsonEvents(secondResponse);
     const firstCompletion = firstEvents.at(-1);
     const secondCompletion = secondEvents.at(-1);
@@ -169,9 +239,11 @@ describe("analysis routes", () => {
         partialFailure: true,
       },
     });
+    // Degraded results are cached with a short TTL so a provider hiccup does
+    // not force every retry to re-run all eight signals.
     expect(secondCompletion?.result).toMatchObject({
       metadata: {
-        cacheHit: false,
+        cacheHit: true,
         partialFailure: true,
       },
     });
@@ -247,11 +319,7 @@ describe("analysis routes", () => {
       }),
     );
 
-    const text = await response.text();
-    const events = text
-      .trim()
-      .split("\n")
-      .map((line) => JSON.parse(line) as { type: string });
+    const events = await parseNdjsonEvents(response);
 
     expect(events[0]?.type).toBe("batch_started");
     expect(events.filter((event) => event.type === "url_started")).toHaveLength(
@@ -268,24 +336,16 @@ describe("analysis routes", () => {
     vi.doMock("@/lib/server/analyze", async (importOriginal) => {
       const actual =
         await importOriginal<typeof import("@/lib/server/analyze")>();
-      const { createApiError } = await import("@/lib/server/api-error");
+      type RunAnalysis = typeof actual.runAnalysis;
 
       return {
         ...actual,
-        runAnalysis: vi.fn(async (input: string, options = {}) => {
-          if (input.includes("bad.example")) {
-            return {
-              ok: false as const,
-              status: 502,
-              error: createApiError(
-                "provider_failed",
-                "Synthetic batch failure.",
-                true,
-              ),
-            };
+        runAnalysis: vi.fn<RunAnalysis>(async (target, options) => {
+          if (target.normalizedUrl.includes("bad.example")) {
+            throw new Error("Synthetic batch failure.");
           }
 
-          return actual.runAnalysis(input, options);
+          return actual.runAnalysis(target, options);
         }),
       };
     });
@@ -305,21 +365,7 @@ describe("analysis routes", () => {
       }),
     );
 
-    const text = await response.text();
-    const events = text
-      .trim()
-      .split("\n")
-      .map(
-        (line) =>
-          JSON.parse(line) as {
-            type: string;
-            url?: string;
-            result?: {
-              verdict?: string;
-              metadata?: { partialFailure?: boolean };
-            };
-          },
-      );
+    const events = await parseNdjsonEvents(response);
 
     expect(
       events.filter((event) => event.type === "url_complete"),
@@ -344,22 +390,29 @@ describe("analysis routes", () => {
 
 async function parseNdjsonEvents(response: Response) {
   const text = await response.text();
-  return text.trim().length === 0
-    ? []
-    : text
-        .split("\n")
-        .map((line) => line.trim())
-        .filter(Boolean)
-        .map(
-          (line) =>
-            JSON.parse(line) as {
-              type: string;
-              cached?: boolean;
-              result?: {
-                metadata?: { cacheHit?: boolean; partialFailure?: boolean };
-              };
-            },
-        );
+  const events =
+    text.trim().length === 0
+      ? []
+      : text
+          .split("\n")
+          .map((line) => line.trim())
+          .filter(Boolean)
+          .map(
+            (line) =>
+              JSON.parse(line) as {
+                type: string;
+                cached?: boolean;
+                url?: string;
+                result?: {
+                  verdict?: string;
+                  metadata?: { cacheHit?: boolean; partialFailure?: boolean };
+                };
+              },
+          );
+
+  // Keepalive frames are timing-dependent chatter; assertions target the
+  // semantic event stream.
+  return events.filter((event) => event.type !== "keepalive");
 }
 
 function installHandlers(

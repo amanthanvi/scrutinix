@@ -1,6 +1,6 @@
 import { getEnv } from "@/lib/config/env";
 import { buildThreatAssessment } from "@/lib/domain/verdict";
-import { createCacheKey, normalizeUrlInput } from "@/lib/domain/url";
+import { createCacheKey, type NormalizedUrl } from "@/lib/domain/url";
 import {
   createPendingSignalResults,
   signalNames,
@@ -10,8 +10,11 @@ import {
   type SignalResult,
   type SignalResults,
 } from "@/lib/domain/types";
-import { createApiError } from "@/lib/server/api-error";
-import { analysisCache } from "@/lib/server/cache";
+import {
+  analysisCache,
+  DEGRADED_RESULT_TTL_MS,
+  FULL_RESULT_TTL_MS,
+} from "@/lib/server/cache";
 import { logError, logInfo, createSafeLogContext } from "@/lib/server/logger";
 import { runGoogleSafeBrowsingProvider } from "@/lib/server/providers/google-safe-browsing";
 import { runMlEnsembleProvider } from "@/lib/server/providers/ml-ensemble";
@@ -22,6 +25,12 @@ import { runDnsSignal } from "@/lib/server/signals/dns";
 import { runRedirectSignal } from "@/lib/server/signals/redirect-chain";
 import { runSslSignal } from "@/lib/server/signals/ssl";
 import { runWhoisSignal } from "@/lib/server/signals/whois";
+
+/** Wall-clock budget for one scan; routes wire it into the AbortSignal. */
+export const SCAN_BUDGET_MS = 60_000;
+
+const ABORTED_SIGNAL_MESSAGE =
+  "The scan was cancelled or exceeded its time budget.";
 
 type SignalListener = (payload: {
   name: SignalName;
@@ -41,6 +50,8 @@ interface AnalyzeOptions {
   onScanReady?: ScanReadyListener;
   scanId?: string;
   startedAt?: string;
+  /** Aborts in-flight provider work (client disconnect or budget expiry). */
+  signal?: AbortSignal;
 }
 
 type SignalOutcome<Name extends SignalName> = {
@@ -48,22 +59,17 @@ type SignalOutcome<Name extends SignalName> = {
   result: SignalResult<SignalPayloadMap[Name]>;
 };
 
-export async function runAnalysis(input: string, options: AnalyzeOptions = {}) {
-  const normalized = normalizeUrlInput(input);
-
-  if (!normalized.ok) {
-    return {
-      ok: false as const,
-      status: 400,
-      error: createApiError("invalid_url", normalized.error, false),
-    };
-  }
-
+export async function runAnalysis(
+  target: NormalizedUrl,
+  options: AnalyzeOptions = {},
+): Promise<AnalysisResult> {
+  const env = getEnv();
   const startedAt = options.startedAt ?? new Date().toISOString();
   const scanId = options.scanId ?? crypto.randomUUID();
-  const cacheKey = createCacheKey(normalized.value.normalizedUrl);
-  const cached = analysisCache.get(cacheKey);
-  const normalizedUrl = normalized.value.normalizedUrl;
+  const normalizedUrl = target.normalizedUrl;
+  const cacheKey = createCacheKey(normalizedUrl);
+  const cached = await analysisCache.get(cacheKey);
+  const signal = options.signal;
 
   options.onScanReady?.({
     cached: Boolean(cached),
@@ -92,37 +98,42 @@ export async function runAnalysis(input: string, options: AnalyzeOptions = {}) {
       options.onSignal?.({ name, result: cachedResult.signals[name] });
     }
 
-    return {
-      ok: true as const,
-      result: cachedResult,
-      scanId,
-      startedAt,
-      cached: true,
-      normalizedUrl,
-    };
+    return cachedResult;
   }
 
   const signals: SignalResults = createPendingSignalResults();
   const signalTasks = [
-    createSignalTask("virusTotal", () =>
-      runVirusTotalProvider(normalized.value.normalizedUrl),
+    createSignalTask(
+      "virusTotal",
+      () => runVirusTotalProvider(normalizedUrl, signal),
+      signal,
     ),
-    createSignalTask("mlEnsemble", () =>
-      runMlEnsembleProvider(normalized.value.normalizedUrl),
+    createSignalTask(
+      "mlEnsemble",
+      () => runMlEnsembleProvider(normalizedUrl, signal),
+      signal,
     ),
-    createSignalTask("googleSafeBrowsing", () =>
-      runGoogleSafeBrowsingProvider(normalized.value.normalizedUrl),
+    createSignalTask(
+      "googleSafeBrowsing",
+      () => runGoogleSafeBrowsingProvider(normalizedUrl, signal),
+      signal,
     ),
-    createSignalTask("threatFeeds", () =>
-      runThreatFeedsProvider(normalized.value.normalizedUrl),
+    createSignalTask(
+      "threatFeeds",
+      () => runThreatFeedsProvider(normalizedUrl, signal),
+      signal,
     ),
-    createSignalTask("ssl", () => runSslSignal(normalized.value.normalizedUrl)),
-    createSignalTask("whois", () =>
-      runWhoisSignal(normalized.value.normalizedUrl),
+    createSignalTask("ssl", () => runSslSignal(normalizedUrl, signal), signal),
+    createSignalTask(
+      "whois",
+      () => runWhoisSignal(normalizedUrl, signal),
+      signal,
     ),
-    createSignalTask("dns", () => runDnsSignal(normalized.value.normalizedUrl)),
-    createSignalTask("redirectChain", () =>
-      runRedirectSignal(normalized.value.normalizedUrl),
+    createSignalTask("dns", () => runDnsSignal(normalizedUrl), signal),
+    createSignalTask(
+      "redirectChain",
+      () => runRedirectSignal(normalizedUrl, signal),
+      signal,
     ),
   ] as const;
 
@@ -141,7 +152,7 @@ export async function runAnalysis(input: string, options: AnalyzeOptions = {}) {
 
   const result: AnalysisResult = {
     id: scanId,
-    url: normalized.value.normalizedUrl,
+    url: normalizedUrl,
     verdict,
     signals,
     threatInfo,
@@ -151,7 +162,7 @@ export async function runAnalysis(input: string, options: AnalyzeOptions = {}) {
       completedAt,
       cacheHit: false,
       partialFailure: Object.values(signals).some(
-        (signal) => signal.status === "error",
+        (signalResult) => signalResult.status === "error",
       ),
       signalCount: signalNames.length,
       durationMs:
@@ -159,14 +170,22 @@ export async function runAnalysis(input: string, options: AnalyzeOptions = {}) {
     },
   };
 
-  if (verdict !== "error" && !result.metadata?.partialFailure) {
-    analysisCache.set(cacheKey, result);
+  // Cache anything with an actionable verdict. Degraded (partial-failure)
+  // results get a shorter TTL so a provider hiccup doesn't pin stale data;
+  // aborted scans are never cached.
+  if (verdict !== "error" && !signal?.aborted) {
+    await analysisCache.set(
+      cacheKey,
+      result,
+      result.metadata.partialFailure
+        ? DEGRADED_RESULT_TTL_MS
+        : FULL_RESULT_TTL_MS,
+    );
   }
 
-  const env = getEnv();
   logInfo(
     "scan.completed",
-    createSafeLogContext(normalized.value.normalizedUrl, {
+    createSafeLogContext(normalizedUrl, {
       scanId,
       verdict,
       cacheHit: false,
@@ -179,19 +198,13 @@ export async function runAnalysis(input: string, options: AnalyzeOptions = {}) {
     }),
   );
 
-  return {
-    ok: true as const,
-    result,
-    scanId,
-    startedAt,
-    cached: false,
-    normalizedUrl: normalized.value.normalizedUrl,
-  };
+  return result;
 }
 
 function createSignalTask<Name extends SignalName>(
   name: Name,
   handler: () => Promise<SignalPayloadMap[Name]>,
+  signal: AbortSignal | undefined,
 ) {
   return async (): Promise<SignalOutcome<Name>> => {
     const start = performance.now();
@@ -224,15 +237,19 @@ function createSignalTask<Name extends SignalName>(
         };
       }
 
+      const message = signal?.aborted
+        ? ABORTED_SIGNAL_MESSAGE
+        : getErrorMessage(error);
+
       logError("signal.failed", {
         signal: name,
-        message: getErrorMessage(error),
+        message,
       });
 
       const result: SignalResult<SignalPayloadMap[Name]> = {
         status: "error",
         data: null,
-        error: getErrorMessage(error),
+        error: message,
         durationMs: Math.round(performance.now() - start),
       };
 
