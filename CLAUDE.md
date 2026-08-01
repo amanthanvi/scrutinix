@@ -59,7 +59,9 @@ lib/
   (`lib/server/stream.ts`, with keepalives and cancel-abort plumbing);
   clients consume via `hooks/use-ndjson-request.ts`.
 - **Abort plumbing**: routes combine request abort, stream cancel, and a
-  60s scan budget with `AbortSignal.any` and thread it into every provider.
+  60s scan budget with `AbortSignal.any` and thread it into every
+  network-bound provider (the local ML classifier and the node DNS
+  resolver use their own internal timeouts instead).
 - **Local ML**: `lib/server/ml/` bundles a quantized ONNX URL classifier
   (urlbert-tiny-v4, Apache-2.0) run via @huggingface/transformers — no
   hosted inference calls. Lexical heuristics are the second ensemble member.

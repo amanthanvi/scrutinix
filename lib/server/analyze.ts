@@ -119,19 +119,19 @@ export async function runAnalysis(
     dns: () => runDnsSignal(normalizedUrl),
     redirectChain: () => runRedirectSignal(normalizedUrl, signal),
   };
+  const task = <Name extends SignalName>(
+    name: Name,
+    handler: () => Promise<SignalPayloadMap[Name]>,
+  ) => createSignalTask(name, handler, signal, target.hostname);
   const signalTasks = [
-    createSignalTask("virusTotal", providers.virusTotal, signal),
-    createSignalTask("mlEnsemble", providers.mlEnsemble, signal),
-    createSignalTask(
-      "googleSafeBrowsing",
-      providers.googleSafeBrowsing,
-      signal,
-    ),
-    createSignalTask("threatFeeds", providers.threatFeeds, signal),
-    createSignalTask("ssl", providers.ssl, signal),
-    createSignalTask("whois", providers.whois, signal),
-    createSignalTask("dns", providers.dns, signal),
-    createSignalTask("redirectChain", providers.redirectChain, signal),
+    task("virusTotal", providers.virusTotal),
+    task("mlEnsemble", providers.mlEnsemble),
+    task("googleSafeBrowsing", providers.googleSafeBrowsing),
+    task("threatFeeds", providers.threatFeeds),
+    task("ssl", providers.ssl),
+    task("whois", providers.whois),
+    task("dns", providers.dns),
+    task("redirectChain", providers.redirectChain),
   ] as const;
 
   const pending = signalTasks.map(async (task) => {
@@ -202,6 +202,7 @@ function createSignalTask<Name extends SignalName>(
   name: Name,
   handler: () => Promise<SignalPayloadMap[Name]>,
   signal: AbortSignal | undefined,
+  hostname: string,
 ) {
   return async (): Promise<SignalOutcome<Name>> => {
     const start = performance.now();
@@ -238,9 +239,12 @@ function createSignalTask<Name extends SignalName>(
         ? ABORTED_SIGNAL_MESSAGE
         : getErrorMessage(error);
 
+      // Provider errors (ENOTFOUND, TLS failures) can embed the scanned
+      // hostname; server logs must stay URL-free per AGENTS.md, so redact
+      // it here. The client-facing signal error keeps the full message.
       logError("signal.failed", {
         signal: name,
-        message,
+        message: hostname ? message.split(hostname).join("[host]") : message,
       });
 
       const result: SignalResult<SignalPayloadMap[Name]> = {

@@ -3,6 +3,7 @@ import type { NextRequest } from "next/server";
 
 import { buildContentSecurityPolicy, createCspNonce } from "@/lib/server/csp";
 import { applyRateLimit, getClientRateLimitId } from "@/lib/server/rate-limit";
+import { MAX_BATCH_SIZE } from "@/lib/server/scan-request";
 
 export async function proxy(request: NextRequest) {
   if (request.nextUrl.pathname.startsWith("/api/analyze")) {
@@ -52,7 +53,7 @@ async function scanCost(request: NextRequest): Promise<number> {
   try {
     const body = (await request.clone().json()) as { urls?: unknown };
     if (Array.isArray(body.urls)) {
-      return Math.min(Math.max(body.urls.length, 1), 10);
+      return Math.min(Math.max(body.urls.length, 1), MAX_BATCH_SIZE);
     }
   } catch {
     // Unreadable body; charge the minimum.
