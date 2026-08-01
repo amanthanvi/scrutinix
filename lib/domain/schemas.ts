@@ -66,6 +66,8 @@ export const verdictSchema = z.enum([
   "suspicious",
   "malicious",
   "critical",
+  // A dead/unreachable host: the absence of findings is not evidence of safety.
+  "unknown",
   "error",
 ]);
 

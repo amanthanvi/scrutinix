@@ -14,6 +14,7 @@ const VERDICT_COLOR: Record<Verdict, string> = {
   suspicious: "var(--sx-suspicious)",
   malicious: "var(--sx-malicious)",
   critical: "var(--sx-critical)",
+  unknown: "var(--sx-info)",
   error: "var(--sx-error)",
 };
 
@@ -22,6 +23,7 @@ const VERDICT_INK: Record<Verdict, string> = {
   suspicious: "var(--sx-suspicious-ink)",
   malicious: "var(--sx-malicious-ink)",
   critical: "var(--sx-critical-ink)",
+  unknown: "var(--sx-info-ink)",
   error: "var(--sx-error-ink)",
 };
 
