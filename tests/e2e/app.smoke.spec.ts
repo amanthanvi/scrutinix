@@ -88,7 +88,7 @@ function buildLegacyHistoryEntry() {
     error: null,
     durationMs: 14,
     data: {
-      hostedModel: null,
+      transformerModel: null,
       lexicalModel: {
         label: "benign",
         score: 0.08,

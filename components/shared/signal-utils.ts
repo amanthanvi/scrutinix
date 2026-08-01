@@ -23,7 +23,7 @@ export function getSignalSummary(
     case "mlEnsemble": {
       const d = data as MLSignalData;
       if (d.consensusLabel === "benign") {
-        return "The ensemble stayed below the risk threshold after comparing the hosted and lexical models.";
+        return "The ensemble stayed below the risk threshold after comparing the local transformer and lexical models.";
       }
 
       return `The ensemble raised a ${d.consensusLabel} result with a ${(d.consensusScore * 100).toFixed(0)} risk score.`;
@@ -163,10 +163,10 @@ export function getSignalDetailEntries(
           value: `${d.lexicalModel.label} (${(d.lexicalModel.score * 100).toFixed(0)}%)`,
         },
       ];
-      if (d.hostedModel) {
+      if (d.transformerModel) {
         entries.push({
-          label: "Hosted model",
-          value: `${d.hostedModel.label} (${((d.hostedModel.score ?? 0) * 100).toFixed(0)}%)`,
+          label: "Local model",
+          value: `${d.transformerModel.label} (${((d.transformerModel.score ?? 0) * 100).toFixed(0)}%)`,
         });
       }
       if (d.reasons?.length) {

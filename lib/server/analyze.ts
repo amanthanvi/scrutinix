@@ -110,7 +110,7 @@ export async function runAnalysis(
     ),
     createSignalTask(
       "mlEnsemble",
-      () => runMlEnsembleProvider(normalizedUrl, signal),
+      () => runMlEnsembleProvider(normalizedUrl),
       signal,
     ),
     createSignalTask(
@@ -193,7 +193,7 @@ export async function runAnalysis(
       configuredProviders: {
         virusTotal: Boolean(env.VIRUSTOTAL_API_KEY),
         googleSafeBrowsing: Boolean(env.GOOGLE_SAFE_BROWSING_API_KEY),
-        huggingFace: Boolean(env.HUGGINGFACE_API_KEY),
+        abuseCh: Boolean(env.URLHAUS_AUTH_KEY),
       },
     }),
   );

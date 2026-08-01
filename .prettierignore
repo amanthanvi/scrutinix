@@ -3,3 +3,6 @@ coverage
 node_modules
 playwright-report
 test-results
+
+# Bundled ML model artifacts (tokenizer/config JSON must stay byte-exact)
+lib/server/ml/model

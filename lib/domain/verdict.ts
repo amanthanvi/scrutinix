@@ -1,6 +1,5 @@
 import type {
   AnalysisResult,
-  ClassificationFinding,
   SignalResults,
   ThreatInfo,
   Verdict,
@@ -556,14 +555,14 @@ function buildConfidenceReasons(
   }
 
   if (signals.mlEnsemble.status === "success" && signals.mlEnsemble.data) {
-    const { hostedModel, lexicalModel } = signals.mlEnsemble.data;
-    if (hostedModel && hostedModel.label !== lexicalModel.label) {
+    const { transformerModel, lexicalModel } = signals.mlEnsemble.data;
+    if (transformerModel && transformerModel.label !== lexicalModel.label) {
       reasons.push(
         "The ML models disagreed, so the ensemble confidence was reduced.",
       );
-    } else if (hostedModel) {
+    } else if (transformerModel) {
       reasons.push(
-        "The hosted and lexical models agreed on the ensemble direction.",
+        "The transformer and lexical models agreed on the ensemble direction.",
       );
     }
   }
@@ -676,11 +675,11 @@ function getModelAgreement(signals: SignalResults) {
     return 0;
   }
 
-  if (!signal.data.hostedModel) {
+  if (!signal.data.transformerModel) {
     return 0.55;
   }
 
-  return signal.data.hostedModel.label === signal.data.lexicalModel?.label
+  return signal.data.transformerModel.label === signal.data.lexicalModel?.label
     ? 1
     : 0.45;
 }
@@ -760,68 +759,4 @@ function formatSourceList(values: string[]) {
   }
 
   return `${values.slice(0, -1).join(", ")}, and ${values.at(-1)}`;
-}
-
-export function classifyConsensus(
-  hosted: ClassificationFinding | null,
-  lexical: ClassificationFinding,
-) {
-  if (!hosted) {
-    return lexical;
-  }
-
-  const combinedRisk =
-    hosted.score * labelRiskWeight(hosted.label) * 0.7 +
-    lexical.score * labelRiskWeight(lexical.label) * 0.3;
-
-  let effectiveRisk = combinedRisk;
-  if (hosted.label === "benign" && lexical.label !== "benign") {
-    if (lexical.label === "malicious") {
-      effectiveRisk = Math.max(
-        combinedRisk,
-        Math.min(0.95, lexical.score * 0.97),
-      );
-    } else {
-      effectiveRisk = Math.max(combinedRisk, lexical.score * 0.78);
-    }
-  }
-
-  const disagreementNote =
-    hosted.label !== lexical.label
-      ? hosted.label === "benign" && lexical.label !== "benign"
-        ? [
-            "The hosted model scored this link benign, but lexical heuristics disagreed; effective risk was raised to reflect structural evidence.",
-          ]
-        : ["Model disagreement reduced the ensemble certainty."]
-      : [
-          "The hosted and lexical models agreed on the classification direction.",
-        ];
-
-  return {
-    label:
-      (hosted.label === "malicious" &&
-        lexical.label !== "benign" &&
-        effectiveRisk >= 0.55) ||
-      effectiveRisk >= 0.74
-        ? "malicious"
-        : effectiveRisk >= 0.38
-          ? "risky"
-          : "benign",
-    score: Number(effectiveRisk.toFixed(2)),
-    reasons: [
-      ...new Set([...hosted.reasons, ...lexical.reasons, ...disagreementNote]),
-    ],
-    model: "ensemble",
-  } satisfies ClassificationFinding;
-}
-
-function labelRiskWeight(label: ClassificationFinding["label"]) {
-  switch (label) {
-    case "malicious":
-      return 1;
-    case "risky":
-      return 0.6;
-    default:
-      return 0.08;
-  }
 }

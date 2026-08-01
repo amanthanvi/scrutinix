@@ -68,7 +68,6 @@ beforeEach(() => {
   vi.stubEnv("NODE_ENV", "test");
   vi.stubEnv("VIRUSTOTAL_API_KEY", "vt-key");
   vi.stubEnv("GOOGLE_SAFE_BROWSING_API_KEY", "gsb-key");
-  vi.stubEnv("HUGGINGFACE_API_KEY", "hf-key");
 });
 
 describe("analysis routes", () => {
@@ -458,10 +457,6 @@ function installHandlers(
     http.get(
       "https://openphish.com/feed.txt",
       () => new HttpResponse("", { status: 200 }),
-    ),
-    http.post(
-      "https://router.huggingface.co/hf-inference/models/:owner/:model",
-      () => HttpResponse.json([[{ label: "benign", score: 0.12 }]]),
     ),
     http.get("https://rdap.org/domain/:hostname", () =>
       options.rdapStatus

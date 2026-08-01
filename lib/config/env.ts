@@ -21,14 +21,9 @@ const envSchema = z.object({
   NEXT_PUBLIC_APP_URL: optionalUrl,
   VIRUSTOTAL_API_KEY: optionalString,
   GOOGLE_SAFE_BROWSING_API_KEY: optionalString,
-  HUGGINGFACE_API_KEY: optionalString,
   URLHAUS_AUTH_KEY: optionalString,
   UPSTASH_REDIS_REST_URL: optionalUrl,
   UPSTASH_REDIS_REST_TOKEN: optionalString,
-  HUGGINGFACE_URL_MODEL: z.preprocess(
-    emptyAsUndefined,
-    z.string().min(1).default("DunnBC22/codebert-base-Malicious_URLs"),
-  ),
   OPENPHISH_FEED_URL: z.preprocess(
     emptyAsUndefined,
     z.string().url().default("https://openphish.com/feed.txt"),

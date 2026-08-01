@@ -125,22 +125,35 @@ const defaultLexicalFinding: ClassificationFinding = {
   model: "lexical-heuristic",
 };
 
-export const mlSignalDataSchema = z
-  .object({
-    hostedModel: classificationFindingSchema.nullable().catch(null),
-    lexicalModel: classificationFindingSchema.catch(defaultLexicalFinding),
-    consensusLabel: z
-      .enum(["benign", "risky", "malicious"])
-      .nullable()
-      .catch(null),
-    consensusScore: finiteNumber(0).transform(clamp01),
-    reasons: stringArray,
-    warnings: stringArray,
-  })
-  .transform((value) => ({
-    ...value,
-    consensusLabel: value.consensusLabel ?? value.lexicalModel.label,
-  }));
+export const mlSignalDataSchema = z.preprocess(
+  // Legacy alias: results stored before the local-model migration used
+  // `hostedModel`; keep old history entries and cached results loading.
+  (value) => {
+    if (isRecord(value) && value.transformerModel === undefined) {
+      const { hostedModel, ...rest } = value;
+      if (hostedModel !== undefined) {
+        return { ...rest, transformerModel: hostedModel };
+      }
+    }
+    return value;
+  },
+  z
+    .object({
+      transformerModel: classificationFindingSchema.nullable().catch(null),
+      lexicalModel: classificationFindingSchema.catch(defaultLexicalFinding),
+      consensusLabel: z
+        .enum(["benign", "risky", "malicious"])
+        .nullable()
+        .catch(null),
+      consensusScore: finiteNumber(0).transform(clamp01),
+      reasons: stringArray,
+      warnings: stringArray,
+    })
+    .transform((value) => ({
+      ...value,
+      consensusLabel: value.consensusLabel ?? value.lexicalModel.label,
+    })),
+);
 
 export type MLSignalData = z.infer<typeof mlSignalDataSchema>;
 

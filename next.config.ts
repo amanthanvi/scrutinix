@@ -31,6 +31,12 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: rootDir,
   },
+  // The local URL classifier: keep the ONNX runtime native and make sure the
+  // bundled model weights ride along with the analyze routes.
+  serverExternalPackages: ["@huggingface/transformers", "onnxruntime-node"],
+  outputFileTracingIncludes: {
+    "/api/analyze/**": ["./lib/server/ml/model/**"],
+  },
   async headers() {
     return [
       {

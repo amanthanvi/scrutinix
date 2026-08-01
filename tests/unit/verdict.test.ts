@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildThreatAssessment, classifyConsensus } from "@/lib/domain/verdict";
+import { buildThreatAssessment } from "@/lib/domain/verdict";
 import { createPendingSignalResults } from "@/lib/domain/types";
 
 describe("buildThreatAssessment", () => {
@@ -145,7 +145,7 @@ describe("buildThreatAssessment", () => {
       error: null,
       durationMs: 12,
       data: {
-        hostedModel: {
+        transformerModel: {
           label: "malicious",
           score: 0.81,
           reasons: ["Hosted model predicted malware with 81% confidence."],
@@ -275,7 +275,7 @@ describe("buildThreatAssessment", () => {
       error: null,
       durationMs: 12,
       data: {
-        hostedModel: {
+        transformerModel: {
           label: "benign",
           score: 0.12,
           reasons: ["Hosted model did not detect malware patterns."],
@@ -380,7 +380,7 @@ describe("buildThreatAssessment", () => {
       error: null,
       durationMs: 12,
       data: {
-        hostedModel: null,
+        transformerModel: null,
         lexicalModel: {
           label: "malicious",
           score: 0.82,
@@ -439,7 +439,7 @@ describe("buildThreatAssessment", () => {
       error: null,
       durationMs: 12,
       data: {
-        hostedModel: {
+        transformerModel: {
           label: "benign",
           score: 0.12,
           reasons: ["Hosted model did not detect malware patterns."],
@@ -535,137 +535,5 @@ describe("buildThreatAssessment", () => {
     expect(result.threatInfo?.confidenceReasons.join(" ")).toMatch(
       /VirusTotal did not complete/i,
     );
-  });
-});
-
-describe("classifyConsensus", () => {
-  it("floors ensemble risk when hosted is benign but lexical is malicious", () => {
-    const result = classifyConsensus(
-      {
-        label: "benign",
-        score: 0.9,
-        reasons: ["Hosted model predicted benign."],
-        model: "huggingface",
-      },
-      {
-        label: "malicious",
-        score: 0.8,
-        reasons: ["Literal IP and script path."],
-        model: "lexical-heuristic",
-      },
-    );
-
-    expect(result.label).toBe("malicious");
-    expect(result.score).toBeGreaterThanOrEqual(0.74);
-    expect(result.reasons.join(" ")).toMatch(/effective risk was raised/i);
-    expect(result.reasons.join(" ")).not.toMatch(
-      /disagreement reduced the ensemble certainty/i,
-    );
-  });
-
-  it("floors ensemble risk when hosted is benign but lexical is risky with meaningful score", () => {
-    const result = classifyConsensus(
-      {
-        label: "benign",
-        score: 0.7,
-        reasons: ["Hosted model predicted benign."],
-        model: "huggingface",
-      },
-      {
-        label: "risky",
-        score: 0.52,
-        reasons: ["Structural cues."],
-        model: "lexical-heuristic",
-      },
-    );
-
-    expect(result.label).toBe("risky");
-    expect(result.score).toBeGreaterThanOrEqual(0.38);
-    expect(result.reasons.join(" ")).toMatch(/effective risk was raised/i);
-  });
-
-  it("does not elevate when hosted and lexical both agree on benign", () => {
-    const result = classifyConsensus(
-      {
-        label: "benign",
-        score: 0.6,
-        reasons: ["Hosted model predicted benign."],
-        model: "huggingface",
-      },
-      {
-        label: "benign",
-        score: 0.08,
-        reasons: ["No suspicious lexical patterns were found."],
-        model: "lexical-heuristic",
-      },
-    );
-
-    expect(result.label).toBe("benign");
-    expect(result.reasons.join(" ")).toMatch(
-      /agreed on the classification direction/i,
-    );
-  });
-
-  it("uses reduced-certainty wording when models disagree without benign-hosted lexical boost", () => {
-    const result = classifyConsensus(
-      {
-        label: "malicious",
-        score: 0.85,
-        reasons: ["Hosted model predicted malicious."],
-        model: "huggingface",
-      },
-      {
-        label: "benign",
-        score: 0.1,
-        reasons: ["No suspicious lexical patterns were found."],
-        model: "lexical-heuristic",
-      },
-    );
-
-    expect(result.reasons.join(" ")).toMatch(
-      /Model disagreement reduced the ensemble certainty/i,
-    );
-    expect(result.reasons.join(" ")).not.toMatch(/effective risk was raised/i);
-  });
-
-  it("treats benign hosted plus structural malicious lexical as suspicious via buildThreatAssessment", () => {
-    const signals = createPendingSignalResults();
-    signals.mlEnsemble = {
-      status: "success",
-      error: null,
-      durationMs: 12,
-      data: {
-        hostedModel: {
-          label: "benign",
-          score: 0.59,
-          reasons: ["Hosted model predicted benign with 59% confidence."],
-          model: "huggingface",
-        },
-        lexicalModel: {
-          label: "malicious",
-          score: 0.76,
-          reasons: [
-            "The URL targets a literal IP address instead of a domain.",
-            "The URL references script or shell content such as .sh.",
-            "The URL uses a non-standard HTTPS port (38376), which is uncommon for typical web services.",
-          ],
-          model: "lexical-heuristic",
-        },
-        consensusLabel: "malicious",
-        consensusScore: 0.74,
-        reasons: [
-          "Hosted model predicted benign with 59% confidence.",
-          "The URL targets a literal IP address instead of a domain.",
-          "The URL references script or shell content such as .sh.",
-          "The hosted model scored this link benign, but lexical heuristics disagreed; effective risk was raised to reflect structural evidence.",
-        ],
-        warnings: [],
-      },
-    };
-
-    const result = buildThreatAssessment(signals);
-
-    expect(result.verdict).toBe("suspicious");
-    expect(result.threatInfo?.score).toBeGreaterThanOrEqual(25);
   });
 });
