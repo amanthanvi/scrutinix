@@ -21,6 +21,10 @@ import { runMlEnsembleProvider } from "@/lib/server/providers/ml-ensemble";
 import { runThreatFeedsProvider } from "@/lib/server/providers/threat-feeds";
 import { runVirusTotalProvider } from "@/lib/server/providers/virustotal";
 import { getErrorMessage, isSignalSkipError } from "@/lib/server/signal-error";
+import {
+  getFixtureSignalProviders,
+  type SignalProviderTable,
+} from "@/lib/server/test-fixtures";
 import { runDnsSignal } from "@/lib/server/signals/dns";
 import { runRedirectSignal } from "@/lib/server/signals/redirect-chain";
 import { runSslSignal } from "@/lib/server/signals/ssl";
@@ -102,39 +106,32 @@ export async function runAnalysis(
   }
 
   const signals: SignalResults = createPendingSignalResults();
+  // E2E fixture mode (SCRUTINIX_TEST_FIXTURES=1) swaps the real providers
+  // for deterministic offline data; see lib/server/test-fixtures.ts.
+  const providers: SignalProviderTable = getFixtureSignalProviders(target) ?? {
+    virusTotal: () => runVirusTotalProvider(normalizedUrl, signal),
+    mlEnsemble: () => runMlEnsembleProvider(normalizedUrl),
+    googleSafeBrowsing: () =>
+      runGoogleSafeBrowsingProvider(normalizedUrl, signal),
+    threatFeeds: () => runThreatFeedsProvider(normalizedUrl, signal),
+    ssl: () => runSslSignal(normalizedUrl, signal),
+    whois: () => runWhoisSignal(normalizedUrl, signal),
+    dns: () => runDnsSignal(normalizedUrl),
+    redirectChain: () => runRedirectSignal(normalizedUrl, signal),
+  };
   const signalTasks = [
-    createSignalTask(
-      "virusTotal",
-      () => runVirusTotalProvider(normalizedUrl, signal),
-      signal,
-    ),
-    createSignalTask(
-      "mlEnsemble",
-      () => runMlEnsembleProvider(normalizedUrl),
-      signal,
-    ),
+    createSignalTask("virusTotal", providers.virusTotal, signal),
+    createSignalTask("mlEnsemble", providers.mlEnsemble, signal),
     createSignalTask(
       "googleSafeBrowsing",
-      () => runGoogleSafeBrowsingProvider(normalizedUrl, signal),
+      providers.googleSafeBrowsing,
       signal,
     ),
-    createSignalTask(
-      "threatFeeds",
-      () => runThreatFeedsProvider(normalizedUrl, signal),
-      signal,
-    ),
-    createSignalTask("ssl", () => runSslSignal(normalizedUrl, signal), signal),
-    createSignalTask(
-      "whois",
-      () => runWhoisSignal(normalizedUrl, signal),
-      signal,
-    ),
-    createSignalTask("dns", () => runDnsSignal(normalizedUrl), signal),
-    createSignalTask(
-      "redirectChain",
-      () => runRedirectSignal(normalizedUrl, signal),
-      signal,
-    ),
+    createSignalTask("threatFeeds", providers.threatFeeds, signal),
+    createSignalTask("ssl", providers.ssl, signal),
+    createSignalTask("whois", providers.whois, signal),
+    createSignalTask("dns", providers.dns, signal),
+    createSignalTask("redirectChain", providers.redirectChain, signal),
   ] as const;
 
   const pending = signalTasks.map(async (task) => {

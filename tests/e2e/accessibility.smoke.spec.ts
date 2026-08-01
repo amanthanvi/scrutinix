@@ -1,9 +1,10 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 
+import { gotoApp } from "./helpers";
+
 test("home page accessibility @smoke", async ({ page }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
-  await page.waitForTimeout(1_000);
+  await gotoApp(page);
 
   const devToolsButton = page.getByRole("button", {
     name: /open next\.js dev tools/i,
@@ -19,8 +20,7 @@ test("home page accessibility @smoke", async ({ page }) => {
 });
 
 test("home page keyboard navigation @smoke", async ({ page }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
-  await page.waitForTimeout(1_000);
+  await gotoApp(page);
 
   await page.keyboard.press("Tab");
   const skipLink = page.getByRole("link", { name: /skip to content/i });
@@ -31,7 +31,9 @@ test("home page keyboard navigation @smoke", async ({ page }) => {
   for (const name of [/scanner/i, /method/i, /privacy/i]) {
     await page.keyboard.press("Tab");
     await expect(
-      page.getByRole("navigation").getByRole("link", { name }),
+      page
+        .getByRole("navigation", { name: /primary/i })
+        .getByRole("link", { name }),
     ).toBeFocused();
   }
 

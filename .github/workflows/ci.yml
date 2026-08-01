@@ -66,8 +66,8 @@ jobs:
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
 
-      - name: E2E smoke
-        run: npm run test:e2e -- --grep @smoke
+      - name: E2E tests (offline fixtures)
+        run: npm run test:e2e
         env:
           SKIP_BUILD: "1"
 

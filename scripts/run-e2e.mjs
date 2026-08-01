@@ -11,10 +11,18 @@ const require = createRequire(import.meta.url);
 const nextBin = require.resolve("next/dist/bin/next");
 const playwrightCli = require.resolve("@playwright/test/cli");
 
+// The e2e suite runs offline against deterministic fixtures by default
+// (lib/server/test-fixtures.ts). Export SCRUTINIX_TEST_FIXTURES=0 to run
+// the specs against the real providers instead.
+const childEnv = {
+  ...process.env,
+  SCRUTINIX_TEST_FIXTURES: process.env.SCRUTINIX_TEST_FIXTURES ?? "1",
+};
+
 // CI builds once in its own step and sets SKIP_BUILD=1.
 if (process.env.SKIP_BUILD !== "1") {
   const build = spawnSync(process.execPath, [nextBin, "build"], {
-    env: process.env,
+    env: childEnv,
     stdio: "inherit",
   });
   if (build.status !== 0) {
@@ -26,7 +34,7 @@ const server = spawn(
   process.execPath,
   [nextBin, "start", "--hostname", HOST, "--port", PORT],
   {
-    env: process.env,
+    env: childEnv,
     stdio: "inherit",
   },
 );
@@ -69,7 +77,7 @@ const testRunner = spawn(
   process.execPath,
   [playwrightCli, "test", ...process.argv.slice(2)],
   {
-    env: process.env,
+    env: childEnv,
     stdio: "inherit",
   },
 );
