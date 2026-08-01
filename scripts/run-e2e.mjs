@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
 
 const HOST = "127.0.0.1";
@@ -10,6 +10,17 @@ const POLL_INTERVAL_MS = 1_000;
 const require = createRequire(import.meta.url);
 const nextBin = require.resolve("next/dist/bin/next");
 const playwrightCli = require.resolve("@playwright/test/cli");
+
+// CI builds once in its own step and sets SKIP_BUILD=1.
+if (process.env.SKIP_BUILD !== "1") {
+  const build = spawnSync(process.execPath, [nextBin, "build"], {
+    env: process.env,
+    stdio: "inherit",
+  });
+  if (build.status !== 0) {
+    process.exit(build.status ?? 1);
+  }
+}
 
 const server = spawn(
   process.execPath,
