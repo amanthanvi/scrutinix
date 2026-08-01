@@ -5,6 +5,7 @@ import {
   sanitizeAnalyzeEvent,
   sanitizeApiErrorResponse,
   sanitizeBatchEvent,
+  sanitizeHistoryEntry,
 } from "@/lib/domain/runtime-safety";
 import {
   createPendingSignalResults,
@@ -137,6 +138,41 @@ describe("runtime boundary sanitizers", () => {
         url: "",
       }),
     ).toBeNull();
+  });
+
+  it("coerces a garbage verdict to error when no threat info exists", () => {
+    const result = sanitizeAnalysisResult({
+      id: "scan-2",
+      url: "https://example.com/",
+      verdict: 42,
+      signals: {},
+      threatInfo: null,
+      metadata: {},
+    });
+
+    expect(result?.verdict).toBe("error");
+    expect(result?.signals.virusTotal.status).toBe("error");
+  });
+
+  it("restores legacy history entries and backfills savedAt", () => {
+    const entry = sanitizeHistoryEntry({
+      ...buildResult("https://example.com/legacy"),
+      savedAt: undefined,
+    });
+
+    expect(entry).toMatchObject({
+      url: "https://example.com/legacy",
+      savedAt: "2026-04-01T00:00:01.000Z",
+    });
+
+    expect(sanitizeHistoryEntry("not-an-entry")).toBeNull();
+    expect(sanitizeHistoryEntry(null)).toBeNull();
+  });
+
+  it("rejects events with an unknown type", () => {
+    expect(sanitizeAnalyzeEvent({ type: "mystery_event" })).toBeNull();
+    expect(sanitizeBatchEvent({ type: "keepalive" })).toBeNull();
+    expect(sanitizeAnalyzeEvent(null)).toBeNull();
   });
 
   it("sanitizes API error responses without leaking malformed fields", () => {
