@@ -5,14 +5,9 @@ import {
   type Verdict,
 } from "@/lib/domain/types";
 
-export const SIGNAL_COUNT = signalNames.length;
+export type { SharedSnapshot } from "@/lib/domain/types";
 
-export interface SharedSnapshot {
-  verdict: Verdict;
-  url: string;
-  summary: string;
-  capturedAt: string;
-}
+export const SIGNAL_COUNT = signalNames.length;
 
 const VERDICT_COLOR: Record<Verdict, string> = {
   safe: "var(--sx-safe)",

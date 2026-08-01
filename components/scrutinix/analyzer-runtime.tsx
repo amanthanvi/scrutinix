@@ -20,12 +20,12 @@ import {
 import { useBatchStream } from "@/hooks/use-batch-stream";
 import { useScanStream } from "@/hooks/use-scan-stream";
 import { threatScoreToVerdict } from "@/lib/domain/score-bands";
+import { sharedSnapshotSchema } from "@/lib/domain/schemas";
 import type { HistoryEntry } from "@/lib/domain/types";
 import {
   signalLabels,
   signalNames,
   type AnalysisResult,
-  type Verdict,
 } from "@/lib/domain/types";
 import { normalizeUrlInput } from "@/lib/domain/url";
 
@@ -59,50 +59,9 @@ function readSnapshot(): SharedSnapshot | null {
   const payload = new URLSearchParams(window.location.search).get("shared");
   if (!payload) return null;
 
-  const validVerdicts: Verdict[] = [
-    "safe",
-    "suspicious",
-    "malicious",
-    "critical",
-    "error",
-  ];
-  const maxUrlLength = 2048;
-  const maxSummaryLength = 600;
-  const maxCapturedAtLength = 128;
   const toSnapshot = (value: unknown): SharedSnapshot | null => {
-    if (
-      !value ||
-      typeof value !== "object" ||
-      typeof (value as { url?: unknown }).url !== "string" ||
-      typeof (value as { summary?: unknown }).summary !== "string" ||
-      typeof (value as { capturedAt?: unknown }).capturedAt !== "string" ||
-      typeof (value as { verdict?: unknown }).verdict !== "string"
-    ) {
-      return null;
-    }
-
-    const verdict = (value as { verdict: string }).verdict;
-    if (!validVerdicts.includes(verdict as Verdict)) {
-      return null;
-    }
-
-    const url = (value as { url: string }).url;
-    const summary = (value as { summary: string }).summary;
-    const capturedAt = (value as { capturedAt: string }).capturedAt;
-    if (
-      url.length > maxUrlLength ||
-      summary.length > maxSummaryLength ||
-      capturedAt.length > maxCapturedAtLength
-    ) {
-      return null;
-    }
-
-    return {
-      verdict: verdict as Verdict,
-      url,
-      summary,
-      capturedAt,
-    };
+    const parsed = sharedSnapshotSchema.safeParse(value);
+    return parsed.success ? parsed.data : null;
   };
 
   try {
