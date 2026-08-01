@@ -1,8 +1,12 @@
 # PLAN.md
 
-Living execution plan for Scrutinix. This file reflects the implemented ship
-state plus the 2026-03-23 public-repo polish follow-up after the rename
-cleanup.
+> **Historical record.** This file captures the original rebuild and the
+> 2026-03-23 public-repo polish; it is no longer a live tracker. Current
+> architecture and conventions live in `CLAUDE.md`, `AGENTS.md`, and
+> `SPEC.md`.
+
+Execution plan for Scrutinix as of the implemented ship state plus the
+2026-03-23 public-repo polish follow-up after the rename cleanup.
 
 ## Status Legend
 

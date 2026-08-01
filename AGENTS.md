@@ -6,7 +6,7 @@ Project-local operating notes for agents working in this repository. Keep this f
 
 - Build and ship Scrutinix, a FOSS public URL threat analyzer with streamed multi-signal results, batch analysis, local history, and production-grade UX.
 - Treat `SPEC.md` as the product and architecture source of truth.
-- Treat `PLAN.md` as the execution source of truth. Update it whenever scope, order, or status changes.
+- `PLAN.md` is a historical execution record from the original rebuild; do not treat it as a live tracker.
 
 ## Current Architecture
 
@@ -22,8 +22,8 @@ Project-local operating notes for agents working in this repository. Keep this f
   - Eight signals are always present in results: `virusTotal`, `mlEnsemble`, `googleSafeBrowsing`, `threatFeeds`, `ssl`, `whois`, `dns`, `redirectChain`.
   - History is client-side only and stored in IndexedDB.
   - Rate limiting is enforced in `proxy.ts` with Upstash when configured and a process-local in-memory fallback otherwise; accept either `UPSTASH_REDIS_REST_*` or Vercel KV `KV_REST_API_*` env names.
-  - The hosted classifier uses the Hugging Face router endpoint with the default model `DunnBC22/codebert-base-Malicious_URLs`.
-  - Threat feeds use URLhaus with the documented `Auth-Key` header plus cached OpenPhish community feed data; do not reintroduce the removed PhishTank adapter.
+  - The ML ensemble runs entirely locally: a quantized ONNX transformer (`lib/server/ml/`, urlbert-tiny-v4, Apache-2.0) via `@huggingface/transformers` plus a lexical heuristic scorer. There is no hosted inference call and no `HUGGINGFACE_*` env var.
+  - Threat feeds combine URLhaus (documented `Auth-Key` header), cached OpenPhish community feed data, ThreatFox (reuses the URLhaus key), and Spamhaus DBL / SURBL DNSBL lookups with sentinel-code handling; do not reintroduce the removed PhishTank adapter.
   - The branded UI lives under `components/scrutinix/*`; shared shadcn/ui primitives live under `components/ui/*`.
   - Production responses ship browser-hardening headers from `next.config.ts`. Per-request CSP (nonce `script-src`, narrow `connect-src`) is applied in `proxy.ts` via `lib/server/csp.ts` so document responses get fresh nonces; do not reintroduce a static CSP-only approach in `next.config.ts` without an equivalent nonce path.
 
@@ -36,7 +36,8 @@ Project-local operating notes for agents working in this repository. Keep this f
 - Typecheck: `npm run typecheck`
 - Unit tests: `npm run test:unit -- --run`
 - Integration tests: `npm run test:integration -- --run`
-- E2E smoke: `npm run test:e2e -- --grep @smoke`
+- DOM tests: `npm run test:dom -- --run`
+- E2E (offline, fixture-backed): `npm run test:e2e`
 - Build: `npm run build`
 - Lighthouse: `npm run lighthouse`
 - Security audit: `npm audit`
@@ -48,7 +49,7 @@ Project-local operating notes for agents working in this repository. Keep this f
 - Keep external provider adapters behind stable interfaces. No provider-specific response shapes should leak into UI components.
 - Sanitize and normalize URLs once, centrally. Never duplicate validation logic in route handlers and UI.
 - Never log raw URLs server-side. Log hashes, scan IDs, timings, and result classes only.
-- Default to deterministic test fixtures and mocked provider responses. Do not depend on live third-party services in automated tests.
+- Default to deterministic test fixtures and mocked provider responses. Do not depend on live third-party services in automated tests. The e2e suite runs fully offline: `SCRUTINIX_TEST_FIXTURES=1` (set by `scripts/run-e2e.mjs`) swaps the analyze orchestrator's providers for the per-hostname scenarios in `lib/server/test-fixtures.ts`.
 
 ## Patterns To Follow
 
@@ -62,16 +63,16 @@ Project-local operating notes for agents working in this repository. Keep this f
 
 ## Anti-Patterns To Avoid
 
-- No new broad state-management layer unless a concrete need appears in `PLAN.md`.
+- No new broad state-management layer unless a concrete need is documented in `SPEC.md`.
 - No silent fallback from provider outage to a malicious verdict.
-- No stale documentation drift: if a command, env var, endpoint, or signal contract changes, update `PLAN.md`, `SPEC.md`, and user-facing docs in the same workstream.
+- No stale documentation drift: if a command, env var, endpoint, or signal contract changes, update `SPEC.md`, `CLAUDE.md`, and user-facing docs in the same workstream.
 - No `next lint`; use ESLint directly.
 - No broad shadcnization of branded components; preserve Scrutinix-specific hero, signal, and motion components unless there is a concrete accessibility or maintainability reason to replace them.
 
 ## Coordination
 
-- If you spawn subagents, point them to this file plus `PLAN.md` and `SPEC.md` first.
-- Before marking work done, run the narrowest relevant verification step and update `PLAN.md` status.
+- If you spawn subagents, point them to this file plus `CLAUDE.md` and `SPEC.md` first.
+- Before marking work done, run the narrowest relevant verification step.
 
 ## Learned User Preferences
 

@@ -11,11 +11,12 @@
 - Provider decision:
   - Keep the public `whois` signal name, but back it with RDAP-style domain registration data where raw WHOIS is unreliable.
   - Treat OpenPhish as a cached community feed, not a per-request live lookup.
-  - Use the Hugging Face router endpoint with the default hosted model `DunnBC22/codebert-base-Malicious_URLs`; the previous `api-inference` host and legacy model path are no longer viable.
+  - Run the ML classifier locally: a quantized ONNX transformer bundled under `lib/server/ml/` (urlbert-tiny-v4, Apache-2.0) via `@huggingface/transformers`, paired with the lexical heuristic scorer. The earlier hosted Hugging Face inference path was removed after the router endpoint proved unreliable in production.
   - Prefer Upstash-backed rate limiting when configured, but degrade to process-local in-memory limits rather than fail closed when Redis credentials are absent.
   - Accept either `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` or Vercel KV `KV_REST_API_URL` / `KV_REST_API_TOKEN` for shared Redis configuration.
   - URLhaus authorization must use the documented `Auth-Key` header.
   - Use the free OpenPhish community TXT feed for phishing-feed coverage instead of the removed PhishTank path.
+  - Extend feed coverage with ThreatFox (reusing the URLhaus `Auth-Key`) and Spamhaus DBL / SURBL DNSBL lookups over plain DNS, treating sentinel/blocked-resolver responses as unavailable rather than clean.
 - Runtime decision:
   - Redirect tracing should not fail on invalid certificate chains that are already reported by the SSL signal; trace redirects through header-only Node HTTP(S) requests with relaxed certificate validation.
 - Testing decision: harness-first is required; Vitest, MSW, Playwright, and Lighthouse land before large feature clusters.
@@ -34,7 +35,7 @@
   - Clean verdict confidence must be capped when a primary reputation source such as VirusTotal, Google Safe Browsing, or threat feeds does not complete, even if the remaining signals stay clean.
 - Security decision: ship CSP and related browser hardening headers from `next.config.ts` in production responses.
 - Verification note: local verification passed for lint, format, typecheck, unit, integration, E2E smoke, production build, audit, and Lighthouse, and Vercel preview/production deployments were verified with `vercel inspect` plus a public production API smoke.
-- Documentation decision: `PLAN.md` is the live execution tracker and must stay in sync with this spec.
+- Documentation decision: `PLAN.md` is a historical execution record; `CLAUDE.md` and `AGENTS.md` are the live operating docs and must stay in sync with this spec.
 
 ## 0) Metadata
 

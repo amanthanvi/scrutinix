@@ -2,96 +2,95 @@
 
 ## Project Overview
 
-**Scrutinix** — a multi-signal URL threat analyzer. Streams 8 independent security signals (VirusTotal, Google Safe Browsing, threat feeds, ML ensemble, TLS, WHOIS, DNS, redirect chain) via NDJSON and renders a real-time threat dashboard. Dark-first terminal aesthetic with a supported light theme.
+**Scrutinix** — a FOSS multi-signal URL threat analyzer, live at
+https://www.scrutinix.net. One scan streams 8 independent security signals
+(VirusTotal, Google Safe Browsing, threat feeds, ML ensemble, TLS, WHOIS,
+DNS, redirect chain) over NDJSON into a light-first product UI ("Daylight
+Desk": Geist Sans chrome, Hack mono for data, no motion library).
+
+Operating conventions, provider decisions, and learned gotchas live in
+[`AGENTS.md`](./AGENTS.md) — read it before making changes. `SPEC.md` is the
+product record; `DESIGN-REDIRECTION.md` is the design constraint of record.
 
 ## Commands
 
 ```bash
-npm run dev          # Dev server on :3000
-npm run build        # Production build
-npm run lint         # ESLint
-npm run typecheck    # tsc --noEmit
-npm run test:unit -- --run
-npm run test:integration -- --run
-npm run test:e2e     # Builds then runs Playwright
-npm run lighthouse   # Lighthouse audit
+npm run dev                        # Dev server on :3000
+npm run build                      # Production build
+npm run lint                       # ESLint (no-console + no-floating-promises are errors)
+npm run typecheck                  # tsc --noEmit (strict + noUncheckedIndexedAccess)
+npm run format:check               # Prettier
+npm run test:unit -- --run         # Vitest, node
+npm run test:integration -- --run  # Vitest, node + MSW
+npm run test:dom -- --run          # Vitest, jsdom + fake-indexeddb
+npm run test:e2e                   # Playwright (offline; see fixture mode below)
 ```
 
 ## Architecture
 
 ```
 app/
-  layout.tsx              # Root layout (ThemeProvider + Sonner + Geist Mono/Sans + Hack)
-  page.tsx                # Renders AnalyzerApp from components/scrutinix/
-  scrutinix.css           # Scrutinix motion/effects/utilities
-  globals.css             # Tailwind v4 + semantic theme tokens
-  api/analyze/            # POST NDJSON stream (single + batch routes)
-  icon.tsx                # Favicon (dark/green)
-  opengraph-image.tsx     # OG card
-
+  page.tsx, about/, privacy/      # Public pages (shared editorial shell)
+  api/analyze/{route,batch/route} # NDJSON streaming endpoints (maxDuration 120/300)
+proxy.ts                          # Rate limiting + per-request CSP nonces
 components/
-  ui/                     # Selective shadcn/ui primitives
-  scrutinix/
-    analyzer-app.tsx      # Main orchestrator (~330 LOC)
-    app-header.tsx        # SCRUTINIX branding + threat elevation bar + theme toggle
-    app-footer.tsx        # Marquee ticker footer
-    verdict-hero.tsx      # Radar SVG, score ring, result display
-    signal-card.tsx       # Per-signal card with LED + edge severity
-    input-panels.tsx      # shadcn-backed input/textarea/button controls
-    history-panel.tsx     # search, verdict filters, export, history drill-down
-    batch-panel.tsx       # Batch results data table
-    intro-panel.tsx       # Scanner-first hero (brand + dock)
-    loading-skeleton.tsx  # Initial page load skeleton
-    error-boundary.tsx    # Class-based error boundary
-  shared/
-    scrutinix-types.ts    # Verdict colors, severity helpers, dynamic accent
-    signal-utils.ts       # Signal labels, summaries, detail entries
-
-hooks/
-  use-scan-stream.ts      # NDJSON consumer for single scan
-  use-batch-stream.ts     # NDJSON consumer for batch scan
-  use-scan-history.ts     # IndexedDB-backed history with search/filter
-
+  scrutinix/                      # Branded UI: analyzer-runtime (context) ->
+                                  #   analyzer-workspace, scan-dock, verdict-hero{,-live,-result},
+                                  #   signal-card, history-{rail,panel}, batch-panel
+  ui/                             # Selective shadcn/ui primitives
+  shared/                         # Verdict colors, signal detail-row builders
+hooks/                            # use-ndjson-request (shared stream core),
+                                  #   use-{scan,batch}-stream, use-scan-history (IndexedDB)
 lib/
-  domain/                 # Types, URL validation, verdict logic
-  server/                 # Analyze orchestrator, providers, signals
-  client/                 # NDJSON parser, export utils
-  config/                 # Environment validation (Zod)
-
-tests/
-  unit/                   # Vitest (cache, url, verdict, env, ml, redirect, rate-limit)
-  integration/            # Vitest (analyze routes, threat feeds)
-  e2e/                    # Playwright (smoke, accessibility)
+  domain/                         # schemas.ts (Zod source of truth), verdict.ts,
+                                  #   url validation, content-analysis, registrable-domain
+  server/                         # analyze.ts orchestrator, providers/, signals/,
+                                  #   cache, rate-limit, stream, ml/ (bundled ONNX model)
+  client/                         # NDJSON parser, CSV/JSON export
 ```
 
 ## Key Patterns
 
-- **NDJSON streaming**: API routes stream signal results as they resolve. Client hooks consume via `ReadableStream`.
-- **8 security signals**: virusTotal, mlEnsemble, googleSafeBrowsing, threatFeeds, ssl, whois, dns, redirectChain.
-- **Dynamic accent color**: `--sx-active-accent` CSS var shifts based on active verdict (green → amber → red → magenta).
-- **Hybrid UI**: keep branded Scrutinix components, but use selective shadcn/ui primitives for reusable controls and accessibility-heavy widgets.
-- **CSS prefix**: All theme vars use `--sx-*`, all utility classes use `sx-*`.
-- **Font hierarchy**: Geist Mono (primary mono), Geist Sans (UI chrome/buttons/prose), Hack (data-dense details).
+- **Zod-first schemas**: every payload/event shape is declared once in
+  `lib/domain/schemas.ts`. Leaves recover with `.catch(default)`; envelopes
+  gate strictly. Any new field MUST be `.optional().catch(undefined)` — that
+  is the whole versioning strategy for old IndexedDB/cache/stream data.
+- **NDJSON streaming**: server writes signal results as they resolve
+  (`lib/server/stream.ts`, with keepalives and cancel-abort plumbing);
+  clients consume via `hooks/use-ndjson-request.ts`.
+- **Abort plumbing**: routes combine request abort, stream cancel, and a
+  60s scan budget with `AbortSignal.any` and thread it into every provider.
+- **Local ML**: `lib/server/ml/` bundles a quantized ONNX URL classifier
+  (urlbert-tiny-v4, Apache-2.0) run via @huggingface/transformers — no
+  hosted inference calls. Lexical heuristics are the second ensemble member.
+- **Verdict engine** (`lib/domain/verdict.ts`): single confirmed source can
+  convict; unreachable hosts get an honest `"unknown"` verdict; exculpatory
+  evidence discounts weak scores but never confirmed hits.
+- **E2E fixture mode**: `SCRUTINIX_TEST_FIXTURES=1` (default under
+  `npm run test:e2e`) swaps real providers for deterministic per-hostname
+  scenarios in `lib/server/test-fixtures.ts` — the suite runs offline.
+- **CSS layering**: `app/globals.css` holds semantic theme tokens
+  (`--sx-*`, light default); `app/scrutinix.css` holds motion/effects
+  utilities (`sx-*`). Do not collapse them.
 
 ## Stack
 
 - Next.js 16, React 19, TypeScript 5.9 (strict + noUncheckedIndexedAccess)
-- Tailwind CSS v4 (CSS-first config via @tailwindcss/postcss)
-- Geist (Sans + Mono), Hack (self-hosted), Framer Motion, Lucide React, clsx, Zod, idb
-- Vitest + Playwright + Lighthouse + axe-core
+- Tailwind CSS v4 (CSS-first config), selective shadcn/ui, next-themes, sonner
+- Geist Sans + self-hosted Hack mono, Lucide icons, Zod 4, idb
+- Vitest (+ MSW, fake-indexeddb) + Playwright + axe-core + Lighthouse
 
 ## Env
+
+All optional keys treat empty strings as unset; the app degrades honestly
+without them (see `.env.example` for the full annotated list).
 
 ```
 VIRUSTOTAL_API_KEY=...
 GOOGLE_SAFE_BROWSING_API_KEY=...  # optional
-HUGGINGFACE_API_KEY=...
-HUGGINGFACE_URL_MODEL=DunnBC22/codebert-base-Malicious_URLs
-URLHAUS_AUTH_KEY=...              # optional
-UPSTASH_REDIS_REST_URL=...        # optional (rate limiting)
-UPSTASH_REDIS_REST_TOKEN=...      # optional
-KV_REST_API_URL=...               # optional Vercel KV alias
-KV_REST_API_TOKEN=...             # optional Vercel KV alias
+URLHAUS_AUTH_KEY=...              # optional; also authenticates ThreatFox
+UPSTASH_REDIS_REST_URL/TOKEN=...  # optional (rate limiting + shared cache)
+KV_REST_API_URL/TOKEN=...         # optional Vercel KV aliases
 OPENPHISH_FEED_URL=https://openphish.com/feed.txt
 NEXT_PUBLIC_APP_URL=https://www.scrutinix.net
 ```
