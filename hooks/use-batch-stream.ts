@@ -1,13 +1,9 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
-import { readNdjsonStream } from "@/lib/client/ndjson";
-import { streamFailureApiError } from "@/lib/client/stream-error";
-import {
-  sanitizeApiErrorResponse,
-  sanitizeBatchEvent,
-} from "@/lib/domain/runtime-safety";
+import { useNdjsonRequest } from "@/hooks/use-ndjson-request";
+import { sanitizeBatchEvent } from "@/lib/domain/runtime-safety";
 import type { AnalysisResult, ApiError } from "@/lib/domain/types";
 
 interface BatchItem {
@@ -21,6 +17,10 @@ interface BatchState {
   items: BatchItem[];
   isStreaming: boolean;
   error: ApiError | null;
+  /** Total scans the server acknowledged for this batch. */
+  total: number | null;
+  /** Index of the most recently started URL, for progress display. */
+  activeIndex: number | null;
 }
 
 function completedResults(items: BatchItem[]): AnalysisResult[] {
@@ -34,15 +34,17 @@ export function useBatchStream(
     items: [],
     isStreaming: false,
     error: null,
+    total: null,
+    activeIndex: null,
   });
-  const abortRef = useRef<AbortController | null>(null);
+  const request = useNdjsonRequest({
+    endpoint: "/api/analyze/batch",
+    requestLabel: "Batch request",
+    streamFailureMessage: "The batch request stream failed unexpectedly.",
+  });
 
   const startBatch = useCallback(
     async (urls: string[]) => {
-      abortRef.current?.abort();
-      const controller = new AbortController();
-      abortRef.current = controller;
-
       setState({
         items: urls.map((url, index) => ({
           index,
@@ -52,125 +54,117 @@ export function useBatchStream(
         })),
         isStreaming: true,
         error: null,
+        total: urls.length,
+        activeIndex: null,
       });
 
-      try {
-        const response = await fetch("/api/analyze/batch", {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
+      await request.start(
+        { urls },
+        {
+          onEvent: (rawEvent) => {
+            const event = sanitizeBatchEvent(rawEvent);
+            if (!event) {
+              return;
+            }
+
+            if (event.type === "batch_started") {
+              setState((previous) => ({
+                ...previous,
+                total: event.total,
+              }));
+            }
+
+            if (event.type === "url_started") {
+              setState((previous) => ({
+                ...previous,
+                activeIndex: event.index,
+              }));
+            }
+
+            if (event.type === "url_complete") {
+              setState((previous) => ({
+                ...previous,
+                items: previous.items.map((item) =>
+                  item.index === event.index
+                    ? {
+                        ...item,
+                        url: event.result.url,
+                        status: "complete",
+                        result: event.result,
+                      }
+                    : item,
+                ),
+              }));
+              onUrlComplete?.(event.result);
+            }
+
+            if (event.type === "batch_complete") {
+              setState((previous) => ({
+                ...previous,
+                isStreaming: false,
+                activeIndex: null,
+                items: previous.items.map((item) => {
+                  const fromEvent = event.results[item.index];
+                  if (!fromEvent) {
+                    return item;
+                  }
+
+                  return {
+                    ...item,
+                    url: fromEvent.url,
+                    status: "complete",
+                    result: fromEvent,
+                  };
+                }),
+              }));
+            }
+
+            if (event.type === "batch_error") {
+              setState((previous) => ({
+                ...previous,
+                isStreaming: false,
+                error: event.error,
+              }));
+            }
           },
-          body: JSON.stringify({ urls }),
-          signal: controller.signal,
-        });
-
-        if (!response.ok) {
-          const payload = await response.json().catch(() => null);
-          const error = sanitizeApiErrorResponse(
-            payload,
-            `Batch request failed with status ${response.status}.`,
-          );
-          setState((previous) => ({
-            ...previous,
-            error,
-            isStreaming: false,
-          }));
-          return;
-        }
-
-        await readNdjsonStream(response, (rawEvent) => {
-          const event = sanitizeBatchEvent(rawEvent);
-          if (!event) {
-            return;
-          }
-
-          if (event.type === "url_complete") {
+          onError: (error) => {
             setState((previous) => ({
               ...previous,
-              items: previous.items.map((item) =>
-                item.index === event.index
-                  ? {
-                      ...item,
-                      url: event.result.url,
-                      status: "complete",
-                      result: event.result,
-                    }
-                  : item,
-              ),
+              error,
+              isStreaming: false,
             }));
-            onUrlComplete?.(event.result);
-          }
-
-          if (event.type === "batch_complete") {
+          },
+          onAborted: () => {
             setState((previous) => ({
               ...previous,
               isStreaming: false,
-              items: previous.items.map((item) => {
-                const fromEvent = event.results[item.index];
-                if (!fromEvent) {
-                  return item;
-                }
-
-                return {
-                  ...item,
-                  url: fromEvent.url,
-                  status: "complete",
-                  result: fromEvent,
-                };
-              }),
             }));
-          }
-
-          if (event.type === "batch_error") {
-            setState((previous) => ({
-              ...previous,
-              isStreaming: false,
-              error: event.error,
-            }));
-          }
-        });
-      } catch (error) {
-        if (
-          controller.signal.aborted ||
-          (error instanceof DOMException && error.name === "AbortError")
-        ) {
-          setState((previous) => ({
-            ...previous,
-            isStreaming: false,
-          }));
-          return;
-        }
-
-        setState((previous) => ({
-          ...previous,
-          isStreaming: false,
-          error: streamFailureApiError(
-            error,
-            "The batch request stream failed unexpectedly.",
-          ),
-        }));
-      }
+          },
+        },
+      );
     },
-    [onUrlComplete],
+    [request, onUrlComplete],
   );
 
   const cancelBatch = useCallback(() => {
-    abortRef.current?.abort();
-    abortRef.current = null;
+    request.cancel();
     setState((previous) => ({
       ...previous,
       isStreaming: false,
     }));
-  }, []);
+  }, [request]);
 
-  const results = useMemo(() => completedResults(state.items), [state.items]);
+  const value = useMemo(() => {
+    const results = completedResults(state.items);
+    return {
+      state: {
+        ...state,
+        results,
+      },
+      startBatch,
+      cancelBatch,
+    };
+  }, [state, startBatch, cancelBatch]);
 
-  return {
-    state: {
-      ...state,
-      results,
-    },
-    startBatch,
-    cancelBatch,
-  };
+  return value;
 }
