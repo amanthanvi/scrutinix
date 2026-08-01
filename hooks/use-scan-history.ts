@@ -2,12 +2,14 @@
 
 import { deleteDB, openDB, type DBSchema, type IDBPDatabase } from "idb";
 import {
+  startTransition,
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
-  useTransition,
 } from "react";
+import { toast } from "sonner";
 
 import { sanitizeHistoryEntry } from "@/lib/domain/runtime-safety";
 import type { AnalysisResult, HistoryEntry, Verdict } from "@/lib/domain/types";
@@ -28,6 +30,18 @@ const STORE_NAME = "scans";
 
 let dbPromise: Promise<IDBPDatabase<HistoryDatabase>> | null = null;
 
+export async function resetHistoryDatabaseForTests() {
+  const pending = dbPromise;
+  dbPromise = null;
+  if (pending) {
+    try {
+      (await pending).close();
+    } catch {
+      // Connection never opened; nothing to close.
+    }
+  }
+}
+
 export function useScanHistory() {
   const [entries, setEntries] = useState<HistoryEntry[]>([]);
   const [historyQuery, setHistoryQuery] = useState("");
@@ -35,60 +49,90 @@ export function useScanHistory() {
   const [lastClearedEntries, setLastClearedEntries] = useState<HistoryEntry[]>(
     [],
   );
-  const [, startTransition] = useTransition();
+  const [historyUnavailable, setHistoryUnavailable] = useState(false);
+  const failureNotified = useRef(false);
+
+  // IndexedDB can be blocked (private browsing, storage pressure). Every
+  // failure lands here instead of an unhandled rejection: the user gets one
+  // toast, and historyUnavailable exposes the state to the UI.
+  const reportHistoryFailure = useCallback((action: string, error: unknown) => {
+    console.warn(`[Scrutinix] Scan history ${action} failed.`, error);
+    setHistoryUnavailable(true);
+    if (!failureNotified.current) {
+      failureNotified.current = true;
+      toast.error("Scan history is unavailable in this browser session.");
+    }
+  }, []);
 
   useEffect(() => {
-    void loadHistory().then((loaded) => {
-      setEntries(loaded);
-    });
-  }, []);
+    loadHistory()
+      .then((loaded) => {
+        setEntries(loaded);
+        setHistoryUnavailable(false);
+      })
+      .catch((error: unknown) => {
+        reportHistoryFailure("loading", error);
+      });
+  }, [reportHistoryFailure]);
 
   const addResult = useCallback(
     async (result: AnalysisResult) => {
-      const entry: HistoryEntry = {
-        ...result,
-        savedAt: new Date().toISOString(),
-      };
-      const db = await getDatabase();
-      await db.put(STORE_NAME, entry);
-      startTransition(() => {
-        setEntries((previous) =>
-          sortEntries([
-            entry,
-            ...previous.filter((item) => item.id !== entry.id),
-          ]),
-        );
-        setLastClearedEntries([]);
-      });
+      try {
+        const entry: HistoryEntry = {
+          ...result,
+          savedAt: new Date().toISOString(),
+        };
+        const db = await getDatabase();
+        await db.put(STORE_NAME, entry);
+        startTransition(() => {
+          setEntries((previous) =>
+            sortEntries([
+              entry,
+              ...previous.filter((item) => item.id !== entry.id),
+            ]),
+          );
+          setLastClearedEntries([]);
+        });
+      } catch (error) {
+        reportHistoryFailure("saving", error);
+      }
     },
-    [startTransition],
+    [reportHistoryFailure],
   );
 
   const clearHistory = useCallback(async () => {
-    const snapshot = entries;
-    const db = await getDatabase();
-    await db.clear(STORE_NAME);
-    startTransition(() => {
-      setEntries([]);
-      setLastClearedEntries(snapshot);
-    });
-  }, [entries, startTransition]);
+    try {
+      const snapshot = entries;
+      const db = await getDatabase();
+      await db.clear(STORE_NAME);
+      startTransition(() => {
+        setEntries([]);
+        setLastClearedEntries(snapshot);
+      });
+    } catch (error) {
+      reportHistoryFailure("clearing", error);
+    }
+  }, [entries, reportHistoryFailure]);
 
   const undoClearHistory = useCallback(async () => {
     if (!lastClearedEntries.length) {
       return;
     }
 
-    const db = await getDatabase();
-    const tx = db.transaction(STORE_NAME, "readwrite");
-    await Promise.all(lastClearedEntries.map((entry) => tx.store.put(entry)));
-    await tx.done;
+    try {
+      const db = await getDatabase();
+      const tx = db.transaction(STORE_NAME, "readwrite");
+      await Promise.all(lastClearedEntries.map((entry) => tx.store.put(entry)));
+      await tx.done;
 
-    startTransition(() => {
-      setEntries(sortEntries(lastClearedEntries));
-      setLastClearedEntries([]);
-    });
-  }, [lastClearedEntries, startTransition]);
+      startTransition(() => {
+        setEntries(sortEntries(lastClearedEntries));
+        setLastClearedEntries([]);
+      });
+    } catch (error) {
+      reportHistoryFailure("restoring", error);
+    }
+  }, [lastClearedEntries, reportHistoryFailure]);
 
   const filteredEntries = useMemo(() => {
     const query = historyQuery.trim().toLowerCase();
@@ -119,6 +163,7 @@ export function useScanHistory() {
     clearHistory,
     undoClearHistory,
     canUndoClear: lastClearedEntries.length > 0,
+    historyUnavailable,
   };
 }
 

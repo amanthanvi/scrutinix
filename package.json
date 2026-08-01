@@ -73,6 +73,7 @@
     "chrome-launcher": "^1.2.1",
     "eslint": "^9.38.0",
     "eslint-config-next": "16.2.12",
+    "fake-indexeddb": "^6.2.5",
     "jsdom": "^30.0.1",
     "lighthouse": "^13.2.0",
     "msw": "^2.14.2",
