@@ -315,4 +315,29 @@
     transition: none !important;
     clip-path: none !important;
   }
+
+  /* Cover motion outside the sx-* utilities: smooth scrolling, button
+     spinners, progress-bar width transitions, press transforms, and the
+     theme background fade. */
+  html {
+    scroll-behavior: auto !important;
+  }
+
+  .scrutinix-theme {
+    transition: none !important;
+  }
+
+  .scrutinix-theme .animate-spin {
+    animation: none !important;
+  }
+
+  .scrutinix-theme *,
+  .scrutinix-theme *::before,
+  .scrutinix-theme *::after {
+    transition-duration: 0.01ms !important;
+  }
+
+  .sx-btn-press:active {
+    transform: none;
+  }
 }

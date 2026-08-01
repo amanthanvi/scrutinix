@@ -26,6 +26,15 @@ test("home page keyboard navigation @smoke", async ({ page }) => {
   const skipLink = page.getByRole("link", { name: /skip to content/i });
   await expect(skipLink).toBeFocused();
 
+  // Primary navigation sits between the skip link and the theme toggle at
+  // desktop widths.
+  for (const name of [/scanner/i, /method/i, /privacy/i]) {
+    await page.keyboard.press("Tab");
+    await expect(
+      page.getByRole("navigation").getByRole("link", { name }),
+    ).toBeFocused();
+  }
+
   await page.keyboard.press("Tab");
   const themeToggle = page.getByRole("button", {
     name: /switch to light theme|switch to dark theme/i,
@@ -33,8 +42,8 @@ test("home page keyboard navigation @smoke", async ({ page }) => {
   await expect(themeToggle).toBeFocused();
 
   await page.keyboard.press("Tab");
-  await expect(page.getByRole("tab", { name: /single scan/i })).toBeFocused();
+  await expect(page.getByRole("tab", { name: /^single$/i })).toBeFocused();
 
   await page.keyboard.press("ArrowRight");
-  await expect(page.getByRole("tab", { name: /batch scan/i })).toBeFocused();
+  await expect(page.getByRole("tab", { name: /^batch$/i })).toBeFocused();
 });
