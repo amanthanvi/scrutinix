@@ -255,34 +255,6 @@ function useCreateAnalyzerRuntime() {
         .slice(0, 3),
     [signals],
   );
-  const successfulSignalCount = useMemo(
-    () =>
-      signalNames.filter(
-        (signalName) => signals[signalName].status === "success",
-      ).length,
-    [signals],
-  );
-  const caveatSignalCount = useMemo(
-    () =>
-      signalNames.filter((signalName) => {
-        const severity = getSignalSeverity(
-          signals[signalName].status,
-          signals[signalName].data,
-          signalName,
-        );
-        return severity === "neutral";
-      }).length,
-    [signals],
-  );
-  const unavailableSignalCount = useMemo(
-    () =>
-      signalNames.filter((signalName) => {
-        const status = signals[signalName].status;
-        return status === "error" || status === "skipped";
-      }).length,
-    [signals],
-  );
-
   const hasActivity = live || active !== null;
   const visibleSignals =
     viewMode === "summary" && summarySignals.length > 0
@@ -401,9 +373,6 @@ function useCreateAnalyzerRuntime() {
     visibleSignals,
     rescanUrl,
     selectHistoryEntry,
-    successfulSignalCount,
-    caveatSignalCount,
-    unavailableSignalCount,
   };
 }
 

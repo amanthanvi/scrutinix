@@ -1,10 +1,4 @@
 /* ── Scrutinix effects — Daylight Desk ── */
-@property --sx-meter {
-  syntax: "<percentage>";
-  inherits: true;
-  initial-value: 0%;
-}
-
 .scrutinix-theme {
   --sx-active-accent: var(--sx-accent);
   --sx-font-sans: var(--font-geist-sans), "Geist", system-ui, sans-serif;
@@ -37,10 +31,6 @@
     color-mix(in srgb, var(--sx-info) 4%, transparent),
     transparent 68%
   );
-}
-
-.scrutinix-theme::after {
-  content: none;
 }
 
 .dark .scrutinix-theme::before {
@@ -80,34 +70,6 @@
   font-family: var(--sx-font-hack);
 }
 
-/* Quiet enter — short, product-appropriate */
-@keyframes sx-stage-in {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.sx-stage-in {
-  animation: sx-stage-in 280ms cubic-bezier(0.16, 1, 0.3, 1) both;
-}
-
-.sx-stage-in[data-delay="1"] {
-  animation-delay: 40ms;
-}
-
-.sx-stage-in[data-delay="2"] {
-  animation-delay: 80ms;
-}
-
-.sx-stage-in[data-delay="3"] {
-  animation-delay: 120ms;
-}
-
 @keyframes sx-pulse {
   0%,
   100% {
@@ -122,22 +84,7 @@
   animation: sx-pulse 1.6s ease-in-out infinite;
 }
 
-@keyframes cursor-blink {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0;
-  }
-}
-
-.sx-cursor {
-  animation: cursor-blink 1s step-end infinite;
-}
-
 /* Status pip — no glow theater */
-.sx-led,
 .sx-status-pip {
   display: inline-block;
   width: 8px;
@@ -156,38 +103,8 @@
   }
 }
 
-.sx-led-pulse,
 .sx-status-pip-live {
   animation: sx-pip-breathe 1.4s ease-in-out infinite;
-}
-
-/* Coverage / progress — solid meter, not scan-line sweep */
-.sx-scan-line,
-.sx-pending-scan {
-  position: relative;
-}
-
-.sx-scan-line::after,
-.sx-pending-scan::after {
-  content: none;
-}
-
-.sx-coverage-meter {
-  --sx-meter: 0%;
-
-  height: 0.5rem;
-  overflow: hidden;
-  border-radius: 999px;
-  background: var(--sx-border);
-}
-
-.sx-coverage-meter > span {
-  display: block;
-  height: 100%;
-  width: var(--sx-meter);
-  border-radius: inherit;
-  background: var(--sx-active-accent);
-  transition: width 420ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 @keyframes alert-pulse {
@@ -264,11 +181,6 @@
   background: color-mix(in srgb, var(--sx-malicious) 5%, var(--sx-surface));
 }
 
-.sx-edge-critical {
-  box-shadow: inset 0 2px 0 0 var(--sx-critical);
-  background: color-mix(in srgb, var(--sx-critical) 5%, var(--sx-surface));
-}
-
 .sx-edge-error {
   box-shadow: inset 0 2px 0 0 var(--sx-error);
   background: color-mix(in srgb, var(--sx-error) 5%, var(--sx-surface));
@@ -296,26 +208,6 @@
 
 .sx-btn-press:active {
   transform: translateY(1px);
-}
-
-@keyframes sx-shimmer {
-  0% {
-    background-position: -200% 0;
-  }
-  100% {
-    background-position: 200% 0;
-  }
-}
-
-.sx-shimmer {
-  background: linear-gradient(
-    90deg,
-    color-mix(in srgb, var(--sx-surface) 92%, transparent) 0%,
-    color-mix(in srgb, var(--sx-surface-elevated) 88%, transparent) 45%,
-    color-mix(in srgb, var(--sx-surface) 92%, transparent) 100%
-  );
-  background-size: 200% 100%;
-  animation: sx-shimmer 1.8s ease-in-out infinite;
 }
 
 @keyframes sx-threat-fill {
@@ -412,14 +304,10 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .sx-stage-in,
   .sx-alert,
   .sx-pulse,
-  .sx-cursor,
-  .sx-led-pulse,
   .sx-status-pip-live,
   .sx-threat-fill,
-  .sx-shimmer,
   .sx-score-arc,
   .sx-score-live,
   .sx-signal-enter {

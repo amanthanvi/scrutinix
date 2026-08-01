@@ -11,9 +11,9 @@ export function IntroPanel({ dock }: IntroPanelProps) {
       className="border-border relative overflow-hidden border-b"
     >
       <div className="relative z-10 mx-auto max-w-[1520px] px-4 py-8 sm:px-6 sm:py-10 xl:px-8 xl:py-12">
-        <div className="sx-home-hero grid gap-6 lg:grid-cols-[minmax(18rem,0.72fr)_minmax(0,1.08fr)] lg:items-start">
+        <div className="grid gap-6 lg:grid-cols-[minmax(18rem,0.72fr)_minmax(0,1.08fr)] lg:items-start">
           <div className="min-w-0 lg:pr-2">
-            <div className="sx-home-brand space-y-7">
+            <div className="space-y-7">
               <div className="space-y-5">
                 <h1
                   id="scrutinix-intro-heading"

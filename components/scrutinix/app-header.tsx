@@ -2,13 +2,11 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import type { ReactNode } from "react";
 import { usePathname } from "next/navigation";
 
 import { ThemeToggle } from "@/components/theme-toggle";
 
 interface AppHeaderProps {
-  children?: ReactNode;
   /** 0–100 threat score for the accent bar. Omit or 0 to hide. */
   threatScore?: number;
   /** CSS color value for the threat bar, e.g. "var(--sx-safe)" */
@@ -18,7 +16,6 @@ interface AppHeaderProps {
 }
 
 export function AppHeader({
-  children,
   threatScore = 0,
   scoreColor,
   hasActivity = false,
@@ -94,11 +91,6 @@ export function AppHeader({
         </div>
 
         <div className="ml-auto flex flex-1 items-center justify-end gap-3">
-          {children ? (
-            <div className="hidden min-w-0 flex-1 justify-end lg:flex">
-              {children}
-            </div>
-          ) : null}
           <div className="flex items-center gap-2">
             <ThemeToggle />
           </div>

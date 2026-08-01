@@ -14,56 +14,34 @@ export interface SharedSnapshot {
   capturedAt: string;
 }
 
+const VERDICT_COLOR: Record<Verdict, string> = {
+  safe: "var(--sx-safe)",
+  suspicious: "var(--sx-suspicious)",
+  malicious: "var(--sx-malicious)",
+  critical: "var(--sx-critical)",
+  error: "var(--sx-error)",
+};
+
+const VERDICT_INK: Record<Verdict, string> = {
+  safe: "var(--sx-safe-ink)",
+  suspicious: "var(--sx-suspicious-ink)",
+  malicious: "var(--sx-malicious-ink)",
+  critical: "var(--sx-critical-ink)",
+  error: "var(--sx-error-ink)",
+};
+
 export function verdictColor(verdict: Verdict | string): string {
-  switch (verdict) {
-    case "safe":
-      return "var(--sx-safe)";
-    case "suspicious":
-      return "var(--sx-suspicious)";
-    case "malicious":
-      return "var(--sx-malicious)";
-    case "critical":
-      return "var(--sx-critical)";
-    default:
-      return "var(--sx-error)";
-  }
+  return VERDICT_COLOR[verdict as Verdict] ?? "var(--sx-error)";
 }
 
 export function verdictInk(verdict: Verdict | string): string {
-  switch (verdict) {
-    case "safe":
-      return "var(--sx-safe-ink)";
-    case "suspicious":
-      return "var(--sx-suspicious-ink)";
-    case "malicious":
-      return "var(--sx-malicious-ink)";
-    case "critical":
-      return "var(--sx-critical-ink)";
-    default:
-      return "var(--sx-error-ink)";
-  }
+  return VERDICT_INK[verdict as Verdict] ?? "var(--sx-error-ink)";
 }
 
 /** Returns the CSS var string for the active accent based on verdict */
 export function getActiveAccent(verdict: Verdict | string | undefined): string {
   if (!verdict) return "var(--sx-accent)";
-  const map: Record<string, string> = {
-    safe: "var(--sx-safe)",
-    suspicious: "var(--sx-suspicious)",
-    malicious: "var(--sx-malicious)",
-    critical: "var(--sx-critical)",
-    error: "var(--sx-error)",
-  };
-  return map[verdict] ?? "var(--sx-accent)";
-}
-
-/** Returns inline style object that sets --sx-active-accent */
-export function getAccentStyle(
-  verdict: Verdict | string | undefined,
-): React.CSSProperties {
-  return {
-    "--sx-active-accent": getActiveAccent(verdict),
-  } as React.CSSProperties;
+  return VERDICT_COLOR[verdict as Verdict] ?? "var(--sx-accent)";
 }
 
 export type Severity =

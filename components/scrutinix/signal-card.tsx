@@ -246,7 +246,6 @@ function SignalCardInner({
       className={clsx(
         "sx-panel sx-signal-enter border-border h-full rounded-lg border px-5 py-5 transition-[border-color,box-shadow,transform] duration-200",
         edgeClass,
-        isActivelyScanning && "sx-pending-scan",
         "hover:border-[color-mix(in_srgb,var(--sx-active-accent)_45%,var(--sx-border))]",
       )}
       aria-label={`${signalLabels[name]} signal: ${result.status}`}
