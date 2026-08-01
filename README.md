@@ -114,7 +114,7 @@ Primary local checks:
 
 ```bash
 npm run lint
-npm run format -- --check .
+npm run format:check
 npm run typecheck
 npm run test:unit -- --run
 npm run test:integration -- --run

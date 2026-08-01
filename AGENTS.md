@@ -32,7 +32,7 @@ Project-local operating notes for agents working in this repository. Keep this f
 - Install deps: `npm install`
 - Dev server: `npm run dev`
 - Lint: `npm run lint`
-- Format check: `npm run format -- --check .`
+- Format check: `npm run format:check`
 - Typecheck: `npm run typecheck`
 - Unit tests: `npm run test:unit -- --run`
 - Integration tests: `npm run test:integration -- --run`
