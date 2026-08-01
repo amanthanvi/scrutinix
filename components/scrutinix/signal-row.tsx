@@ -79,7 +79,7 @@ export function SignalRow({ name, result, index }: SignalRowProps) {
     return (
       <div
         aria-label={ariaLabel}
-        className="sx-enter flex items-center gap-3 px-4 py-3"
+        className="sx-enter flex items-center gap-3 py-3"
         style={enterDelay}
       >
         {summaryRow}
@@ -92,7 +92,7 @@ export function SignalRow({ name, result, index }: SignalRowProps) {
     <details className="sx-disclosure sx-enter" style={enterDelay}>
       <summary
         aria-label={ariaLabel}
-        className="flex items-center gap-3 px-4 py-3 hover:bg-[var(--sx-bg)]"
+        className="hover:bg-muted/40 flex items-center gap-3 py-3"
       >
         {summaryRow}
         <svg
@@ -103,7 +103,7 @@ export function SignalRow({ name, result, index }: SignalRowProps) {
           <path d="M2 0l4 4-4 4z" />
         </svg>
       </summary>
-      <dl className="space-y-1.5 px-4 pt-1 pb-4 pl-[2.15rem] font-mono text-xs leading-5">
+      <dl className="space-y-1.5 pt-1 pb-4 pl-[1.125rem] font-mono text-xs leading-5">
         {entries.map((entry, entryIndex) => (
           <div key={`${entryIndex}-${entry.label}`} className="flex gap-3">
             <dt className="w-28 shrink-0 text-[var(--sx-text-soft)] sm:w-40">

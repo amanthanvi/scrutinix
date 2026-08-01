@@ -57,7 +57,7 @@ export function ResultsSection() {
       </p>
 
       {activeTab === "single" ? (
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-4">
           <VerdictPanel
             result={active}
             isStreaming={scan.state.isStreaming}
@@ -123,7 +123,7 @@ export function ResultsSection() {
       )}
 
       {activeTab === "single" && hasSignalActivity ? (
-        <div className="border-border divide-border divide-y rounded-lg border bg-[var(--sx-surface)]">
+        <div className="border-border divide-border divide-y border-y">
           {signalNames.map((signalName, index) => (
             <SignalRow
               key={signalName}
@@ -133,10 +133,6 @@ export function ResultsSection() {
             />
           ))}
         </div>
-      ) : activeTab === "single" && !sharedSnapshot ? (
-        <p className="text-[0.8125rem] text-[var(--sx-text-soft)]">
-          Results appear here.
-        </p>
       ) : null}
     </section>
   );

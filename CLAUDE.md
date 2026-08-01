@@ -22,7 +22,7 @@ npm run lighthouse   # Lighthouse audit
 ```
 app/
   layout.tsx              # Root layout (ThemeProvider + Sonner + Geist Sans/Mono)
-  page.tsx                # Single-column home: header, title, ScanForm, ResultsSection, HistorySection, footer
+  page.tsx                # Single-column home: header, intro line, ScanForm, ResultsSection, HistorySection, footer
   scrutinix.css           # Small CSS-only motion/utility layer (sx-* classes)
   globals.css             # Tailwind v4 + semantic --sx-* theme tokens (OKLCH, both themes)
   api/analyze/            # POST NDJSON stream (single + batch routes)
@@ -37,8 +37,8 @@ components/
     scan-form.tsx         # Single/Batch tabs + inputs (id="scan-console")
     input-panels.tsx      # SingleInput/BatchInput with export/share/rescan actions
     results-section.tsx   # VerdictPanel or BatchTable + 8 SignalRows
-    verdict-panel.tsx     # One panel: verdict word, score meter, confidence, reasons, Details disclosure
-    signal-row.tsx        # Per-signal <details> row with severity dot + mono detail dl
+    verdict-panel.tsx     # Typographic verdict block: verdict word, score meter, confidence, reasons, Details disclosure
+    signal-row.tsx        # Per-signal <details> row (hairline table) with severity dot + mono detail dl
     batch-table.tsx       # Plain batch result list
     history-section.tsx   # Dynamic-import wrapper (keeps idb off critical path)
     history-panel.tsx     # Search, confirm-clear + undo, export, entry list

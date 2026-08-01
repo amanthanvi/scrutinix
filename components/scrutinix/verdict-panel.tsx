@@ -43,11 +43,8 @@ export function VerdictPanel({
 
   if (isStreaming && !result) {
     return (
-      <section
-        className="sx-enter border-border rounded-lg border bg-[var(--sx-surface)]"
-        aria-label="Scanning URL"
-      >
-        <div className="flex items-center gap-3 px-5 py-4">
+      <section className="sx-enter" aria-label="Scanning URL">
+        <div className="flex items-center gap-3">
           <span
             aria-hidden="true"
             className="sx-live size-1.5 shrink-0 rounded-full bg-[var(--sx-accent)]"
@@ -59,7 +56,7 @@ export function VerdictPanel({
             {completedSignals}/{SIGNAL_COUNT}
           </p>
         </div>
-        <div className="sx-progress" aria-hidden="true">
+        <div className="sx-progress mt-3" aria-hidden="true">
           <span
             style={{
               transform: `scaleX(${completedSignals / SIGNAL_COUNT})`,
@@ -73,7 +70,7 @@ export function VerdictPanel({
   if (!result && sharedSnapshot) {
     return (
       <section
-        className="sx-enter border-border rounded-lg border bg-[var(--sx-surface)] p-5"
+        className="sx-enter"
         aria-label={`Scan result: ${sharedSnapshot.verdict}`}
       >
         <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -140,10 +137,7 @@ export function VerdictPanel({
       : null;
 
   return (
-    <section
-      className="sx-enter border-border rounded-lg border bg-[var(--sx-surface)] p-5"
-      aria-label={`Scan result: ${result.verdict}`}
-    >
+    <section className="sx-enter" aria-label={`Scan result: ${result.verdict}`}>
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
         <h2
           className="text-2xl font-semibold tracking-[-0.01em] capitalize"

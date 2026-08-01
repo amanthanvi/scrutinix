@@ -21,16 +21,18 @@ The verdict is a sentence with a number, not a dashboard. One centered column, a
 - **Layout:** single centered column, `max-w-[44rem]`; h-14 header; one-line footer. The page scrolls — no sticky rails, no scroll areas.
 - **Color:** achromatic neutrals (OKLCH, zero chroma in light; near-zero cool tint in dark). One static accent blue (`--sx-accent`) for the primary action, links, focus, and the live indicator. Five verdict hues, each as a pair: `--sx-<verdict>` for graphics (dots, bars) and `--sx-<verdict>-fg` for AA text on the theme background. No dynamic accent — chrome never re-tints.
 - **Theme:** system default (`next-themes`); light and dark are both designed, neither derived.
-- **Depth:** flat backgrounds and 1px borders only — no shadows, gradients, washes, or blur.
+- **Depth:** flat background; structure comes from typography, spacing, and hairline dividers (`border-y` + `divide-y`). Borders are reserved for controls (inputs, buttons). No cards, shadows, gradients, washes, or blur.
 - **Type:** Geist Sans for UI; Geist Mono for data (URLs, scores, durations, detail entries). 13px UI / 14px body / 16px section / 20px page title / 24px verdict word. No uppercase display type.
 - **Radius:** 6px (`--radius: 0.375rem`).
 
 ## Component grammar
 
-- **Verdict panel:** verdict word (colored `-fg`) + `role="meter"` score + confidence as text; mono URL; summary sentence; one merged amber caveat sentence; plain reason list; native `<details>` for recommendations, caveats, and scan metadata.
-- **Signal rows:** eight stable `<details>` rows, fixed order, filled in place. One severity encoding: a 6px dot. Evidence is a mono `<dl>` from `getSignalDetailEntries`.
-- **History:** in-flow list — verdict word, mono URL, time. Search filters URL, verdict, and summary. Confirm-clear with undo; exports as quiet text buttons.
-- **Batch:** plain list — index, verdict word, mono URL, Open.
+- **Verdict:** a typographic block, not a card — verdict word (colored `-fg`) + `role="meter"` score + confidence as text; mono URL; summary sentence; one merged amber caveat sentence; plain reason list; native `<details>` for recommendations, caveats, and scan metadata; result actions (Export/Share/Re-scan) below it.
+- **Signal rows:** eight stable `<details>` rows in a hairline table (`border-y` + `divide-y`), fixed order, filled in place. One severity encoding: a 6px dot. Evidence is a mono `<dl>` from `getSignalDetailEntries`.
+- **Tabs:** text tabs with a 2px accent underline on the active trigger (Radix) — no pill container.
+- **History:** hairline-divided in-flow list — verdict word, mono URL, time. Search filters URL, verdict, and summary. Confirm-clear with undo; exports as quiet text buttons.
+- **Batch:** hairline-divided list — index, verdict word, mono URL, Open.
+- **Errors / empty states:** plain colored or muted text lines — never callout boxes; absence is the empty state.
 
 ## Motion (CSS-only, Emil Kowalski rules)
 
@@ -41,7 +43,7 @@ The verdict is a sentence with a number, not a dashboard. One centered column, a
 
 ## Ban list
 
-No CRT/terminal/radar/glow. No casefile/dossier/stamp costume. No cream/purple SaaS. No score rings, threat bars, or duplicate encodings of the same number. No card stacks or per-item bordered boxes inside a panel.
+No CRT/terminal/radar/glow. No casefile/dossier/stamp costume. No cream/purple SaaS. No score rings, threat bars, or duplicate encodings of the same number. No cards: no enclosing `rounded border bg` containers around content, no callout boxes, no pill tab bars. No marketing headlines on the tool surface.
 
 ## Accessibility contracts (tests depend on these)
 

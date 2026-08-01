@@ -24,7 +24,7 @@ export class ScrutinixErrorBoundary extends Component<
   render() {
     if (this.state.hasError) {
       return (
-        <div className="border-border rounded-lg border bg-[var(--sx-surface)] p-5">
+        <div className="py-4">
           <p className="text-sm font-medium text-[var(--sx-text)]">
             Something went wrong.
           </p>

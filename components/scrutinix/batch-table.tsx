@@ -26,11 +26,7 @@ export function BatchTable({
   onSelectResult,
 }: BatchTableProps) {
   if (items.length === 0) {
-    return (
-      <p className="text-[0.8125rem] text-[var(--sx-text-soft)]">
-        Batch results appear here.
-      </p>
-    );
+    return null;
   }
 
   return (
@@ -52,11 +48,11 @@ export function BatchTable({
         </div>
       ) : null}
 
-      <ul className="border-border divide-border mt-3 divide-y rounded-lg border bg-[var(--sx-surface)]">
+      <ul className="border-border divide-border mt-3 divide-y border-y">
         {items.map((item) => (
           <li
             key={`${item.index}-${item.url}`}
-            className="flex items-center gap-3 px-4 py-2"
+            className="flex items-center gap-3 py-2"
           >
             <span className="w-5 shrink-0 font-mono text-xs text-[var(--sx-text-soft)] tabular-nums">
               {item.index + 1}

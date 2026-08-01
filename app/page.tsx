@@ -14,19 +14,16 @@ export default function HomePage() {
 
         <main
           id="main-content"
-          className="mx-auto w-full max-w-[44rem] flex-1 px-4 pt-10 pb-16 sm:px-6"
+          className="mx-auto w-full max-w-[44rem] flex-1 px-4 pt-12 pb-16 sm:px-6"
         >
-          <h1 className="text-xl font-semibold tracking-[-0.01em] text-[var(--sx-text)]">
-            Check a link before you click.
-          </h1>
-          <p className="mt-1.5 text-sm text-[var(--sx-text-muted)]">
-            Eight security signals stream into one verdict. Scans stay on this
-            device.
+          <h1 className="sr-only">Scrutinix — URL threat scanner</h1>
+          <p className="text-sm text-[var(--sx-text-muted)]">
+            Check a link against eight security signals before you open it.
           </p>
 
-          <div className="mt-8 flex flex-col gap-10">
+          <div className="mt-8 flex flex-col gap-12">
             <ScrutinixErrorBoundary>
-              <div className="flex flex-col gap-6">
+              <div className="flex flex-col gap-8">
                 <ScanForm />
                 <ResultsSection />
               </div>

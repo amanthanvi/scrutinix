@@ -16,9 +16,9 @@ import {
 
 function StreamError({ message }: { message: string }) {
   return (
-    <div className="mt-4 rounded-md border border-[var(--sx-malicious)] px-3 py-2.5 text-[0.8125rem] text-[var(--sx-malicious-fg)]">
+    <p className="mt-4 text-[0.8125rem] text-[var(--sx-malicious-fg)]">
       {message}
-    </div>
+    </p>
   );
 }
 

@@ -146,13 +146,13 @@ export function HistoryPanel({
         </p>
       ) : (
         <>
-          <ul className="border-border divide-border mt-3 divide-y rounded-lg border bg-[var(--sx-surface)]">
+          <ul className="border-border divide-border mt-3 divide-y border-y">
             {entries.map((entry) => (
               <li key={entry.id}>
                 <button
                   type="button"
                   onClick={() => onSelect(entry)}
-                  className="flex w-full items-center gap-3 px-4 py-2.5 text-left hover:bg-[var(--sx-bg)]"
+                  className="hover:bg-muted/40 flex w-full items-center gap-3 py-2.5 text-left"
                 >
                   <span
                     className="w-20 shrink-0 text-[0.8125rem] font-medium capitalize"
