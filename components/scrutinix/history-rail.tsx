@@ -24,7 +24,8 @@ const HistoryPanel = dynamic(
 );
 
 export function HistoryRail() {
-  const { historyEvent, selectHistoryEntry } = useAnalyzerRuntime();
+  const { historyQueue, drainHistoryQueue, selectHistoryEntry } =
+    useAnalyzerRuntime();
   const {
     addResult,
     canUndoClear,
@@ -38,9 +39,12 @@ export function HistoryRail() {
   } = useScanHistory();
 
   useEffect(() => {
-    if (!historyEvent) return;
-    void addResult(historyEvent.result);
-  }, [addResult, historyEvent]);
+    if (!historyQueue.length) return;
+    for (const result of historyQueue) {
+      void addResult(result);
+    }
+    drainHistoryQueue();
+  }, [addResult, drainHistoryQueue, historyQueue]);
 
   return (
     <HistoryPanel

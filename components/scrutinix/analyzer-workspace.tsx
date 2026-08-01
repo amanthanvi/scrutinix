@@ -48,9 +48,7 @@ export function AnalyzerWorkspace() {
     live,
     rescanUrl,
     scan,
-    setActiveTab,
-    setSelectedResult,
-    setSingleUrl,
+    selectHistoryEntry,
     setViewMode,
     sharedSnapshot,
     signals,
@@ -71,10 +69,7 @@ export function AnalyzerWorkspace() {
             completedSignals={done}
             onRunSharedScan={
               sharedSnapshot
-                ? () => {
-                    setSingleUrl(sharedSnapshot.url);
-                    void rescanUrl(sharedSnapshot.url);
-                  }
+                ? () => void rescanUrl(sharedSnapshot.url)
                 : undefined
             }
           />
@@ -83,11 +78,7 @@ export function AnalyzerWorkspace() {
             items={batch.state.items}
             isStreaming={batch.state.isStreaming}
             results={batch.state.results}
-            onSelectResult={(result) => {
-              setSelectedResult(result);
-              setSingleUrl(result.url);
-              setActiveTab("single");
-            }}
+            onSelectResult={selectHistoryEntry}
           />
         )}
       </div>

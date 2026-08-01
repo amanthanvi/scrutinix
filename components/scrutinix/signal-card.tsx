@@ -12,7 +12,7 @@ import {
   Shield,
   TriangleAlert,
 } from "lucide-react";
-import { memo, type ComponentType } from "react";
+import { memo, useState, type ComponentType } from "react";
 
 import {
   getSignalSummary,
@@ -29,9 +29,6 @@ import type {
   SignalName,
   SignalResults,
   RedirectData,
-  SSLData,
-  WhoisData,
-  ThreatFeedsData,
 } from "@/lib/domain/types";
 
 const signalIconMap = {
@@ -53,148 +50,56 @@ interface SignalCardProps {
   index?: number;
 }
 
+/** The redirect chain keeps its bespoke ordered hop list; everything else
+ * renders the shared detail entries so formatting lives in one place. */
 function renderRichDetails(name: SignalName, data: unknown): React.ReactNode {
-  if (name === "redirectChain") {
-    const d = data as RedirectData;
-    if (!d.hops?.length) return null;
-    return (
-      <ol className="sx-font-hack mt-2 list-inside list-decimal space-y-1.5">
-        {(d.hops ?? []).map((hop) => (
-          <li
-            key={`${hop.url}-${hop.status}`}
-            className="rounded bg-[var(--sx-bg)] px-3 py-1.5 text-xs text-[var(--sx-text)]"
-          >
-            <span className="mr-1 text-[var(--sx-info)]">{hop.status}</span>
-            <span className="break-all">{hop.url}</span>
-            {hop.location && (
-              <span className="break-all text-[var(--sx-text-muted)]">
-                {" "}
-                → {hop.location}
-              </span>
-            )}
-          </li>
-        ))}
-      </ol>
-    );
-  }
-
-  if (name === "ssl" || name === "whois") {
-    const entries =
-      name === "ssl"
-        ? [
-            { label: "Issuer", value: (data as SSLData).issuer ?? "Unknown" },
-            { label: "Subject", value: (data as SSLData).subject ?? "Unknown" },
-            {
-              label: "Valid from",
-              value: (data as SSLData).validFrom
-                ? new Date((data as SSLData).validFrom!).toLocaleDateString()
-                : "Unknown",
-            },
-            {
-              label: "Valid to",
-              value: (data as SSLData).validTo
-                ? new Date((data as SSLData).validTo!).toLocaleDateString()
-                : "Unknown",
-            },
-          ]
-        : [
-            {
-              label: "Registrar",
-              value: (data as WhoisData).registrar ?? "Unknown",
-            },
-            {
-              label: "Country",
-              value: (data as WhoisData).country ?? "Unknown",
-            },
-            {
-              label: "Registered",
-              value: (data as WhoisData).registeredAt
-                ? new Date(
-                    (data as WhoisData).registeredAt!,
-                  ).toLocaleDateString()
-                : "Unknown",
-            },
-            {
-              label: "Expires",
-              value: (data as WhoisData).expiresAt
-                ? new Date((data as WhoisData).expiresAt!).toLocaleDateString()
-                : "Unknown",
-            },
-          ];
-    return (
-      <div className="sx-font-hack mt-2 grid grid-cols-2 gap-2">
-        {entries.map((e) => (
-          <div
-            key={e.label}
-            className="rounded bg-[var(--sx-bg)] px-3 py-1.5 text-xs"
-          >
-            <span className="text-[var(--sx-text-muted)]">{e.label}: </span>
-            <span className="break-words text-[var(--sx-text)]">{e.value}</span>
-          </div>
-        ))}
-      </div>
-    );
-  }
-
-  if (name === "threatFeeds") {
-    const d = data as ThreatFeedsData;
-    const hasMatches = (d.matches?.length ?? 0) > 0;
-    const hasNotes =
-      (d.observations?.length ?? 0) > 0 || (d.warnings?.length ?? 0) > 0;
-    if (!hasMatches && !hasNotes) return null;
-    return (
-      <div className="sx-font-hack mt-2 space-y-1.5">
-        {(d.matches ?? []).map((m) => (
-          <div
-            key={`${m.feed}-${m.matchedUrl}`}
-            className="rounded bg-[var(--sx-bg)] px-3 py-1.5 text-xs"
-          >
-            <span className="font-semibold text-[var(--sx-text)]">
-              {m.feed}
-            </span>
-            <span className="ml-1 break-words text-[var(--sx-text-muted)]">
-              {m.detail}
-            </span>
-          </div>
-        ))}
-        {(d.observations ?? []).map((text, i) => (
-          <div
-            key={`obs-${i}`}
-            className="rounded bg-[var(--sx-bg)] px-3 py-1.5 text-xs text-[var(--sx-text-muted)]"
-          >
-            {text}
-          </div>
-        ))}
-        {(d.warnings ?? []).map((text, i) => (
-          <div
-            key={`warn-${i}`}
-            className="rounded bg-[var(--sx-bg)] px-3 py-1.5 text-xs text-[var(--sx-suspicious)]"
-          >
-            {text}
-          </div>
-        ))}
-      </div>
-    );
-  }
-
+  const hops =
+    name === "redirectChain" ? ((data as RedirectData).hops ?? []) : [];
   const entries = getSignalDetailEntries(name, data as never);
-  if (entries.length === 0) return null;
+
+  if (hops.length === 0 && entries.length === 0) {
+    return null;
+  }
+
   return (
-    <div className="sx-font-hack mt-2 space-y-1.5">
-      {entries.map((entry) => (
-        <div
-          key={entry.label}
-          className="flex gap-2 rounded bg-[var(--sx-bg)] px-3 py-1.5 text-xs"
-        >
-          <span className="shrink-0 text-[var(--sx-text-muted)]">
-            {entry.label}:
-          </span>
-          <span className="break-words text-[var(--sx-text)]">
-            {entry.value}
-          </span>
+    <>
+      {hops.length > 0 ? (
+        <ol className="sx-font-hack mt-2 list-inside list-decimal space-y-1.5">
+          {hops.map((hop) => (
+            <li
+              key={`${hop.url}-${hop.status}`}
+              className="rounded bg-[var(--sx-bg)] px-3 py-1.5 text-xs text-[var(--sx-text)]"
+            >
+              <span className="mr-1 text-[var(--sx-info)]">{hop.status}</span>
+              <span className="break-all">{hop.url}</span>
+              {hop.location && (
+                <span className="break-all text-[var(--sx-text-muted)]">
+                  {" "}
+                  → {hop.location}
+                </span>
+              )}
+            </li>
+          ))}
+        </ol>
+      ) : null}
+      {entries.length > 0 ? (
+        <div className="sx-font-hack mt-2 space-y-1.5">
+          {entries.map((entry, index) => (
+            <div
+              key={`${entry.label}-${index}`}
+              className="flex gap-2 rounded bg-[var(--sx-bg)] px-3 py-1.5 text-xs"
+            >
+              <span className="shrink-0 text-[var(--sx-text-muted)]">
+                {entry.label}:
+              </span>
+              <span className="break-words text-[var(--sx-text)]">
+                {entry.value}
+              </span>
+            </div>
+          ))}
         </div>
-      ))}
-    </div>
+      ) : null}
+    </>
   );
 }
 
@@ -205,6 +110,7 @@ function SignalCardInner({
   isStreaming = false,
   index = 0,
 }: SignalCardProps) {
+  const [detailsOpen, setDetailsOpen] = useState(true);
   const severity = getSignalSeverity(result.status, result.data, name);
   const edgeClass = getEdgeClassFromSeverity(severity);
   const ledColor = getLedColorFromSeverity(severity);
@@ -322,7 +228,11 @@ function SignalCardInner({
           if (!details) return null;
 
           return (
-            <details className="border-border mt-5 border-t pt-4" open>
+            <details
+              className="border-border mt-5 border-t pt-4"
+              open={detailsOpen}
+              onToggle={(event) => setDetailsOpen(event.currentTarget.open)}
+            >
               <summary className="cursor-pointer text-xs text-[var(--sx-info)]">
                 Full evidence
               </summary>
@@ -334,12 +244,4 @@ function SignalCardInner({
   );
 }
 
-export const SignalCard = memo(SignalCardInner, (prev, next) => {
-  return (
-    prev.name === next.name &&
-    prev.result === next.result &&
-    prev.viewMode === next.viewMode &&
-    prev.isStreaming === next.isStreaming &&
-    prev.index === next.index
-  );
-});
+export const SignalCard = memo(SignalCardInner);

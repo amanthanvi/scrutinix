@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { toast } from "sonner";
 
 import {
@@ -21,20 +22,31 @@ export function ScanDock() {
     active,
     activeTab,
     batch,
-    batchInput,
     formError,
     live,
+    prefill,
     rescanUrl,
     scan,
     setActiveTab,
-    setBatchInput,
     setFormError,
-    setSingleUrl,
     shareResult,
-    singleUrl,
-    startBatchScan,
-    startSingleScan,
+    submitBatch,
+    submitSingle,
   } = useAnalyzerRuntime();
+
+  // Input text lives here, not in the shared context: typing must not
+  // re-render the whole analyzer tree. The runtime pushes URLs back in via
+  // prefill (re-scan, history selection), adopted during render.
+  const [singleUrl, setSingleUrl] = useState("");
+  const [batchInput, setBatchInput] = useState("");
+  const [adoptedPrefillNonce, setAdoptedPrefillNonce] = useState<number | null>(
+    null,
+  );
+
+  if (prefill && prefill.nonce !== adoptedPrefillNonce) {
+    setAdoptedPrefillNonce(prefill.nonce);
+    setSingleUrl(prefill.url);
+  }
 
   return (
     <section
@@ -91,7 +103,7 @@ export function ScanDock() {
               }}
               error={activeTab === "single" ? formError : null}
               streaming={scan.state.isStreaming}
-              onSubmit={() => void startSingleScan()}
+              onSubmit={() => void submitSingle(singleUrl)}
               onCancel={scan.cancelScan}
               result={active}
               onExport={() => {
@@ -117,13 +129,14 @@ export function ScanDock() {
               }}
               error={activeTab === "batch" ? formError : null}
               streaming={batch.state.isStreaming}
-              onSubmit={() => void startBatchScan()}
+              onSubmit={() => void submitBatch(batchInput)}
               onCancel={batch.cancelBatch}
               hasResults={batch.state.results.length > 0}
               onCsv={() => {
                 downloadTextFile(
                   "batch.csv",
                   resultsToCsv(batch.state.results),
+                  "text/csv",
                 );
                 toast.success("Exported batch.csv");
               }}
@@ -140,12 +153,18 @@ export function ScanDock() {
         </Tabs>
 
         {scan.state.error && (
-          <div className="mt-4 rounded-md border border-[var(--sx-malicious)] bg-[color-mix(in_srgb,var(--sx-malicious)_8%,transparent)] px-4 py-3 text-xs text-[var(--sx-malicious)]">
+          <div
+            role="alert"
+            className="mt-4 rounded-md border border-[var(--sx-malicious)] bg-[color-mix(in_srgb,var(--sx-malicious)_8%,transparent)] px-4 py-3 text-xs text-[var(--sx-malicious)]"
+          >
             {scan.state.error.message}
           </div>
         )}
         {batch.state.error && (
-          <div className="mt-4 rounded-md border border-[var(--sx-malicious)] bg-[color-mix(in_srgb,var(--sx-malicious)_8%,transparent)] px-4 py-3 text-xs text-[var(--sx-malicious)]">
+          <div
+            role="alert"
+            className="mt-4 rounded-md border border-[var(--sx-malicious)] bg-[color-mix(in_srgb,var(--sx-malicious)_8%,transparent)] px-4 py-3 text-xs text-[var(--sx-malicious)]"
+          >
             {batch.state.error.message}
           </div>
         )}

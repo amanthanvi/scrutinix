@@ -263,7 +263,7 @@ export function HistoryPanel({
                       className="rounded-md px-2.5 py-1 text-[0.65rem] font-medium tracking-[0.08em] uppercase"
                       style={{
                         color: verdictInk(entry.verdict),
-                        backgroundColor: `color-mix(in_srgb, ${verdictColor(entry.verdict)} 12%, transparent)`,
+                        backgroundColor: `color-mix(in srgb, ${verdictColor(entry.verdict)} 12%, transparent)`,
                       }}
                     >
                       {entry.verdict}
