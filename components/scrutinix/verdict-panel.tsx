@@ -1,7 +1,6 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { threatScoreBandLabel } from "@/lib/domain/score-bands";
 import { formatDisplayUrl } from "@/lib/domain/url";
 import type { AnalysisResult } from "@/lib/domain/types";
 import {
@@ -131,15 +130,13 @@ export function VerdictPanel({
   const limitedCoverage = Boolean(metadata?.partialFailure);
   const provisionalSafe = result.verdict === "safe" && confidence < 0.5;
   const caveat = limitedCoverage
-    ? `Based on ${completed}/${SIGNAL_COUNT} completed signals${
+    ? `Based on ${completed}/${SIGNAL_COUNT} resolved signals${
         failed > 0 ? `; ${failed} failed` : ""
       }${skipped > 0 ? `, ${skipped} not applicable` : ""}.${
-        provisionalSafe
-          ? " Confidence is low — not a clean bill of health."
-          : ""
+        provisionalSafe ? " Not a clean bill of health." : ""
       }`
     : provisionalSafe
-      ? "Confidence is low — don't treat this as a clean bill of health."
+      ? "Not a clean bill of health — treat this safe verdict with caution."
       : null;
 
   return (
@@ -166,7 +163,7 @@ export function VerdictPanel({
           >
             {score}/100
           </span>
-          {threatScoreBandLabel(score)} · {confidenceLabel} confidence
+          {confidenceLabel} confidence
         </p>
       </div>
 

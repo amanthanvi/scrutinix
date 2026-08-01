@@ -2,7 +2,6 @@
 
 import { useMemo } from "react";
 
-import type { AnalysisResult } from "@/lib/domain/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -14,10 +13,6 @@ interface SingleInputProps {
   streaming: boolean;
   onSubmit: () => void;
   onCancel: () => void;
-  result: AnalysisResult | null;
-  onExport: () => void;
-  onShare: () => void;
-  onRescan: () => void;
 }
 
 export function SingleInput({
@@ -27,10 +22,6 @@ export function SingleInput({
   streaming,
   onSubmit,
   onCancel,
-  result,
-  onExport,
-  onShare,
-  onRescan,
 }: SingleInputProps) {
   const hasUrl = url.trim().length > 0;
 
@@ -77,36 +68,11 @@ export function SingleInput({
         </p>
       ) : null}
 
-      {(streaming || result) && (
+      {streaming && (
         <div className="flex flex-wrap items-center gap-1">
-          {streaming && (
-            <Button type="button" onClick={onCancel} variant="ghost" size="sm">
-              Cancel
-            </Button>
-          )}
-          {result && (
-            <>
-              <Button
-                type="button"
-                onClick={onExport}
-                variant="ghost"
-                size="sm"
-              >
-                Export JSON
-              </Button>
-              <Button type="button" onClick={onShare} variant="ghost" size="sm">
-                Share
-              </Button>
-              <Button
-                type="button"
-                onClick={onRescan}
-                variant="ghost"
-                size="sm"
-              >
-                Re-scan
-              </Button>
-            </>
-          )}
+          <Button type="button" onClick={onCancel} variant="ghost" size="sm">
+            Cancel
+          </Button>
         </div>
       )}
     </div>

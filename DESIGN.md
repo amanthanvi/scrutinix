@@ -2,6 +2,7 @@
 
 **Register:** Product (tool UI).
 **Status:** Live — documented from the built system (2026-07 redesign; supersedes Daylight Desk).
+**Direction provenance:** user-pinned canon (minimal product tool at Linear/Vercel craft level) via explicit choice; no concept-seed roll was run for this world.
 
 ## Thesis
 

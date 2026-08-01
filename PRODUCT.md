@@ -8,12 +8,12 @@ Someone at an ordinary desk about to forward mail — not a SOC analyst in a vau
 
 ## What the UI is
 
-A sharp everyday **product tool** (impeccable product register): bold visual identity, boring interaction grammar. Scanner-first home. No costume theater.
+A quiet everyday **product tool** (impeccable product register): minimal, single-column, boring interaction grammar. Scanner-first home. No costume theater.
 
 ## Visual lane
 
-**Daylight Desk** — cool sky neutrals, ink-blue Analyze tool-mark, heavy brand wordmark, Mail-compose intake. See `DESIGN.md` / `DESIGN-HOME-SHAPE.md`.
+**Minimal Product Tool** (2026-07, supersedes Daylight Desk) — achromatic surfaces, one static blue accent, verdict color only where a verdict is stated, one centered 44rem column, Geist Sans + Geist Mono. This lane was pinned by the user (canon minimal product tool at Linear/Vercel craft level) — no concept roll was run. See `DESIGN.md` for the live system.
 
 ## Locked redesign constraints
 
-See `DESIGN-REDIRECTION.md`, `CONTEXT.md`, and `DESIGN-HOME-SHAPE.md` (Daylight Desk). Casefile / dossier / terminal cosplay are out of bounds.
+Casefile / dossier / terminal cosplay remain out of bounds, as do cream/purple SaaS and glow/CRT theater (`CONTEXT.md` has the vocabulary; `DESIGN-REDIRECTION.md` / `DESIGN-HOME-SHAPE.md` are historical records of the superseded Daylight Desk shape). Duplicate encodings of the same fact — score rings, threat bars, per-signal badge stacks — are equally out of bounds.

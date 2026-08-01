@@ -24,18 +24,15 @@ function StreamError({ message }: { message: string }) {
 
 export function ScanForm() {
   const {
-    active,
     activeTab,
     batch,
     batchInput,
     formError,
-    rescanUrl,
     scan,
     setActiveTab,
     setBatchInput,
     setFormError,
     setSingleUrl,
-    shareResult,
     singleUrl,
     startBatchScan,
     startSingleScan,
@@ -67,18 +64,6 @@ export function ScanForm() {
             streaming={scan.state.isStreaming}
             onSubmit={() => void startSingleScan()}
             onCancel={scan.cancelScan}
-            result={active}
-            onExport={() => {
-              if (!active) return;
-              downloadTextFile(
-                "scan.json",
-                JSON.stringify(active, null, 2),
-                "application/json",
-              );
-              toast.success("Exported scan.json");
-            }}
-            onShare={() => active && void shareResult(active)}
-            onRescan={() => active && void rescanUrl(active.url)}
           />
         </TabsContent>
 

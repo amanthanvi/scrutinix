@@ -57,10 +57,14 @@ export function SignalRow({ name, result, index }: SignalRowProps) {
         className="size-1.5 shrink-0 rounded-full"
         style={{ backgroundColor: dot }}
       />
-      <span className="w-32 shrink-0 text-sm font-medium text-[var(--sx-text)]">
+      <span className="w-32 shrink-0 text-sm font-medium text-[var(--sx-text)] sm:w-44">
         {label}
       </span>
-      <span className="min-w-0 flex-1 truncate text-[0.8125rem] text-[var(--sx-text-muted)]">
+      <span
+        className={`min-w-0 flex-1 text-[0.8125rem] text-[var(--sx-text-muted)] ${
+          entries.length === 0 ? "" : "truncate"
+        }`}
+      >
         {statusLine}
       </span>
       {result.status !== "pending" ? (
@@ -102,7 +106,7 @@ export function SignalRow({ name, result, index }: SignalRowProps) {
       <dl className="space-y-1.5 px-4 pt-1 pb-4 pl-[2.15rem] font-mono text-xs leading-5">
         {entries.map((entry, entryIndex) => (
           <div key={`${entryIndex}-${entry.label}`} className="flex gap-3">
-            <dt className="w-28 shrink-0 text-[var(--sx-text-soft)]">
+            <dt className="w-28 shrink-0 text-[var(--sx-text-soft)] sm:w-40">
               {entry.label}
             </dt>
             <dd className="min-w-0 break-all text-[var(--sx-text-muted)]">
