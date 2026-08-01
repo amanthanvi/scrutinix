@@ -148,6 +148,28 @@ describe("analysis routes", () => {
     await parseNdjsonEvents(response);
   });
 
+  it("matches the browser origin against the Host header, not request.url", async () => {
+    const { POST } = await import("@/app/api/analyze/route");
+    installHandlers();
+
+    // Behind `next start`, request.url reports the server's configured
+    // hostname (localhost) even when the browser connected via 127.0.0.1.
+    const response = await POST(
+      new Request("http://localhost/api/analyze", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          host: "127.0.0.1:3000",
+          origin: "http://127.0.0.1:3000",
+        },
+        body: JSON.stringify({ url: "example.com" }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    await parseNdjsonEvents(response);
+  });
+
   it("reports RDAP outages as whois signal errors and partial failure", async () => {
     const { POST } = await import("@/app/api/analyze/route");
     installHandlers({ rdapStatus: 504 });

@@ -126,6 +126,11 @@ function parseBatchBody(body: unknown): ScanRequestOutcome {
  * If the browser sent an Origin header, it must match this deployment.
  * Otherwise any third-party page could burn provider quota via cross-origin
  * fetch. Requests without an Origin (curl, server-to-server) pass through.
+ *
+ * Hosts are compared instead of full origins because Next normalizes
+ * request.url to the server's configured hostname (e.g. localhost behind
+ * `next start`), so the incoming Host / X-Forwarded-Host headers are the
+ * only reliable record of the origin the browser actually used.
  */
 function checkOrigin(request: Request): ScanRequestOutcome | null {
   const origin = request.headers.get("origin");
@@ -133,9 +138,23 @@ function checkOrigin(request: Request): ScanRequestOutcome | null {
     return null;
   }
 
-  const allowed = new Set<string>();
+  let originHost: string;
   try {
-    allowed.add(new URL(request.url).origin);
+    originHost = new URL(origin).host.toLowerCase();
+  } catch {
+    return rejectCrossOrigin();
+  }
+
+  const allowedHosts = new Set<string>();
+  for (const header of ["host", "x-forwarded-host"]) {
+    const value = request.headers.get(header);
+    if (value) {
+      allowedHosts.add(value.trim().toLowerCase());
+    }
+  }
+
+  try {
+    allowedHosts.add(new URL(request.url).host.toLowerCase());
   } catch {
     // request.url is always absolute in route handlers; ignore otherwise.
   }
@@ -143,16 +162,16 @@ function checkOrigin(request: Request): ScanRequestOutcome | null {
   const appUrl = getEnv().NEXT_PUBLIC_APP_URL;
   if (appUrl) {
     try {
-      allowed.add(new URL(appUrl).origin);
+      allowedHosts.add(new URL(appUrl).host.toLowerCase());
     } catch {
-      // Malformed configured URL; same-origin check falls back to request.url.
+      // Malformed configured URL; the header-derived hosts still apply.
     }
   }
 
-  if (allowed.has(origin)) {
-    return null;
-  }
+  return allowedHosts.has(originHost) ? null : rejectCrossOrigin();
+}
 
+function rejectCrossOrigin(): ScanRequestOutcome {
   return reject(
     403,
     "cross_origin_forbidden",
