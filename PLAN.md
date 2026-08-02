@@ -41,6 +41,7 @@ state plus the current analysis-hardening and review-remediation work.
   - Body typography defaults to Geist Sans, while mono styling is reserved for telemetry, timings, hashes, and other code-like labels.
   - Favicons and manifest are now served from checked-in assets under `public/` instead of a generated `app/icon.tsx` route.
   - Production headers include CSP, permissions policy, referrer policy, and anti-sniff/frame protections.
+  - Pull requests and `main` pushes run fixture-backed Playwright plus blocking Lighthouse Performance `>= 0.90` and Accessibility `>= 0.95` gates against an explicitly provisioned Chromium executable.
 - Intentional baseline decision:
   - `package-lock.json` drift from the platform refresh bootstrap was kept intentionally because the project was fully re-scaffolded onto the new dependency graph.
 
@@ -125,6 +126,13 @@ Observed results:
 - [x] Keep batch, history, export, share, re-scan, unknown verdict, and partial-coverage behavior intact.
 - [x] Reconcile privacy and architecture copy with server-side scan processing and client-only history.
 - [-] Complete the merged validation and external review loop before landing.
+
+### P23 Enforce browser quality gates on every change
+
+- [x] Run fixture-backed Playwright and Lighthouse in pull-request and `main` CI after fast-fail static/test/build checks.
+- [x] Provision one Chromium installation explicitly and pass its executable path to Playwright and `chrome-launcher`.
+- [x] Make Lighthouse Performance `>= 0.90` and Accessibility `>= 0.95` blocking thresholds.
+- [-] Validate the rebuilt PR in GitHub Actions and complete external review before landing.
 
 ### P01 Reset the baseline and living docs
 

@@ -123,7 +123,13 @@ npm run test:integration -- --run
 npm run test:dom -- --run
 npm run test:e2e
 npm run build
+npm run lighthouse
 ```
+
+Pull requests and pushes to `main` run the full CI chain, including fixture-backed
+Playwright checks and Lighthouse with blocking Performance `>= 0.90` and
+Accessibility `>= 0.95` thresholds. CI installs Chromium explicitly and shares
+its executable path with both browser tools.
 
 Additional repo maintenance checks:
 
