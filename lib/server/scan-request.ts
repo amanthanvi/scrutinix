@@ -125,8 +125,9 @@ function parseBatchBody(body: unknown): ScanRequestOutcome {
  *
  * Hosts are compared instead of full origins because Next normalizes
  * request.url to the server's configured hostname (e.g. localhost behind
- * `next start`), so the incoming Host / X-Forwarded-Host headers are the
- * only reliable record of the origin the browser actually used.
+ * `next start`), so the incoming Host header is also checked. Forwarding
+ * headers are caller-controlled unless a trusted proxy contract says
+ * otherwise and must not authorize an origin.
  */
 function checkOrigin(request: Request): ScanRequestOutcome | null {
   const origin = request.headers.get("origin");
@@ -142,16 +143,9 @@ function checkOrigin(request: Request): ScanRequestOutcome | null {
   }
 
   const allowedHosts = new Set<string>();
-  for (const header of ["host", "x-forwarded-host"]) {
-    const value = request.headers.get(header);
-    if (value) {
-      for (const host of value.split(",")) {
-        const normalized = host.trim().toLowerCase();
-        if (normalized) {
-          allowedHosts.add(normalized);
-        }
-      }
-    }
+  const host = request.headers.get("host")?.trim().toLowerCase();
+  if (host) {
+    allowedHosts.add(host);
   }
 
   try {
