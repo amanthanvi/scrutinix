@@ -150,9 +150,11 @@ function applyExculpatoryEvidence(
   }
 
   const vt = signals.virusTotal;
+  const vtAgeDays = vtAnalysisAgeDays(signals);
   if (
     vt.status === "success" &&
     vt.data &&
+    (vtAgeDays === null || vtAgeDays <= VT_STALE_ANALYSIS_DAYS) &&
     vt.data.harmless >= 60 &&
     vt.data.malicious === 0 &&
     vt.data.suspicious === 0

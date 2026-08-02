@@ -60,6 +60,21 @@ describe("runRedirectSignal", () => {
     expect(result.content?.obfuscationHints).not.toContain("eval() call");
   });
 
+  it("stops during hostname resolution when the scan is cancelled", async () => {
+    lookupMock.mockImplementationOnce(() => new Promise(() => {}) as never);
+    const controller = new AbortController();
+
+    const pending = runRedirectSignal(
+      "http://example.test/start",
+      controller.signal,
+    );
+    controller.abort();
+    const result = await pending;
+
+    expect(requestMock).not.toHaveBeenCalled();
+    expect(result.terminalError).toContain("cancelled");
+  });
+
   it("blocks a redirect target that resolves to a private address", async () => {
     mockLookupAll([{ address: "93.184.216.34", family: 4 }]);
     mockLookupAll([{ address: "10.0.0.8", family: 4 }]);

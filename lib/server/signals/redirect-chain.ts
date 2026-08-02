@@ -42,7 +42,10 @@ export async function runRedirectSignal(
     }
 
     if (!currentResolution) {
-      const publicTarget = await assertPublicNetworkTarget(currentUrl);
+      const publicTarget = await assertPublicNetworkTarget(currentUrl, {
+        signal,
+        timeoutMs: Math.max(0, deadline - Date.now()),
+      });
       if (!publicTarget.ok) {
         reachable = false;
         terminalError = publicTarget.error;
@@ -99,6 +102,10 @@ export async function runRedirectSignal(
 
     const publicRedirectTarget = await assertPublicNetworkTarget(
       nextUrl.toString(),
+      {
+        signal,
+        timeoutMs: Math.max(0, deadline - Date.now()),
+      },
     );
 
     if (!publicRedirectTarget.ok) {

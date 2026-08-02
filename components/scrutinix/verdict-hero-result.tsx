@@ -99,6 +99,12 @@ export function VerdictHeroResult({
     threatInfo?.hasPositiveEvidence && threatInfo?.reasons
       ? threatInfo.reasons
       : [];
+  const unavailableEvidenceText =
+    result?.verdict === "unknown"
+      ? "The host could not be inspected, so this scan cannot establish whether the URL is safe."
+      : result?.verdict === "error"
+        ? "The scan did not return enough evidence to establish a safety verdict."
+        : "Supporting evidence details are unavailable for this verdict.";
   const confidenceLabel = threatInfo?.confidenceLabel
     ? threatInfo.confidenceLabel.toUpperCase()
     : "LOW";
@@ -250,7 +256,7 @@ export function VerdictHeroResult({
                 ))}
               </div>
             </div>
-          ) : result ? (
+          ) : result?.verdict === "safe" ? (
             <div className="border-border bg-card rounded-lg border px-4 py-4 text-sm leading-6 text-[var(--sx-text-muted)]">
               <CheckCircle2
                 className="mr-2 inline h-4 w-4 align-[-2px] text-[var(--sx-safe)]"
@@ -258,6 +264,15 @@ export function VerdictHeroResult({
               />
               No direct malicious indicators were found in the completed
               signals.
+            </div>
+          ) : result ? (
+            <div className="border-border bg-card rounded-lg border px-4 py-4 text-sm leading-6 text-[var(--sx-text-muted)]">
+              <AlertTriangle
+                className="mr-2 inline h-4 w-4 align-[-2px]"
+                style={{ color }}
+                aria-hidden="true"
+              />
+              {unavailableEvidenceText}
             </div>
           ) : null}
 
@@ -421,7 +436,9 @@ export function VerdictHeroResult({
                   <p className="mt-2 text-sm leading-6 text-[var(--sx-text-muted)]">
                     {threatInfo?.hasPositiveEvidence
                       ? "Direct risk indicators influenced the final score."
-                      : "No direct malicious indicators across completed signals."}
+                      : result.verdict === "safe"
+                        ? "No direct malicious indicators across completed signals."
+                        : unavailableEvidenceText}
                   </p>
                 </div>
               </div>
