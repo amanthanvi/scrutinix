@@ -3,6 +3,14 @@
 Living execution plan for Scrutinix. This file reflects the implemented ship
 state plus the current analysis-hardening and review-remediation work.
 
+> **Superseded — 2026-08 minimal redesign.** The frontend entries below
+> describe the pre-redesign UI and are kept as history. The shipped system is
+> now a single-column minimal shell (`max-w-[44rem]`): no two-column
+> workspace, no sticky history rail, no Summary/Full toggle (per-row
+> `<details>` disclosure replaced it), no verdict-driven accent. `DESIGN.md`
+> is the current source of truth for the visual system; `CLAUDE.md` for the
+> component map.
+
 ## Status Legend
 
 - `[ ]` not started

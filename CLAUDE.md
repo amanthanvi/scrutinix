@@ -4,7 +4,7 @@
 
 **Scrutinix** — a FOSS multi-signal URL threat analyzer, live at
 https://www.scrutinix.net. It streams 8 independent security signals
-(VirusTotal, Google Safe Browsing, threat feeds, ML ensemble, TLS, WHOIS,
+(VirusTotal, ML ensemble, Google Safe Browsing, threat feeds, SSL, WHOIS,
 DNS, redirect chain) over NDJSON into a minimal, single-column product UI.
 Light and dark themes receive equal treatment.
 

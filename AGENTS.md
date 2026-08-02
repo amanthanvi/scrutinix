@@ -76,7 +76,7 @@ Project-local operating notes for agents working in this repository. Keep this f
 
 ## Learned User Preferences
 
-- Keep the home layout scanner-first: brand column and scan console placement should match the current intro grid (narrow story column, wide console column) unless a redesign explicitly changes it.
+- Keep the home layout scanner-first: since the 2026-08 minimal redesign that means one centered 44rem column (form → verdict → signal rows → history), not the earlier two-column intro grid. See `DESIGN.md`.
 - Remove redundant marketing and spec microcopy when the same facts already appear next to the scan workflow (for example duplicate signal counts, batch limits, or NDJSON lines in both the hero and the scan-console footer).
 - Keep method/caveat reference content on `/about` (compact definition list or grouped notes), not as a support card grid under the home scanner.
 - For Summary versus Full signal lanes, use an accessible labelled control (for example a `role="switch"` with visible Summary and Full labels) instead of only icon buttons.
