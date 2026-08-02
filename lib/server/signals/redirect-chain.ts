@@ -100,6 +100,13 @@ export async function runRedirectSignal(
       break;
     }
 
+    if (attempt === MAX_REDIRECTS - 1) {
+      reachable = false;
+      terminalError = `The redirect chain exceeded the maximum of ${MAX_REDIRECTS} redirects before reaching a terminal response.`;
+      observations.push(terminalError);
+      break;
+    }
+
     const publicRedirectTarget = await assertPublicNetworkTarget(
       nextUrl.toString(),
       {

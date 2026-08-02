@@ -60,7 +60,7 @@ Completed deployment verification:
 
 Observed results:
 
-- Unit tests: `28` files passed, `167` tests passed.
+- Unit tests: `28` files passed, `168` tests passed.
 - Integration tests: `2` files passed, `24` tests passed, including full-origin authorization, exact-host ThreatFox isolation, batch per-URL failure isolation, disconnect cancellation, and incomplete DNSBL coverage propagation.
 - DOM tests: `5` files passed, `12` tests passed.
 - Playwright: `9` tests passed, covering legacy history migration, single-scan, batch-scan, accessibility, keyboard navigation, history undo, and fixture-backed verdicts.
@@ -92,6 +92,8 @@ Observed results:
 - [x] Replace hosted ML inference with a bundled quantized ONNX classifier plus lexical consensus.
 - [x] Add ThreatFox and DNSBL coverage inside the existing eight-signal contract.
 - [x] Use the Public Suffix List, including private suffixes, for registrable-domain feed and redirect boundaries.
+- [x] Preserve the VirusTotal free-tier request budget by limiting each uncached report lookup to the primary URL endpoint.
+- [x] Report redirect-limit exhaustion without presenting an unprobed destination as reachable.
 - [x] Centralize runtime schemas and harden request, stream, history, cache, and provider boundaries.
 - [x] Expand unit, integration, DOM, fixture-backed E2E, CI, and dependency-audit coverage.
 - [-] Resolve external review findings, run the full verification chain, and land the reviewed PR stack.
@@ -135,6 +137,7 @@ Observed results:
 ### P06 Implement external threat intel and classifier adapters
 
 - [x] VirusTotal adapter.
+- [x] Keep VirusTotal URL-report lookups to one request per uncached report path; omit optional domain enrichment that would double free-tier consumption.
 - [x] Google Safe Browsing adapter.
 - [x] URLhaus adapter.
 - [x] OpenPhish cached feed ingestion.

@@ -34,6 +34,8 @@
   - Favicons and manifest are served from checked-in `public/` assets with explicit metadata links instead of a generated icon route.
 - Verdict decision:
   - Clean verdict confidence must be capped when a primary reputation source such as VirusTotal, Google Safe Browsing, or threat feeds does not complete, even if the remaining signals stay clean.
+- Provider decision: an uncached VirusTotal report lookup uses the primary URL report endpoint only; optional domain enrichment is omitted so one scan does not consume two of the free tier's four requests per minute.
+- Redirect decision: once the five-response redirect budget is exhausted, retain the last probed URL as the final URL and report the unprobed next location only as hop metadata.
 - Security decision: generate per-request nonce CSP in `proxy.ts` via `lib/server/csp.ts`; keep the remaining browser-hardening headers in `next.config.ts`.
 - Verification note: the shipped baseline passed lint, format, typecheck, unit, integration, E2E smoke, production build, audit, and Lighthouse; current P21 revalidation and review status are tracked in `PLAN.md`.
 - Documentation decision: `PLAN.md` is the live execution source of truth; keep it aligned with `SPEC.md`, `CLAUDE.md`, and `AGENTS.md` whenever architecture or delivery status changes.
@@ -312,20 +314,20 @@ Implementation note: batch streams also emit `batch_started`, `url_started`, and
 
 ### 4.6 Dependencies / integrations
 
-| Dependency                   | Type              | Free Tier              | Failure Behavior                                                   |
-| ---------------------------- | ----------------- | ---------------------- | ------------------------------------------------------------------ |
-| VirusTotal API v3            | External          | 4 req/min, 500 req/day | Signal marked unavailable; verdict computed without it             |
-| Bundled URL classifier       | Self-computed     | N/A                    | Signal degrades to the lexical model on init/inference failure     |
-| Google Safe Browsing API v4  | External          | 10k req/day            | Signal marked unavailable; verdict remains partial                 |
-| URLhaus API                  | External          | Unlimited              | Signal marked unavailable; verdict remains partial                 |
-| OpenPhish feed               | External          | Public feed            | Signal marked unavailable; verdict remains partial                 |
-| ThreatFox API                | External          | abuse.ch account key   | Source warning recorded; other threat feeds still contribute       |
-| Spamhaus DBL / SURBL DNSBL   | External DNS      | Public DNS             | Blocked/wildcard resolvers are treated as unavailable, not clean   |
-| DNS resolution               | Self-computed     | N/A                    | Prefer success-with-observation over hard failure where possible   |
-| SSL cert inspection          | Self-computed     | N/A                    | Prefer success-with-validation-state over hard failure             |
-| WHOIS lookup                 | Self-computed/API | Varies                 | Prefer success-with-observation or skipped where applicable        |
-| Redirect chain               | Self-computed     | N/A                    | Prefer success-with-observation over hard failure where possible   |
-| Public Suffix List (`tldts`) | Bundled data      | N/A                    | Fall back to the normalized host when no registrable domain exists |
+| Dependency                   | Type              | Free Tier              | Failure Behavior                                                              |
+| ---------------------------- | ----------------- | ---------------------- | ----------------------------------------------------------------------------- |
+| VirusTotal API v3            | External          | 4 req/min, 500 req/day | One primary report request per uncached lookup; signal unavailable on failure |
+| Bundled URL classifier       | Self-computed     | N/A                    | Signal degrades to the lexical model on init/inference failure                |
+| Google Safe Browsing API v4  | External          | 10k req/day            | Signal marked unavailable; verdict remains partial                            |
+| URLhaus API                  | External          | Unlimited              | Signal marked unavailable; verdict remains partial                            |
+| OpenPhish feed               | External          | Public feed            | Signal marked unavailable; verdict remains partial                            |
+| ThreatFox API                | External          | abuse.ch account key   | Source warning recorded; other threat feeds still contribute                  |
+| Spamhaus DBL / SURBL DNSBL   | External DNS      | Public DNS             | Blocked/wildcard resolvers are treated as unavailable, not clean              |
+| DNS resolution               | Self-computed     | N/A                    | Prefer success-with-observation over hard failure where possible              |
+| SSL cert inspection          | Self-computed     | N/A                    | Prefer success-with-validation-state over hard failure                        |
+| WHOIS lookup                 | Self-computed/API | Varies                 | Prefer success-with-observation or skipped where applicable                   |
+| Redirect chain               | Self-computed     | N/A                    | Prefer success-with-observation over hard failure where possible              |
+| Public Suffix List (`tldts`) | Bundled data      | N/A                    | Fall back to the normalized host when no registrable domain exists            |
 
 ## 5) Security, Privacy, Compliance
 
