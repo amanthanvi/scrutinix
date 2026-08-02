@@ -48,8 +48,8 @@ const consoleNotes: ReadonlyArray<{ title: string; body: ReactNode }> = [
     ),
   },
   {
-    title: "Feed hits need the full URL",
-    body: "URLhaus and OpenPhish match the exact IOC string you paste — not browse pages like urlhaus.abuse.ch/browse/.",
+    title: "Feed hits distinguish scope",
+    body: "URLhaus and OpenPhish treat an exact listed URL as high-confidence evidence. When the path differs, a listed hostname may still appear as a medium-confidence fallback; browse pages like urlhaus.abuse.ch/browse/ are not matches.",
   },
 ];
 
@@ -109,8 +109,9 @@ export default function AboutPage() {
               <ul className="mt-4 space-y-2.5 text-sm leading-6 text-[var(--sx-text-muted)]">
                 <li>Google Safe Browsing</li>
                 <li>
-                  Threat feeds: URLhaus and OpenPhish — matches use the exact
-                  listed URL string, not directory or hub pages.
+                  Threat feeds: URLhaus and OpenPhish — exact listed URLs are
+                  high confidence; hostname-only fallbacks are medium
+                  confidence.
                 </li>
                 <li>VirusTotal multi-engine detections</li>
                 <li>Local ensemble consensus</li>

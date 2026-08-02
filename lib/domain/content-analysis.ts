@@ -40,13 +40,16 @@ function extractTitle(html: string): string | null {
 }
 
 function extractCrossOriginFormHosts(html: string, finalUrl: string): string[] {
+  let pageUrl: URL;
   let pageDomain: string;
   try {
-    pageDomain = getRegistrableDomain(new URL(finalUrl).hostname);
+    pageUrl = new URL(finalUrl);
+    pageDomain = getRegistrableDomain(pageUrl.hostname);
   } catch {
     return [];
   }
 
+  const documentBaseUrl = extractDocumentBaseUrl(html, pageUrl);
   const hosts = new Set<string>();
   const formPattern = /<form\b[^>]*>/gi;
   let form: RegExpExecArray | null;
@@ -59,7 +62,7 @@ function extractCrossOriginFormHosts(html: string, finalUrl: string): string[] {
 
     let target: URL;
     try {
-      target = new URL(action, finalUrl);
+      target = new URL(action, documentBaseUrl);
     } catch {
       continue;
     }
@@ -77,6 +80,29 @@ function extractCrossOriginFormHosts(html: string, finalUrl: string): string[] {
   }
 
   return [...hosts];
+}
+
+function extractDocumentBaseUrl(html: string, fallbackUrl: URL): URL {
+  const basePattern = /<base\b[^>]*>/gi;
+  let base: RegExpExecArray | null;
+
+  while ((base = basePattern.exec(html)) !== null) {
+    const href = extractAttribute(base[0], "href");
+    if (href === null) {
+      continue;
+    }
+
+    try {
+      const baseUrl = new URL(href, fallbackUrl);
+      return baseUrl.protocol === "data:" || baseUrl.protocol === "javascript:"
+        ? fallbackUrl
+        : baseUrl;
+    } catch {
+      return fallbackUrl;
+    }
+  }
+
+  return fallbackUrl;
 }
 
 function countHiddenIframes(html: string): number {
