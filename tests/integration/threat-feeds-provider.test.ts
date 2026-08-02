@@ -139,7 +139,7 @@ describe("threat feed provider", () => {
     });
   });
 
-  it("skips ThreatFox with an observation when no auth key is configured", async () => {
+  it("marks ThreatFox coverage incomplete when no auth key is configured", async () => {
     vi.stubEnv("URLHAUS_AUTH_KEY", "");
 
     server.use(
@@ -157,7 +157,7 @@ describe("threat feed provider", () => {
 
     const result = await runThreatFeedsProvider("https://example.com/");
 
-    expect(result.observations).toContain(
+    expect(result.warnings).toContain(
       "ThreatFox lookup skipped: no abuse.ch Auth-Key is configured.",
     );
   });

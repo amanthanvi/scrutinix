@@ -10,18 +10,17 @@ const TIMEOUT_MS = 5_000;
 /**
  * abuse.ch ThreatFox IOC lookup by hostname. Reuses the URLhaus Auth-Key
  * (both services share the abuse.ch account key); without a key the lookup
- * is skipped with an observation rather than failing the signal.
+ * is skipped with a coverage warning rather than failing the signal.
  */
 export async function checkThreatFox(
   hostname: string,
   signal?: AbortSignal,
-): Promise<{ match: FeedMatch | null; observation: string | null }> {
+): Promise<{ match: FeedMatch | null; warning: string | null }> {
   const env = getEnv();
   if (!env.URLHAUS_AUTH_KEY) {
     return {
       match: null,
-      observation:
-        "ThreatFox lookup skipped: no abuse.ch Auth-Key is configured.",
+      warning: "ThreatFox lookup skipped: no abuse.ch Auth-Key is configured.",
     };
   }
 
@@ -50,7 +49,7 @@ export async function checkThreatFox(
   };
 
   if (payload.query_status !== "ok" || !Array.isArray(payload.data)) {
-    return { match: null, observation: null };
+    return { match: null, warning: null };
   }
 
   const normalizedHostname = hostname.toLowerCase().replace(/\.$/, "");
@@ -72,7 +71,7 @@ export async function checkThreatFox(
   });
 
   if (!entry) {
-    return { match: null, observation: null };
+    return { match: null, warning: null };
   }
 
   const threatType =
@@ -95,7 +94,7 @@ export async function checkThreatFox(
       confidence: confidenceLevel >= 75 ? "high" : "medium",
       matchType: "host",
     },
-    observation: null,
+    warning: null,
   };
 }
 

@@ -64,8 +64,8 @@ export async function runThreatFeedsProvider(
     if (threatFoxResult.value.match) {
       matches.push(threatFoxResult.value.match);
     }
-    if (threatFoxResult.value.observation) {
-      observations.push(threatFoxResult.value.observation);
+    if (threatFoxResult.value.warning) {
+      warnings.push(threatFoxResult.value.warning);
     }
   } else {
     warnings.push(
