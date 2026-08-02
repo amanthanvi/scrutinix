@@ -1,9 +1,8 @@
 import { getEnv } from "@/lib/config/env";
+import { readRequestTextWithLimit } from "@/lib/domain/request-body";
+import { MAX_BATCH_SIZE, MAX_SCAN_BODY_BYTES } from "@/lib/domain/scan-limits";
 import { normalizeUrlInput, type NormalizedUrl } from "@/lib/domain/url";
 import { createApiError } from "@/lib/server/api-error";
-
-const MAX_BODY_BYTES = 32 * 1024;
-export const MAX_BATCH_SIZE = 10;
 
 export type ScanRequestOutcome =
   | { ok: true; targets: NormalizedUrl[] }
@@ -33,58 +32,26 @@ export async function parseScanRequest(
   }
 
   const declaredLength = Number(request.headers.get("content-length") ?? "0");
-  if (Number.isFinite(declaredLength) && declaredLength > MAX_BODY_BYTES) {
+  if (Number.isFinite(declaredLength) && declaredLength > MAX_SCAN_BODY_BYTES) {
     return reject(413, "payload_too_large", "Request body is too large.");
   }
 
-  const bodyResult = await readBodyWithLimit(request);
-  if (!bodyResult.ok) {
+  const bodyResult = await readRequestTextWithLimit(
+    request,
+    MAX_SCAN_BODY_BYTES,
+  );
+  if (!bodyResult.ok && bodyResult.reason === "too_large") {
     return reject(413, "payload_too_large", "Request body is too large.");
   }
 
   let body: unknown;
   try {
-    body = JSON.parse(bodyResult.text);
+    body = JSON.parse(bodyResult.ok ? bodyResult.text : "");
   } catch {
     body = null;
   }
 
   return shape === "single" ? parseSingleBody(body) : parseBatchBody(body);
-}
-
-async function readBodyWithLimit(
-  request: Request,
-): Promise<{ ok: true; text: string } | { ok: false }> {
-  if (!request.body) {
-    return { ok: true, text: "" };
-  }
-
-  const reader = request.body.getReader();
-  const decoder = new TextDecoder();
-  let bytesRead = 0;
-  let text = "";
-
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      bytesRead += value.byteLength;
-      if (bytesRead > MAX_BODY_BYTES) {
-        await reader.cancel().catch(() => undefined);
-        return { ok: false };
-      }
-
-      text += decoder.decode(value, { stream: true });
-    }
-
-    text += decoder.decode();
-    return { ok: true, text };
-  } catch {
-    return { ok: true, text: "" };
-  } finally {
-    reader.releaseLock();
-  }
 }
 
 function parseSingleBody(body: unknown): ScanRequestOutcome {

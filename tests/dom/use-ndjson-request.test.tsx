@@ -35,7 +35,12 @@ describe("useNdjsonRequest", () => {
       await result.current.start(
         { url: "https://example.com/" },
         {
-          onEvent: (event) => events.push(event),
+          onEvent: (event) => {
+            events.push(event);
+            return (event as { type?: string }).type === "b"
+              ? "terminal"
+              : "continue";
+          },
           onError,
           onAborted: vi.fn(),
         },
@@ -100,7 +105,14 @@ describe("useNdjsonRequest", () => {
     await act(async () => {
       await result.current.start(
         { url: "https://example.com/" },
-        { onEvent: (event) => events.push(event), onError, onAborted: vi.fn() },
+        {
+          onEvent: (event) => {
+            events.push(event);
+            return "continue";
+          },
+          onError,
+          onAborted: vi.fn(),
+        },
       );
     });
 
@@ -177,7 +189,10 @@ describe("useNdjsonRequest", () => {
       const second = result.current.start(
         { url: "https://new.example/" },
         {
-          onEvent: (event) => secondEvents.push(event),
+          onEvent: (event) => {
+            secondEvents.push(event);
+            return "terminal";
+          },
           onError: vi.fn(),
           onAborted: vi.fn(),
         },
@@ -187,5 +202,32 @@ describe("useNdjsonRequest", () => {
 
     expect(firstAborted).not.toHaveBeenCalled();
     expect(secondEvents).toEqual([{ type: "new" }]);
+  });
+
+  it("reports a clean EOF that arrives before a terminal event", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ndjsonResponse(['{"type":"scan_started"}'])),
+    );
+
+    const { result } = renderHook(() => useNdjsonRequest(OPTIONS));
+    const onError = vi.fn();
+
+    await act(async () => {
+      await result.current.start(
+        { url: "https://example.com/" },
+        {
+          onEvent: () => "continue",
+          onError,
+          onAborted: vi.fn(),
+        },
+      );
+    });
+
+    expect(onError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: "The result stream ended before a terminal event.",
+      }),
+    );
   });
 });

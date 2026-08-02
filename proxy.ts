@@ -3,7 +3,7 @@ import type { NextRequest } from "next/server";
 
 import { buildContentSecurityPolicy, createCspNonce } from "@/lib/server/csp";
 import { applyRateLimit, getClientRateLimitId } from "@/lib/server/rate-limit";
-import { MAX_BATCH_SIZE } from "@/lib/server/scan-request";
+import { getScanRequestCost } from "@/lib/server/scan-cost";
 
 export async function proxy(request: NextRequest) {
   if (request.nextUrl.pathname.startsWith("/api/analyze")) {
@@ -16,7 +16,10 @@ export async function proxy(request: NextRequest) {
 async function enforceRateLimit(request: NextRequest) {
   // Identity trusts platform/proxy headers; see getClientRateLimitId.
   const identifier = getClientRateLimitId(request.headers);
-  const limit = await applyRateLimit(identifier, await scanCost(request));
+  const limit = await applyRateLimit(
+    identifier,
+    await getScanRequestCost(request, request.nextUrl.pathname),
+  );
 
   if (!limit.success) {
     const retryAfter = Math.max(
@@ -39,27 +42,6 @@ async function enforceRateLimit(request: NextRequest) {
   const response = NextResponse.next();
   response.headers.set("X-RateLimit-Remaining", String(limit.remaining));
   return response;
-}
-
-/**
- * A batch of N URLs consumes N rate-limit tokens; a malformed body costs 1
- * (the route will 400 it anyway).
- */
-async function scanCost(request: NextRequest): Promise<number> {
-  if (!request.nextUrl.pathname.startsWith("/api/analyze/batch")) {
-    return 1;
-  }
-
-  try {
-    const body = (await request.clone().json()) as { urls?: unknown };
-    if (Array.isArray(body.urls)) {
-      return Math.min(Math.max(body.urls.length, 1), MAX_BATCH_SIZE);
-    }
-  } catch {
-    // Unreadable body; charge the minimum.
-  }
-
-  return 1;
 }
 
 function applyCspNonce(request: NextRequest) {
