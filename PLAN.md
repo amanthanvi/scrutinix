@@ -1,12 +1,7 @@
 # PLAN.md
 
-> **Historical record.** This file captures the original rebuild and the
-> 2026-03-23 public-repo polish; it is no longer a live tracker. Current
-> architecture and conventions live in `CLAUDE.md`, `AGENTS.md`, and
-> `SPEC.md`.
-
-Execution plan for Scrutinix as of the implemented ship state plus the
-2026-03-23 public-repo polish follow-up after the rename cleanup.
+Living execution plan for Scrutinix. This file reflects the implemented ship
+state plus the current analysis-hardening and review-remediation work.
 
 ## Status Legend
 
@@ -17,10 +12,10 @@ Execution plan for Scrutinix as of the implemented ship state plus the
 
 ## Current Snapshot
 
-- Date: 2026-07-17
-- Execution status: `P20 advisory wave 001-006 merged locally`
+- Date: 2026-08-02
+- Execution status: `P21 analysis expansion review remediation in progress`
 - Platform:
-  - Next.js `16.2.10`
+  - Next.js `16.2.12`
   - React `19.2.x`
   - Node `22 LTS`
   - NDJSON streaming over `fetch`
@@ -28,6 +23,9 @@ Execution plan for Scrutinix as of the implemented ship state plus the
   - `proxy.ts` enforces rate limits on `/api/analyze` request paths.
   - Node.js route handlers orchestrate eight signals and stream normalized results.
   - IndexedDB stores client-only history, export state, and re-scan sources.
+  - The ML ensemble uses a bundled quantized ONNX URL classifier plus lexical heuristics; scans do not call hosted inference.
+  - Threat-feed coverage combines URLhaus, cached OpenPhish, ThreatFox, and Spamhaus DBL / SURBL DNSBL lookups.
+  - Completed results use a process-local LRU cache plus optional shared Redis storage with explicit TTL and bounded best-effort operations.
   - The home page now renders scanner-first: a compact top band with the scan dock and minimal product framing, a calmer two-column operational workspace, and a sticky history rail. Method and caveat notes live on `/about`, not under the home workspace.
   - The public site now shares one editorial shell across `/`, `/about`, and `/privacy`, so the trust, methodology, and privacy surfaces stay visually aligned with the scanner.
   - The UI now uses the actual pulled shadcn preset `b1D24VYe` as its baseline language: neutral `radix-mira` tokens, compact controls, and smaller radii adapted onto the branded `components/scrutinix/*` surface.
@@ -47,7 +45,8 @@ Completed local verification:
 - `npm run typecheck`
 - `npm run test:unit -- --run`
 - `npm run test:integration -- --run`
-- `npm run test:e2e -- --grep @smoke`
+- `npm run test:dom -- --run`
+- `npm run test:e2e`
 - `npm run build`
 - `npm audit`
 - `npm run lighthouse`
@@ -84,8 +83,16 @@ Observed results:
 
 ### P20 Advisory wave execute (001-006)
 
-- [x] Merged local advisor branches on dvisor/execute-all-merge: 006 (incl. 004), 001, 002, 003, 005.
-- See plans/README.md for DONE status and per-plan detail.
+- [x] Merged local advisor branches on `advisor/execute-all-merge`: 006 (incl. 004), 001, 002, 003, 005.
+- Historical executor plans and their per-plan details remain available in git history.
+
+### P21 Expand local intelligence and verification
+
+- [x] Replace hosted ML inference with a bundled quantized ONNX classifier plus lexical consensus.
+- [x] Add ThreatFox and DNSBL coverage inside the existing eight-signal contract.
+- [x] Centralize runtime schemas and harden request, stream, history, cache, and provider boundaries.
+- [x] Expand unit, integration, DOM, fixture-backed E2E, CI, and dependency-audit coverage.
+- [-] Resolve external review findings, run the full verification chain, and land the reviewed PR stack.
 
 ### P01 Reset the baseline and living docs
 

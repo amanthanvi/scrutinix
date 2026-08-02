@@ -5,7 +5,7 @@
 **IA:** Scanner-first **kept** (narrow brand column + wide scan console). Not reopened.  
 **Supersedes:** Instrument Casefile (historical text removed; see git history / `DESIGN-REDIRECTION.md`).
 
-**Probes:** `design/probes/probe-daylight-desk.png` (chosen), `probe-ink-margin.png` (rejected — navy-security second-order), `probe-soft-blotter.png` (rejected — stationery costume).
+**Probe record:** Daylight Desk was chosen; Ink Margin (navy-security second-order) and Soft Blotter (stationery costume) were rejected. The point-in-time probe images remain available in git history.
 
 ---
 

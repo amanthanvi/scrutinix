@@ -149,7 +149,12 @@ function checkOrigin(request: Request): ScanRequestOutcome | null {
   for (const header of ["host", "x-forwarded-host"]) {
     const value = request.headers.get(header);
     if (value) {
-      allowedHosts.add(value.trim().toLowerCase());
+      for (const host of value.split(",")) {
+        const normalized = host.trim().toLowerCase();
+        if (normalized) {
+          allowedHosts.add(normalized);
+        }
+      }
     }
   }
 

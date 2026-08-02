@@ -6,7 +6,7 @@ Project-local operating notes for agents working in this repository. Keep this f
 
 - Build and ship Scrutinix, a FOSS public URL threat analyzer with streamed multi-signal results, batch analysis, local history, and production-grade UX.
 - Treat `SPEC.md` as the product and architecture source of truth.
-- `PLAN.md` is a historical execution record from the original rebuild; do not treat it as a live tracker.
+- Treat `PLAN.md` as the execution source of truth. Update it whenever scope, order, or status changes.
 
 ## Current Architecture
 
@@ -63,16 +63,16 @@ Project-local operating notes for agents working in this repository. Keep this f
 
 ## Anti-Patterns To Avoid
 
-- No new broad state-management layer unless a concrete need is documented in `SPEC.md`.
+- No new broad state-management layer unless a concrete need appears in `PLAN.md`.
 - No silent fallback from provider outage to a malicious verdict.
-- No stale documentation drift: if a command, env var, endpoint, or signal contract changes, update `SPEC.md`, `CLAUDE.md`, and user-facing docs in the same workstream.
+- No stale documentation drift: if a command, env var, endpoint, or signal contract changes, update `PLAN.md`, `SPEC.md`, `CLAUDE.md`, and user-facing docs in the same workstream.
 - No `next lint`; use ESLint directly.
 - No broad shadcnization of branded components; preserve Scrutinix-specific hero, signal, and motion components unless there is a concrete accessibility or maintainability reason to replace them.
 
 ## Coordination
 
-- If you spawn subagents, point them to this file plus `CLAUDE.md` and `SPEC.md` first.
-- Before marking work done, run the narrowest relevant verification step.
+- If you spawn subagents, point them to this file plus `PLAN.md` and `SPEC.md` first.
+- Before marking work done, run the narrowest relevant verification step and update `PLAN.md` status.
 
 ## Learned User Preferences
 

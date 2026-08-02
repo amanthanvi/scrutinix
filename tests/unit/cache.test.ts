@@ -47,7 +47,7 @@ describe("ResultCache", () => {
   it("falls back to the remote store and revalidates its contents", async () => {
     const stored = buildResult("https://remote.example/");
     const remote: RemoteCacheStore = {
-      get: vi.fn(async () => stored as unknown),
+      get: vi.fn(async () => ({ value: stored, ttlMs: 12_000 })),
       set: vi.fn(async () => "OK"),
     };
     const cache = new ResultCache(2, () => remote);
@@ -63,7 +63,10 @@ describe("ResultCache", () => {
 
   it("rejects remote values that fail schema validation", async () => {
     const remote: RemoteCacheStore = {
-      get: vi.fn(async () => "not-an-analysis-result"),
+      get: vi.fn(async () => ({
+        value: "not-an-analysis-result",
+        ttlMs: 12_000,
+      })),
       set: vi.fn(async () => "OK"),
     };
     const cache = new ResultCache(2, () => remote);
@@ -106,6 +109,39 @@ describe("ResultCache", () => {
 
     await expect(cache.set("key", result, 60_000)).resolves.toBeUndefined();
     expect(await cache.get("key")).toEqual(result);
+  });
+
+  it("preserves a remote entry's remaining TTL in the local layer", async () => {
+    vi.useFakeTimers();
+    const stored = buildResult("https://remote.example/");
+    const remote: RemoteCacheStore = {
+      get: vi
+        .fn()
+        .mockResolvedValueOnce({ value: stored, ttlMs: 1_000 })
+        .mockResolvedValueOnce(null),
+      set: vi.fn(async () => "OK"),
+    };
+    const cache = new ResultCache(2, () => remote);
+
+    expect(await cache.get("remote-key")).toEqual(stored);
+    await vi.advanceTimersByTimeAsync(1_001);
+    expect(await cache.get("remote-key")).toBeNull();
+    expect(remote.get).toHaveBeenCalledTimes(2);
+    vi.useRealTimers();
+  });
+
+  it("bounds a stalled remote write", async () => {
+    vi.useFakeTimers();
+    const remote: RemoteCacheStore = {
+      get: vi.fn(async () => null),
+      set: vi.fn(() => new Promise(() => undefined)),
+    };
+    const cache = new ResultCache(2, () => remote);
+    const write = cache.set("key", buildResult("https://example.com/"), 60_000);
+
+    await vi.advanceTimersByTimeAsync(1_000);
+    await expect(write).resolves.toBeUndefined();
+    vi.useRealTimers();
   });
 });
 

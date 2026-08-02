@@ -4,14 +4,21 @@ import type { Redis } from "@upstash/redis";
 
 import type { AnalysisResult } from "@/lib/domain/types";
 import { sanitizeAnalysisResult } from "@/lib/domain/runtime-safety";
+import { withTimeout } from "@/lib/server/http";
 import { getRedisRestConfig } from "@/lib/server/redis-config";
 
 export const FULL_RESULT_TTL_MS = 1000 * 60 * 15;
 export const DEGRADED_RESULT_TTL_MS = 1000 * 60 * 5;
+const REMOTE_CACHE_TIMEOUT_MS = 1_000;
+
+interface RemoteCacheEntry {
+  value: unknown;
+  ttlMs: number;
+}
 
 /** Minimal remote store surface so tests can inject a fake. */
 export interface RemoteCacheStore {
-  get(key: string): Promise<unknown>;
+  get(key: string): Promise<RemoteCacheEntry | null>;
   set(key: string, value: AnalysisResult, ttlMs: number): Promise<unknown>;
 }
 
@@ -46,17 +53,21 @@ export class ResultCache {
     }
 
     try {
-      const value = await remote.get(remoteKey(key));
-      if (!value) {
+      const entry = await withTimeout(
+        remote.get(remoteKey(key)),
+        REMOTE_CACHE_TIMEOUT_MS,
+        "Shared cache read",
+      );
+      if (!entry || entry.ttlMs <= 0) {
         return null;
       }
 
-      const result = sanitizeAnalysisResult(value);
+      const result = sanitizeAnalysisResult(entry.value);
       if (!result) {
         return null;
       }
 
-      this.setLocal(key, result, DEGRADED_RESULT_TTL_MS);
+      this.setLocal(key, result, entry.ttlMs);
       return result;
     } catch {
       return null;
@@ -76,7 +87,11 @@ export class ResultCache {
     }
 
     try {
-      await remote.set(remoteKey(key), result, ttlMs);
+      await withTimeout(
+        remote.set(remoteKey(key), result, ttlMs),
+        REMOTE_CACHE_TIMEOUT_MS,
+        "Shared cache write",
+      );
     } catch {
       // Shared cache is best-effort; the local layer already has the entry.
     }
@@ -154,7 +169,14 @@ function getSharedRedisStore(): RemoteCacheStore | null {
   }
 
   return {
-    get: async (key) => (await redis).get(key),
+    get: async (key) => {
+      const client = await redis;
+      const [value, ttlMs] = await Promise.all([
+        client.get(key),
+        client.pttl(key),
+      ]);
+      return value === null || ttlMs <= 0 ? null : { value, ttlMs };
+    },
     set: async (key, value, ttlMs) =>
       (await redis).set(key, value, { px: ttlMs }),
   };

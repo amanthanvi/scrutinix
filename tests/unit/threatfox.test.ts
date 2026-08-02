@@ -78,6 +78,39 @@ describe("checkThreatFox", () => {
     expect(outcome.match).toBeNull();
   });
 
+  it("matches only exact hosts and subdomains on hostname boundaries", async () => {
+    vi.stubEnv("URLHAUS_AUTH_KEY", "abusech-key");
+    resetEnvForTests();
+
+    const responses = [
+      "http://notexample.com/payload",
+      "http://example.com.evil.test/payload",
+      "http://unrelated.test/?next=example.com",
+      "https://sub.example.com/payload",
+    ];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        Response.json({
+          query_status: "ok",
+          data: responses.map((ioc) => ({
+            ioc,
+            threat_type: "payload_delivery",
+            confidence_level: 80,
+          })),
+        }),
+      ),
+    );
+
+    const outcome = await checkThreatFox("example.com");
+
+    expect(outcome.match).toMatchObject({
+      feed: "threatfox",
+      matchedUrl: "example.com",
+      matchType: "host",
+    });
+  });
+
   it("throws on server errors so the caller can count the failure", async () => {
     vi.stubEnv("URLHAUS_AUTH_KEY", "abusech-key");
     resetEnvForTests();

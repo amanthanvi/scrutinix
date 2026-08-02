@@ -53,13 +53,23 @@ export async function checkThreatFox(
     return { match: null, observation: null };
   }
 
-  const entry = payload.data.find(
-    (item): item is Record<string, unknown> =>
-      Boolean(item) &&
-      typeof item === "object" &&
-      typeof (item as Record<string, unknown>).ioc === "string" &&
-      String((item as Record<string, unknown>).ioc).includes(hostname),
-  );
+  const normalizedHostname = hostname.toLowerCase().replace(/\.$/, "");
+  const entry = payload.data.find((item): item is Record<string, unknown> => {
+    if (!item || typeof item !== "object") {
+      return false;
+    }
+
+    const ioc = (item as Record<string, unknown>).ioc;
+    if (typeof ioc !== "string") {
+      return false;
+    }
+
+    const iocHostname = parseIocHostname(ioc);
+    return (
+      iocHostname === normalizedHostname ||
+      iocHostname?.endsWith(`.${normalizedHostname}`) === true
+    );
+  });
 
   if (!entry) {
     return { match: null, observation: null };
@@ -87,4 +97,13 @@ export async function checkThreatFox(
     },
     observation: null,
   };
+}
+
+function parseIocHostname(ioc: string): string | null {
+  try {
+    const value = ioc.includes("://") ? ioc : `http://${ioc}`;
+    return new URL(value).hostname.toLowerCase().replace(/\.$/, "");
+  } catch {
+    return null;
+  }
 }

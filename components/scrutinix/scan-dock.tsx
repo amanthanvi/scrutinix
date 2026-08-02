@@ -18,13 +18,23 @@ import {
 } from "@/lib/client/export";
 
 export function ScanDock() {
+  const { prefill } = useAnalyzerRuntime();
+
+  return (
+    <ScanDockContent
+      key={prefill?.nonce ?? "initial"}
+      initialSingleUrl={prefill?.url ?? ""}
+    />
+  );
+}
+
+function ScanDockContent({ initialSingleUrl }: { initialSingleUrl: string }) {
   const {
     active,
     activeTab,
     batch,
     formError,
     live,
-    prefill,
     rescanUrl,
     scan,
     setActiveTab,
@@ -36,17 +46,10 @@ export function ScanDock() {
 
   // Input text lives here, not in the shared context: typing must not
   // re-render the whole analyzer tree. The runtime pushes URLs back in via
-  // prefill (re-scan, history selection), adopted during render.
-  const [singleUrl, setSingleUrl] = useState("");
+  // prefill (re-scan, history selection). ScanDock remounts this local input
+  // island when the prefill nonce changes, avoiding shared-context keystrokes.
+  const [singleUrl, setSingleUrl] = useState(initialSingleUrl);
   const [batchInput, setBatchInput] = useState("");
-  const [adoptedPrefillNonce, setAdoptedPrefillNonce] = useState<number | null>(
-    null,
-  );
-
-  if (prefill && prefill.nonce !== adoptedPrefillNonce) {
-    setAdoptedPrefillNonce(prefill.nonce);
-    setSingleUrl(prefill.url);
-  }
 
   return (
     <section

@@ -56,8 +56,8 @@ export function resetLocalClassifierForTests() {
 }
 
 /**
- * Classify a URL with the bundled transformer. Returns null (never throws
- * past its caller's catch) so a broken runtime degrades to lexical-only.
+ * Classify a URL with the bundled transformer. Initialization and inference
+ * errors throw so the ensemble caller can degrade to lexical-only in its catch.
  */
 export async function classifyUrlLocally(
   url: string,
@@ -70,11 +70,6 @@ export async function classifyUrlLocally(
       throw error;
     },
   ));
-
-  if (pending === null) {
-    globalThis.__sxUrlClassifier = undefined;
-    return classifyUrlLocally(url);
-  }
 
   const classifier = await withTimeout(
     pending,

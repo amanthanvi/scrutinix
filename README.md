@@ -146,7 +146,7 @@ npm run lighthouse
 ## Repository Guide
 
 - [`SPEC.md`](./SPEC.md): product and architecture source of truth
-- [`PLAN.md`](./PLAN.md): historical execution record from the original rebuild
+- [`PLAN.md`](./PLAN.md): live execution plan and delivery status
 - [`CONTRIBUTING.md`](./CONTRIBUTING.md): local setup and contribution rules
 - [`SECURITY.md`](./SECURITY.md): private vulnerability reporting guidance
 - [`LICENSE`](./LICENSE): MIT
