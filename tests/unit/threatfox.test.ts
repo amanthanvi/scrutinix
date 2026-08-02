@@ -13,14 +13,14 @@ describe("checkThreatFox", () => {
     vi.unstubAllGlobals();
   });
 
-  it("skips with an observation when no auth key is configured", async () => {
+  it("skips with a coverage warning when no auth key is configured", async () => {
     delete process.env.URLHAUS_AUTH_KEY;
     resetEnvForTests();
 
     const outcome = await checkThreatFox("example.com");
 
     expect(outcome.match).toBeNull();
-    expect(outcome.observation).toContain("no abuse.ch Auth-Key");
+    expect(outcome.warning).toContain("no abuse.ch Auth-Key");
   });
 
   it("maps high-confidence IOCs to high-confidence matches", async () => {
