@@ -25,7 +25,9 @@ test("an unreachable host renders an unknown verdict, not safe", async ({
   await submitSingleScan(page, "https://unreachable.scrutinix.test/");
 
   await expect(page.getByLabel(/^scan result: unknown$/i)).toBeVisible();
-  await expect(page.getByText(/host could not be inspected/i)).toBeVisible();
+  await expect(
+    page.getByText(/host was unreachable.*not evidence of safety/i),
+  ).toBeVisible();
   await expect(page.getByText(/^safe \(0-24\)$/i)).toHaveCount(0);
 });
 
