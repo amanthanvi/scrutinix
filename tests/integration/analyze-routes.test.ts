@@ -128,6 +128,25 @@ describe("analysis routes", () => {
     expect(body.error?.code).toBe("cross_origin_forbidden");
   });
 
+  it("rejects opaque browser origins", async () => {
+    const { POST } = await import("@/app/api/analyze/route");
+
+    const response = await POST(
+      new Request("http://localhost/api/analyze", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          origin: "null",
+        },
+        body: JSON.stringify({ url: "example.com" }),
+      }),
+    );
+
+    expect(response.status).toBe(403);
+    const body = (await response.json()) as { error?: { code?: string } };
+    expect(body.error?.code).toBe("cross_origin_forbidden");
+  });
+
   it("allows same-origin scan requests", async () => {
     const { POST } = await import("@/app/api/analyze/route");
     installHandlers();
@@ -146,6 +165,44 @@ describe("analysis routes", () => {
     expect(response.status).toBe(200);
     // Drain the stream so the scan does not keep running into the next test.
     await parseNdjsonEvents(response);
+  });
+
+  it("rejects a same-host origin with a different scheme", async () => {
+    const { POST } = await import("@/app/api/analyze/route");
+    installHandlers();
+
+    const requestBody = JSON.stringify({ url: "example.com" });
+    const mismatchedResponse = await POST(
+      new Request("https://scrutinix.example/api/analyze", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          host: "scrutinix.example",
+          origin: "http://scrutinix.example",
+        },
+        body: requestBody,
+      }),
+    );
+
+    if (mismatchedResponse.status === 200) {
+      await parseNdjsonEvents(mismatchedResponse);
+    }
+    expect(mismatchedResponse.status).toBe(403);
+
+    const matchingResponse = await POST(
+      new Request("https://scrutinix.example/api/analyze", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          host: "scrutinix.example",
+          origin: "https://scrutinix.example",
+        },
+        body: requestBody,
+      }),
+    );
+
+    expect(matchingResponse.status).toBe(200);
+    await parseNdjsonEvents(matchingResponse);
   });
 
   it("matches the browser origin against the Host header, not request.url", async () => {

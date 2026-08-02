@@ -123,47 +123,66 @@ function parseBatchBody(body: unknown): ScanRequestOutcome {
  * Otherwise any third-party page could burn provider quota via cross-origin
  * fetch. Requests without an Origin (curl, server-to-server) pass through.
  *
- * Hosts are compared instead of full origins because Next normalizes
- * request.url to the server's configured hostname (e.g. localhost behind
- * `next start`), so the incoming Host header is also checked. Forwarding
+ * Full origins are compared so scheme and effective port remain part of the
+ * authorization decision. Next can normalize request.url to the server's
+ * configured hostname (e.g. localhost behind `next start`), so the incoming
+ * Host header is also paired with the request URL's protocol. Forwarding
  * headers are caller-controlled unless a trusted proxy contract says
  * otherwise and must not authorize an origin.
  */
 function checkOrigin(request: Request): ScanRequestOutcome | null {
   const origin = request.headers.get("origin");
-  if (!origin || origin === "null") {
+  if (!origin) {
     return null;
   }
+  if (origin === "null") {
+    return rejectCrossOrigin();
+  }
 
-  let originHost: string;
+  let requestOrigin: string;
   try {
-    originHost = new URL(origin).host.toLowerCase();
+    requestOrigin = toHttpOrigin(origin);
   } catch {
     return rejectCrossOrigin();
   }
 
-  const allowedHosts = new Set<string>();
-  const host = request.headers.get("host")?.trim().toLowerCase();
-  if (host) {
-    allowedHosts.add(host);
-  }
+  const allowedOrigins = new Set<string>();
+  let requestUrl: URL | null = null;
 
   try {
-    allowedHosts.add(new URL(request.url).host.toLowerCase());
+    requestUrl = new URL(request.url);
+    allowedOrigins.add(toHttpOrigin(request.url));
   } catch {
     // request.url is always absolute in route handlers; ignore otherwise.
+  }
+
+  const host = request.headers.get("host")?.trim();
+  if (host && requestUrl && !/[\\/@?#\s]/.test(host)) {
+    try {
+      allowedOrigins.add(toHttpOrigin(`${requestUrl.protocol}//${host}`));
+    } catch {
+      // Invalid Host header; the other deployment origins still apply.
+    }
   }
 
   const appUrl = getEnv().NEXT_PUBLIC_APP_URL;
   if (appUrl) {
     try {
-      allowedHosts.add(new URL(appUrl).host.toLowerCase());
+      allowedOrigins.add(toHttpOrigin(appUrl));
     } catch {
-      // Malformed configured URL; the header-derived hosts still apply.
+      // Malformed configured URL; the request-derived origins still apply.
     }
   }
 
-  return allowedHosts.has(originHost) ? null : rejectCrossOrigin();
+  return allowedOrigins.has(requestOrigin) ? null : rejectCrossOrigin();
+}
+
+function toHttpOrigin(value: string) {
+  const parsed = new URL(value);
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    throw new TypeError("Origin must use HTTP or HTTPS.");
+  }
+  return parsed.origin.toLowerCase();
 }
 
 function rejectCrossOrigin(): ScanRequestOutcome {
