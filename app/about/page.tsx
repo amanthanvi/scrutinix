@@ -48,8 +48,8 @@ const consoleNotes: ReadonlyArray<{ title: string; body: ReactNode }> = [
     ),
   },
   {
-    title: "Feed hits need the full URL",
-    body: "URLhaus and OpenPhish match the exact IOC string you paste — not browse pages like urlhaus.abuse.ch/browse/.",
+    title: "Feed hits favor the exact URL",
+    body: "URLhaus and OpenPhish are checked for the exact URL you paste — not browse pages like urlhaus.abuse.ch/browse/. When only other URLs on the same hostname are listed, the scan reports a lower-confidence host-level match and labels it as such.",
   },
 ];
 

@@ -15,9 +15,13 @@ export function analyzePageContent(
   html: string,
   finalUrl: string,
 ): PageContentFindings {
+  // Browsers resolve relative URLs against the first <base href>, so a
+  // phishing page can point a relative form action at another origin.
+  const baseUrl = resolveDocumentBaseUrl(html, finalUrl);
+
   return {
     title: extractTitle(html),
-    crossOriginFormHosts: extractCrossOriginFormHosts(html, finalUrl),
+    crossOriginFormHosts: extractCrossOriginFormHosts(html, finalUrl, baseUrl),
     passwordInputCount: countMatches(
       html,
       /<input\b[^>]*type\s*=\s*["']?password/gi,
@@ -25,8 +29,27 @@ export function analyzePageContent(
     iframeCount: countMatches(html, /<iframe\b/gi),
     hiddenIframeCount: countHiddenIframes(html),
     obfuscationHints: extractObfuscationHints(html),
-    metaRefreshTarget: extractMetaRefreshTarget(html, finalUrl),
+    metaRefreshTarget: extractMetaRefreshTarget(html, baseUrl),
   };
+}
+
+/** The document's effective base URL: the first valid HTTP(S) <base href>, else the page URL. */
+function resolveDocumentBaseUrl(html: string, finalUrl: string): string {
+  const base = /<base\b[^>]*>/i.exec(html);
+  const href = base ? extractAttribute(base[0], "href") : null;
+  if (!href) {
+    return finalUrl;
+  }
+
+  try {
+    const resolved = new URL(href, finalUrl);
+    if (resolved.protocol !== "http:" && resolved.protocol !== "https:") {
+      return finalUrl;
+    }
+    return resolved.toString();
+  } catch {
+    return finalUrl;
+  }
 }
 
 function extractTitle(html: string): string | null {
@@ -39,7 +62,11 @@ function extractTitle(html: string): string | null {
   return title ? title.slice(0, MAX_TITLE_LENGTH) : null;
 }
 
-function extractCrossOriginFormHosts(html: string, finalUrl: string): string[] {
+function extractCrossOriginFormHosts(
+  html: string,
+  finalUrl: string,
+  baseUrl: string,
+): string[] {
   let pageDomain: string;
   try {
     pageDomain = getRegistrableDomain(new URL(finalUrl).hostname);
@@ -59,7 +86,9 @@ function extractCrossOriginFormHosts(html: string, finalUrl: string): string[] {
 
     let target: URL;
     try {
-      target = new URL(action, finalUrl);
+      // Resolve against the document base, but compare against the page's
+      // own domain - that is where the browser would actually submit.
+      target = new URL(action, baseUrl);
     } catch {
       continue;
     }
@@ -132,7 +161,7 @@ function extractObfuscationHints(html: string): string[] {
 
 function extractMetaRefreshTarget(
   html: string,
-  finalUrl: string,
+  baseUrl: string,
 ): string | null {
   const meta = /<meta\b[^>]*http-equiv\s*=\s*["']?refresh["']?[^>]*>/i.exec(
     html,
@@ -148,7 +177,7 @@ function extractMetaRefreshTarget(
   }
 
   try {
-    const target = new URL(urlPart[1], finalUrl);
+    const target = new URL(urlPart[1], baseUrl);
     if (target.protocol !== "http:" && target.protocol !== "https:") {
       return null;
     }

