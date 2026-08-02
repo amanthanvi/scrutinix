@@ -11,7 +11,10 @@ vi.mock("@/lib/server/http", async (importOriginal) => {
   };
 });
 
-import { runVirusTotalProvider } from "@/lib/server/providers/virustotal";
+import {
+  resetVirusTotalQuotaCooldownForTests,
+  runVirusTotalProvider,
+} from "@/lib/server/providers/virustotal";
 
 function completedAnalysisJson() {
   return {
@@ -36,6 +39,7 @@ describe("runVirusTotalProvider", () => {
     vi.stubEnv("NODE_ENV", "test");
     vi.stubEnv("VIRUSTOTAL_API_KEY", "vt-test-key");
     resetEnvForTests();
+    resetVirusTotalQuotaCooldownForTests();
   });
 
   afterEach(() => {
@@ -245,6 +249,43 @@ describe("runVirusTotalProvider", () => {
       String(arg).includes("/domains/"),
     );
     expect(domainCalls).toHaveLength(1);
+  });
+
+  it("skips domain enrichment while the quota cools down after a 429", async () => {
+    let urlCalls = 0;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/urls/")) {
+        urlCalls += 1;
+        // The first primary lookup trips the free-tier limit; the retry
+        // succeeds but must leave the enrichment budget untouched.
+        if (urlCalls === 1) {
+          return new Response(null, {
+            status: 429,
+            headers: { "retry-after": "0" },
+          });
+        }
+        return Response.json({
+          data: {
+            attributes: {
+              last_analysis_stats: { malicious: 0, harmless: 10 },
+              last_analysis_results: {},
+            },
+          },
+        });
+      }
+      return new Response("unexpected", { status: 500 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await runVirusTotalProvider("https://cooldown.example/");
+
+    expect(result.malicious).toBe(0);
+    expect(result.domain).toBeNull();
+    const domainCalls = fetchMock.mock.calls.filter(([arg]) =>
+      String(arg).includes("/domains/"),
+    );
+    expect(domainCalls).toHaveLength(0);
   });
 
   it("degrades domain enrichment to null when the endpoint errors", async () => {

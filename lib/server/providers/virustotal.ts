@@ -18,6 +18,24 @@ const VT_PROVIDER_BUDGET_MS = 45_000;
 const VT_MAX_POLL_ATTEMPTS = 8;
 const VT_POLL_BASE_DELAY_MS = 2_000;
 const VT_429_MAX_RETRIES = 3;
+/**
+ * After any 429, optional enrichment stands down for this long so the free
+ * tier's 4 req/min budget stays reserved for primary URL-report lookups
+ * (a cold 3-wide batch would otherwise fire six VT calls at once).
+ */
+const VT_QUOTA_COOLDOWN_MS = 60_000;
+
+declare global {
+  var __vtQuotaCooldownUntil: number | undefined;
+}
+
+function vtQuotaUnderPressure(): boolean {
+  return (globalThis.__vtQuotaCooldownUntil ?? 0) > Date.now();
+}
+
+export function resetVirusTotalQuotaCooldownForTests() {
+  globalThis.__vtQuotaCooldownUntil = undefined;
+}
 
 interface VtRequestContext {
   signal?: AbortSignal;
@@ -122,13 +140,17 @@ async function virusTotalFetch(
   apiKey: string,
   context: VtRequestContext,
   init: RequestInit = {},
+  // Optional calls pass false: a 429 answers immediately instead of
+  // spending Retry-After sleeps on non-essential data.
+  retry429 = true,
 ): Promise<Response> {
   const headers = new Headers(init.headers);
   headers.set("x-apikey", apiKey);
 
   let last429: Response | null = null;
+  const maxAttempts = retry429 ? VT_429_MAX_RETRIES : 0;
 
-  for (let attempt = 0; attempt <= VT_429_MAX_RETRIES; attempt += 1) {
+  for (let attempt = 0; attempt <= maxAttempts; attempt += 1) {
     const response = await fetchWithTimeout(
       url,
       { ...init, headers, signal: context.signal },
@@ -139,9 +161,10 @@ async function virusTotalFetch(
       return response;
     }
 
+    globalThis.__vtQuotaCooldownUntil = Date.now() + VT_QUOTA_COOLDOWN_MS;
     last429 = response;
 
-    if (attempt === VT_429_MAX_RETRIES) {
+    if (attempt === maxAttempts) {
       return response;
     }
 
@@ -247,12 +270,20 @@ async function fetchDomainReputation(
     return cached.data;
   }
 
+  // Under quota pressure the optional enrichment yields its request budget to
+  // primary URL-report lookups instead of competing with them.
+  if (vtQuotaUnderPressure()) {
+    return null;
+  }
+
   let data: VirusTotalDomainData | null = null;
   try {
     const response = await virusTotalFetch(
       `${API_BASE}/domains/${encodeURIComponent(domain)}`,
       apiKey,
       context,
+      {},
+      false,
     );
 
     if (response.ok) {

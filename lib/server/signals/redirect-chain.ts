@@ -100,6 +100,16 @@ export async function runRedirectSignal(
       break;
     }
 
+    // Following this Location would exceed the redirect budget. Stop at the
+    // last probed hop instead of presenting an unprobed URL as the reachable
+    // final destination; the hop's Location field still records the target.
+    if (attempt === MAX_REDIRECTS - 1) {
+      observations.push(
+        "The redirect chain hit the follow limit; the next destination was recorded but never probed.",
+      );
+      break;
+    }
+
     const publicRedirectTarget = await assertPublicNetworkTarget(
       nextUrl.toString(),
       {

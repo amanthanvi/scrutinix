@@ -98,6 +98,30 @@ describe("runRedirectSignal", () => {
     ]);
   });
 
+  it("stops at the follow limit without presenting an unprobed destination", async () => {
+    for (let index = 0; index < 5; index += 1) {
+      mockLookupAll([{ address: "93.184.216.34", family: 4 }]);
+    }
+    for (let index = 0; index < 5; index += 1) {
+      mockHttpResponse(302, `http://example.test/hop-${index + 1}`);
+    }
+
+    const result = await runRedirectSignal("http://example.test/hop-0");
+
+    // Five probes maximum; hop-5 is recorded as a Location but never fetched,
+    // so it must not be reported as the reachable final destination.
+    expect(requestMock).toHaveBeenCalledTimes(5);
+    expect(result.finalUrl).toBe("http://example.test/hop-4");
+    expect(result.reachable).toBe(true);
+    expect(result.terminalStatus).toBe(302);
+    expect(result.hops).toHaveLength(5);
+    expect(result.hops.at(-1)?.location).toBe("http://example.test/hop-5");
+    expect(result.observations).toEqual([
+      expect.stringContaining("follow limit"),
+    ]);
+    expect(result.content).toBeNull();
+  });
+
   it("blocks an initial private literal target before a request", async () => {
     const result = await runRedirectSignal("http://127.0.0.1:3000/start");
 
