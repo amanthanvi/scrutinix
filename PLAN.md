@@ -17,7 +17,7 @@ state plus the current analysis-hardening and review-remediation work.
 - Platform:
   - Next.js `16.2.12`
   - React `19.2.x`
-  - Node `22 LTS`
+  - Node `22.23.2 LTS` (`.nvmrc`; deploy compatibility remains `22.x`)
   - NDJSON streaming over `fetch`
 - Architecture:
   - `proxy.ts` enforces rate limits on `/api/analyze` request paths.
@@ -60,9 +60,10 @@ Completed deployment verification:
 
 Observed results:
 
-- Unit tests: `8` files passed, `27` tests passed.
-- Integration tests: `2` files passed, `6` tests passed, including batch per-URL failure isolation.
-- Playwright smoke: `6` tests passed, covering legacy history migration, single-scan, batch-scan, accessibility, keyboard navigation, and history clear undo.
+- Unit tests: `28` files passed, `161` tests passed.
+- Integration tests: `2` files passed, `19` tests passed, including batch per-URL failure isolation.
+- DOM tests: `4` files passed, `11` tests passed.
+- Playwright: `9` tests passed, covering legacy history migration, single-scan, batch-scan, accessibility, keyboard navigation, history undo, and fixture-backed verdicts.
 - Production build: passed with static metadata routes for `/icon`, `/opengraph-image`, `/robots.txt`, and `/sitemap.xml`.
 - Security audit: `0` vulnerabilities reported across prod and dev dependencies after the 2026-05-01 dependency refresh.
 - Lighthouse:
@@ -90,6 +91,7 @@ Observed results:
 
 - [x] Replace hosted ML inference with a bundled quantized ONNX classifier plus lexical consensus.
 - [x] Add ThreatFox and DNSBL coverage inside the existing eight-signal contract.
+- [x] Use the Public Suffix List, including private suffixes, for registrable-domain feed and redirect boundaries.
 - [x] Centralize runtime schemas and harden request, stream, history, cache, and provider boundaries.
 - [x] Expand unit, integration, DOM, fixture-backed E2E, CI, and dependency-audit coverage.
 - [-] Resolve external review findings, run the full verification chain, and land the reviewed PR stack.
@@ -274,4 +276,5 @@ Observed results:
 - 2026-05-01: Next `16.2.4` resolves the direct Next advisories but still pins vulnerable `postcss`; keep the npm `overrides` block until upstream package pins move past the audited vulnerable leaves.
 - 2026-05-01: Active network probes must validate every resolved address and pin outbound sockets to the validated public address; checking only the hostname or first DNS answer leaves room for private-address redirects and rebinding.
 - 2026-05-01: Cache only complete non-error analysis results; a clean verdict with provider partial failures can otherwise mask upstream outages for the full cache TTL.
+- 2026-08-02: Registrable-domain comparisons must include private Public Suffix List entries so unrelated platform tenants such as `safe.github.io` never collapse to `github.io`.
 - 2026-05-01: Keeping parallel PRs out of `PLAN.md` avoided artificial merge conflicts; use one consolidated plan update after the code branches land.

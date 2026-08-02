@@ -63,6 +63,12 @@ export function VerdictHeroResult({
 
   const color = result ? verdictColor(result.verdict) : "var(--sx-accent)";
   const score = result ? verdictScore(result) : 0;
+  const scoreBandLabel =
+    result?.verdict === "unknown"
+      ? "Unknown — not a safety verdict"
+      : result?.verdict === "error"
+        ? "Error — no safety verdict"
+        : threatScoreBandLabel(score);
   const resultSignals = result?.signals ?? createPendingSignalResults();
   const resultMetadata = result?.metadata;
   const displayUrl = result
@@ -307,12 +313,12 @@ export function VerdictHeroResult({
                 Threat score
               </p>
               <span className="sr-only">
-                Threat score {score} out of 100. {threatScoreBandLabel(score)}.
+                Threat score {score} out of 100. {scoreBandLabel}.
               </span>
               <ScoreRing
                 score={score}
                 color={color}
-                bandLabel={threatScoreBandLabel(score)}
+                bandLabel={scoreBandLabel}
               />
               <div className="mt-4 h-2.5 w-full overflow-hidden rounded-full bg-[var(--sx-border)]">
                 <div
