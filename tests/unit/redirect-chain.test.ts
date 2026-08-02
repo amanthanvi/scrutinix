@@ -26,7 +26,7 @@ const lookupMock = vi.mocked(lookup);
 const requestMock = vi.mocked(http.request);
 
 afterEach(() => {
-  vi.clearAllMocks();
+  vi.resetAllMocks();
 });
 
 describe("runRedirectSignal", () => {
@@ -107,6 +107,58 @@ describe("runRedirectSignal", () => {
     expect(result.terminalStatus).toBeNull();
     expect(result.terminalError).toContain("private");
     expect(result.hops).toEqual([]);
+  });
+
+  it("reports a reachable terminal response before the redirect limit", async () => {
+    mockLookupAll([{ address: "93.184.216.34", family: 4 }]);
+    mockLookupAll([{ address: "93.184.216.34", family: 4 }]);
+    mockHttpResponse(302, "/landing");
+    mockHttpResponse(204);
+
+    const result = await runRedirectSignal("http://example.test/start");
+
+    expect(result.finalUrl).toBe("http://example.test/landing");
+    expect(result.totalHops).toBe(1);
+    expect(result.reachable).toBe(true);
+    expect(result.terminalStatus).toBe(204);
+    expect(result.terminalError).toBeNull();
+    expect(result.observations).toEqual([]);
+    expect(result.hops).toEqual([
+      {
+        url: "http://example.test/start",
+        status: 302,
+        location: "/landing",
+      },
+      {
+        url: "http://example.test/landing",
+        status: 204,
+      },
+    ]);
+  });
+
+  it("reports an indeterminate result when the redirect limit is exhausted", async () => {
+    lookupMock.mockResolvedValue([
+      { address: "93.184.216.34", family: 4 },
+    ] as never);
+    for (let index = 1; index <= 5; index += 1) {
+      mockHttpResponse(302, `/hop-${index}`);
+    }
+
+    const result = await runRedirectSignal("http://example.test/start");
+
+    expect(result.finalUrl).toBe("http://example.test/hop-4");
+    expect(result.totalHops).toBe(5);
+    expect(result.reachable).toBe(false);
+    expect(result.terminalStatus).toBe(302);
+    expect(result.terminalError).toBe(
+      "The redirect chain exceeded the maximum of 5 redirects before reaching a terminal response.",
+    );
+    expect(result.observations).toEqual([result.terminalError]);
+    expect(result.hops.at(-1)).toEqual({
+      url: "http://example.test/hop-4",
+      status: 302,
+      location: "/hop-5",
+    });
   });
 });
 

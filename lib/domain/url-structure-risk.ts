@@ -64,6 +64,61 @@ const IMPERSONATED_BRANDS = [
   "yahoo",
 ] as const;
 
+/**
+ * Known registrable domains controlled by the brands above. Exemptions must
+ * match the full PSL-aware registrable domain: a matching label on another TLD
+ * or private hosting suffix is still an impersonation signal.
+ */
+const OFFICIAL_BRAND_DOMAINS = new Set([
+  "adobe.com",
+  "airbnb.com",
+  "amazon.co.uk",
+  "amazon.com",
+  "americanexpress.com",
+  "apple.com",
+  "bankofamerica.com",
+  "barclays.co.uk",
+  "barclays.com",
+  "binance.com",
+  "bitwarden.com",
+  "blockchain.com",
+  "booking.com",
+  "chase.com",
+  "citibank.com",
+  "coinbase.com",
+  "discord.com",
+  "dropbox.com",
+  "facebook.com",
+  "fedex.com",
+  "github.com",
+  "gmail.com",
+  "google.co.uk",
+  "google.com",
+  "hsbc.co.uk",
+  "hsbc.com",
+  "icloud.com",
+  "instagram.com",
+  "linkedin.com",
+  "metamask.io",
+  "microsoft.com",
+  "netflix.com",
+  "office365.com",
+  "outlook.com",
+  "paypal.co.uk",
+  "paypal.com",
+  "roblox.com",
+  "santander.co.uk",
+  "santander.com",
+  "spotify.com",
+  "steam.com",
+  "telegram.org",
+  "twitter.com",
+  "walmart.com",
+  "wellsfargo.com",
+  "whatsapp.com",
+  "yahoo.com",
+]);
+
 const MIN_EDIT_DISTANCE_BRAND_LENGTH = 5;
 
 /**
@@ -172,11 +227,16 @@ function detectTyposquatRisk(hostname: string): string | null {
   const hostLabels = hostname.split(".");
 
   // The brand's own domains (paypal.com, paypal.co.uk, www.paypal.com).
-  if ((IMPERSONATED_BRANDS as readonly string[]).includes(registrableLabel)) {
+  if (OFFICIAL_BRAND_DOMAINS.has(registrable)) {
     return null;
   }
 
   for (const brand of IMPERSONATED_BRANDS) {
+    // paypal.github.io / google.support - exact brand on an unrelated root.
+    if (registrableLabel === brand) {
+      return `The registrable domain (${registrable}) uses the exact "${brand}" brand label on an unrelated domain.`;
+    }
+
     // paypal.com.evil.example - brand as a non-registrable hostname label.
     if (hostLabels.slice(0, -1).includes(brand)) {
       return `The hostname embeds "${brand}" as a subdomain of an unrelated domain (${registrable}).`;

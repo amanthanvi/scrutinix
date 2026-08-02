@@ -55,17 +55,30 @@ describe("getUrlStructureRisk", () => {
     expect(subdomain.reasons.join(" ")).toMatch(/subdomain of an unrelated/i);
   });
 
-  it("never flags the brand's own domains", () => {
+  it("never flags known official brand domains", () => {
     for (const url of [
       "https://www.paypal.com/",
       "https://paypal.co.uk/signin",
       "https://accounts.google.com/",
       "https://github.com/user/repo",
+      "https://metamask.io/",
+      "https://telegram.org/",
     ]) {
       const risk = getUrlStructureRisk(url);
-      expect(risk.reasons.join(" ")).not.toMatch(
-        /typo|impersonation|subdomain/i,
-      );
+      expect(risk.scoreDelta).toBe(0);
+      expect(risk.reasons).toHaveLength(0);
+    }
+  });
+
+  it("flags exact brand labels on unrelated registrable domains", () => {
+    for (const url of [
+      "https://google.support/account",
+      "https://paypal.github.io/login",
+      "https://paypal.pages.dev/login",
+    ]) {
+      const risk = getUrlStructureRisk(url);
+      expect(risk.reasons.join(" ")).toMatch(/unrelated domain/i);
+      expect(risk.scoreDelta).toBeGreaterThanOrEqual(0.22);
     }
   });
 

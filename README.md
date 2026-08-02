@@ -25,7 +25,7 @@ and ML scoring in one place.
 
 ## Signals
 
-- `virusTotal`: multi-engine reputation plus registrable-domain enrichment
+- `virusTotal`: multi-engine URL reputation with analysis-freshness context
 - `googleSafeBrowsing`: browser-protection verdicts
 - `threatFeeds`: URLhaus, cached OpenPhish, ThreatFox, and Spamhaus DBL /
   SURBL DNSBL coverage
