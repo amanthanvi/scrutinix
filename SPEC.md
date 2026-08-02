@@ -29,7 +29,7 @@
   - Restore dark/light theme support through the shared semantic token layer in `app/globals.css` while keeping `app/scrutinix.css` for the branded motion/effects layer.
   - When a theme toggle sits inside a server-rendered header, gate any `resolvedTheme`-dependent icon or label behind a mount-safe client snapshot to avoid hydration mismatches.
   - Keep the top header metrics truthful in idle state: the threat meter stays visually inert and the coverage badge reads as idle until a scan actually runs.
-  - The public site now uses a dashboard-first home route: a compact scanner-first top band on `/`, a calmer two-column operational workspace with a sticky history rail, and method/caveat detail on `/about` and `/privacy`, all expressed through the preset-aligned neutral system.
+  - The public site uses a scanner-first, single-column `44rem` flow on `/`: scan form, verdict, accessible Summary/Full signal rows, and in-flow history. Method/caveat detail lives on `/about` and `/privacy`.
   - Sans-serif typography is the default reading mode; mono is reserved for telemetry, timings, hashes, and other code-like labels.
   - Favicons and manifest are served from checked-in `public/` assets with explicit metadata links instead of a generated icon route.
 - Verdict decision:
@@ -123,12 +123,12 @@ Both personas use the same tool. A **view mode toggle** (Summary / Full Report) 
 1. Previous scans stored in IndexedDB (client-side)
 2. History panel shows recent scans with status badges
 3. Click to view cached result, re-scan button for fresh analysis
-4. Export history as CSV or JSON, or undo a local clear immediately from the history rail
+4. Export the visible history results as CSV or JSON, or undo a local clear immediately from the in-flow history list
 
 ### 2.3 UX states checklist
 
-- **Loading/streaming:** Skeleton cards per enrichment source. Each card populates independently as its API resolves. Progress indicator shows which sources are still pending
-- **Empty:** Dashboard-first landing state with the scanner dock, brief product framing, and chrome links to privacy/methodology; deeper explanation lives on `/about` and `/privacy`
+- **Loading/streaming:** Pending signal rows update independently as each source resolves. A transform-only progress line shows aggregate completion
+- **Empty:** Scanner-first landing state in the centered product shell, with brief framing and links to privacy/methodology; deeper explanation lives on `/about` and `/privacy`
 - **Error (partial):** Failed or non-applicable sources show "failed", "caveat", or "n/a" state with the reason surfaced inline. Verdict is computed from available data, safe-result confidence is capped when primary reputation coverage is missing, and the user can rerun the full scan from the primary controls
 - **Error (total):** All sources failed — show error message with "Retry All" button and suggestion to check network
 - **Offline/degraded:** N/A (server-side tool, requires network). Client-side history remains accessible offline via IndexedDB
@@ -136,10 +136,10 @@ Both personas use the same tool. A **view mode toggle** (Summary / Full Report) 
 
 ### 2.4 View modes
 
-| Mode            | Content                                                                                                                                                                      | Target                     |
-| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- |
-| **Summary**     | Overall verdict (Safe/Suspicious/Malicious/Critical) with confidence indicator, top 3 most relevant signals as compact cards, one-line recommendation                        | Casual users, quick checks |
-| **Full Report** | All enrichment signals in structured sections, raw engine results, confidence breakdowns per model, WHOIS/SSL/DNS details, redirect chain visualization, threat feed matches | Power users, investigation |
+| Mode            | Content                                                                                                                                                          | Target                     |
+| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- |
+| **Summary**     | Overall verdict (Safe/Suspicious/Malicious/Critical) with confidence, the three most relevant completed signals as disclosure rows, and a concise recommendation | Casual users, quick checks |
+| **Full Report** | All eight signals in fixed-order disclosure rows, with engine results, classifier details, WHOIS/SSL/DNS evidence, redirect hops, and threat-feed matches        | Power users, investigation |
 
 ## 3) Functional Requirements
 
@@ -207,18 +207,17 @@ Both personas use the same tool. A **view mode toggle** (Summary / Full Report) 
                          │
 ┌──────────────────────────────────────────────────────┐
 │                    Signal Sources                   │
-│  VT | GSB | Threat feeds | ML | TLS | DNS | RDAP | │
-│  Redirect chain                                     │
+│  VT | ML ensemble | GSB | Threat feeds | SSL |      │
+│  WHOIS/RDAP | DNS | Redirect chain                  │
 └──────────────────────────────────────────────────────┘
                          │
 ┌──────────────────────────────────────────────────────┐
 │                  Client Experience                  │
-│  - onboarding/value layer + trust routes            │
-│  - server-rendered shell + smaller client islands   │
-│  - streamed result hero and signal cards            │
-│  - batch result table                               │
-│  - IndexedDB history, export, re-scan, and undo     │
-│  - theme toggle, share links, educational guidance  │
+│  - single-column server-rendered shell               │
+│  - streamed verdict + Summary/Full signal rows       │
+│  - batch result list                                 │
+│  - in-flow IndexedDB history, export, re-scan, undo │
+│  - theme toggle, share links, trust routes           │
 └──────────────────────────────────────────────────────┘
 ```
 
@@ -351,11 +350,11 @@ Implementation note: batch streams also emit `batch_started`, `url_started`, and
 
 | Failure                   | Detection                      | User Impact                   | System Behavior                                                        | Recovery                    | Blast Radius      |
 | ------------------------- | ------------------------------ | ----------------------------- | ---------------------------------------------------------------------- | --------------------------- | ----------------- |
-| VT API down/timeout       | HTTP error / 30s timeout       | Missing VT signal             | Signal card shows "unavailable"                                        | Full scan rerun             | Single signal     |
+| VT API down/timeout       | HTTP error / 30s timeout       | Missing VT signal             | Signal row shows "unavailable"                                         | Full scan rerun             | Single signal     |
 | VT rate limit exceeded    | 429 response                   | Delayed/missing VT signal     | Surface partial coverage and keep verdict provisional                  | Retry after cooldown window | VT signal only    |
-| HF model cold start       | > 30s response                 | Delayed ML signal             | Lexical scorer still returns a partial ML result                       | Full scan rerun             | ML signal only    |
-| HF model unavailable      | HTTP error                     | Missing ML signal             | Hosted model warning; lexical scorer still contributes                 | Full scan rerun             | ML signal         |
-| Google Safe Browsing down | HTTP error                     | Missing GSB signal            | Signal card shows "unavailable"                                        | Full scan rerun             | Single signal     |
+| Local model load slow     | Classifier budget exhausted    | Delayed/partial ML signal     | Lexical scorer still returns a partial ML result                       | Full scan rerun             | ML signal only    |
+| Local model unavailable   | Init or inference error        | Reduced ML coverage           | Local-model warning; lexical scorer still contributes                  | Full scan rerun             | ML signal         |
+| Google Safe Browsing down | HTTP error                     | Missing GSB signal            | Signal row shows "unavailable"                                         | Full scan rerun             | Single signal     |
 | DNS resolution failure    | Lookup error / bounded timeout | Reduced DNS coverage          | Prefer a caveat or unavailable state over a threat-colored failure     | None needed                 | DNS signal        |
 | SSL handshake failure     | Connection error               | Reduced TLS coverage          | Prefer validation-state or unavailable state without inventing malware | None needed                 | SSL signal        |
 | WHOIS lookup failure      | API error / timeout            | Reduced registration coverage | Show caveat / unavailable / skipped as appropriate                     | Full scan rerun             | WHOIS signal      |
