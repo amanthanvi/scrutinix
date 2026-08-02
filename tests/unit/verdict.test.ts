@@ -500,7 +500,7 @@ describe("buildThreatAssessment", () => {
     expect(result.threatInfo?.score).toBeGreaterThanOrEqual(25);
   });
 
-  it("caps clean-result confidence when a primary reputation source fails", () => {
+  it("caps clean-result confidence when a primary reputation source is incomplete", () => {
     const signals = createPendingSignalResults();
     signals.virusTotal = {
       status: "error",
@@ -628,6 +628,19 @@ describe("buildThreatAssessment", () => {
     expect(result.threatInfo?.confidence).toBeLessThanOrEqual(0.79);
     expect(result.threatInfo?.confidenceReasons.join(" ")).toMatch(
       /VirusTotal did not complete/i,
+    );
+
+    withVirusTotal(signals, { harmless: 8, undetected: 12 });
+    signals.threatFeeds.data!.warnings = [
+      "spamhaus-dbl lookups are unavailable from this runtime's DNS resolver.",
+    ];
+
+    const partialFeedResult = buildThreatAssessment(signals);
+
+    expect(partialFeedResult.verdict).toBe("safe");
+    expect(partialFeedResult.threatInfo?.confidence).toBeLessThanOrEqual(0.79);
+    expect(partialFeedResult.threatInfo?.confidenceReasons.join(" ")).toMatch(
+      /Threat Feeds did not complete/i,
     );
   });
 

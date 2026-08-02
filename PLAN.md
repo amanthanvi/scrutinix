@@ -61,7 +61,7 @@ Completed deployment verification:
 Observed results:
 
 - Unit tests: `28` files passed, `161` tests passed.
-- Integration tests: `2` files passed, `19` tests passed, including batch per-URL failure isolation.
+- Integration tests: `2` files passed, `20` tests passed, including batch per-URL failure isolation and incomplete DNSBL coverage propagation.
 - DOM tests: `4` files passed, `11` tests passed.
 - Playwright: `9` tests passed, covering legacy history migration, single-scan, batch-scan, accessibility, keyboard navigation, history undo, and fixture-backed verdicts.
 - Production build: passed with static metadata routes for `/icon`, `/opengraph-image`, `/robots.txt`, and `/sitemap.xml`.

@@ -963,7 +963,11 @@ function getUnavailableHighConfidenceSources(signals: SignalResults) {
     unavailable.push("Google Safe Browsing");
   }
 
-  if (signals.threatFeeds.status !== "success") {
+  if (
+    signals.threatFeeds.status !== "success" ||
+    !signals.threatFeeds.data ||
+    (signals.threatFeeds.data.warnings?.length ?? 0) > 0
+  ) {
     unavailable.push("Threat Feeds");
   }
 
