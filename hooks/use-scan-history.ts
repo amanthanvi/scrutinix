@@ -142,9 +142,10 @@ export function useScanHistory() {
         typeof entry.threatInfo?.summary === "string"
           ? entry.threatInfo.summary
           : "";
+      const verdict = typeof entry.verdict === "string" ? entry.verdict : "";
       return (
         url.toLowerCase().includes(query) ||
-        entry.verdict.includes(query) ||
+        verdict.toLowerCase().includes(query) ||
         summary.toLowerCase().includes(query)
       );
     });

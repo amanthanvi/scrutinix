@@ -1,8 +1,6 @@
 /* Scrutinix — minimal product tool */
 
 .scrutinix-theme {
-  --sx-ease: cubic-bezier(0.23, 1, 0.32, 1);
-
   min-height: 100vh;
   background: var(--sx-bg);
   color: var(--sx-text);
@@ -35,7 +33,7 @@
   height: 100%;
   background: var(--sx-accent);
   transform-origin: left;
-  transition: transform 300ms var(--sx-ease);
+  transition: transform 280ms var(--sx-ease);
 }
 
 /* The live dot is the app's only infinite animation. */
@@ -72,17 +70,18 @@
 
 .sx-btn-press {
   transition:
-    scale 160ms ease,
-    border-color 160ms ease,
-    background-color 160ms ease,
-    color 160ms ease,
-    opacity 160ms ease;
+    scale 160ms var(--sx-ease),
+    border-color 160ms var(--sx-ease),
+    background-color 160ms var(--sx-ease),
+    color 160ms var(--sx-ease),
+    opacity 160ms var(--sx-ease);
 }
 
 .sx-btn-press:active {
   scale: 0.97;
 }
 
+.sx-skip-link:focus-visible,
 .scrutinix-theme button:focus-visible,
 .scrutinix-theme input:focus-visible,
 .scrutinix-theme textarea:focus-visible,

@@ -80,7 +80,7 @@ export function HistoryPanel({
   };
 
   return (
-    <section aria-label="Scan history" role="region">
+    <section aria-label="Scan history">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h2 className="text-base font-semibold tracking-[-0.01em] text-[var(--sx-text)]">
           History
@@ -179,9 +179,9 @@ export function HistoryPanel({
               }
               variant="ghost"
               size="sm"
-              aria-label="Export history as CSV"
+              aria-label={`Export ${historyQuery ? "filtered " : ""}history as CSV`}
             >
-              Export CSV
+              {historyQuery ? "Export filtered CSV" : "Export CSV"}
             </Button>
             <Button
               type="button"
@@ -194,9 +194,9 @@ export function HistoryPanel({
               }
               variant="ghost"
               size="sm"
-              aria-label="Export history as JSON"
+              aria-label={`Export ${historyQuery ? "filtered " : ""}history as JSON`}
             >
-              Export JSON
+              {historyQuery ? "Export filtered JSON" : "Export JSON"}
             </Button>
           </div>
         </>

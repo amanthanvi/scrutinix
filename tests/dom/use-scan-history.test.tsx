@@ -95,6 +95,30 @@ describe("useScanHistory", () => {
     );
   });
 
+  it("searches legacy verdicts defensively and case-insensitively", async () => {
+    const { result } = renderHook(() => useScanHistory());
+    const missingVerdict = {
+      ...buildResult("missing-verdict", "https://legacy.example/"),
+      verdict: undefined,
+    } as unknown as AnalysisResult;
+    const uppercaseVerdict = {
+      ...buildResult("uppercase-verdict", "https://case.example/"),
+      verdict: "SAFE",
+    } as unknown as AnalysisResult;
+
+    await act(async () => {
+      await result.current.addResult(missingVerdict);
+      await result.current.addResult(uppercaseVerdict);
+    });
+    act(() => result.current.setHistoryQuery("safe"));
+
+    await waitFor(() => {
+      expect(result.current.filteredEntries.map((entry) => entry.id)).toEqual([
+        "uppercase-verdict",
+      ]);
+    });
+  });
+
   it("degrades to historyUnavailable instead of throwing when IndexedDB is broken", async () => {
     const openSpy = vi.spyOn(indexedDB, "open").mockImplementation(() => {
       throw new Error("IndexedDB is disabled in this session.");
