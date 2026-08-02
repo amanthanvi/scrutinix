@@ -27,6 +27,45 @@ describe("analyzePageContent", () => {
     expect(findings.crossOriginFormHosts).toEqual(["collector.evil"]);
   });
 
+  it("resolves relative form actions against a cross-origin document base", () => {
+    const findings = analyzePageContent(
+      `<base href=https://evil.example/><form action=/collect><input type=password>`,
+      FINAL_URL,
+    );
+
+    expect(findings.crossOriginFormHosts).toEqual(["evil.example"]);
+    expect(findings.passwordInputCount).toBe(1);
+  });
+
+  it("keeps relative form actions local with a same-origin document base", () => {
+    const findings = analyzePageContent(
+      `<base href="/account/"><form action="collect"></form>`,
+      FINAL_URL,
+    );
+
+    expect(findings.crossOriginFormHosts).toEqual([]);
+  });
+
+  it("uses only the first base with an href, falling back when it is invalid", () => {
+    const firstBaseWins = analyzePageContent(
+      `<base target="_blank"><base href="/account/"><base href="https://evil.example/"><form action="collect"></form>`,
+      FINAL_URL,
+    );
+    expect(firstBaseWins.crossOriginFormHosts).toEqual([]);
+
+    const invalidFirstBase = analyzePageContent(
+      `<base href="http://["><base href="https://evil.example/"><form action="/collect"></form>`,
+      FINAL_URL,
+    );
+    expect(invalidFirstBase.crossOriginFormHosts).toEqual([]);
+
+    const blockedFirstBase = analyzePageContent(
+      `<base href="javascript:void(0)"><base href="https://evil.example/"><form action="/collect"></form>`,
+      FINAL_URL,
+    );
+    expect(blockedFirstBase.crossOriginFormHosts).toEqual([]);
+  });
+
   it("counts password inputs and iframes, including hidden ones", () => {
     const html = `
       <input type="password" name="pw">

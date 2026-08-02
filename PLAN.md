@@ -68,7 +68,7 @@ Completed deployment verification:
 
 Observed results:
 
-- Unit tests: `28` files passed, `169` tests passed.
+- Unit tests: `28` files passed, `172` tests passed.
 - Integration tests: `2` files passed, `24` tests passed, including full-origin authorization, exact-host ThreatFox isolation, batch per-URL failure isolation, disconnect cancellation, and incomplete DNSBL coverage propagation.
 - DOM tests: `5` files passed, `13` tests passed.
 - Playwright: `9` tests passed, covering legacy history migration, single-scan, Summary/Full signals, batch-scan, accessibility, keyboard navigation, history undo, and fixture-backed verdicts.
@@ -103,6 +103,7 @@ Observed results:
 - [x] Preserve the VirusTotal free-tier request budget by limiting each uncached report lookup to the primary URL endpoint.
 - [x] Report redirect-limit exhaustion without presenting an unprobed destination as reachable.
 - [x] Restrict brand-impersonation exemptions to known official registrable domains, including across private hosting suffixes.
+- [x] Resolve relative form actions against the document's effective base URL before scoring cross-origin credential posts.
 - [x] Centralize runtime schemas and harden request, stream, history, cache, and provider boundaries.
 - [x] Expand unit, integration, DOM, fixture-backed E2E, CI, and dependency-audit coverage.
 - [-] Resolve external review findings, run the full verification chain, and land the reviewed PR stack.

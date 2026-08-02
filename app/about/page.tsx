@@ -118,8 +118,9 @@ export default function AboutPage() {
             for what the server still processes.
           </li>
           <li>
-            Feed matches use the exact URL string you paste — not browse pages
-            like urlhaus.abuse.ch/browse/.
+            URLhaus and OpenPhish treat exact listed URLs as high-confidence
+            evidence and hostname-only fallbacks as medium confidence. Browse
+            pages like urlhaus.abuse.ch/browse/ are not matches.
           </li>
         </ul>
       </section>
