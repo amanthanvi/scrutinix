@@ -1,4 +1,5 @@
 import { lookup } from "node:dns/promises";
+import { EventEmitter } from "node:events";
 import http from "node:http";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -48,6 +49,15 @@ describe("runRedirectSignal", () => {
         status: 200,
       },
     ]);
+  });
+
+  it("does not analyze terminal HTML beyond the capture limit", async () => {
+    mockLookupAll([{ address: "93.184.216.34", family: 4 }]);
+    mockHtmlResponse(`${"a".repeat(64 * 1024)}<script>eval('late')</script>`);
+
+    const result = await runRedirectSignal("http://example.test/start");
+
+    expect(result.content?.obfuscationHints).not.toContain("eval() call");
   });
 
   it("blocks a redirect target that resolves to a private address", async () => {
@@ -122,4 +132,33 @@ function mockHttpResponse(statusCode: number, location?: string) {
 
 function mockLookupAll(records: Array<{ address: string; family: 4 | 6 }>) {
   lookupMock.mockResolvedValueOnce(records as never);
+}
+
+function mockHtmlResponse(body: string) {
+  requestMock.mockImplementationOnce((...args: unknown[]) => {
+    const callback = args.find(
+      (arg): arg is (response: unknown) => void => typeof arg === "function",
+    );
+    const response = Object.assign(new EventEmitter(), {
+      headers: { "content-type": "text/html" },
+      statusCode: 200,
+      destroy: vi.fn(),
+    });
+    const request = {
+      once: vi.fn(),
+      setTimeout: vi.fn(),
+      destroy: vi.fn(),
+      end: vi.fn(() => {
+        queueMicrotask(() => {
+          callback?.(response as never);
+          queueMicrotask(() => {
+            response.emit("data", Buffer.from(body));
+            response.emit("end");
+          });
+        });
+      }),
+    };
+
+    return request as never;
+  });
 }

@@ -139,6 +139,46 @@ describe("threat feed provider", () => {
     });
   });
 
+  it("does not promote a sibling ThreatFox IOC to the scanned host", async () => {
+    let searchTerm: string | null = null;
+    server.use(
+      http.post("https://urlhaus-api.abuse.ch/v1/url/", () =>
+        HttpResponse.json({ query_status: "no_results" }),
+      ),
+      http.post("https://urlhaus-api.abuse.ch/v1/host/", () =>
+        HttpResponse.json({ query_status: "no_results" }),
+      ),
+      http.get(
+        "https://openphish.com/feed.txt",
+        () => new HttpResponse("", { status: 200 }),
+      ),
+      http.post(
+        "https://threatfox-api.abuse.ch/api/v1/",
+        async ({ request }) => {
+          const body = (await request.json()) as { search_term?: string };
+          searchTerm = body.search_term ?? null;
+          return HttpResponse.json({
+            query_status: "ok",
+            data: [
+              {
+                ioc: "malware.example.com",
+                threat_type: "payload_delivery",
+                confidence_level: 100,
+              },
+            ],
+          });
+        },
+      ),
+    );
+
+    const result = await runThreatFeedsProvider("https://www.example.com/");
+
+    expect(searchTerm).toBe("www.example.com");
+    expect(result.matches.some((match) => match.feed === "threatfox")).toBe(
+      false,
+    );
+  });
+
   it("marks ThreatFox coverage incomplete when no auth key is configured", async () => {
     vi.stubEnv("URLHAUS_AUTH_KEY", "");
 

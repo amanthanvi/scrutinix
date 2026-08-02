@@ -64,10 +64,7 @@ export async function checkThreatFox(
     }
 
     const iocHostname = parseIocHostname(ioc);
-    return (
-      iocHostname === normalizedHostname ||
-      iocHostname?.endsWith(`.${normalizedHostname}`) === true
-    );
+    return iocHostname === normalizedHostname;
   });
 
   if (!entry) {

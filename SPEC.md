@@ -19,7 +19,7 @@
   - Extend feed coverage with ThreatFox (reusing the URLhaus `Auth-Key`) and Spamhaus DBL / SURBL DNSBL lookups over plain DNS, treating sentinel/blocked-resolver responses as unavailable rather than clean.
 - Runtime decision:
   - Redirect tracing should not fail on invalid certificate chains that are already reported by the SSL signal; trace redirects through header-only Node HTTP(S) requests with relaxed certificate validation.
-  - Resolve registrable domains with the Public Suffix List and private suffixes enabled so reputation, feed, DNSBL, and redirect comparisons preserve tenant boundaries on shared hosting platforms.
+  - Resolve registrable domains with the Public Suffix List and private suffixes enabled so reputation, DNSBL, and redirect comparisons preserve tenant boundaries on shared hosting platforms; keep ThreatFox IOC scoring bound to the exact scanned hostname so sibling tenants cannot contaminate one another.
 - Testing decision: harness-first is required; Vitest, MSW, Playwright, and Lighthouse land before large feature clusters.
 - Tooling decision:
   - Replace `@lhci/cli` with a direct `lighthouse` + `chrome-launcher` script so the verification path does not carry stale vulnerable transitive dependencies.

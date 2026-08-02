@@ -27,13 +27,14 @@ export async function runThreatFeedsProvider(
   const warnings: string[] = [];
   const observations: string[] = [];
   const matches: ThreatFeedsData["matches"] = [];
-  const registrableDomain = getRegistrableDomain(new URL(url).hostname);
+  const hostname = new URL(url).hostname.toLowerCase().replace(/\.$/, "");
+  const registrableDomain = getRegistrableDomain(hostname);
 
   const [urlhausResult, openPhishResult, threatFoxResult, dnsblResult] =
     await Promise.allSettled([
       checkUrlhaus(url, signal),
       checkOpenPhishFeed(url),
-      checkThreatFox(registrableDomain, signal),
+      checkThreatFox(hostname, signal),
       queryDnsbls(registrableDomain),
     ]);
 
