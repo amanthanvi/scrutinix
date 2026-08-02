@@ -21,8 +21,8 @@ cleanup.
 
 ## Current Snapshot
 
-- Date: 2026-07-17
-- Execution status: `P20 advisory wave 001-006 merged locally`
+- Date: 2026-08-02
+- Execution status: `2026-08 minimal frontend redesign shipped on PR #13`
 - Platform:
   - Next.js `16.2.10`
   - React `19.2.x`

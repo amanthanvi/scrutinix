@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-**Scrutinix** — a multi-signal URL threat analyzer. Streams 8 independent security signals (VirusTotal, Google Safe Browsing, threat feeds, ML ensemble, TLS, WHOIS, DNS, redirect chain) via NDJSON and renders them in a minimal, single-column product UI. System-default theme; light and dark are designed to equal quality.
+**Scrutinix** — a multi-signal URL threat analyzer. Streams 8 independent security signals (VirusTotal, ML ensemble, Google Safe Browsing, threat feeds, SSL, WHOIS, DNS, redirect chain) via NDJSON and renders them in a minimal, single-column product UI. System-default theme; light and dark are designed to equal quality.
 
 ## Commands
 
