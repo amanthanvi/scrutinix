@@ -115,6 +115,18 @@ describe("applyRateLimit", () => {
     });
   });
 
+  it("ignores empty Upstash placeholders when KV aliases are populated", () => {
+    vi.stubEnv("UPSTASH_REDIS_REST_URL", "  ");
+    vi.stubEnv("UPSTASH_REDIS_REST_TOKEN", "");
+    vi.stubEnv("KV_REST_API_URL", "https://example-kv.upstash.io");
+    vi.stubEnv("KV_REST_API_TOKEN", "kv-token");
+
+    expect(getRedisRestConfig()).toEqual({
+      url: "https://example-kv.upstash.io",
+      token: "kv-token",
+    });
+  });
+
   it("constructs Redis from Vercel KV aliases in production", async () => {
     vi.stubEnv("NODE_ENV", "production");
     delete process.env.UPSTASH_REDIS_REST_URL;

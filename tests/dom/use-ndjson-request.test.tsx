@@ -144,4 +144,48 @@ describe("useNdjsonRequest", () => {
     expect(onAborted).toHaveBeenCalledOnce();
     expect(onError).not.toHaveBeenCalled();
   });
+
+  it("ignores abort callbacks from a request superseded by a newer one", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockImplementationOnce(
+          (_input: unknown, init?: RequestInit) =>
+            new Promise<Response>((_, reject) => {
+              init?.signal?.addEventListener("abort", () =>
+                reject(new DOMException("Aborted", "AbortError")),
+              );
+            }),
+        )
+        .mockResolvedValueOnce(ndjsonResponse(['{"type":"new"}'])),
+    );
+
+    const { result } = renderHook(() => useNdjsonRequest(OPTIONS));
+    const firstAborted = vi.fn();
+    const secondEvents: unknown[] = [];
+
+    await act(async () => {
+      const first = result.current.start(
+        { url: "https://old.example/" },
+        {
+          onEvent: vi.fn(),
+          onError: vi.fn(),
+          onAborted: firstAborted,
+        },
+      );
+      const second = result.current.start(
+        { url: "https://new.example/" },
+        {
+          onEvent: (event) => secondEvents.push(event),
+          onError: vi.fn(),
+          onAborted: vi.fn(),
+        },
+      );
+      await Promise.all([first, second]);
+    });
+
+    expect(firstAborted).not.toHaveBeenCalled();
+    expect(secondEvents).toEqual([{ type: "new" }]);
+  });
 });

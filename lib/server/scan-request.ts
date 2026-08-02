@@ -37,25 +37,54 @@ export async function parseScanRequest(
     return reject(413, "payload_too_large", "Request body is too large.");
   }
 
-  let bodyText: string;
-  try {
-    bodyText = await request.text();
-  } catch {
-    bodyText = "";
-  }
-
-  if (bodyText.length > MAX_BODY_BYTES) {
+  const bodyResult = await readBodyWithLimit(request);
+  if (!bodyResult.ok) {
     return reject(413, "payload_too_large", "Request body is too large.");
   }
 
   let body: unknown;
   try {
-    body = JSON.parse(bodyText);
+    body = JSON.parse(bodyResult.text);
   } catch {
     body = null;
   }
 
   return shape === "single" ? parseSingleBody(body) : parseBatchBody(body);
+}
+
+async function readBodyWithLimit(
+  request: Request,
+): Promise<{ ok: true; text: string } | { ok: false }> {
+  if (!request.body) {
+    return { ok: true, text: "" };
+  }
+
+  const reader = request.body.getReader();
+  const decoder = new TextDecoder();
+  let bytesRead = 0;
+  let text = "";
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      bytesRead += value.byteLength;
+      if (bytesRead > MAX_BODY_BYTES) {
+        await reader.cancel().catch(() => undefined);
+        return { ok: false };
+      }
+
+      text += decoder.decode(value, { stream: true });
+    }
+
+    text += decoder.decode();
+    return { ok: true, text };
+  } catch {
+    return { ok: true, text: "" };
+  } finally {
+    reader.releaseLock();
+  }
 }
 
 function parseSingleBody(body: unknown): ScanRequestOutcome {

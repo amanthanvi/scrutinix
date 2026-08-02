@@ -164,7 +164,9 @@ export function VerdictHeroResult({
                 ) : null}
                 {result ? (
                   <span className="text-xs text-[var(--sx-text-muted)]">
-                    {threatScoreBandLabel(score)}
+                    {result.verdict === "unknown"
+                      ? "Unknown — host could not be inspected"
+                      : threatScoreBandLabel(score)}
                   </span>
                 ) : null}
               </div>
