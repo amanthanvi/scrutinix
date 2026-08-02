@@ -68,7 +68,9 @@ server.once("exit", (code) => {
 await waitForServer();
 
 const config = JSON.parse(await fs.readFile(CONFIG_PATH, "utf8"));
+const chromePath = process.env.CHROME_PATH?.trim() || undefined;
 chrome = await launch({
+  chromePath,
   chromeFlags: ["--headless=new", "--no-sandbox", "--disable-gpu"],
 });
 

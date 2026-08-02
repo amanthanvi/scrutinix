@@ -30,5 +30,12 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Export Chromium path
+        run: |
+          node -e "process.stdout.write('CHROME_PATH=' + require('playwright').chromium.executablePath() + '\n')" >> "$GITHUB_ENV"
+
       - name: Lighthouse
         run: npm run lighthouse

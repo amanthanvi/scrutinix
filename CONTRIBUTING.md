@@ -32,7 +32,12 @@ npm run test:unit -- --run
 npm run test:integration -- --run
 npm run test:e2e -- --grep @smoke
 npm run build
+npm run lighthouse
 ```
+
+GitHub Actions runs the full browser gates on pull requests and pushes to
+`main`. Lighthouse blocks below Performance `0.90` or Accessibility `0.95`;
+its Chromium executable is provisioned explicitly by the workflow.
 
 ## Contribution Rules
 
