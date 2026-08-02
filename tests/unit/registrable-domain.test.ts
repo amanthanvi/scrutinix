@@ -12,10 +12,17 @@ describe("getRegistrableDomain", () => {
     expect(getRegistrableDomain("example.org")).toBe("example.org");
   });
 
-  it("keeps three labels for known two-level public suffixes", () => {
+  it("keeps three labels for two-level public suffixes", () => {
     expect(getRegistrableDomain("www.example.co.uk")).toBe("example.co.uk");
     expect(getRegistrableDomain("shop.example.com.au")).toBe("example.com.au");
     expect(getRegistrableDomain("example.co.jp")).toBe("example.co.jp");
+  });
+
+  it("treats private suffix tenants as independent registrable domains", () => {
+    expect(getRegistrableDomain("safe.github.io")).toBe("safe.github.io");
+    expect(getRegistrableDomain("www.safe.github.io")).toBe("safe.github.io");
+    expect(getRegistrableDomain("alpha.pages.dev")).toBe("alpha.pages.dev");
+    expect(getRegistrableDomain("tenant.vercel.app")).toBe("tenant.vercel.app");
   });
 
   it("passes through IPs, single labels, and trailing dots", () => {

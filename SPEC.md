@@ -19,6 +19,7 @@
   - Extend feed coverage with ThreatFox (reusing the URLhaus `Auth-Key`) and Spamhaus DBL / SURBL DNSBL lookups over plain DNS, treating sentinel/blocked-resolver responses as unavailable rather than clean.
 - Runtime decision:
   - Redirect tracing should not fail on invalid certificate chains that are already reported by the SSL signal; trace redirects through header-only Node HTTP(S) requests with relaxed certificate validation.
+  - Resolve registrable domains with the Public Suffix List and private suffixes enabled so reputation, feed, DNSBL, and redirect comparisons preserve tenant boundaries on shared hosting platforms.
 - Testing decision: harness-first is required; Vitest, MSW, Playwright, and Lighthouse land before large feature clusters.
 - Tooling decision:
   - Replace `@lhci/cli` with a direct `lighthouse` + `chrome-launcher` script so the verification path does not carry stale vulnerable transitive dependencies.
@@ -311,19 +312,20 @@ Implementation note: batch streams also emit `batch_started`, `url_started`, and
 
 ### 4.6 Dependencies / integrations
 
-| Dependency                  | Type              | Free Tier              | Failure Behavior                                                 |
-| --------------------------- | ----------------- | ---------------------- | ---------------------------------------------------------------- |
-| VirusTotal API v3           | External          | 4 req/min, 500 req/day | Signal marked unavailable; verdict computed without it           |
-| Bundled URL classifier      | Self-computed     | N/A                    | Signal degrades to the lexical model on init/inference failure   |
-| Google Safe Browsing API v4 | External          | 10k req/day            | Signal marked unavailable; verdict remains partial               |
-| URLhaus API                 | External          | Unlimited              | Signal marked unavailable; verdict remains partial               |
-| OpenPhish feed              | External          | Public feed            | Signal marked unavailable; verdict remains partial               |
-| ThreatFox API               | External          | abuse.ch account key   | Source warning recorded; other threat feeds still contribute     |
-| Spamhaus DBL / SURBL DNSBL  | External DNS      | Public DNS             | Blocked/wildcard resolvers are treated as unavailable, not clean |
-| DNS resolution              | Self-computed     | N/A                    | Prefer success-with-observation over hard failure where possible |
-| SSL cert inspection         | Self-computed     | N/A                    | Prefer success-with-validation-state over hard failure           |
-| WHOIS lookup                | Self-computed/API | Varies                 | Prefer success-with-observation or skipped where applicable      |
-| Redirect chain              | Self-computed     | N/A                    | Prefer success-with-observation over hard failure where possible |
+| Dependency                   | Type              | Free Tier              | Failure Behavior                                                   |
+| ---------------------------- | ----------------- | ---------------------- | ------------------------------------------------------------------ |
+| VirusTotal API v3            | External          | 4 req/min, 500 req/day | Signal marked unavailable; verdict computed without it             |
+| Bundled URL classifier       | Self-computed     | N/A                    | Signal degrades to the lexical model on init/inference failure     |
+| Google Safe Browsing API v4  | External          | 10k req/day            | Signal marked unavailable; verdict remains partial                 |
+| URLhaus API                  | External          | Unlimited              | Signal marked unavailable; verdict remains partial                 |
+| OpenPhish feed               | External          | Public feed            | Signal marked unavailable; verdict remains partial                 |
+| ThreatFox API                | External          | abuse.ch account key   | Source warning recorded; other threat feeds still contribute       |
+| Spamhaus DBL / SURBL DNSBL   | External DNS      | Public DNS             | Blocked/wildcard resolvers are treated as unavailable, not clean   |
+| DNS resolution               | Self-computed     | N/A                    | Prefer success-with-observation over hard failure where possible   |
+| SSL cert inspection          | Self-computed     | N/A                    | Prefer success-with-validation-state over hard failure             |
+| WHOIS lookup                 | Self-computed/API | Varies                 | Prefer success-with-observation or skipped where applicable        |
+| Redirect chain               | Self-computed     | N/A                    | Prefer success-with-observation over hard failure where possible   |
+| Public Suffix List (`tldts`) | Bundled data      | N/A                    | Fall back to the normalized host when no registrable domain exists |
 
 ## 5) Security, Privacy, Compliance
 

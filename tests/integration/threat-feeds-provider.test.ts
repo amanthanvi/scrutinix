@@ -199,6 +199,36 @@ describe("threat feed provider", () => {
     expect(queryDnsbls).toHaveBeenCalledWith("evil.example");
   });
 
+  it("propagates unavailable DNSBL coverage as a warning", async () => {
+    vi.mocked(queryDnsbls).mockResolvedValue({
+      matches: [],
+      warnings: [
+        "spamhaus-dbl lookups are unavailable from this runtime's DNS resolver.",
+      ],
+      observations: [],
+    });
+
+    server.use(
+      http.post("https://urlhaus-api.abuse.ch/v1/url/", () =>
+        HttpResponse.json({ query_status: "no_results" }),
+      ),
+      http.post("https://urlhaus-api.abuse.ch/v1/host/", () =>
+        HttpResponse.json({ query_status: "no_results" }),
+      ),
+      http.get(
+        "https://openphish.com/feed.txt",
+        () => new HttpResponse("", { status: 200 }),
+      ),
+    );
+    stubThreatFox();
+
+    const result = await runThreatFeedsProvider("https://example.com/");
+
+    expect(result.warnings).toContainEqual(
+      expect.stringContaining("spamhaus-dbl lookups are unavailable"),
+    );
+  });
+
   it("fails the signal only when every feed source fails", async () => {
     vi.mocked(queryDnsbls).mockRejectedValue(new Error("resolver down"));
 

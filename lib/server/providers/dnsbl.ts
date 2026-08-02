@@ -185,7 +185,7 @@ export async function queryDnsbls(
   await Promise.all(
     ZONES.map(async (zone) => {
       if (!(await isZoneHealthy(resolver, zone))) {
-        outcome.observations.push(
+        outcome.warnings.push(
           `${zone.feed} lookups are unavailable from this runtime's DNS resolver.`,
         );
         return;

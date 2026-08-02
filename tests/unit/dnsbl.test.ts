@@ -135,13 +135,13 @@ describe("queryDnsbls", () => {
 
     const outcome = await queryDnsbls("whatever.example");
 
-    expect(outcome.observations).toContainEqual(
+    expect(outcome.warnings).toContainEqual(
       expect.stringContaining(
         "spamhaus-dbl lookups are unavailable from this runtime's DNS resolver",
       ),
     );
-    // The failing zone must not produce a lookup warning or a clean answer.
-    expect(outcome.warnings).toEqual([]);
+    // The failing zone must not produce a clean answer.
+    expect(outcome.observations).toEqual([]);
     expect(outcome.matches).toEqual([]);
 
     // A second query reuses the cached health verdict without re-testing.
