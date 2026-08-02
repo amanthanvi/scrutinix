@@ -279,8 +279,15 @@ function captureBody(response: IncomingMessage): Promise<string | null> {
     const timer = setTimeout(finish, BODY_CAPTURE_TIMEOUT_MS);
 
     response.on("data", (chunk: Buffer) => {
-      chunks.push(chunk);
-      total += chunk.length;
+      const remaining = BODY_CAPTURE_LIMIT_BYTES - total;
+      if (remaining <= 0) {
+        finish();
+        return;
+      }
+
+      const captured = chunk.subarray(0, remaining);
+      chunks.push(captured);
+      total += captured.length;
       if (total >= BODY_CAPTURE_LIMIT_BYTES) {
         finish();
       }

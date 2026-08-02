@@ -78,7 +78,7 @@ describe("checkThreatFox", () => {
     expect(outcome.match).toBeNull();
   });
 
-  it("matches only exact hosts and subdomains on hostname boundaries", async () => {
+  it("does not promote a subdomain IOC to its parent host", async () => {
     vi.stubEnv("URLHAUS_AUTH_KEY", "abusech-key");
     resetEnvForTests();
 
@@ -104,11 +104,7 @@ describe("checkThreatFox", () => {
 
     const outcome = await checkThreatFox("example.com");
 
-    expect(outcome.match).toMatchObject({
-      feed: "threatfox",
-      matchedUrl: "example.com",
-      matchType: "host",
-    });
+    expect(outcome.match).toBeNull();
   });
 
   it("throws on server errors so the caller can count the failure", async () => {
