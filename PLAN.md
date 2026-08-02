@@ -61,7 +61,7 @@ Completed deployment verification:
 Observed results:
 
 - Unit tests: `28` files passed, `161` tests passed.
-- Integration tests: `2` files passed, `20` tests passed, including batch per-URL failure isolation and incomplete DNSBL coverage propagation.
+- Integration tests: `2` files passed, `21` tests passed, including batch per-URL failure isolation, disconnect cancellation, and incomplete DNSBL coverage propagation.
 - DOM tests: `4` files passed, `12` tests passed.
 - Playwright: `9` tests passed, covering legacy history migration, single-scan, Summary/Full signals, batch-scan, accessibility, keyboard navigation, history undo, and fixture-backed verdicts.
 - Production build: passed with static metadata routes for `/icon`, `/opengraph-image`, `/robots.txt`, and `/sitemap.xml`.
@@ -154,6 +154,7 @@ Observed results:
 - [x] Shared orchestration service for all eight signals.
 - [x] `POST /api/analyze` NDJSON stream.
 - [x] `POST /api/analyze/batch` NDJSON stream with concurrency cap of `3`.
+- [x] Stop dispatching queued batch items when the client disconnects.
 - [x] Cache-aware short-circuit path with fresh scan IDs on cached hits.
 - [x] Final verdict logic that never fabricates threat info on total failure.
 

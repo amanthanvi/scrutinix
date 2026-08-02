@@ -384,6 +384,64 @@ describe("analysis routes", () => {
     expect(events.at(-1)?.type).toBe("batch_complete");
   });
 
+  it("stops dispatching queued URLs after the client disconnects", async () => {
+    vi.resetModules();
+    const runAnalysis = vi.fn(
+      async (
+        _target: unknown,
+        options: { signal: AbortSignal },
+      ): Promise<never> => {
+        await new Promise<never>((_resolve, reject) => {
+          if (options.signal.aborted) {
+            reject(options.signal.reason);
+            return;
+          }
+
+          options.signal.addEventListener(
+            "abort",
+            () => reject(options.signal.reason),
+            { once: true },
+          );
+        });
+
+        throw new Error("unreachable");
+      },
+    );
+
+    vi.doMock("@/lib/server/analyze", async (importOriginal) => {
+      const actual =
+        await importOriginal<typeof import("@/lib/server/analyze")>();
+      return { ...actual, runAnalysis };
+    });
+
+    const { POST } = await import("@/app/api/analyze/batch/route");
+    const response = await POST(
+      new Request("http://localhost/api/analyze/batch", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          urls: Array.from(
+            { length: 10 },
+            (_, index) => `https://batch-${index}.example`,
+          ),
+        }),
+      }),
+    );
+
+    const reader = response.body?.getReader();
+    expect(reader).toBeDefined();
+    await reader?.read();
+    await reader?.cancel();
+    await new Promise((resolve) => setTimeout(resolve, 25));
+
+    expect(runAnalysis).toHaveBeenCalledTimes(3);
+
+    vi.doUnmock("@/lib/server/analyze");
+    vi.resetModules();
+  });
+
   it("keeps the batch stream alive when one URL fails internally", async () => {
     vi.resetModules();
     vi.doMock("@/lib/server/analyze", async (importOriginal) => {

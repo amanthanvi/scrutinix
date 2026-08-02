@@ -26,9 +26,11 @@ export async function POST(request: Request) {
     });
 
     try {
+      const dispatchSignal = AbortSignal.any([request.signal, clientGone]);
       const results = await mapWithConcurrency(
         targets,
         CONCURRENCY,
+        dispatchSignal,
         async (target, index) => {
           const scanId = crypto.randomUUID();
           const startedAt = new Date().toISOString();
@@ -96,6 +98,7 @@ export async function POST(request: Request) {
 async function mapWithConcurrency<T, R>(
   items: T[],
   concurrency: number,
+  signal: AbortSignal,
   worker: (item: T, index: number) => Promise<R>,
 ) {
   const results = new Array<R>(items.length);
@@ -105,6 +108,7 @@ async function mapWithConcurrency<T, R>(
     { length: Math.min(concurrency, items.length) },
     async () => {
       while (nextIndex < items.length) {
+        signal.throwIfAborted();
         const currentIndex = nextIndex;
         nextIndex += 1;
         const item = items[currentIndex];
