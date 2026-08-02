@@ -36,7 +36,7 @@
   height: 100%;
   background: var(--sx-accent);
   transform-origin: left;
-  transition: transform 300ms var(--sx-ease);
+  transition: transform 250ms var(--sx-ease);
 }
 
 /* Live indicator — the only infinite animation in the app */
@@ -75,11 +75,11 @@
 /* Press feedback on all pressable elements */
 .sx-btn-press {
   transition:
-    scale 160ms ease,
-    border-color 160ms ease,
-    background-color 160ms ease,
-    color 160ms ease,
-    opacity 160ms ease;
+    scale 160ms var(--sx-ease),
+    border-color 160ms var(--sx-ease),
+    background-color 160ms var(--sx-ease),
+    color 160ms var(--sx-ease),
+    opacity 160ms var(--sx-ease);
 }
 
 .sx-btn-press:active {

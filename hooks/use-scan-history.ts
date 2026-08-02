@@ -94,13 +94,14 @@ export function useScanHistory() {
     if (query.length === 0) return entries;
     return entries.filter((entry) => {
       const url = typeof entry.url === "string" ? entry.url : "";
+      const verdict = typeof entry.verdict === "string" ? entry.verdict : "";
       const summary =
         typeof entry.threatInfo?.summary === "string"
           ? entry.threatInfo.summary
           : "";
       return (
         url.toLowerCase().includes(query) ||
-        entry.verdict.includes(query) ||
+        verdict.toLowerCase().includes(query) ||
         summary.toLowerCase().includes(query)
       );
     });

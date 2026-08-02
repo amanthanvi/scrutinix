@@ -4,6 +4,14 @@ Living execution plan for Scrutinix. This file reflects the implemented ship
 state plus the 2026-03-23 public-repo polish follow-up after the rename
 cleanup.
 
+> **Superseded — 2026-08 minimal redesign.** The frontend entries below
+> describe the pre-redesign UI and are kept as history. The shipped system is
+> now a single-column minimal shell (`max-w-[44rem]`): no two-column
+> workspace, no sticky history rail, no Summary/Full toggle (per-row
+> `<details>` disclosure replaced it), no verdict-driven accent. `DESIGN.md`
+> is the current source of truth for the visual system; `CLAUDE.md` for the
+> component map.
+
 ## Status Legend
 
 - `[ ]` not started
@@ -24,7 +32,7 @@ cleanup.
   - `proxy.ts` enforces rate limits on `/api/analyze` request paths.
   - Node.js route handlers orchestrate eight signals and stream normalized results.
   - IndexedDB stores client-only history, export state, and re-scan sources.
-  - The home page now renders scanner-first: a compact top band with the scan dock and minimal product framing, a calmer two-column operational workspace, and a sticky history rail. Method and caveat notes live on `/about`, not under the home workspace.
+  - The home page renders scanner-first in a single centered column (2026-08 redesign): scan form, verdict block, eight signal rows, and in-flow history. Method and caveat notes live on `/about`, not under the home scanner.
   - The public site now shares one editorial shell across `/`, `/about`, and `/privacy`, so the trust, methodology, and privacy surfaces stay visually aligned with the scanner.
   - The UI now uses the actual pulled shadcn preset `b1D24VYe` as its baseline language: neutral `radix-mira` tokens, compact controls, and smaller radii adapted onto the branded `components/scrutinix/*` surface.
   - Dark/light theme tokens stay in `app/globals.css`, while `app/scrutinix.css` is now limited to the lighter motion/effects layer needed for live scan states.

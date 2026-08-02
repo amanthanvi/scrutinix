@@ -45,6 +45,7 @@ export function HistorySection() {
   return (
     <HistoryPanel
       entries={filteredEntries}
+      exportEntries={entries}
       totalCount={entries.length}
       historyQuery={historyQuery}
       onHistoryQueryChange={setHistoryQuery}

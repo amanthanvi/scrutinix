@@ -15,6 +15,8 @@ import { Input } from "@/components/ui/input";
 
 interface HistoryPanelProps {
   entries: HistoryEntry[];
+  /** Full unfiltered history — exports always cover this list. */
+  exportEntries: HistoryEntry[];
   totalCount: number;
   historyQuery: string;
   onHistoryQueryChange: (value: string) => void;
@@ -42,6 +44,7 @@ function formatTimestamp(iso: string): string {
 
 export function HistoryPanel({
   entries,
+  exportEntries,
   totalCount,
   historyQuery,
   onHistoryQueryChange,
@@ -175,7 +178,10 @@ export function HistoryPanel({
             <Button
               type="button"
               onClick={() =>
-                downloadTextFile("scan-history.csv", resultsToCsv(entries))
+                downloadTextFile(
+                  "scan-history.csv",
+                  resultsToCsv(exportEntries),
+                )
               }
               variant="ghost"
               size="sm"
@@ -188,7 +194,7 @@ export function HistoryPanel({
               onClick={() =>
                 downloadTextFile(
                   "scan-history.json",
-                  resultsToJson(entries),
+                  resultsToJson(exportEntries),
                   "application/json",
                 )
               }

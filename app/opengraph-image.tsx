@@ -56,7 +56,7 @@ export default function OpenGraphImage() {
           Check a link before you click.
         </div>
         <div style={{ fontSize: 30, maxWidth: "820px", color: "#9a9ca3" }}>
-          Eight security signals stream into one verdict. Scans stay on your
+          Eight security signals stream into one verdict. History stays on your
           device.
         </div>
       </div>

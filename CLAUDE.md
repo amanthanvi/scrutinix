@@ -35,7 +35,7 @@ components/
     app-header.tsx        # h-14 header: wordmark, About/Privacy nav, theme toggle
     app-footer.tsx        # One-line footer
     scan-form.tsx         # Single/Batch tabs + inputs (id="scan-console")
-    input-panels.tsx      # SingleInput/BatchInput with export/share/rescan actions
+    input-panels.tsx      # SingleInput/BatchInput: inputs + cancel (batch exports only; single-scan actions live in results-section)
     results-section.tsx   # VerdictPanel or BatchTable + 8 SignalRows
     verdict-panel.tsx     # Typographic verdict block: verdict word, score meter, confidence, reasons, Details disclosure
     signal-row.tsx        # Per-signal <details> row (hairline table) with severity dot + mono detail dl
