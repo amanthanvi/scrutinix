@@ -49,15 +49,17 @@ function batchNdjson(urls: string[]): string {
 }
 
 function Probe() {
-  const { historyQueue, submitBatch } = useAnalyzerRuntime();
+  const { batch, historyQueue } = useAnalyzerRuntime();
   return (
     <>
       <button
         type="button"
         onClick={() =>
-          void submitBatch(
-            "https://a.example\nhttps://b.example\nhttps://c.example",
-          )
+          void batch.startBatch([
+            "https://a.example",
+            "https://b.example",
+            "https://c.example",
+          ])
         }
       >
         go

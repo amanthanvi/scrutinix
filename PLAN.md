@@ -13,7 +13,7 @@ state plus the current analysis-hardening and review-remediation work.
 ## Current Snapshot
 
 - Date: 2026-08-02
-- Execution status: `P21 analysis expansion review remediation in progress`
+- Execution status: `P21 analysis expansion and P22 interface simplification review remediation in progress`
 - Platform:
   - Next.js `16.2.12`
   - React `19.2.x`
@@ -26,7 +26,7 @@ state plus the current analysis-hardening and review-remediation work.
   - The ML ensemble uses a bundled quantized ONNX URL classifier plus lexical heuristics; scans do not call hosted inference.
   - Threat-feed coverage combines URLhaus, cached OpenPhish, ThreatFox, and Spamhaus DBL / SURBL DNSBL lookups.
   - Completed results use a process-local LRU cache plus optional shared Redis storage with explicit TTL and bounded best-effort operations.
-  - The home page now renders scanner-first: a compact top band with the scan dock and minimal product framing, a calmer two-column operational workspace, and a sticky history rail. Method and caveat notes live on `/about`, not under the home workspace.
+  - The home page renders as a scanner-first, single-column product tool in a `44rem` shell: scan form, verdict, Summary/Full signal rows, and local history in one flow. Method and caveat notes live on `/about`.
   - The public site now shares one editorial shell across `/`, `/about`, and `/privacy`, so the trust, methodology, and privacy surfaces stay visually aligned with the scanner.
   - The UI now uses the actual pulled shadcn preset `b1D24VYe` as its baseline language: neutral `radix-mira` tokens, compact controls, and smaller radii adapted onto the branded `components/scrutinix/*` surface.
   - Dark/light theme tokens stay in `app/globals.css`, while `app/scrutinix.css` is now limited to the lighter motion/effects layer needed for live scan states.
@@ -60,15 +60,16 @@ Completed deployment verification:
 
 Observed results:
 
-- Unit tests: `8` files passed, `27` tests passed.
-- Integration tests: `2` files passed, `6` tests passed, including batch per-URL failure isolation.
-- Playwright smoke: `6` tests passed, covering legacy history migration, single-scan, batch-scan, accessibility, keyboard navigation, and history clear undo.
+- Unit tests: `26` files passed, `154` tests passed.
+- Integration tests: `2` files passed, `19` tests passed, including batch per-URL failure isolation.
+- DOM tests: `4` files passed, `9` tests passed, including multi-result history queue retention.
+- Playwright smoke: `6` tests passed, covering legacy history migration, single-scan, Summary/Full signals, batch-scan, accessibility, keyboard navigation, and history clear undo.
 - Production build: passed with static metadata routes for `/icon`, `/opengraph-image`, `/robots.txt`, and `/sitemap.xml`.
 - Security audit: `0` vulnerabilities reported across prod and dev dependencies after the 2026-05-01 dependency refresh.
 - Lighthouse:
   - Performance `0.91`
   - Accessibility `1.00`
-  - Best Practices `1.00`
+  - Best Practices `0.96`
   - SEO `1.00`
 - Vercel preview deployments: protected and verified via `vercel inspect`
 - Vercel production deployment: `Ready` at `https://www.scrutinix.net`
@@ -93,6 +94,15 @@ Observed results:
 - [x] Centralize runtime schemas and harden request, stream, history, cache, and provider boundaries.
 - [x] Expand unit, integration, DOM, fixture-backed E2E, CI, and dependency-audit coverage.
 - [-] Resolve external review findings, run the full verification chain, and land the reviewed PR stack.
+
+### P22 Simplify the scanner interface
+
+- [x] Replace the dashboard/card composition with a minimal single-column scan, verdict, signal, and history flow.
+- [x] Keep one static accent and reserve verdict colors for stated verdict/severity facts.
+- [x] Preserve the accessible Summary/Full signal control and at least 44px interactive targets.
+- [x] Keep batch, history, export, share, re-scan, unknown verdict, and partial-coverage behavior intact.
+- [x] Reconcile privacy and architecture copy with server-side scan processing and client-only history.
+- [-] Complete the merged validation and external review loop before landing.
 
 ### P01 Reset the baseline and living docs
 

@@ -26,20 +26,17 @@ test("home page keyboard navigation @smoke", async ({ page }) => {
   const skipLink = page.getByRole("link", { name: /skip to content/i });
   await expect(skipLink).toBeFocused();
 
-  // Primary navigation sits between the skip link and the theme toggle at
-  // desktop widths.
-  for (const name of [/scanner/i, /method/i, /privacy/i]) {
-    await page.keyboard.press("Tab");
-    await expect(
-      page
-        .getByRole("navigation", { name: /primary/i })
-        .getByRole("link", { name }),
-    ).toBeFocused();
-  }
+  const header = page.getByRole("banner");
+
+  await page.keyboard.press("Tab");
+  await expect(header.getByRole("link", { name: /^about$/i })).toBeFocused();
+
+  await page.keyboard.press("Tab");
+  await expect(header.getByRole("link", { name: /^privacy$/i })).toBeFocused();
 
   await page.keyboard.press("Tab");
   const themeToggle = page.getByRole("button", {
-    name: /switch to light theme|switch to dark theme/i,
+    name: /switch to light theme|switch to dark theme|toggle theme/i,
   });
   await expect(themeToggle).toBeFocused();
 

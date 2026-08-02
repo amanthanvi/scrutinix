@@ -12,7 +12,7 @@ import {
 import { toast } from "sonner";
 
 import { sanitizeHistoryEntry } from "@/lib/domain/runtime-safety";
-import type { AnalysisResult, HistoryEntry, Verdict } from "@/lib/domain/types";
+import type { AnalysisResult, HistoryEntry } from "@/lib/domain/types";
 
 interface HistoryDatabase extends DBSchema {
   scans: {
@@ -45,7 +45,6 @@ export async function resetHistoryDatabaseForTests() {
 export function useScanHistory() {
   const [entries, setEntries] = useState<HistoryEntry[]>([]);
   const [historyQuery, setHistoryQuery] = useState("");
-  const [filterVerdict, setFilterVerdict] = useState<Verdict | "all">("all");
   const [lastClearedEntries, setLastClearedEntries] = useState<HistoryEntry[]>(
     [],
   );
@@ -136,29 +135,26 @@ export function useScanHistory() {
 
   const filteredEntries = useMemo(() => {
     const query = historyQuery.trim().toLowerCase();
+    if (query.length === 0) return entries;
     return entries.filter((entry) => {
       const url = typeof entry.url === "string" ? entry.url : "";
       const summary =
         typeof entry.threatInfo?.summary === "string"
           ? entry.threatInfo.summary
           : "";
-      const matchesVerdict =
-        filterVerdict === "all" || entry.verdict === filterVerdict;
-      const matchesQuery =
-        query.length === 0 ||
+      return (
         url.toLowerCase().includes(query) ||
-        summary.toLowerCase().includes(query);
-      return matchesVerdict && matchesQuery;
+        entry.verdict.includes(query) ||
+        summary.toLowerCase().includes(query)
+      );
     });
-  }, [entries, filterVerdict, historyQuery]);
+  }, [entries, historyQuery]);
 
   return {
     entries,
     filteredEntries,
     historyQuery,
     setHistoryQuery,
-    filterVerdict,
-    setFilterVerdict,
     addResult,
     clearHistory,
     undoClearHistory,

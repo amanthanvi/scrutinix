@@ -16,67 +16,51 @@ export default function OpenGraphImage() {
         width: "100%",
         flexDirection: "column",
         justifyContent: "space-between",
-        background: "#0a0a0a",
+        background: "#141519",
         padding: "72px",
-        color: "#e5e5e5",
-        fontFamily: "monospace",
+        color: "#ececee",
+        fontFamily: "sans-serif",
       }}
     >
       <div
         style={{
-          fontSize: 24,
-          letterSpacing: "0.3em",
-          textTransform: "uppercase",
-          color: "#737373",
+          display: "flex",
+          alignItems: "center",
+          gap: 14,
+          fontSize: 28,
+          fontWeight: 600,
+          letterSpacing: "-0.01em",
         }}
       >
-        SCRUTINIX
+        <div
+          style={{
+            height: 14,
+            width: 14,
+            borderRadius: 7,
+            background: "#7a9ef8",
+          }}
+        />
+        Scrutinix
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
         <div
           style={{
-            fontSize: 80,
-            lineHeight: 1,
-            fontWeight: 700,
+            fontSize: 72,
+            lineHeight: 1.05,
+            fontWeight: 600,
             maxWidth: "900px",
-            letterSpacing: "-0.03em",
-            color: "#00e639",
+            letterSpacing: "-0.02em",
+            color: "#fafafa",
           }}
         >
-          Stream link verdicts from 8 threat signals.
+          Check a link before you click.
         </div>
-        <div style={{ fontSize: 30, maxWidth: "760px", color: "#737373" }}>
-          VirusTotal, Safe Browsing, community feeds, TLS, DNS, redirects,
-          registration, and ML ensemble — streamed via NDJSON.
+        <div style={{ fontSize: 30, maxWidth: "820px", color: "#9a9ca3" }}>
+          Eight security signals stream into one verdict. History stays on your
+          device.
         </div>
       </div>
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 16,
-          fontSize: 22,
-          color: "#737373",
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            height: 48,
-            width: 48,
-            alignItems: "center",
-            justifyContent: "center",
-            borderRadius: 12,
-            border: "2px solid #00e639",
-            color: "#00e639",
-            fontSize: 18,
-            fontWeight: 700,
-          }}
-        >
-          SX
-        </div>
-        <span>scrutinix</span>
-      </div>
+      <div style={{ fontSize: 22, color: "#9a9ca3" }}>scrutinix.net</div>
     </div>,
     size,
   );

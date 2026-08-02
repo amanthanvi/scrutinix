@@ -4,7 +4,6 @@ import dynamic from "next/dynamic";
 import { useEffect } from "react";
 
 import { useAnalyzerRuntime } from "@/components/scrutinix/analyzer-runtime";
-import { Card, CardContent } from "@/components/ui/card";
 import { useScanHistory } from "@/hooks/use-scan-history";
 
 const HistoryPanel = dynamic(
@@ -14,26 +13,27 @@ const HistoryPanel = dynamic(
     ),
   {
     loading: () => (
-      <Card role="region" aria-label="Scan history" className="min-h-[22rem]">
-        <CardContent className="px-5 py-6 text-xs text-[var(--sx-text-muted)]">
-          Loading history console...
-        </CardContent>
-      </Card>
+      <div
+        role="region"
+        aria-label="Scan history"
+        className="text-[0.8125rem] text-[var(--sx-text-soft)]"
+      >
+        Loading history…
+      </div>
     ),
   },
 );
 
-export function HistoryRail() {
-  const { historyQueue, drainHistoryQueue, selectHistoryEntry } =
+export function HistorySection() {
+  const { drainHistoryQueue, historyQueue, selectHistoryEntry } =
     useAnalyzerRuntime();
   const {
     addResult,
     canUndoClear,
     clearHistory,
+    entries,
     filteredEntries,
-    filterVerdict,
     historyQuery,
-    setFilterVerdict,
     setHistoryQuery,
     undoClearHistory,
   } = useScanHistory();
@@ -49,10 +49,9 @@ export function HistoryRail() {
   return (
     <HistoryPanel
       entries={filteredEntries}
+      totalCount={entries.length}
       historyQuery={historyQuery}
       onHistoryQueryChange={setHistoryQuery}
-      filterVerdict={filterVerdict}
-      onFilterVerdictChange={setFilterVerdict}
       onSelect={selectHistoryEntry}
       onClear={() => void clearHistory()}
       canUndoClear={canUndoClear}

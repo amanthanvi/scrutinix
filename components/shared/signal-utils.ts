@@ -18,37 +18,39 @@ export function getSignalSummary(
   switch (name) {
     case "virusTotal": {
       const d = data as VirusTotalData;
-      return `${d.malicious} malicious and ${d.suspicious} suspicious engines across the last analysis run.`;
+      return d.malicious === 0 && d.suspicious === 0
+        ? "No engines flagged this URL."
+        : `${d.malicious} malicious and ${d.suspicious} suspicious engine flags.`;
     }
     case "mlEnsemble": {
       const d = data as MLSignalData;
       if (d.consensusLabel === "benign") {
-        return "The ensemble stayed below the risk threshold after comparing the local transformer and lexical models.";
+        return "Below the risk threshold.";
       }
 
-      return `The ensemble raised a ${d.consensusLabel} result with a ${(d.consensusScore * 100).toFixed(0)} risk score.`;
+      return `Scored ${d.consensusLabel} (${(d.consensusScore * 100).toFixed(0)}/100).`;
     }
     case "googleSafeBrowsing": {
       const d = data as GoogleSafeBrowsingData;
       return (d.matches?.length ?? 0) > 0
-        ? `${d.matches.length} Safe Browsing threat match${d.matches.length === 1 ? "" : "es"} found.`
-        : "No Safe Browsing threat matches were reported.";
+        ? `${d.matches.length} threat match${d.matches.length === 1 ? "" : "es"} found.`
+        : "No threat matches.";
     }
     case "threatFeeds": {
       const d = data as ThreatFeedsData;
       if (d.matches?.length) {
-        return `${d.matches.length} community feed match${d.matches.length === 1 ? "" : "es"} found.`;
+        return `${d.matches.length} feed match${d.matches.length === 1 ? "" : "es"} found.`;
       }
 
       if (d.warnings?.length) {
-        return "No community-feed matches were found, but one or more feed checks completed with caveats.";
+        return "No feed matches, but one or more feed checks had caveats.";
       }
 
       if (d.observations?.length) {
-        return "No feed matches for this exact URL; see signal notes for URLhaus listing context.";
+        return "No matches for this exact URL — see details for listing context.";
       }
 
-      return "No matches were found in the checked community feeds.";
+      return "No matches in the checked feeds.";
     }
     case "ssl": {
       const d = data as SSLData;
@@ -57,30 +59,24 @@ export function getSignalSummary(
       }
 
       if (d.validationState === "trusted") {
-        return `TLS is available via ${d.protocol ?? "unknown protocol"} and the certificate looks valid.`;
+        return `Valid certificate over ${d.protocol ?? "TLS"}.`;
       }
 
       if (d.validationState === "warning") {
-        return "TLS responded, but certificate verification was only partially conclusive from this scan runtime.";
+        return "Certificate could not be fully verified.";
       }
 
-      return (
-        d.observations?.[0] ??
-        "TLS responded, but the certificate was not trusted."
-      );
+      return d.observations?.[0] ?? "Certificate is not trusted.";
     }
     case "whois": {
       const d = data as WhoisData;
       if (!d.available) {
-        return (
-          d.observations?.[0] ??
-          "Registration data was unavailable during this scan."
-        );
+        return d.observations?.[0] ?? "Registration data was unavailable.";
       }
 
       return d.ageDays !== null
-        ? `The domain was first registered ${d.ageDays} day${d.ageDays === 1 ? "" : "s"} ago.`
-        : "Registration data was returned without a domain age.";
+        ? `Domain registered ${d.ageDays} day${d.ageDays === 1 ? "" : "s"} ago.`
+        : "Registration data has no domain age.";
     }
     case "dns": {
       const d = data as DNSData;
@@ -90,25 +86,21 @@ export function getSignalSummary(
 
       if ((d.addresses?.length ?? 0) === 0 && (d.cnames?.length ?? 0) === 0) {
         return (
-          d.observations?.[0] ??
-          "The hostname did not resolve to web-facing address records."
+          d.observations?.[0] ?? "Hostname did not resolve to address records."
         );
       }
 
-      return `${d.addresses?.length ?? 0} address${(d.addresses?.length ?? 0) === 1 ? "" : "es"} and ${d.mx?.length ?? 0} mail exchange record${(d.mx?.length ?? 0) === 1 ? "" : "s"} were found.`;
+      return `${d.addresses?.length ?? 0} address${(d.addresses?.length ?? 0) === 1 ? "" : "es"}, ${d.mx?.length ?? 0} mail record${(d.mx?.length ?? 0) === 1 ? "" : "s"}.`;
     }
     case "redirectChain": {
       const d = data as RedirectData;
       if (!d.reachable) {
-        return (
-          d.observations?.[0] ??
-          "The target did not accept a redirect probe, so chain analysis was limited."
-        );
+        return d.observations?.[0] ?? "Target did not accept a redirect probe.";
       }
 
       return d.totalHops === 0
-        ? `The URL resolved without redirects to ${d.finalUrl}.`
-        : `${d.totalHops} redirect hop${d.totalHops === 1 ? "" : "s"} led to ${d.finalUrl}.`;
+        ? "Resolved without redirects."
+        : `${d.totalHops} redirect hop${d.totalHops === 1 ? "" : "s"} to ${d.finalUrl}.`;
     }
     default:
       return "Signal complete.";

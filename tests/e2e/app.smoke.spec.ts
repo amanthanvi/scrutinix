@@ -237,9 +237,6 @@ test("single scan flow @smoke", async ({ page }) => {
   const singleUrlInput = page.getByRole("textbox", {
     name: /url to analyze/i,
   });
-  await expect(
-    page.getByRole("meter", { name: /threat score/i }),
-  ).toBeVisible();
   await expect(page.getByRole("tab", { name: /^single$/i })).toBeVisible();
   await expect(singleUrlInput).toBeVisible();
   await expect(
@@ -253,10 +250,19 @@ test("single scan flow @smoke", async ({ page }) => {
 
   await expect(page.getByText(/example\.com/i).first()).toBeVisible();
   await expect(page.getByLabel(/VirusTotal signal:/i)).toBeVisible();
-  // The signal-coverage strip lives in the scan console footer.
-  await expect(
-    page.locator("#scan-console").getByText(/8\/8 signals/i),
-  ).toBeVisible();
+  const signalView = page.getByRole("switch", {
+    name: /show full signal list/i,
+  });
+  await expect(signalView).toHaveAttribute("aria-checked", "false");
+  await expect(signalView.getByText("Summary")).toBeVisible();
+  await expect(signalView.getByText("Full")).toBeVisible();
+  await signalView.click();
+  await expect(signalView).toHaveAttribute("aria-checked", "true");
+  await expect(page.getByLabel(/DNS Profile signal:/i)).toBeVisible();
+  await expect(page.getByLabel(/Redirect Chain signal:/i)).toBeVisible();
+  await expect(page.getByRole("meter", { name: /threat score/i })).toBeVisible({
+    timeout: 30_000,
+  });
   await expect(
     page.getByRole("region", { name: /scan history/i }),
   ).toBeVisible();

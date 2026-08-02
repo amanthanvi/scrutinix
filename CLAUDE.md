@@ -3,89 +3,116 @@
 ## Project Overview
 
 **Scrutinix** — a FOSS multi-signal URL threat analyzer, live at
-https://www.scrutinix.net. One scan streams 8 independent security signals
+https://www.scrutinix.net. It streams 8 independent security signals
 (VirusTotal, Google Safe Browsing, threat feeds, ML ensemble, TLS, WHOIS,
-DNS, redirect chain) over NDJSON into a light-first product UI ("Daylight
-Desk": Geist Sans chrome, Hack mono for data, no motion library).
+DNS, redirect chain) over NDJSON into a minimal, single-column product UI.
+Light and dark themes receive equal treatment.
 
-Operating conventions, provider decisions, and learned gotchas live in
-[`AGENTS.md`](./AGENTS.md) — read it before making changes. `SPEC.md` is the
-product record; `DESIGN-REDIRECTION.md` is the design constraint of record.
+Operating conventions and learned gotchas live in [`AGENTS.md`](./AGENTS.md).
+`SPEC.md` is the product record; `DESIGN.md` is the design constraint of
+record; `PLAN.md` is the live execution record.
 
 ## Commands
 
 ```bash
 npm run dev                        # Dev server on :3000
 npm run build                      # Production build
-npm run lint                       # ESLint (no-console + no-floating-promises are errors)
-npm run typecheck                  # tsc --noEmit (strict + noUncheckedIndexedAccess)
+npm run lint                       # ESLint
+npm run typecheck                  # tsc --noEmit
 npm run format:check               # Prettier
 npm run test:unit -- --run         # Vitest, node
 npm run test:integration -- --run  # Vitest, node + MSW
 npm run test:dom -- --run          # Vitest, jsdom + fake-indexeddb
-npm run test:e2e                   # Playwright (offline; see fixture mode below)
+npm run test:e2e                   # Playwright with offline fixtures
+npm run lighthouse                 # Lighthouse audit
 ```
 
 ## Architecture
 
 ```
 app/
-  page.tsx, about/, privacy/      # Public pages (shared editorial shell)
-  api/analyze/{route,batch/route} # NDJSON streaming endpoints (maxDuration 120/300)
-proxy.ts                          # Rate limiting + per-request CSP nonces
+  layout.tsx              # Root layout (ThemeProvider + Sonner + Geist Sans/Mono)
+  page.tsx                # Single-column home: header, ScanForm, ResultsSection, history, footer
+  scrutinix.css           # CSS-only motion/utility layer (sx-* classes)
+  globals.css             # Tailwind v4 + semantic --sx-* theme tokens
+  api/analyze/            # POST NDJSON stream (single + batch routes)
+  opengraph-image.tsx     # OG card
+proxy.ts                  # Rate limiting + per-request CSP nonces
+
 components/
-  scrutinix/                      # Branded UI: analyzer-runtime (context) ->
-                                  #   analyzer-workspace, scan-dock, verdict-hero{,-live,-result},
-                                  #   signal-card, history-{rail,panel}, batch-panel
-  ui/                             # Selective shadcn/ui primitives
-  shared/                         # Verdict colors, signal detail-row builders
-hooks/                            # use-ndjson-request (shared stream core),
-                                  #   use-{scan,batch}-stream, use-scan-history (IndexedDB)
+  ui/                     # Minimal primitives: button, input, textarea, tabs, sonner
+  scrutinix/
+    analyzer-runtime.tsx  # Context: inputs, streams, view mode, share/rescan/history queue
+    app-header.tsx        # Header: wordmark, About/Privacy nav, theme toggle
+    app-footer.tsx        # One-line footer
+    scan-form.tsx         # Single/Batch tabs + inputs (id="scan-console")
+    input-panels.tsx      # Input, cancel, and batch-export controls
+    results-section.tsx   # Verdict/BatchTable, result actions, Summary/Full signal rows
+    verdict-panel.tsx     # Verdict, score meter, confidence, reasons, details
+    signal-row.tsx        # Typed per-signal disclosure row
+    batch-table.tsx       # Plain batch result list
+    history-section.tsx   # Dynamic-import wrapper; drains completed-result queue
+    history-panel.tsx     # Search, clear/undo, export, entry list
+    public-page-shell.tsx # Shared 44rem shell for /about and /privacy
+    error-boundary.tsx    # Class-based error boundary
+  shared/
+    scrutinix-types.ts    # Verdict/severity presentation helpers
+    signal-utils.ts       # Signal summaries + detail entries
+
+hooks/
+  use-ndjson-request.ts   # Shared stream core
+  use-scan-stream.ts      # NDJSON consumer for one scan
+  use-batch-stream.ts     # NDJSON consumer for batch scans
+  use-scan-history.ts     # IndexedDB history with search
+
 lib/
-  domain/                         # schemas.ts (Zod source of truth), verdict.ts,
-                                  #   url validation, content-analysis, registrable-domain
-  server/                         # analyze.ts orchestrator, providers/, signals/,
-                                  #   cache, rate-limit, stream, ml/ (bundled ONNX model)
-  client/                         # NDJSON parser, CSV/JSON export
+  domain/                 # Zod schemas, URL validation, verdict logic
+  server/                 # Orchestrator, providers, signals, cache, local ONNX ML
+  client/                 # NDJSON parser, export utilities
+  config/                 # Environment validation
+
+tests/
+  unit/                   # Vitest unit coverage
+  integration/            # Route/provider integration coverage
+  dom/                    # Client state and IndexedDB coverage
+  e2e/                    # Playwright smoke/accessibility coverage
 ```
 
 ## Key Patterns
 
-- **Zod-first schemas**: every payload/event shape is declared once in
-  `lib/domain/schemas.ts`. Leaves recover with `.catch(default)`; envelopes
-  gate strictly. Any new field MUST be `.optional().catch(undefined)` — that
-  is the whole versioning strategy for old IndexedDB/cache/stream data.
-- **NDJSON streaming**: server writes signal results as they resolve
-  (`lib/server/stream.ts`, with keepalives and cancel-abort plumbing);
-  clients consume via `hooks/use-ndjson-request.ts`.
-- **Abort plumbing**: routes combine request abort, stream cancel, and a
-  60s scan budget with `AbortSignal.any` and thread it into every
-  network-bound provider (the local ML classifier and the node DNS
-  resolver use their own internal timeouts instead).
-- **Local ML**: `lib/server/ml/` bundles a quantized ONNX URL classifier
-  (urlbert-tiny-v4, Apache-2.0) run via @huggingface/transformers — no
-  hosted inference calls. Lexical heuristics are the second ensemble member.
-- **Verdict engine** (`lib/domain/verdict.ts`): single confirmed source can
-  convict; unreachable hosts get an honest `"unknown"` verdict; exculpatory
-  evidence discounts weak scores but never confirmed hits.
-- **E2E fixture mode**: `SCRUTINIX_TEST_FIXTURES=1` (default under
-  `npm run test:e2e`) swaps real providers for deterministic per-hostname
-  scenarios in `lib/server/test-fixtures.ts` — the suite runs offline.
-- **CSS layering**: `app/globals.css` holds semantic theme tokens
-  (`--sx-*`, light default); `app/scrutinix.css` holds motion/effects
-  utilities (`sx-*`). Do not collapse them.
+- **Zod-first schemas**: payload and event shapes live in
+  `lib/domain/schemas.ts`; old IndexedDB/cache/stream data is sanitized at
+  boundaries.
+- **NDJSON streaming**: server routes stream signal results as they resolve;
+  `use-ndjson-request.ts` owns client parsing and cancellation.
+- **Abort plumbing**: request abort, stream cancel, and scan budget signals
+  reach network-bound providers. Local ML and Node DNS use internal timeouts.
+- **Local ML**: `lib/server/ml/` runs a bundled quantized ONNX classifier via
+  `@huggingface/transformers`; lexical heuristics are the second ensemble
+  member. No hosted inference call is required.
+- **Verdict engine**: confirmed sources can convict; unreachable hosts produce
+  an honest `unknown`; exculpatory evidence never erases confirmed hits.
+- **One encoding per fact**: threat score renders once; severity renders once
+  per signal. Verdict text uses AA-safe `--sx-<verdict>-fg` tokens.
+- **Static accent**: blue `--sx-accent`; verdict colors appear only where a
+  verdict is stated.
+- **E2E fixtures**: `SCRUTINIX_TEST_FIXTURES=1` provides deterministic offline
+  scenarios under `npm run test:e2e`.
+- **CSS layering**: `app/globals.css` owns semantic tokens;
+  `app/scrutinix.css` owns prefixed motion/effect utilities. Motion is CSS-only,
+  under 300ms, and respects `prefers-reduced-motion`.
 
 ## Stack
 
 - Next.js 16, React 19, TypeScript 5.9 (strict + noUncheckedIndexedAccess)
-- Tailwind CSS v4 (CSS-first config), selective shadcn/ui, next-themes, sonner
-- Geist Sans + self-hosted Hack mono, Lucide icons, Zod 4, idb
-- Vitest (+ MSW, fake-indexeddb) + Playwright + axe-core + Lighthouse
+- Tailwind CSS v4, Geist Sans/Mono, Radix, Lucide, Zod 4, idb, sonner,
+  next-themes, local `@huggingface/transformers`
+- Vitest, MSW, fake-indexeddb, Playwright, axe-core, Lighthouse
 
 ## Env
 
-All optional keys treat empty strings as unset; the app degrades honestly
-without them (see `.env.example` for the full annotated list).
+Optional keys treat empty strings as unset; the app degrades honestly without
+them. See `.env.example` for the full annotated list.
 
 ```
 VIRUSTOTAL_API_KEY=...

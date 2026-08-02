@@ -11,37 +11,20 @@ import {
 } from "react";
 import { toast } from "sonner";
 
-import { getSignalSummary } from "@/components/shared/signal-utils";
-import {
-  getActiveAccent,
-  getSignalSeverity,
-  type SharedSnapshot,
-} from "@/components/shared/scrutinix-types";
+import { getSignalSeverity } from "@/components/shared/scrutinix-types";
+import type { SharedSnapshot } from "@/components/shared/scrutinix-types";
 import { useBatchStream } from "@/hooks/use-batch-stream";
 import { useScanStream } from "@/hooks/use-scan-stream";
-import { threatScoreToVerdict } from "@/lib/domain/score-bands";
 import { sharedSnapshotSchema } from "@/lib/domain/schemas";
 import {
-  signalLabels,
   signalNames,
   type AnalysisResult,
+  type HistoryEntry,
 } from "@/lib/domain/types";
 import { normalizeUrlInput } from "@/lib/domain/url";
 
 export type Tab = "single" | "batch";
 export type ViewMode = "summary" | "full";
-
-interface TickerEvent {
-  id: string;
-  time: string;
-  text: string;
-}
-
-/** Requests the scan inputs adopt a URL (rescan, history selection). */
-interface InputPrefill {
-  url: string;
-  nonce: number;
-}
 
 const summarySignalOrder = [
   "googleSafeBrowsing",
@@ -54,53 +37,6 @@ const summarySignalOrder = [
   "dns",
 ] as const;
 
-function readSnapshot(): SharedSnapshot | null {
-  if (typeof window === "undefined") return null;
-  const payload = new URLSearchParams(window.location.search).get("shared");
-  if (!payload) return null;
-
-  const toSnapshot = (value: unknown): SharedSnapshot | null => {
-    const parsed = sharedSnapshotSchema.safeParse(value);
-    return parsed.success ? parsed.data : null;
-  };
-
-  try {
-    return toSnapshot(JSON.parse(decodeURIComponent(atob(payload))));
-  } catch {
-    try {
-      return toSnapshot(JSON.parse(atob(payload)));
-    } catch {
-      return null;
-    }
-  }
-}
-
-function fmtTime(date: Date) {
-  return date.toLocaleTimeString("en-US", { hour12: false });
-}
-
-function deriveTickerTime(
-  durationMs: number,
-  startedAt: string | null,
-  completedAt: string | null,
-) {
-  if (startedAt) {
-    const started = new Date(startedAt).getTime();
-    if (!Number.isNaN(started)) {
-      return fmtTime(new Date(started + durationMs));
-    }
-  }
-
-  if (completedAt) {
-    const completed = new Date(completedAt);
-    if (!Number.isNaN(completed.getTime())) {
-      return fmtTime(completed);
-    }
-  }
-
-  return fmtTime(new Date());
-}
-
 const severityRank = {
   malicious: 5,
   suspicious: 4,
@@ -111,9 +47,32 @@ const severityRank = {
   pending: -1,
 } as const;
 
+function readSnapshot(): SharedSnapshot | null {
+  if (typeof window === "undefined") return null;
+  const payload = new URLSearchParams(window.location.search).get("shared");
+  if (!payload) return null;
+
+  const parseSnapshot = (value: unknown): SharedSnapshot | null => {
+    const parsed = sharedSnapshotSchema.safeParse(value);
+    return parsed.success ? parsed.data : null;
+  };
+
+  try {
+    return parseSnapshot(JSON.parse(decodeURIComponent(atob(payload))));
+  } catch {
+    try {
+      return parseSnapshot(JSON.parse(atob(payload)));
+    } catch {
+      return null;
+    }
+  }
+}
+
 function useCreateAnalyzerRuntime() {
   const [activeTab, setActiveTab] = useState<Tab>("single");
   const [viewMode, setViewMode] = useState<ViewMode>("summary");
+  const [singleUrl, setSingleUrl] = useState("");
+  const [batchInput, setBatchInput] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
   const [selectedResult, setSelectedResult] = useState<AnalysisResult | null>(
     null,
@@ -121,10 +80,8 @@ function useCreateAnalyzerRuntime() {
   const [sharedSnapshot] = useState<SharedSnapshot | null>(() =>
     readSnapshot(),
   );
-  const [prefill, setPrefill] = useState<InputPrefill | null>(null);
-  // A queue, not a single slot: React batches state updates, so several
-  // url_complete events can land in one render pass - a single slot
-  // silently dropped all but the last batch result from history.
+  // React can batch several url_complete events into one render. Keep every
+  // result so a fast batch cannot silently drop history entries.
   const [historyQueue, setHistoryQueue] = useState<AnalysisResult[]>([]);
 
   const pushHistoryEvent = useCallback((result: AnalysisResult) => {
@@ -133,10 +90,6 @@ function useCreateAnalyzerRuntime() {
 
   const drainHistoryQueue = useCallback(() => {
     setHistoryQueue([]);
-  }, []);
-
-  const requestPrefill = useCallback((url: string) => {
-    setPrefill((previous) => ({ url, nonce: (previous?.nonce ?? 0) + 1 }));
   }, []);
 
   const scan = useScanStream((result) => {
@@ -150,53 +103,12 @@ function useCreateAnalyzerRuntime() {
 
   const active = selectedResult ?? scan.state.result;
   const signals = active?.signals ?? scan.state.signals;
-
   const live = scan.state.isStreaming || batch.state.isStreaming;
-  const isMalicious =
-    active?.verdict === "malicious" || active?.verdict === "critical";
-  const score = active?.threatInfo?.score ?? 0;
-  const scoreColor = getActiveAccent(threatScoreToVerdict(score));
-  const accentColor = getActiveAccent(active?.verdict);
-  const scanStartedAt = active?.metadata?.startedAt ?? scan.state.startedAt;
-  const scanCompletedAt = active?.metadata?.completedAt ?? null;
-
-  const ticker = useMemo(() => {
-    const events: TickerEvent[] = [];
-    for (const signalName of signalNames) {
-      const signal = signals[signalName];
-      if (signal.status === "success" && signal.data) {
-        events.push({
-          id: `${signalName}-${signal.durationMs}`,
-          time: deriveTickerTime(
-            signal.durationMs,
-            scanStartedAt,
-            scanCompletedAt,
-          ),
-          text: `${signalLabels[signalName]}: ${getSignalSummary(signalName, signal.data)}`,
-        });
-      }
-      if (signal.status === "error" && signal.error) {
-        events.push({
-          id: `${signalName}-err`,
-          time: deriveTickerTime(
-            signal.durationMs,
-            scanStartedAt,
-            scanCompletedAt,
-          ),
-          text: `${signalLabels[signalName]}: ERROR - ${signal.error}`,
-        });
-      }
-    }
-    return events.slice(-8);
-  }, [scanCompletedAt, scanStartedAt, signals]);
 
   const done = useMemo(
     () =>
-      signalNames.filter(
-        (signalName) =>
-          signals[signalName].status === "success" ||
-          signals[signalName].status === "error" ||
-          signals[signalName].status === "skipped",
+      signalNames.filter((signalName) =>
+        ["success", "error", "skipped"].includes(signals[signalName].status),
       ).length,
     [signals],
   );
@@ -221,61 +133,52 @@ function useCreateAnalyzerRuntime() {
         .slice(0, 3),
     [signals],
   );
-  const hasActivity = live || active !== null;
+
   const visibleSignals = useMemo(
     () =>
       viewMode === "summary" && summarySignals.length > 0
         ? summarySignals
-        : hasActivity
-          ? [...signalNames]
-          : [],
-    [viewMode, summarySignals, hasActivity],
+        : [...signalNames],
+    [summarySignals, viewMode],
   );
 
-  const submitSingle = useCallback(
-    async (rawUrl: string) => {
-      setFormError(null);
-      setSelectedResult(null);
-      const value = normalizeUrlInput(rawUrl);
-      if (!value.ok) {
-        setFormError(value.error);
-        return;
-      }
-      await scan.startScan(value.value.normalizedUrl);
-    },
-    [scan],
-  );
+  const startSingleScan = useCallback(async () => {
+    setFormError(null);
+    setSelectedResult(null);
+    const value = normalizeUrlInput(singleUrl);
+    if (!value.ok) {
+      setFormError(value.error);
+      return;
+    }
+    await scan.startScan(value.value.normalizedUrl);
+  }, [scan, singleUrl]);
 
-  const submitBatch = useCallback(
-    async (rawInput: string) => {
-      setFormError(null);
-      const urls = rawInput
-        .split("\n")
-        .map((segment) => segment.trim())
-        .filter(Boolean);
+  const startBatchScan = useCallback(async () => {
+    setFormError(null);
+    const urls = batchInput
+      .split("\n")
+      .map((segment) => segment.trim())
+      .filter(Boolean);
 
-      if (!urls.length) {
-        setFormError("Add at least one URL.");
-        return;
-      }
+    if (!urls.length) {
+      setFormError("Add at least one URL.");
+      return;
+    }
+    if (urls.length > 10) {
+      setFormError("Batch capped at 10 URLs.");
+      return;
+    }
 
-      if (urls.length > 10) {
-        setFormError("Batch capped at 10 URLs.");
-        return;
-      }
+    const invalid = urls
+      .map((url) => normalizeUrlInput(url))
+      .find((result) => !result.ok);
+    if (invalid && !invalid.ok) {
+      setFormError(invalid.error);
+      return;
+    }
 
-      const invalid = urls
-        .map((url) => normalizeUrlInput(url))
-        .find((result) => !result.ok);
-      if (invalid && !invalid.ok) {
-        setFormError(invalid.error);
-        return;
-      }
-
-      await batch.startBatch(urls);
-    },
-    [batch],
-  );
+    await batch.startBatch(urls);
+  }, [batch, batchInput]);
 
   const shareResult = useCallback(async (result: AnalysisResult) => {
     const capturedAt = result.metadata?.completedAt ?? new Date().toISOString();
@@ -301,86 +204,49 @@ function useCreateAnalyzerRuntime() {
     async (url: string) => {
       setFormError(null);
       setSelectedResult(null);
-      requestPrefill(url);
+      setSingleUrl(url);
       setActiveTab("single");
       await scan.startScan(url);
     },
-    [scan, requestPrefill],
+    [scan],
   );
 
-  const selectHistoryEntry = useCallback(
-    (entry: AnalysisResult) => {
-      setSelectedResult(entry);
-      requestPrefill(entry.url);
-      setActiveTab("single");
-    },
-    [requestPrefill],
-  );
+  const selectHistoryEntry = useCallback((entry: HistoryEntry) => {
+    setSelectedResult(entry);
+    setSingleUrl(entry.url);
+    setActiveTab("single");
+  }, []);
 
-  return useMemo(
-    () => ({
-      active,
-      accentColor,
-      activeTab,
-      batch,
-      done,
-      drainHistoryQueue,
-      formError,
-      hasActivity,
-      historyQueue,
-      isMalicious,
-      live,
-      prefill,
-      scan,
-      score,
-      scoreColor,
-      selectedResult,
-      setActiveTab,
-      setFormError,
-      setSelectedResult,
-      setViewMode,
-      shareResult,
-      sharedSnapshot,
-      signals,
-      submitBatch,
-      submitSingle,
-      summarySignals,
-      ticker,
-      viewMode,
-      visibleSignals,
-      rescanUrl,
-      selectHistoryEntry,
-    }),
-    [
-      active,
-      accentColor,
-      activeTab,
-      batch,
-      done,
-      drainHistoryQueue,
-      formError,
-      hasActivity,
-      historyQueue,
-      isMalicious,
-      live,
-      prefill,
-      scan,
-      score,
-      scoreColor,
-      selectedResult,
-      shareResult,
-      sharedSnapshot,
-      signals,
-      submitBatch,
-      submitSingle,
-      summarySignals,
-      ticker,
-      viewMode,
-      visibleSignals,
-      rescanUrl,
-      selectHistoryEntry,
-    ],
-  );
+  return {
+    active,
+    activeTab,
+    batch,
+    batchInput,
+    done,
+    drainHistoryQueue,
+    formError,
+    historyQueue,
+    live,
+    rescanUrl,
+    scan,
+    selectedResult,
+    selectHistoryEntry,
+    setActiveTab,
+    setBatchInput,
+    setFormError,
+    setSelectedResult,
+    setSingleUrl,
+    setViewMode,
+    shareResult,
+    sharedSnapshot,
+    signals,
+    singleUrl,
+    startBatchScan,
+    startSingleScan,
+    summarySignals,
+    viewMode,
+    visibleSignals,
+  };
 }
 
 type AnalyzerRuntimeValue = ReturnType<typeof useCreateAnalyzerRuntime>;
