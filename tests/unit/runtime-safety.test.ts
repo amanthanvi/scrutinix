@@ -26,6 +26,7 @@ describe("runtime boundary sanitizers", () => {
         score: -1,
       },
       metadata: {
+        scanId: "legacy-scan",
         completedAt: "2026-04-01T00:00:00.000Z",
         signalCount: -10,
         durationMs: -1,
@@ -47,7 +48,7 @@ describe("runtime boundary sanitizers", () => {
         durationMs: 0,
       },
     });
-    expect(result?.id).toMatch(/^restored-2026-04-01T00:00:00.000Z-/);
+    expect(result?.id).toBe("legacy-scan");
   });
 
   it("sanitizes analyze events and rejects invalid event payloads", () => {
@@ -152,6 +153,25 @@ describe("runtime boundary sanitizers", () => {
 
     expect(result?.verdict).toBe("error");
     expect(result?.signals.virusTotal.status).toBe("error");
+  });
+
+  it("rejects incomplete analysis-result envelopes", () => {
+    expect(sanitizeAnalysisResult({})).toBeNull();
+    expect(
+      sanitizeAnalysisResult({
+        id: "scan-1",
+        url: "",
+        signals: {},
+        metadata: {},
+      }),
+    ).toBeNull();
+    expect(
+      sanitizeAnalysisResult({
+        url: "https://example.com/",
+        signals: {},
+        metadata: {},
+      }),
+    ).toBeNull();
   });
 
   it("restores legacy history entries and backfills savedAt", () => {

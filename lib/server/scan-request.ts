@@ -1,9 +1,8 @@
 import { getEnv } from "@/lib/config/env";
+import { readRequestTextWithLimit } from "@/lib/domain/request-body";
+import { MAX_BATCH_SIZE, MAX_SCAN_BODY_BYTES } from "@/lib/domain/scan-limits";
 import { normalizeUrlInput, type NormalizedUrl } from "@/lib/domain/url";
 import { createApiError } from "@/lib/server/api-error";
-
-const MAX_BODY_BYTES = 32 * 1024;
-export const MAX_BATCH_SIZE = 10;
 
 export type ScanRequestOutcome =
   | { ok: true; targets: NormalizedUrl[] }
@@ -33,24 +32,21 @@ export async function parseScanRequest(
   }
 
   const declaredLength = Number(request.headers.get("content-length") ?? "0");
-  if (Number.isFinite(declaredLength) && declaredLength > MAX_BODY_BYTES) {
+  if (Number.isFinite(declaredLength) && declaredLength > MAX_SCAN_BODY_BYTES) {
     return reject(413, "payload_too_large", "Request body is too large.");
   }
 
-  let bodyText: string;
-  try {
-    bodyText = await request.text();
-  } catch {
-    bodyText = "";
-  }
-
-  if (bodyText.length > MAX_BODY_BYTES) {
+  const bodyResult = await readRequestTextWithLimit(
+    request,
+    MAX_SCAN_BODY_BYTES,
+  );
+  if (!bodyResult.ok && bodyResult.reason === "too_large") {
     return reject(413, "payload_too_large", "Request body is too large.");
   }
 
   let body: unknown;
   try {
-    body = JSON.parse(bodyText);
+    body = JSON.parse(bodyResult.ok ? bodyResult.text : "");
   } catch {
     body = null;
   }

@@ -423,19 +423,36 @@ export type HistoryEntry = AnalysisResult & { savedAt: string };
 
 export function createAnalysisResultSchema(fallbackTimestamp: string) {
   return z
-    .record(z.string(), z.unknown())
+    .object({
+      id: z.unknown().optional(),
+      url: z.string().trim().min(1),
+      verdict: z.unknown().optional(),
+      signals: z.record(z.string(), z.unknown()),
+      threatInfo: z.unknown().optional(),
+      metadata: z.record(z.string(), z.unknown()),
+    })
+    .passthrough()
+    .superRefine((record, ctx) => {
+      const id = tolerantString("").parse(record.id).trim();
+      const scanId = tolerantString("").parse(record.metadata.scanId).trim();
+      if (!id && !scanId) {
+        ctx.addIssue({
+          code: "custom",
+          message: "Analysis result requires a scan identifier.",
+        });
+      }
+    })
     .transform((record): AnalysisResult => {
       const threatInfoParsed = threatInfoSchema.safeParse(record.threatInfo);
       const threatInfo = threatInfoParsed.success
         ? threatInfoParsed.data
         : null;
       const metadata = parseScanMetadata(record.metadata, fallbackTimestamp);
+      const id = tolerantString("").parse(record.id).trim() || metadata.scanId;
 
       return {
-        id:
-          tolerantString("").parse(record.id) ||
-          `restored-${metadata.completedAt}-${Math.random().toString(16).slice(2, 8)}`,
-        url: tolerantString("").parse(record.url),
+        id,
+        url: record.url,
         verdict: verdictSchema
           .catch(threatInfo?.verdict ?? "error")
           .parse(record.verdict),

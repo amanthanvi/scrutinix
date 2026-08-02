@@ -35,7 +35,12 @@ describe("useNdjsonRequest", () => {
       await result.current.start(
         { url: "https://example.com/" },
         {
-          onEvent: (event) => events.push(event),
+          onEvent: (event) => {
+            events.push(event);
+            return (event as { type?: string }).type === "b"
+              ? "terminal"
+              : "continue";
+          },
           onError,
           onAborted: vi.fn(),
         },
@@ -100,7 +105,14 @@ describe("useNdjsonRequest", () => {
     await act(async () => {
       await result.current.start(
         { url: "https://example.com/" },
-        { onEvent: (event) => events.push(event), onError, onAborted: vi.fn() },
+        {
+          onEvent: (event) => {
+            events.push(event);
+            return "continue";
+          },
+          onError,
+          onAborted: vi.fn(),
+        },
       );
     });
 
@@ -143,5 +155,79 @@ describe("useNdjsonRequest", () => {
 
     expect(onAborted).toHaveBeenCalledOnce();
     expect(onError).not.toHaveBeenCalled();
+  });
+
+  it("ignores abort callbacks from a request superseded by a newer one", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockImplementationOnce(
+          (_input: unknown, init?: RequestInit) =>
+            new Promise<Response>((_, reject) => {
+              init?.signal?.addEventListener("abort", () =>
+                reject(new DOMException("Aborted", "AbortError")),
+              );
+            }),
+        )
+        .mockResolvedValueOnce(ndjsonResponse(['{"type":"new"}'])),
+    );
+
+    const { result } = renderHook(() => useNdjsonRequest(OPTIONS));
+    const firstAborted = vi.fn();
+    const secondEvents: unknown[] = [];
+
+    await act(async () => {
+      const first = result.current.start(
+        { url: "https://old.example/" },
+        {
+          onEvent: vi.fn(),
+          onError: vi.fn(),
+          onAborted: firstAborted,
+        },
+      );
+      const second = result.current.start(
+        { url: "https://new.example/" },
+        {
+          onEvent: (event) => {
+            secondEvents.push(event);
+            return "terminal";
+          },
+          onError: vi.fn(),
+          onAborted: vi.fn(),
+        },
+      );
+      await Promise.all([first, second]);
+    });
+
+    expect(firstAborted).not.toHaveBeenCalled();
+    expect(secondEvents).toEqual([{ type: "new" }]);
+  });
+
+  it("reports a clean EOF that arrives before a terminal event", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ndjsonResponse(['{"type":"scan_started"}'])),
+    );
+
+    const { result } = renderHook(() => useNdjsonRequest(OPTIONS));
+    const onError = vi.fn();
+
+    await act(async () => {
+      await result.current.start(
+        { url: "https://example.com/" },
+        {
+          onEvent: () => "continue",
+          onError,
+          onAborted: vi.fn(),
+        },
+      );
+    });
+
+    expect(onError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: "The result stream ended before a terminal event.",
+      }),
+    );
   });
 });

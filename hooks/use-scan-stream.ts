@@ -52,7 +52,7 @@ export function useScanStream(onComplete?: (result: AnalysisResult) => void) {
           onEvent: (rawEvent) => {
             const event = sanitizeAnalyzeEvent(rawEvent);
             if (!event) {
-              return;
+              return "continue";
             }
 
             if (event.type === "scan_started") {
@@ -93,6 +93,10 @@ export function useScanStream(onComplete?: (result: AnalysisResult) => void) {
                 isStreaming: false,
               }));
             }
+
+            return event.type === "scan_complete" || event.type === "scan_error"
+              ? "terminal"
+              : "continue";
           },
           onError: (error) => {
             setState((previous) => ({

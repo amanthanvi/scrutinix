@@ -64,7 +64,7 @@ export function useBatchStream(
           onEvent: (rawEvent) => {
             const event = sanitizeBatchEvent(rawEvent);
             if (!event) {
-              return;
+              return "continue";
             }
 
             if (event.type === "batch_started") {
@@ -126,6 +126,11 @@ export function useBatchStream(
                 error: event.error,
               }));
             }
+
+            return event.type === "batch_complete" ||
+              event.type === "batch_error"
+              ? "terminal"
+              : "continue";
           },
           onError: (error) => {
             setState((previous) => ({

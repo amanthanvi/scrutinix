@@ -16,7 +16,7 @@ interface NdjsonRequestOptions {
 }
 
 interface NdjsonRequestHandlers {
-  onEvent: (rawEvent: unknown) => void;
+  onEvent: (rawEvent: unknown) => "continue" | "terminal";
   onError: (error: ApiError) => void;
   onAborted: () => void;
 }
@@ -35,6 +35,8 @@ export function useNdjsonRequest(options: NdjsonRequestOptions) {
       abortRef.current?.abort();
       const controller = new AbortController();
       abortRef.current = controller;
+      const isActive = () => abortRef.current === controller;
+      let sawTerminalEvent = false;
 
       try {
         const response = await fetch(endpoint, {
@@ -48,17 +50,34 @@ export function useNdjsonRequest(options: NdjsonRequestOptions) {
 
         if (!response.ok) {
           const payload = await response.json().catch(() => null);
-          handlers.onError(
-            sanitizeApiErrorResponse(
-              payload,
-              `${requestLabel} failed with status ${response.status}.`,
-            ),
-          );
+          if (isActive()) {
+            handlers.onError(
+              sanitizeApiErrorResponse(
+                payload,
+                `${requestLabel} failed with status ${response.status}.`,
+              ),
+            );
+          }
           return;
         }
 
-        await readNdjsonStream(response, handlers.onEvent);
+        await readNdjsonStream(response, (event) => {
+          if (!isActive()) return;
+          if (handlers.onEvent(event) === "terminal") {
+            sawTerminalEvent = true;
+          }
+        });
+        if (isActive() && !sawTerminalEvent) {
+          handlers.onError(
+            streamFailureApiError(
+              new Error("The result stream ended before a terminal event."),
+              streamFailureMessage,
+            ),
+          );
+        }
       } catch (error) {
+        if (!isActive()) return;
+
         if (
           controller.signal.aborted ||
           (error instanceof DOMException && error.name === "AbortError")
@@ -68,6 +87,8 @@ export function useNdjsonRequest(options: NdjsonRequestOptions) {
         }
 
         handlers.onError(streamFailureApiError(error, streamFailureMessage));
+      } finally {
+        if (isActive()) abortRef.current = null;
       }
     },
     [endpoint, requestLabel, streamFailureMessage],
@@ -75,7 +96,6 @@ export function useNdjsonRequest(options: NdjsonRequestOptions) {
 
   const cancel = useCallback(() => {
     abortRef.current?.abort();
-    abortRef.current = null;
   }, []);
 
   return useMemo(() => ({ start, cancel }), [start, cancel]);
