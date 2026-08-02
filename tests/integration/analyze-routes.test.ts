@@ -170,24 +170,27 @@ describe("analysis routes", () => {
     await parseNdjsonEvents(response);
   });
 
-  it("accepts a matching host from a forwarded-host chain", async () => {
+  it("rejects an origin spoofed through X-Forwarded-Host", async () => {
     const { POST } = await import("@/app/api/analyze/route");
     installHandlers();
 
     const response = await POST(
-      new Request("http://localhost/api/analyze", {
+      new Request("https://scrutinix.example/api/analyze", {
         method: "POST",
         headers: {
           "content-type": "application/json",
-          origin: "https://scrutinix.example",
-          "x-forwarded-host": "edge.internal, scrutinix.example",
+          host: "scrutinix.example",
+          origin: "https://attacker.example",
+          "x-forwarded-host": "attacker.example",
         },
         body: JSON.stringify({ url: "example.com" }),
       }),
     );
 
-    expect(response.status).toBe(200);
-    await parseNdjsonEvents(response);
+    if (response.status === 200) {
+      await parseNdjsonEvents(response);
+    }
+    expect(response.status).toBe(403);
   });
 
   it("reports RDAP outages as whois signal errors and partial failure", async () => {
