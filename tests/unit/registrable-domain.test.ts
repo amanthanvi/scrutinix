@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   getRegistrableDomain,
   getRegistrableLabel,
+  isPrivateSuffixDomain,
 } from "@/lib/domain/registrable-domain";
 
 describe("getRegistrableDomain", () => {
@@ -29,6 +30,16 @@ describe("getRegistrableDomain", () => {
     expect(getRegistrableDomain("192.0.2.10")).toBe("192.0.2.10");
     expect(getRegistrableDomain("localhost")).toBe("localhost");
     expect(getRegistrableDomain("Example.COM.")).toBe("example.com");
+  });
+});
+
+describe("isPrivateSuffixDomain", () => {
+  it("distinguishes shared hosting platforms from ICANN suffixes", () => {
+    expect(isPrivateSuffixDomain("paypal.github.io")).toBe(true);
+    expect(isPrivateSuffixDomain("google.web.app")).toBe(true);
+    expect(isPrivateSuffixDomain("paypal.com")).toBe(false);
+    expect(isPrivateSuffixDomain("google.co.uk")).toBe(false);
+    expect(isPrivateSuffixDomain("192.0.2.10")).toBe(false);
   });
 });
 

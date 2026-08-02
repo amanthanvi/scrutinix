@@ -4,6 +4,7 @@ import { domainToUnicode } from "node:url";
 import {
   getRegistrableLabel,
   getRegistrableDomain,
+  isPrivateSuffixDomain,
 } from "@/lib/domain/registrable-domain";
 import { normalizeUrlInput } from "@/lib/domain/url";
 
@@ -171,8 +172,14 @@ function detectTyposquatRisk(hostname: string): string | null {
   const registrable = getRegistrableDomain(hostname);
   const hostLabels = hostname.split(".");
 
-  // The brand's own domains (paypal.com, paypal.co.uk, www.paypal.com).
+  // The brand's own domains (paypal.com, paypal.co.uk, www.paypal.com) sit
+  // under ICANN suffixes. The same label under a *private* suffix
+  // (paypal.github.io, paypal.web.app) is an anyone-registrable tenant of a
+  // shared hosting platform, never the brand itself.
   if ((IMPERSONATED_BRANDS as readonly string[]).includes(registrableLabel)) {
+    if (isPrivateSuffixDomain(hostname)) {
+      return `The hostname uses "${registrableLabel}" as its name on a shared hosting platform (${registrable}), where anyone can register that label.`;
+    }
     return null;
   }
 

@@ -55,6 +55,17 @@ describe("getUrlStructureRisk", () => {
     expect(subdomain.reasons.join(" ")).toMatch(/subdomain of an unrelated/i);
   });
 
+  it("flags a brand label registered on a shared hosting platform", () => {
+    for (const url of [
+      "https://paypal.github.io/login",
+      "https://google.web.app/",
+    ]) {
+      const risk = getUrlStructureRisk(url);
+      expect(risk.reasons.join(" ")).toMatch(/shared hosting platform/i);
+      expect(risk.scoreDelta).toBeGreaterThanOrEqual(0.22);
+    }
+  });
+
   it("never flags the brand's own domains", () => {
     for (const url of [
       "https://www.paypal.com/",
