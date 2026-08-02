@@ -30,7 +30,11 @@ export async function runSslSignal(
   signal?: AbortSignal,
 ): Promise<SSLData> {
   const { hostname, port } = getTlsProbeTarget(url);
-  const publicTarget = await assertPublicNetworkTarget(hostname);
+  const deadline = Date.now() + SSL_SIGNAL_BUDGET_MS;
+  const publicTarget = await assertPublicNetworkTarget(hostname, {
+    signal,
+    timeoutMs: Math.max(0, deadline - Date.now()),
+  });
 
   if (!publicTarget.ok) {
     return createUnavailableSslData(publicTarget.error);
@@ -43,7 +47,6 @@ export async function runSslSignal(
     );
   }
 
-  const deadline = Date.now() + SSL_SIGNAL_BUDGET_MS;
   let lastResult: SSLData | null = null;
 
   for (const probeAddress of probeAddresses) {

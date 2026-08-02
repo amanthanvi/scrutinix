@@ -60,9 +60,9 @@ Completed deployment verification:
 
 Observed results:
 
-- Unit tests: `28` files passed, `162` tests passed.
+- Unit tests: `28` files passed, `167` tests passed.
 - Integration tests: `2` files passed, `24` tests passed, including full-origin authorization, exact-host ThreatFox isolation, batch per-URL failure isolation, disconnect cancellation, and incomplete DNSBL coverage propagation.
-- DOM tests: `4` files passed, `12` tests passed.
+- DOM tests: `5` files passed, `13` tests passed.
 - Playwright: `9` tests passed, covering legacy history migration, single-scan, Summary/Full signals, batch-scan, accessibility, keyboard navigation, history undo, and fixture-backed verdicts.
 - Production build: passed with static metadata routes for `/icon`, `/opengraph-image`, `/robots.txt`, and `/sitemap.xml`.
 - Security audit: `0` vulnerabilities reported across prod and dev dependencies after the 2026-05-01 dependency refresh.
@@ -138,6 +138,7 @@ Observed results:
 - [x] DNS enrichment.
 - [x] TLS/certificate enrichment.
 - [x] Redirect chain enrichment.
+- [x] Bound active-probe hostname resolution by the scan signal and each signal's aggregate time budget.
 - [x] RDAP-backed registration enrichment behind the public `whois` signal name.
 
 ### P06 Implement external threat intel and classifier adapters

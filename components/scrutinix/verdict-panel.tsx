@@ -114,6 +114,12 @@ export function VerdictPanel({
   const reasons = threatInfo?.hasPositiveEvidence
     ? (threatInfo?.reasons ?? [])
     : [];
+  const emptyEvidenceText =
+    result.verdict === "safe"
+      ? "No direct malicious indicators were found in the completed signals."
+      : result.verdict === "unknown"
+        ? "The host could not be inspected, so this scan cannot establish whether the URL is safe."
+        : "Supporting evidence details are unavailable for this verdict.";
   const recommendations = threatInfo?.recommendations ?? [];
   const limitations = threatInfo?.limitations ?? [];
   const confidenceReasons = threatInfo?.confidenceReasons ?? [];
@@ -194,7 +200,7 @@ export function VerdictPanel({
         </ul>
       ) : (
         <p className="mt-3 text-sm leading-6 text-[var(--sx-text-muted)]">
-          No direct malicious indicators were found in the completed signals.
+          {emptyEvidenceText}
         </p>
       )}
 

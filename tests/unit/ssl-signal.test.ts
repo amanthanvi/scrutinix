@@ -1,7 +1,14 @@
+import { lookup } from "node:dns/promises";
 import tls from "node:tls";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { getTlsProbeTarget, runSslSignal } from "@/lib/server/signals/ssl";
+
+vi.mock("node:dns/promises", () => ({
+  lookup: vi.fn(),
+}));
+
+const lookupMock = vi.mocked(lookup);
 
 describe("getTlsProbeTarget", () => {
   it("uses explicit https port when present", () => {
@@ -25,6 +32,7 @@ describe("getTlsProbeTarget", () => {
 
 describe("runSslSignal", () => {
   afterEach(() => {
+    vi.clearAllMocks();
     vi.restoreAllMocks();
   });
 
@@ -69,5 +77,19 @@ describe("runSslSignal", () => {
     expect(connectSpy).not.toHaveBeenCalled();
     expect(result.available).toBe(false);
     expect(result.observations[0]).toContain("private");
+  });
+
+  it("stops during hostname resolution when the scan is cancelled", async () => {
+    lookupMock.mockImplementationOnce(() => new Promise(() => {}) as never);
+    const connectSpy = vi.spyOn(tls, "connect");
+    const controller = new AbortController();
+
+    const pending = runSslSignal("https://example.test/", controller.signal);
+    controller.abort();
+    const result = await pending;
+
+    expect(connectSpy).not.toHaveBeenCalled();
+    expect(result.available).toBe(false);
+    expect(result.observations[0]).toContain("cancelled");
   });
 });

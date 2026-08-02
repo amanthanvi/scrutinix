@@ -911,6 +911,41 @@ describe("buildThreatAssessment", () => {
     expect(result.threatInfo?.confidence).toBeLessThanOrEqual(0.85);
   });
 
+  it("does not subtract clean-score points from stale VirusTotal harmless counts", () => {
+    const signals = createPendingSignalResults();
+    withVirusTotal(signals, {
+      harmless: 70,
+      undetected: 10,
+      lastAnalysisDate: "2000-01-01T00:00:00.000Z",
+    });
+    signals.mlEnsemble = {
+      status: "success",
+      error: null,
+      durationMs: 12,
+      data: {
+        transformerModel: null,
+        lexicalModel: {
+          label: "risky",
+          score: 0.5,
+          reasons: ["The URL contains high-risk terms such as login."],
+          model: "lexical-heuristic",
+        },
+        consensusLabel: "risky",
+        consensusScore: 0.5,
+        reasons: ["The URL contains high-risk terms such as login."],
+        warnings: [],
+      },
+    };
+
+    const result = buildThreatAssessment(signals);
+
+    expect(result.threatInfo?.score).toBe(8);
+    expect(result.threatInfo?.reasons.join(" ")).not.toMatch(
+      /rate this URL harmless/,
+    );
+    expect(result.threatInfo?.confidence).toBeLessThanOrEqual(0.85);
+  });
+
   it("flags a fresh certificate on a brand-new domain", () => {
     const signals = createPendingSignalResults();
     signals.whois = {

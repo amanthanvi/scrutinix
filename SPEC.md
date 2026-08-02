@@ -347,18 +347,18 @@ Implementation note: batch streams also emit `batch_started`, `url_started`, and
 
 ### 6.1 Failure modes table
 
-| Failure                   | Detection                 | User Impact                   | System Behavior                                                        | Recovery                    | Blast Radius      |
-| ------------------------- | ------------------------- | ----------------------------- | ---------------------------------------------------------------------- | --------------------------- | ----------------- |
-| VT API down/timeout       | HTTP error / 30s timeout  | Missing VT signal             | Signal card shows "unavailable"                                        | Full scan rerun             | Single signal     |
-| VT rate limit exceeded    | 429 response              | Delayed/missing VT signal     | Surface partial coverage and keep verdict provisional                  | Retry after cooldown window | VT signal only    |
-| HF model cold start       | > 30s response            | Delayed ML signal             | Lexical scorer still returns a partial ML result                       | Full scan rerun             | ML signal only    |
-| HF model unavailable      | HTTP error                | Missing ML signal             | Hosted model warning; lexical scorer still contributes                 | Full scan rerun             | ML signal         |
-| Google Safe Browsing down | HTTP error                | Missing GSB signal            | Signal card shows "unavailable"                                        | Full scan rerun             | Single signal     |
-| DNS resolution failure    | Lookup error              | Reduced DNS coverage          | Prefer a caveat or unavailable state over a threat-colored failure     | None needed                 | DNS signal        |
-| SSL handshake failure     | Connection error          | Reduced TLS coverage          | Prefer validation-state or unavailable state without inventing malware | None needed                 | SSL signal        |
-| WHOIS lookup failure      | API error / timeout       | Reduced registration coverage | Show caveat / unavailable / skipped as appropriate                     | Full scan rerun             | WHOIS signal      |
-| All sources fail          | All signals error         | No useful analysis            | Show error state with a full rerun path                                | Full retry                  | Complete          |
-| Vercel function timeout   | 10s edge / 60s serverless | Partial results               | Stream whatever completed before timeout                               | Retry                       | Depends on timing |
+| Failure                   | Detection                      | User Impact                   | System Behavior                                                        | Recovery                    | Blast Radius      |
+| ------------------------- | ------------------------------ | ----------------------------- | ---------------------------------------------------------------------- | --------------------------- | ----------------- |
+| VT API down/timeout       | HTTP error / 30s timeout       | Missing VT signal             | Signal card shows "unavailable"                                        | Full scan rerun             | Single signal     |
+| VT rate limit exceeded    | 429 response                   | Delayed/missing VT signal     | Surface partial coverage and keep verdict provisional                  | Retry after cooldown window | VT signal only    |
+| HF model cold start       | > 30s response                 | Delayed ML signal             | Lexical scorer still returns a partial ML result                       | Full scan rerun             | ML signal only    |
+| HF model unavailable      | HTTP error                     | Missing ML signal             | Hosted model warning; lexical scorer still contributes                 | Full scan rerun             | ML signal         |
+| Google Safe Browsing down | HTTP error                     | Missing GSB signal            | Signal card shows "unavailable"                                        | Full scan rerun             | Single signal     |
+| DNS resolution failure    | Lookup error / bounded timeout | Reduced DNS coverage          | Prefer a caveat or unavailable state over a threat-colored failure     | None needed                 | DNS signal        |
+| SSL handshake failure     | Connection error               | Reduced TLS coverage          | Prefer validation-state or unavailable state without inventing malware | None needed                 | SSL signal        |
+| WHOIS lookup failure      | API error / timeout            | Reduced registration coverage | Show caveat / unavailable / skipped as appropriate                     | Full scan rerun             | WHOIS signal      |
+| All sources fail          | All signals error              | No useful analysis            | Show error state with a full rerun path                                | Full retry                  | Complete          |
+| Vercel function timeout   | 10s edge / 60s serverless      | Partial results               | Stream whatever completed before timeout                               | Retry                       | Depends on timing |
 
 ### 6.2 Retries/timeouts/circuit breakers
 
