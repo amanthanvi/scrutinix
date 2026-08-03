@@ -64,35 +64,39 @@ function extractFormFindings(
   const hosts = new Set<string>();
   const passwordHosts = new Set<string>();
   const passwordInputs = extractPasswordInputs(html);
+  const submitControls = extractSubmitControls(html);
   const formPattern = /<form\b[^>]*>/gi;
   let form: RegExpExecArray | null;
 
   while ((form = formPattern.exec(html)) !== null) {
     const action = extractAttribute(form[0], "action");
-    if (!action) {
-      continue;
-    }
-
-    let target: URL;
-    try {
-      target = new URL(action, documentBaseUrl);
-    } catch {
-      continue;
-    }
-
-    if (target.protocol !== "http:" && target.protocol !== "https:") {
-      continue;
-    }
-
-    if (getRegistrableDomain(target.hostname) !== pageDomain) {
-      if (hosts.size < MAX_FORM_HOSTS) {
-        hosts.add(target.hostname);
+    const destinations = action?.trim() ? [action] : [];
+    for (const control of submitControls) {
+      if (formOwnsElement(html, form, control)) {
+        destinations.push(control.formAction);
       }
-      if (
-        passwordHosts.size < MAX_FORM_HOSTS &&
-        formOwnsPasswordInput(html, form, passwordInputs)
-      ) {
-        passwordHosts.add(target.hostname);
+    }
+
+    const ownsPassword = formOwnsPasswordInput(html, form, passwordInputs);
+    for (const destination of destinations) {
+      let target: URL;
+      try {
+        target = new URL(destination, documentBaseUrl);
+      } catch {
+        continue;
+      }
+
+      if (target.protocol !== "http:" && target.protocol !== "https:") {
+        continue;
+      }
+
+      if (getRegistrableDomain(target.hostname) !== pageDomain) {
+        if (hosts.size < MAX_FORM_HOSTS) {
+          hosts.add(target.hostname);
+        }
+        if (passwordHosts.size < MAX_FORM_HOSTS && ownsPassword) {
+          passwordHosts.add(target.hostname);
+        }
       }
     }
   }
@@ -106,6 +110,12 @@ function extractFormFindings(
 interface PasswordInput {
   index: number;
   ownerId: string | null;
+}
+
+interface SubmitControl {
+  index: number;
+  ownerId: string | null;
+  formAction: string;
 }
 
 function extractPasswordInputs(html: string): PasswordInput[] {
@@ -125,10 +135,63 @@ function extractPasswordInputs(html: string): PasswordInput[] {
   return inputs;
 }
 
+function extractSubmitControls(html: string): SubmitControl[] {
+  const controls: SubmitControl[] = [];
+  const controlPattern = /<(button|input)\b[^>]*>/gi;
+  let control: RegExpExecArray | null;
+
+  while ((control = controlPattern.exec(html)) !== null) {
+    const tag = control[0];
+    const tagName = control[1]?.toLowerCase();
+    if (!tagName) {
+      continue;
+    }
+    if (!isSubmitControl(tag, tagName) || hasAttribute(tag, "disabled")) {
+      continue;
+    }
+
+    const formAction = extractAttribute(tag, "formaction")?.trim();
+    if (!formAction) {
+      continue;
+    }
+
+    controls.push({
+      index: control.index,
+      ownerId: extractAttribute(tag, "form"),
+      formAction,
+    });
+  }
+
+  return controls;
+}
+
+function isSubmitControl(tag: string, tagName: string): boolean {
+  const type = extractAttribute(tag, "type")?.toLowerCase();
+  if (tagName === "input") {
+    return type === "submit" || type === "image";
+  }
+
+  if (type === "submit") {
+    return true;
+  }
+  if (type === "button" || type === "reset") {
+    return false;
+  }
+  return !hasAttribute(tag, "command") && !hasAttribute(tag, "commandfor");
+}
+
 function formOwnsPasswordInput(
   html: string,
   form: RegExpExecArray,
   passwordInputs: PasswordInput[],
+): boolean {
+  return passwordInputs.some((input) => formOwnsElement(html, form, input));
+}
+
+function formOwnsElement(
+  html: string,
+  form: RegExpExecArray,
+  element: Pick<PasswordInput, "index" | "ownerId">,
 ): boolean {
   const formId = extractAttribute(form[0], "id");
   const contentStart = form.index + form[0].length;
@@ -137,12 +200,10 @@ function formOwnsPasswordInput(
   const closingForm = closingFormPattern.exec(html);
   const contentEnd = closingForm?.index ?? html.length;
 
-  return passwordInputs.some((input) => {
-    if (input.ownerId !== null) {
-      return Boolean(formId) && input.ownerId === formId;
-    }
-    return input.index >= contentStart && input.index < contentEnd;
-  });
+  if (element.ownerId !== null) {
+    return Boolean(formId) && element.ownerId === formId;
+  }
+  return element.index >= contentStart && element.index < contentEnd;
 }
 
 function extractDocumentBaseUrl(html: string, fallbackUrl: URL): URL {
@@ -251,11 +312,15 @@ function extractMetaRefreshTarget(
 
 function extractAttribute(tag: string, name: string): string | null {
   const pattern = new RegExp(
-    `\\b${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s>]+))`,
+    `(?:^|\\s)${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s>]+))`,
     "i",
   );
   const match = pattern.exec(tag);
   return match?.[1] ?? match?.[2] ?? match?.[3] ?? null;
+}
+
+function hasAttribute(tag: string, name: string): boolean {
+  return new RegExp(`(?:^|\\s)${name}(?=\\s|=|/?>)`, "i").test(tag);
 }
 
 function countMatches(html: string, pattern: RegExp): number {

@@ -153,7 +153,7 @@ Both personas use the same tool. A **view mode toggle** (Summary / Full Report) 
 - **FR-6** MUST perform SSL certificate analysis (issuer, validity, expiry, chain trust)
 - **FR-7** MUST perform WHOIS lookup (domain age, registrar, registration date)
 - **FR-8** MUST perform DNS analysis (record types, anomalies, MX/A/CNAME)
-- **FR-9** MUST trace HTTP redirect chain (hops, final destination, status codes) and associate password inputs with their submitting form before scoring cross-origin credential posts
+- **FR-9** MUST trace HTTP redirect chain (hops, final destination, status codes) and associate password inputs with their submitting form and viable `formaction` overrides before scoring cross-origin credential posts
 - **FR-10** MUST compute an overall threat verdict from all available signals
 
 ### UX & Presentation
