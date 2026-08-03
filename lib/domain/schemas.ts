@@ -551,28 +551,24 @@ export const analyzeEventSchema = z.discriminatedUnion("type", [
       cached: z.unknown().optional(),
       startedAt: z.string().min(1),
     })
-    .transform(
-      (record): AnalyzeEvent => ({
-        type: "scan_started",
-        scanId: record.scanId,
-        url: record.url,
-        cached: tolerantBoolean(false).parse(record.cached),
-        startedAt: record.startedAt,
-      }),
-    ),
+    .transform((record): AnalyzeEvent => ({
+      type: "scan_started",
+      scanId: record.scanId,
+      url: record.url,
+      cached: tolerantBoolean(false).parse(record.cached),
+      startedAt: record.startedAt,
+    })),
   z
     .object({
       type: z.literal("signal_result"),
       name: z.enum(signalNames),
       result: z.unknown().optional(),
     })
-    .transform(
-      (record): AnalyzeEvent => ({
-        type: "signal_result",
-        name: record.name,
-        result: parseSignalResult(record.name, record.result),
-      }),
-    ),
+    .transform((record): AnalyzeEvent => ({
+      type: "signal_result",
+      name: record.name,
+      result: parseSignalResult(record.name, record.result),
+    })),
   z
     .object({
       type: z.literal("scan_complete"),
@@ -591,12 +587,10 @@ export const analyzeEventSchema = z.discriminatedUnion("type", [
       type: z.literal("scan_error"),
       error: z.unknown().optional(),
     })
-    .transform(
-      (record): AnalyzeEvent => ({
-        type: "scan_error",
-        error: createApiErrorSchema("The scan failed.").parse(record.error),
-      }),
-    ),
+    .transform((record): AnalyzeEvent => ({
+      type: "scan_error",
+      error: createApiErrorSchema("The scan failed.").parse(record.error),
+    })),
 ]);
 
 export const batchEventSchema = z.discriminatedUnion("type", [
@@ -606,26 +600,22 @@ export const batchEventSchema = z.discriminatedUnion("type", [
       total: z.unknown().optional(),
       startedAt: z.string().min(1),
     })
-    .transform(
-      (record): BatchEvent => ({
-        type: "batch_started",
-        total: nonNegative(finiteNumber(0).parse(record.total)),
-        startedAt: record.startedAt,
-      }),
-    ),
+    .transform((record): BatchEvent => ({
+      type: "batch_started",
+      total: nonNegative(finiteNumber(0).parse(record.total)),
+      startedAt: record.startedAt,
+    })),
   z
     .object({
       type: z.literal("url_started"),
       index: z.unknown().optional(),
       url: z.string().min(1),
     })
-    .transform(
-      (record): BatchEvent => ({
-        type: "url_started",
-        index: nonNegative(finiteNumber(0).parse(record.index)),
-        url: record.url,
-      }),
-    ),
+    .transform((record): BatchEvent => ({
+      type: "url_started",
+      index: nonNegative(finiteNumber(0).parse(record.index)),
+      url: record.url,
+    })),
   z
     .object({
       type: z.literal("url_complete"),
@@ -651,30 +641,24 @@ export const batchEventSchema = z.discriminatedUnion("type", [
       type: z.literal("batch_complete"),
       results: z.unknown().optional(),
     })
-    .transform(
-      (record): BatchEvent => ({
-        type: "batch_complete",
-        results: Array.isArray(record.results)
-          ? record.results.flatMap((item) => {
-              const result = parseAnalysisResult(item);
-              return result ? [result] : [];
-            })
-          : [],
-      }),
-    ),
+    .transform((record): BatchEvent => ({
+      type: "batch_complete",
+      results: Array.isArray(record.results)
+        ? record.results.flatMap((item) => {
+            const result = parseAnalysisResult(item);
+            return result ? [result] : [];
+          })
+        : [],
+    })),
   z
     .object({
       type: z.literal("batch_error"),
       error: z.unknown().optional(),
     })
-    .transform(
-      (record): BatchEvent => ({
-        type: "batch_error",
-        error: createApiErrorSchema("The batch scan failed.").parse(
-          record.error,
-        ),
-      }),
-    ),
+    .transform((record): BatchEvent => ({
+      type: "batch_error",
+      error: createApiErrorSchema("The batch scan failed.").parse(record.error),
+    })),
 ]);
 
 /**
