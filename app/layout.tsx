@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
-import localFont from "next/font/local";
 import { headers } from "next/headers";
+import { GeistMono } from "geist/font/mono";
 import { GeistSans } from "geist/font/sans";
 
 import "@/app/globals.css";
@@ -10,18 +10,6 @@ import { AppToaster } from "@/components/ui/sonner";
 import { getSiteUrl } from "@/lib/site-url";
 
 const siteUrl = getSiteUrl();
-
-const hack = localFont({
-  src: [
-    {
-      path: "../public/fonts/hack-regular.woff2",
-      weight: "400",
-      style: "normal",
-    },
-  ],
-  variable: "--font-hack",
-  display: "swap",
-});
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
@@ -63,8 +51,8 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: [
-    { media: "(prefers-color-scheme: dark)", color: "#1a2030" },
-    { media: "(prefers-color-scheme: light)", color: "#f4f7fb" },
+    { media: "(prefers-color-scheme: dark)", color: "#1d1e22" },
+    { media: "(prefers-color-scheme: light)", color: "#fcfcfc" },
   ],
 };
 
@@ -79,14 +67,14 @@ export default async function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body
-        className={`${GeistSans.variable} ${hack.variable} font-sans antialiased`}
+        className={`${GeistSans.variable} ${GeistMono.variable} font-sans antialiased`}
       >
         <a href="#main-content" className="sx-skip-link">
           Skip to content
         </a>
         <ThemeProvider
           attribute="class"
-          defaultTheme="light"
+          defaultTheme="system"
           enableSystem
           disableTransitionOnChange
           nonce={nonce}

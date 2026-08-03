@@ -11,18 +11,11 @@ import {
 } from "react";
 import { toast } from "sonner";
 
-import { getSignalSummary } from "@/components/shared/signal-utils";
-import {
-  getActiveAccent,
-  getSignalSeverity,
-  type SharedSnapshot,
-} from "@/components/shared/scrutinix-types";
+import { type SharedSnapshot } from "@/components/shared/scrutinix-types";
 import { useBatchStream } from "@/hooks/use-batch-stream";
 import { useScanStream } from "@/hooks/use-scan-stream";
-import { threatScoreToVerdict } from "@/lib/domain/score-bands";
 import type { HistoryEntry } from "@/lib/domain/types";
 import {
-  signalLabels,
   signalNames,
   type AnalysisResult,
   type Verdict,
@@ -30,29 +23,11 @@ import {
 import { normalizeUrlInput } from "@/lib/domain/url";
 
 export type Tab = "single" | "batch";
-export type ViewMode = "summary" | "full";
-
-interface TickerEvent {
-  id: string;
-  time: string;
-  text: string;
-}
 
 interface HistoryEvent {
   nonce: number;
   result: AnalysisResult;
 }
-
-const summarySignalOrder = [
-  "googleSafeBrowsing",
-  "threatFeeds",
-  "virusTotal",
-  "mlEnsemble",
-  "ssl",
-  "redirectChain",
-  "whois",
-  "dns",
-] as const;
 
 function readSnapshot(): SharedSnapshot | null {
   if (typeof window === "undefined") return null;
@@ -116,45 +91,8 @@ function readSnapshot(): SharedSnapshot | null {
   }
 }
 
-function fmtTime(date: Date) {
-  return date.toLocaleTimeString("en-US", { hour12: false });
-}
-
-function deriveTickerTime(
-  durationMs: number,
-  startedAt: string | null,
-  completedAt: string | null,
-) {
-  if (startedAt) {
-    const started = new Date(startedAt).getTime();
-    if (!Number.isNaN(started)) {
-      return fmtTime(new Date(started + durationMs));
-    }
-  }
-
-  if (completedAt) {
-    const completed = new Date(completedAt);
-    if (!Number.isNaN(completed.getTime())) {
-      return fmtTime(completed);
-    }
-  }
-
-  return fmtTime(new Date());
-}
-
-const severityRank = {
-  malicious: 5,
-  suspicious: 4,
-  error: 3,
-  neutral: 2,
-  skipped: 1,
-  safe: 0,
-  pending: -1,
-} as const;
-
 function useCreateAnalyzerRuntime() {
   const [activeTab, setActiveTab] = useState<Tab>("single");
-  const [viewMode, setViewMode] = useState<ViewMode>("summary");
   const [singleUrl, setSingleUrl] = useState("");
   const [batchInput, setBatchInput] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
@@ -186,43 +124,6 @@ function useCreateAnalyzerRuntime() {
   const signals = active?.signals ?? scan.state.signals;
 
   const live = scan.state.isStreaming || batch.state.isStreaming;
-  const isMalicious =
-    active?.verdict === "malicious" || active?.verdict === "critical";
-  const score = active?.threatInfo?.score ?? 0;
-  const scoreColor = getActiveAccent(threatScoreToVerdict(score));
-  const accentColor = getActiveAccent(active?.verdict);
-  const scanStartedAt = active?.metadata?.startedAt ?? scan.state.startedAt;
-  const scanCompletedAt = active?.metadata?.completedAt ?? null;
-
-  const ticker = useMemo(() => {
-    const events: TickerEvent[] = [];
-    for (const signalName of signalNames) {
-      const signal = signals[signalName];
-      if (signal.status === "success" && signal.data) {
-        events.push({
-          id: `${signalName}-${signal.durationMs}`,
-          time: deriveTickerTime(
-            signal.durationMs,
-            scanStartedAt,
-            scanCompletedAt,
-          ),
-          text: `${signalLabels[signalName]}: ${getSignalSummary(signalName, signal.data)}`,
-        });
-      }
-      if (signal.status === "error" && signal.error) {
-        events.push({
-          id: `${signalName}-err`,
-          time: deriveTickerTime(
-            signal.durationMs,
-            scanStartedAt,
-            scanCompletedAt,
-          ),
-          text: `${signalLabels[signalName]}: ERROR - ${signal.error}`,
-        });
-      }
-    }
-    return events.slice(-8);
-  }, [scanCompletedAt, scanStartedAt, signals]);
 
   const done = useMemo(
     () =>
@@ -234,62 +135,6 @@ function useCreateAnalyzerRuntime() {
       ).length,
     [signals],
   );
-
-  const summarySignals = useMemo(
-    () =>
-      [...summarySignalOrder]
-        .filter((signalName) => signals[signalName].status !== "pending")
-        .sort((left, right) => {
-          const leftSeverity = getSignalSeverity(
-            signals[left].status,
-            signals[left].data,
-            left,
-          );
-          const rightSeverity = getSignalSeverity(
-            signals[right].status,
-            signals[right].data,
-            right,
-          );
-          return severityRank[rightSeverity] - severityRank[leftSeverity];
-        })
-        .slice(0, 3),
-    [signals],
-  );
-  const successfulSignalCount = useMemo(
-    () =>
-      signalNames.filter(
-        (signalName) => signals[signalName].status === "success",
-      ).length,
-    [signals],
-  );
-  const caveatSignalCount = useMemo(
-    () =>
-      signalNames.filter((signalName) => {
-        const severity = getSignalSeverity(
-          signals[signalName].status,
-          signals[signalName].data,
-          signalName,
-        );
-        return severity === "neutral";
-      }).length,
-    [signals],
-  );
-  const unavailableSignalCount = useMemo(
-    () =>
-      signalNames.filter((signalName) => {
-        const status = signals[signalName].status;
-        return status === "error" || status === "skipped";
-      }).length,
-    [signals],
-  );
-
-  const hasActivity = live || active !== null;
-  const visibleSignals =
-    viewMode === "summary" && summarySignals.length > 0
-      ? summarySignals
-      : hasActivity
-        ? signalNames
-        : [];
 
   const startSingleScan = useCallback(async () => {
     setFormError(null);
@@ -369,41 +214,28 @@ function useCreateAnalyzerRuntime() {
 
   return {
     active,
-    accentColor,
     activeTab,
     batch,
     batchInput,
     done,
     formError,
-    hasActivity,
     historyEvent,
-    isMalicious,
     live,
     scan,
-    score,
-    scoreColor,
     selectedResult,
     setActiveTab,
     setBatchInput,
     setFormError,
     setSelectedResult,
     setSingleUrl,
-    setViewMode,
     shareResult,
     sharedSnapshot,
     signals,
     singleUrl,
     startBatchScan,
     startSingleScan,
-    summarySignals,
-    ticker,
-    viewMode,
-    visibleSignals,
     rescanUrl,
     selectHistoryEntry,
-    successfulSignalCount,
-    caveatSignalCount,
-    unavailableSignalCount,
   };
 }
 

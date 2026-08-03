@@ -37,7 +37,6 @@
     "lighthouse": "node ./scripts/run-lighthouse.mjs"
   },
   "dependencies": {
-    "@radix-ui/react-scroll-area": "^1.2.10",
     "@radix-ui/react-slot": "^1.2.4",
     "@radix-ui/react-tabs": "^1.1.13",
     "@upstash/ratelimit": "^2.0.8",
@@ -45,7 +44,6 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "geist": "^1.7.0",
-    "hack-font": "^3.3.0",
     "idb": "^8.0.3",
     "lucide-react": "^0.577.0",
     "next": "16.2.10",

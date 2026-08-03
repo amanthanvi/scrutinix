@@ -14,56 +14,20 @@ export interface SharedSnapshot {
   capturedAt: string;
 }
 
-export function verdictColor(verdict: Verdict | string): string {
+/** AA-contrast text color for a stated verdict. */
+export function verdictFg(verdict: Verdict | string): string {
   switch (verdict) {
     case "safe":
-      return "var(--sx-safe)";
+      return "var(--sx-safe-fg)";
     case "suspicious":
-      return "var(--sx-suspicious)";
+      return "var(--sx-suspicious-fg)";
     case "malicious":
-      return "var(--sx-malicious)";
+      return "var(--sx-malicious-fg)";
     case "critical":
-      return "var(--sx-critical)";
+      return "var(--sx-critical-fg)";
     default:
-      return "var(--sx-error)";
+      return "var(--sx-error-fg)";
   }
-}
-
-export function verdictInk(verdict: Verdict | string): string {
-  switch (verdict) {
-    case "safe":
-      return "var(--sx-safe-ink)";
-    case "suspicious":
-      return "var(--sx-suspicious-ink)";
-    case "malicious":
-      return "var(--sx-malicious-ink)";
-    case "critical":
-      return "var(--sx-critical-ink)";
-    default:
-      return "var(--sx-error-ink)";
-  }
-}
-
-/** Returns the CSS var string for the active accent based on verdict */
-export function getActiveAccent(verdict: Verdict | string | undefined): string {
-  if (!verdict) return "var(--sx-accent)";
-  const map: Record<string, string> = {
-    safe: "var(--sx-safe)",
-    suspicious: "var(--sx-suspicious)",
-    malicious: "var(--sx-malicious)",
-    critical: "var(--sx-critical)",
-    error: "var(--sx-error)",
-  };
-  return map[verdict] ?? "var(--sx-accent)";
-}
-
-/** Returns inline style object that sets --sx-active-accent */
-export function getAccentStyle(
-  verdict: Verdict | string | undefined,
-): React.CSSProperties {
-  return {
-    "--sx-active-accent": getActiveAccent(verdict),
-  } as React.CSSProperties;
 }
 
 export type Severity =
@@ -143,30 +107,16 @@ export function getSignalSeverity(
   return "safe";
 }
 
-const SEVERITY_LED: Record<Severity, string> = {
-  safe: "var(--sx-safe)",
-  neutral: "var(--sx-info)",
-  suspicious: "var(--sx-suspicious)",
-  malicious: "var(--sx-malicious)",
-  error: "var(--sx-error)",
-  pending: "var(--sx-suspicious)",
-  skipped: "var(--sx-border-muted)",
+/**
+ * The single severity encoding: a dot color for graphics and an AA text
+ * color for stating the severity in words.
+ */
+export const severityColor: Record<Severity, { dot: string; fg: string }> = {
+  safe: { dot: "var(--sx-safe)", fg: "var(--sx-safe-fg)" },
+  neutral: { dot: "var(--sx-info)", fg: "var(--sx-info-fg)" },
+  suspicious: { dot: "var(--sx-suspicious)", fg: "var(--sx-suspicious-fg)" },
+  malicious: { dot: "var(--sx-malicious)", fg: "var(--sx-malicious-fg)" },
+  error: { dot: "var(--sx-error)", fg: "var(--sx-error-fg)" },
+  pending: { dot: "var(--sx-border)", fg: "var(--sx-text-muted)" },
+  skipped: { dot: "var(--sx-border)", fg: "var(--sx-text-muted)" },
 };
-
-const SEVERITY_EDGE: Record<Severity, string> = {
-  safe: "sx-edge-safe",
-  neutral: "sx-edge-neutral",
-  suspicious: "sx-edge-suspicious",
-  malicious: "sx-edge-malicious",
-  error: "sx-edge-error",
-  pending: "sx-edge-pending",
-  skipped: "sx-edge-skipped",
-};
-
-export function getLedColorFromSeverity(severity: Severity): string {
-  return SEVERITY_LED[severity];
-}
-
-export function getEdgeClassFromSeverity(severity: Severity): string {
-  return SEVERITY_EDGE[severity];
-}
