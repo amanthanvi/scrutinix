@@ -68,7 +68,7 @@ Completed deployment verification:
 
 Observed results:
 
-- Unit tests: `29` files passed, `194` tests passed.
+- Unit tests: `29` files passed, `198` tests passed.
 - Integration tests: `2` files passed, `27` tests passed, including full-origin authorization, exact-host ThreatFox isolation, batch per-URL failure isolation, disconnect cancellation, warning/redirect-degraded provider recovery, and incomplete DNSBL coverage propagation.
 - DOM tests: `5` files passed, `15` tests passed.
 - Playwright: `9` tests passed, covering legacy history migration, single-scan, Summary/Full signals, batch-scan, accessibility, keyboard navigation, history undo, and fixture-backed verdicts.
@@ -103,7 +103,7 @@ Observed results:
 - [x] Preserve the VirusTotal free-tier request budget by limiting each uncached report lookup to the primary URL endpoint.
 - [x] Report redirect-limit exhaustion without presenting an unprobed destination as reachable.
 - [x] Restrict brand-impersonation exemptions to known official registrable domains, including across private hosting suffixes.
-- [x] Resolve relative form actions against the document's effective base URL and require password inputs to belong to the cross-origin form before scoring credential posts.
+- [x] Resolve form and submit-control destinations against the document's effective base URL and require password inputs to belong to the submitting form before scoring credential posts.
 - [x] Resolve relative meta-refresh targets against the same effective document base.
 - [x] Accept only the documented JSON media type, with parameters, at scan request boundaries.
 - [x] Charge rejected requests one rate-limit token while preserving per-URL weighting for admitted batches.

