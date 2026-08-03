@@ -253,6 +253,7 @@ export type DNSData = z.infer<typeof dnsDataSchema>;
 export const pageContentFindingsSchema = z.object({
   title: nullableString,
   crossOriginFormHosts: stringArray,
+  crossOriginPasswordFormHosts: stringArray.optional().catch(undefined),
   passwordInputCount: finiteNumber(0).transform(nonNegative),
   iframeCount: finiteNumber(0).transform(nonNegative),
   hiddenIframeCount: finiteNumber(0).transform(nonNegative),

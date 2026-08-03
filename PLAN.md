@@ -68,9 +68,9 @@ Completed deployment verification:
 
 Observed results:
 
-- Unit tests: `29` files passed, `190` tests passed.
+- Unit tests: `29` files passed, `194` tests passed.
 - Integration tests: `2` files passed, `27` tests passed, including full-origin authorization, exact-host ThreatFox isolation, batch per-URL failure isolation, disconnect cancellation, warning/redirect-degraded provider recovery, and incomplete DNSBL coverage propagation.
-- DOM tests: `5` files passed, `14` tests passed.
+- DOM tests: `5` files passed, `15` tests passed.
 - Playwright: `9` tests passed, covering legacy history migration, single-scan, Summary/Full signals, batch-scan, accessibility, keyboard navigation, history undo, and fixture-backed verdicts.
 - Production build: passed with static metadata routes for `/icon`, `/opengraph-image`, `/robots.txt`, and `/sitemap.xml`.
 - Security audit: `0` vulnerabilities reported across prod and dev dependencies after the 2026-05-01 dependency refresh.
@@ -103,7 +103,7 @@ Observed results:
 - [x] Preserve the VirusTotal free-tier request budget by limiting each uncached report lookup to the primary URL endpoint.
 - [x] Report redirect-limit exhaustion without presenting an unprobed destination as reachable.
 - [x] Restrict brand-impersonation exemptions to known official registrable domains, including across private hosting suffixes.
-- [x] Resolve relative form actions against the document's effective base URL before scoring cross-origin credential posts.
+- [x] Resolve relative form actions against the document's effective base URL and require password inputs to belong to the cross-origin form before scoring credential posts.
 - [x] Resolve relative meta-refresh targets against the same effective document base.
 - [x] Accept only the documented JSON media type, with parameters, at scan request boundaries.
 - [x] Charge rejected requests one rate-limit token while preserving per-URL weighting for admitted batches.
@@ -112,6 +112,7 @@ Observed results:
 - [x] Preserve fresh provider recovery by never caching partial, error, or aborted scans.
 - [x] Treat composite-signal warnings as partial coverage so warning-degraded scans also bypass the cache.
 - [x] Keep redirect exhaustion truthful, cache-ineligible, and distinct from a wholly uninspectable host.
+- [x] Include unreachable-host `unknown` verdicts in history filtering.
 - [x] Centralize runtime schemas and harden request, stream, history, cache, and provider boundaries.
 - [x] Expand unit, integration, DOM, fixture-backed E2E, CI, and dependency-audit coverage.
 - [-] Resolve external review findings, run the full verification chain, and land the reviewed PR stack.

@@ -15,9 +15,11 @@ export function analyzePageContent(
   html: string,
   finalUrl: string,
 ): PageContentFindings {
+  const formFindings = extractFormFindings(html, finalUrl);
+
   return {
     title: extractTitle(html),
-    crossOriginFormHosts: extractCrossOriginFormHosts(html, finalUrl),
+    ...formFindings,
     passwordInputCount: countMatches(
       html,
       /<input\b[^>]*type\s*=\s*["']?password/gi,
@@ -39,18 +41,29 @@ function extractTitle(html: string): string | null {
   return title ? title.slice(0, MAX_TITLE_LENGTH) : null;
 }
 
-function extractCrossOriginFormHosts(html: string, finalUrl: string): string[] {
+function extractFormFindings(
+  html: string,
+  finalUrl: string,
+): Pick<
+  PageContentFindings,
+  "crossOriginFormHosts" | "crossOriginPasswordFormHosts"
+> {
   let pageUrl: URL;
   let pageDomain: string;
   try {
     pageUrl = new URL(finalUrl);
     pageDomain = getRegistrableDomain(pageUrl.hostname);
   } catch {
-    return [];
+    return {
+      crossOriginFormHosts: [],
+      crossOriginPasswordFormHosts: [],
+    };
   }
 
   const documentBaseUrl = extractDocumentBaseUrl(html, pageUrl);
   const hosts = new Set<string>();
+  const passwordHosts = new Set<string>();
+  const passwordInputs = extractPasswordInputs(html);
   const formPattern = /<form\b[^>]*>/gi;
   let form: RegExpExecArray | null;
 
@@ -72,14 +85,64 @@ function extractCrossOriginFormHosts(html: string, finalUrl: string): string[] {
     }
 
     if (getRegistrableDomain(target.hostname) !== pageDomain) {
-      hosts.add(target.hostname);
-      if (hosts.size >= MAX_FORM_HOSTS) {
-        break;
+      if (hosts.size < MAX_FORM_HOSTS) {
+        hosts.add(target.hostname);
+      }
+      if (
+        passwordHosts.size < MAX_FORM_HOSTS &&
+        formOwnsPasswordInput(html, form, passwordInputs)
+      ) {
+        passwordHosts.add(target.hostname);
       }
     }
   }
 
-  return [...hosts];
+  return {
+    crossOriginFormHosts: [...hosts],
+    crossOriginPasswordFormHosts: [...passwordHosts],
+  };
+}
+
+interface PasswordInput {
+  index: number;
+  ownerId: string | null;
+}
+
+function extractPasswordInputs(html: string): PasswordInput[] {
+  const inputs: PasswordInput[] = [];
+  const inputPattern = /<input\b[^>]*>/gi;
+  let input: RegExpExecArray | null;
+
+  while ((input = inputPattern.exec(html)) !== null) {
+    if (extractAttribute(input[0], "type")?.toLowerCase() === "password") {
+      inputs.push({
+        index: input.index,
+        ownerId: extractAttribute(input[0], "form"),
+      });
+    }
+  }
+
+  return inputs;
+}
+
+function formOwnsPasswordInput(
+  html: string,
+  form: RegExpExecArray,
+  passwordInputs: PasswordInput[],
+): boolean {
+  const formId = extractAttribute(form[0], "id");
+  const contentStart = form.index + form[0].length;
+  const closingFormPattern = /<\/form\s*>/gi;
+  closingFormPattern.lastIndex = contentStart;
+  const closingForm = closingFormPattern.exec(html);
+  const contentEnd = closingForm?.index ?? html.length;
+
+  return passwordInputs.some((input) => {
+    if (input.ownerId !== null) {
+      return Boolean(formId) && input.ownerId === formId;
+    }
+    return input.index >= contentStart && input.index < contentEnd;
+  });
 }
 
 function extractDocumentBaseUrl(html: string, fallbackUrl: URL): URL {

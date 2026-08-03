@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { analyzePageContent } from "@/lib/domain/content-analysis";
 import { buildThreatAssessment } from "@/lib/domain/verdict";
 import {
   createPendingSignalResults,
@@ -960,6 +961,7 @@ describe("buildThreatAssessment", () => {
         content: {
           title: "Account Login",
           crossOriginFormHosts: ["collector.other"],
+          crossOriginPasswordFormHosts: ["collector.other"],
           passwordInputCount: 1,
           iframeCount: 0,
           hiddenIframeCount: 0,
@@ -978,6 +980,39 @@ describe("buildThreatAssessment", () => {
       /crosses domains.*short\.example.*landing\.evil/,
     );
     expect(result.threatInfo?.reasons.join(" ")).toMatch(
+      /submits its form to a different domain/,
+    );
+  });
+
+  it("does not conflate a local password form with an unrelated cross-origin form", () => {
+    const signals = createPendingSignalResults();
+    signals.redirectChain = {
+      status: "success",
+      error: null,
+      durationMs: 12,
+      data: {
+        finalUrl: "https://landing.example/login",
+        totalHops: 0,
+        httpsUpgraded: false,
+        reachable: true,
+        terminalStatus: 200,
+        terminalError: null,
+        hops: [{ url: "https://landing.example/login", status: 200 }],
+        observations: [],
+        content: analyzePageContent(
+          `
+            <form action="/login"><input type="password"></form>
+            <form action="https://newsletter.other/subscribe"><input type="email"></form>
+          `,
+          "https://landing.example/login",
+        ),
+      },
+    };
+
+    const result = buildThreatAssessment(signals);
+
+    expect(result.threatInfo?.score).toBe(0);
+    expect(result.threatInfo?.reasons.join(" ")).not.toMatch(
       /submits its form to a different domain/,
     );
   });

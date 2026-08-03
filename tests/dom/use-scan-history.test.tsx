@@ -119,6 +119,28 @@ describe("useScanHistory", () => {
     });
   });
 
+  it("isolates unknown verdicts through the history query", async () => {
+    const { result } = renderHook(() => useScanHistory());
+    const unknownResult = {
+      ...buildResult("unknown", "https://unreachable.example/"),
+      verdict: "unknown" as const,
+    };
+
+    await act(async () => {
+      await result.current.addResult(
+        buildResult("safe", "https://reachable.example/"),
+      );
+      await result.current.addResult(unknownResult);
+    });
+    act(() => result.current.setHistoryQuery("unknown"));
+
+    await waitFor(() => {
+      expect(result.current.filteredEntries.map((entry) => entry.id)).toEqual([
+        "unknown",
+      ]);
+    });
+  });
+
   it("degrades to historyUnavailable instead of throwing when IndexedDB is broken", async () => {
     const openSpy = vi.spyOn(indexedDB, "open").mockImplementation(() => {
       throw new Error("IndexedDB is disabled in this session.");
