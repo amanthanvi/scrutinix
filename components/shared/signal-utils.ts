@@ -276,9 +276,10 @@ export function getSignalDetailEntries(
     }
     case "redirectChain": {
       const d = data as RedirectData;
-      // Hops are rendered as a dedicated ordered list by the signal card;
-      // these entries carry everything else.
-      const entries: DetailEntry[] = [];
+      const entries: DetailEntry[] = d.hops.map((hop, index) => ({
+        label: `Hop ${index + 1}`,
+        value: `URL: ${hop.url} · Status: ${hop.status} · Location: ${hop.location ?? "None"}`,
+      }));
       if (d.terminalError) {
         entries.push({
           label: "Probe",
