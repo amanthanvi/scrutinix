@@ -5,8 +5,7 @@ import { normalizeUrlInput, type NormalizedUrl } from "@/lib/domain/url";
 import { createApiError } from "@/lib/server/api-error";
 
 export type ScanRequestOutcome =
-  | { ok: true; targets: NormalizedUrl[] }
-  | { ok: false; response: Response };
+  { ok: true; targets: NormalizedUrl[] } | { ok: false; response: Response };
 
 /**
  * Shared request kernel for the analyze routes: enforces content type, body

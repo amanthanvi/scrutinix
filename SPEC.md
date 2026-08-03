@@ -237,12 +237,7 @@ interface AnalysisResult {
 }
 
 type Verdict =
-  | "safe"
-  | "suspicious"
-  | "malicious"
-  | "critical"
-  | "unknown"
-  | "error";
+  "safe" | "suspicious" | "malicious" | "critical" | "unknown" | "error";
 
 interface SignalResults {
   virusTotal: SignalResult<VirusTotalData>;
