@@ -442,6 +442,54 @@ describe("analysis routes", () => {
     expect(urlhausLookup).toHaveBeenCalledTimes(2);
   });
 
+  it("re-runs results after the URLhaus host fallback recovers", async () => {
+    const { POST } = await import("@/app/api/analyze/route");
+    const { urlhausHostLookup } = installHandlers({
+      urlhausHostStatuses: [503, undefined],
+    });
+
+    const requestBody = JSON.stringify({ url: "host-feed-recovery.example" });
+    const firstResponse = await POST(
+      new Request("http://localhost/api/analyze", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: requestBody,
+      }),
+    );
+    const firstEvents = await parseNdjsonEvents(firstResponse);
+    const secondResponse = await POST(
+      new Request("http://localhost/api/analyze", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: requestBody,
+      }),
+    );
+    const secondEvents = await parseNdjsonEvents(secondResponse);
+
+    expect(firstEvents.at(-1)?.result).toMatchObject({
+      signals: {
+        threatFeeds: {
+          status: "success",
+          data: {
+            warnings: ["URLhaus host lookup failed with status 503."],
+          },
+        },
+      },
+      metadata: { cacheHit: false, partialFailure: true },
+    });
+    expect(secondEvents[0]).toMatchObject({
+      type: "scan_started",
+      cached: false,
+    });
+    expect(secondEvents.at(-1)?.result).toMatchObject({
+      signals: {
+        threatFeeds: { status: "success", data: { warnings: [] } },
+      },
+      metadata: { cacheHit: false, partialFailure: false },
+    });
+    expect(urlhausHostLookup).toHaveBeenCalledTimes(2);
+  });
+
   it("re-runs lexical-fallback results after the local classifier recovers", async () => {
     const { POST } = await import("@/app/api/analyze/route");
     installHandlers();
@@ -787,11 +835,21 @@ async function parseNdjsonEvents(response: Response) {
 function installHandlers(
   options: {
     rdapStatus?: number;
+    urlhausHostStatuses?: readonly (number | undefined)[];
     urlhausStatuses?: readonly (number | undefined)[];
     virusTotalStatus?: number;
     virusTotalStatuses?: readonly (number | undefined)[];
   } = {},
 ) {
+  let urlhausHostRequest = 0;
+  const urlhausHostLookup = vi.fn(() => {
+    const status = options.urlhausHostStatuses?.[urlhausHostRequest];
+    urlhausHostRequest += 1;
+
+    return status
+      ? new HttpResponse(null, { status })
+      : HttpResponse.json({ query_status: "no_results" });
+  });
   let urlhausRequest = 0;
   const urlhausLookup = vi.fn(() => {
     const status = options.urlhausStatuses?.[urlhausRequest];
@@ -832,9 +890,7 @@ function installHandlers(
       HttpResponse.json({ matches: [] }),
     ),
     http.post("https://urlhaus-api.abuse.ch/v1/url/", urlhausLookup),
-    http.post("https://urlhaus-api.abuse.ch/v1/host/", () =>
-      HttpResponse.json({ query_status: "no_results" }),
-    ),
+    http.post("https://urlhaus-api.abuse.ch/v1/host/", urlhausHostLookup),
     http.post("https://threatfox-api.abuse.ch/api/v1/", () =>
       HttpResponse.json({ query_status: "no_result", data: [] }),
     ),
@@ -871,5 +927,5 @@ function installHandlers(
     ),
   );
 
-  return { urlhausLookup, virusTotalLookup };
+  return { urlhausHostLookup, urlhausLookup, virusTotalLookup };
 }

@@ -168,9 +168,10 @@ async function checkUrlhausHost(
   signal?: AbortSignal,
 ): Promise<ThreatFeedsData["matches"][number] | null> {
   const hostname = new URL(url).hostname;
-  const response = await fetchWithTimeout(
-    "https://urlhaus-api.abuse.ch/v1/host/",
-    {
+  let response: Response;
+
+  try {
+    response = await fetchWithTimeout("https://urlhaus-api.abuse.ch/v1/host/", {
       method: "POST",
       signal,
       headers: {
@@ -179,12 +180,17 @@ async function checkUrlhausHost(
         ...(authKey ? { "Auth-Key": authKey } : {}),
       },
       body: new URLSearchParams({ host: hostname }),
-    },
-  );
+    });
+  } catch (error) {
+    throw new Error(`URLhaus host lookup failed: ${getErrorMessage(error)}`, {
+      cause: error,
+    });
+  }
 
   if (!response.ok) {
-    // The exact-URL lookup already succeeded; treat host-level errors softly.
-    return null;
+    throw new Error(
+      `URLhaus host lookup failed with status ${response.status}.`,
+    );
   }
 
   const payload = asRecord(await response.json());
