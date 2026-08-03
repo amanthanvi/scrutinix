@@ -101,6 +101,53 @@ describe("threat feed provider", () => {
     expect(result.observations).toEqual([]);
   });
 
+  it("warns when the URLhaus host fallback returns an HTTP error", async () => {
+    server.use(
+      http.post("https://urlhaus-api.abuse.ch/v1/url/", () =>
+        HttpResponse.json({ query_status: "no_results" }),
+      ),
+      http.post(
+        "https://urlhaus-api.abuse.ch/v1/host/",
+        () => new HttpResponse(null, { status: 503 }),
+      ),
+      http.get(
+        "https://openphish.com/feed.txt",
+        () => new HttpResponse("", { status: 200 }),
+      ),
+    );
+    stubThreatFox();
+
+    const result = await runThreatFeedsProvider("https://example.com/");
+
+    expect(result.warnings).toContain(
+      "URLhaus host lookup failed with status 503.",
+    );
+    expect(result.observations).not.toContain(URLHAUS_NO_LISTING_OBSERVATION);
+  });
+
+  it("warns when the URLhaus host fallback has a network failure", async () => {
+    server.use(
+      http.post("https://urlhaus-api.abuse.ch/v1/url/", () =>
+        HttpResponse.json({ query_status: "no_results" }),
+      ),
+      http.post("https://urlhaus-api.abuse.ch/v1/host/", () =>
+        HttpResponse.error(),
+      ),
+      http.get(
+        "https://openphish.com/feed.txt",
+        () => new HttpResponse("", { status: 200 }),
+      ),
+    );
+    stubThreatFox();
+
+    const result = await runThreatFeedsProvider("https://example.com/");
+
+    expect(result.warnings).toContain(
+      "URLhaus host lookup failed: Failed to fetch",
+    );
+    expect(result.observations).not.toContain(URLHAUS_NO_LISTING_OBSERVATION);
+  });
+
   it("surfaces ThreatFox IOC matches for the registrable domain", async () => {
     server.use(
       http.post("https://urlhaus-api.abuse.ch/v1/url/", () =>
