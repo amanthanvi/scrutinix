@@ -480,14 +480,15 @@ function scoreRedirects(signals: SignalResults): Contribution[] {
 
   const content = data.content;
   if (content) {
-    if (
-      content.passwordInputCount > 0 &&
-      content.crossOriginFormHosts.length > 0
-    ) {
+    // Only a form that itself contains a password input convicts here; a
+    // same-domain login next to an unrelated cross-domain form (newsletter,
+    // payment widget) must not read as credential harvesting.
+    const credentialFormHosts = content.crossOriginPasswordFormHosts ?? [];
+    if (credentialFormHosts.length > 0) {
       contributions.push({
         score: 20,
         category: "Page Content",
-        reason: `The final page asks for credentials but submits its form to a different domain (${content.crossOriginFormHosts[0]}).`,
+        reason: `The final page collects credentials in a form that submits to a different domain (${credentialFormHosts[0]}).`,
         quality: "medium",
       });
     }

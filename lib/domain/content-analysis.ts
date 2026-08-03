@@ -15,9 +15,12 @@ export function analyzePageContent(
   html: string,
   finalUrl: string,
 ): PageContentFindings {
+  const forms = extractCrossOriginForms(html, finalUrl);
+
   return {
     title: extractTitle(html),
-    crossOriginFormHosts: extractCrossOriginFormHosts(html, finalUrl),
+    crossOriginFormHosts: forms.hosts,
+    crossOriginPasswordFormHosts: forms.passwordHosts,
     passwordInputCount: countMatches(
       html,
       /<input\b[^>]*type\s*=\s*["']?password/gi,
@@ -39,18 +42,24 @@ function extractTitle(html: string): string | null {
   return title ? title.slice(0, MAX_TITLE_LENGTH) : null;
 }
 
-function extractCrossOriginFormHosts(html: string, finalUrl: string): string[] {
+const PASSWORD_INPUT_PATTERN = /<input\b[^>]*type\s*=\s*["']?password/i;
+
+function extractCrossOriginForms(
+  html: string,
+  finalUrl: string,
+): { hosts: string[]; passwordHosts: string[] } {
   let pageUrl: URL;
   let pageDomain: string;
   try {
     pageUrl = new URL(finalUrl);
     pageDomain = getRegistrableDomain(pageUrl.hostname);
   } catch {
-    return [];
+    return { hosts: [], passwordHosts: [] };
   }
 
   const documentBaseUrl = extractDocumentBaseUrl(html, pageUrl);
   const hosts = new Set<string>();
+  const passwordHosts = new Set<string>();
   const formPattern = /<form\b[^>]*>/gi;
   let form: RegExpExecArray | null;
 
@@ -73,13 +82,30 @@ function extractCrossOriginFormHosts(html: string, finalUrl: string): string[] {
 
     if (getRegistrableDomain(target.hostname) !== pageDomain) {
       hosts.add(target.hostname);
+      if (PASSWORD_INPUT_PATTERN.test(formScope(html, form))) {
+        passwordHosts.add(target.hostname);
+      }
       if (hosts.size >= MAX_FORM_HOSTS) {
         break;
       }
     }
   }
 
-  return [...hosts];
+  return { hosts: [...hosts], passwordHosts: [...passwordHosts] };
+}
+
+/**
+ * The markup a form owns: from its open tag to its close tag, or to the
+ * next form when the close tag is missing (browsers never nest forms, so a
+ * following open tag also ends the scope).
+ */
+function formScope(html: string, form: RegExpExecArray): string {
+  const rest = html.slice(form.index + form[0].length);
+  const boundaries = [
+    rest.search(/<\/form\b/i),
+    rest.search(/<form\b/i),
+  ].filter((index) => index !== -1);
+  return boundaries.length ? rest.slice(0, Math.min(...boundaries)) : rest;
 }
 
 function extractDocumentBaseUrl(html: string, fallbackUrl: URL): URL {

