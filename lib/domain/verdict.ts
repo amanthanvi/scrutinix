@@ -113,15 +113,15 @@ export function buildThreatAssessment(
 
 /**
  * True when no live probe got anything out of the host: the redirect probe
- * failed or found it unreachable AND no TLS service answered. (A host that
- * doesn't resolve at all fails both probes by construction.)
+ * failed or received no HTTP status AND no TLS service answered. (A host
+ * that doesn't resolve at all fails both probes by construction.)
  */
 function isUnreachable(signals: SignalResults): boolean {
   const redirect = signals.redirectChain;
-  const redirectUnreachable =
+  const redirectUninspectable =
     redirect.status === "error" ||
     (redirect.status === "success" && redirect.data
-      ? !redirect.data.reachable
+      ? !redirect.data.reachable && redirect.data.terminalStatus === null
       : false);
 
   const ssl = signals.ssl;
@@ -129,7 +129,7 @@ function isUnreachable(signals: SignalResults): boolean {
     ssl.status === "error" ||
     (ssl.status === "success" && ssl.data ? !ssl.data.available : false);
 
-  return redirectUnreachable && sslUnavailable;
+  return redirectUninspectable && sslUnavailable;
 }
 
 /**

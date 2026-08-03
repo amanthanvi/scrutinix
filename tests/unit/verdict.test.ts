@@ -660,6 +660,40 @@ describe("buildThreatAssessment", () => {
     expect(result.threatInfo?.hasPositiveEvidence).toBe(false);
   });
 
+  it("does not treat redirect-budget exhaustion after HTTP responses as an unreachable host", () => {
+    const signals = createPendingSignalResults();
+    markUnreachable(signals);
+    const terminalError =
+      "The redirect chain exceeded the maximum of 5 redirects before reaching a terminal response.";
+    signals.redirectChain = {
+      status: "success",
+      error: null,
+      durationMs: 12,
+      data: {
+        finalUrl: "http://loop.example/hop-4",
+        totalHops: 5,
+        httpsUpgraded: false,
+        reachable: false,
+        terminalStatus: 302,
+        terminalError,
+        hops: Array.from({ length: 5 }, (_, index) => ({
+          url: `http://loop.example/hop-${index}`,
+          status: 302,
+          location: `http://loop.example/hop-${index + 1}`,
+        })),
+        observations: [terminalError],
+      },
+    };
+
+    const result = buildThreatAssessment(signals);
+
+    expect(result.verdict).toBe("safe");
+    expect(result.threatInfo?.summary).not.toMatch(/unreachable/i);
+    expect(result.threatInfo?.limitations).toContain(
+      `Redirect Chain: ${terminalError}`,
+    );
+  });
+
   it("never downgrades a positive verdict to unknown for a dead host", () => {
     const signals = createPendingSignalResults();
     markUnreachable(signals);

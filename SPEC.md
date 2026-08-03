@@ -299,7 +299,7 @@ Implementation note: batch streams also emit `batch_started`, `url_started`, and
 ### 4.4 State, caching, concurrency
 
 - **Source of truth:** Each scan is ephemeral server-side (computed, cached briefly, not persisted). Client-side IndexedDB is the only persistence layer
-- **Server cache:** LRU cache (200 items, 15-min TTL) keyed by normalized URL, with optional shared Redis. Only complete, non-partial results are eligible; error, warning-degraded composite, partial-failure, and aborted scans always trigger fresh work. Composite `warnings` represent lost coverage; informational feed notes use `observations`
+- **Server cache:** LRU cache (200 items, 15-min TTL) keyed by normalized URL, with optional shared Redis. Only complete, non-partial results are eligible; error, warning-degraded composite, incomplete redirect, partial-failure, and aborted scans always trigger fresh work. Composite `warnings` and redirect terminal errors represent lost coverage; informational feed notes use `observations`
 - **Concurrency:** Enrichment pipeline runs all 8 sources via `Promise.allSettled()`. Batch mode uses a concurrency limiter (max 3 URLs in-flight simultaneously to stay within API quotas)
 - **Hazards:** VT rate limit (4 req/min on free tier) — queue VT calls with backoff. Bound bundled-model initialization to 10 seconds and each local inference to 2 seconds so cold starts cannot consume the full scan budget
 

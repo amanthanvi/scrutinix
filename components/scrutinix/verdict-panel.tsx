@@ -109,7 +109,7 @@ export function VerdictPanel({
 
   const threatInfo = result.threatInfo;
   const score = Math.min(Math.max(threatInfo?.score ?? 0, 0), 100);
-  const confidence = threatInfo?.confidence ?? 1;
+  const confidence = threatInfo?.confidence ?? 0;
   const confidenceLabel = threatInfo?.confidenceLabel ?? "low";
   const reasons = threatInfo?.hasPositiveEvidence
     ? (threatInfo?.reasons ?? [])
