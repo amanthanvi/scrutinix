@@ -313,9 +313,11 @@ describe("analysis routes", () => {
     });
   });
 
-  it("caches partial-failure results briefly instead of re-running everything", async () => {
+  it("re-runs partial-failure results so recovered providers can contribute", async () => {
     const { POST } = await import("@/app/api/analyze/route");
-    installHandlers({ virusTotalStatus: 503 });
+    const { virusTotalLookup } = installHandlers({
+      virusTotalStatuses: [503, undefined],
+    });
 
     const requestBody = JSON.stringify({ url: "partial.example" });
     const firstResponse = await POST(
@@ -327,7 +329,6 @@ describe("analysis routes", () => {
         body: requestBody,
       }),
     );
-    // Drain the first scan fully so its cache write lands before the retry.
     const firstEvents = await parseNdjsonEvents(firstResponse);
 
     const secondResponse = await POST(
@@ -344,19 +345,32 @@ describe("analysis routes", () => {
     const secondCompletion = secondEvents.at(-1);
 
     expect(firstCompletion?.result).toMatchObject({
+      signals: {
+        virusTotal: {
+          status: "error",
+        },
+      },
       metadata: {
         cacheHit: false,
         partialFailure: true,
       },
     });
-    // Degraded results are cached with a short TTL so a provider hiccup does
-    // not force every retry to re-run all eight signals.
+    expect(secondEvents[0]).toMatchObject({
+      type: "scan_started",
+      cached: false,
+    });
     expect(secondCompletion?.result).toMatchObject({
+      signals: {
+        virusTotal: {
+          status: "success",
+        },
+      },
       metadata: {
-        cacheHit: true,
-        partialFailure: true,
+        cacheHit: false,
+        partialFailure: false,
       },
     });
+    expect(virusTotalLookup).toHaveBeenCalledTimes(2);
     expect(
       secondEvents.filter((event) => event.type === "signal_result"),
     ).toHaveLength(8);
@@ -584,27 +598,39 @@ async function parseNdjsonEvents(response: Response) {
 }
 
 function installHandlers(
-  options: { rdapStatus?: number; virusTotalStatus?: number } = {},
+  options: {
+    rdapStatus?: number;
+    virusTotalStatus?: number;
+    virusTotalStatuses?: readonly (number | undefined)[];
+  } = {},
 ) {
-  server.use(
-    http.get("https://www.virustotal.com/api/v3/urls/:id", () =>
-      options.virusTotalStatus
-        ? new HttpResponse(null, { status: options.virusTotalStatus })
-        : HttpResponse.json({
-            data: {
-              attributes: {
-                last_analysis_stats: {
-                  malicious: 0,
-                  suspicious: 0,
-                  harmless: 5,
-                  undetected: 20,
-                  timeout: 0,
-                },
-                last_analysis_results: {},
+  let virusTotalRequest = 0;
+  const virusTotalLookup = vi.fn(() => {
+    const status =
+      options.virusTotalStatuses?.[virusTotalRequest] ??
+      options.virusTotalStatus;
+    virusTotalRequest += 1;
+
+    return status
+      ? new HttpResponse(null, { status })
+      : HttpResponse.json({
+          data: {
+            attributes: {
+              last_analysis_stats: {
+                malicious: 0,
+                suspicious: 0,
+                harmless: 5,
+                undetected: 20,
+                timeout: 0,
               },
+              last_analysis_results: {},
             },
-          }),
-    ),
+          },
+        });
+  });
+
+  server.use(
+    http.get("https://www.virustotal.com/api/v3/urls/:id", virusTotalLookup),
     http.post("https://safebrowsing.googleapis.com/v4/threatMatches:find", () =>
       HttpResponse.json({ matches: [] }),
     ),
@@ -646,4 +672,6 @@ function installHandlers(
           }),
     ),
   );
+
+  return { virusTotalLookup };
 }

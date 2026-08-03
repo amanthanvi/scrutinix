@@ -26,6 +26,7 @@ const lookupMock = vi.mocked(lookup);
 const requestMock = vi.mocked(http.request);
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.resetAllMocks();
 });
 
@@ -58,6 +59,51 @@ describe("runRedirectSignal", () => {
     const result = await runRedirectSignal("http://example.test/start");
 
     expect(result.content?.obfuscationHints).not.toContain("eval() call");
+  });
+
+  it("analyzes terminal HTML captured normally within the deadline", async () => {
+    mockLookupAll([{ address: "93.184.216.34", family: 4 }]);
+    mockHtmlResponse("<html><script>eval('captured')</script></html>");
+
+    const result = await runRedirectSignal("http://example.test/start");
+
+    expect(result.content?.obfuscationHints).toContain("eval() call");
+  });
+
+  it("caps terminal HTML capture by the remaining aggregate deadline", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-02T12:00:00.000Z"));
+    mockLookupAll([{ address: "93.184.216.34", family: 4 }]);
+    const response = mockDelayedHtmlHeaders(11_750);
+
+    const pending = runRedirectSignal("http://example.test/start");
+    await vi.advanceTimersByTimeAsync(11_750);
+    expect(response.destroy).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(249);
+    expect(response.destroy).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(1);
+    const result = await pending;
+
+    expect(response.destroy).toHaveBeenCalledTimes(1);
+    expect(result.terminalStatus).toBe(200);
+    expect(result.content).toBeNull();
+  });
+
+  it("destroys terminal HTML immediately when no signal budget remains", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-02T12:00:00.000Z"));
+    mockLookupAll([{ address: "93.184.216.34", family: 4 }]);
+    const response = mockDelayedHtmlHeaders(12_000);
+
+    const pending = runRedirectSignal("http://example.test/start");
+    await vi.advanceTimersByTimeAsync(12_000);
+    const result = await pending;
+
+    expect(response.destroy).toHaveBeenCalledTimes(1);
+    expect(result.terminalStatus).toBe(200);
+    expect(result.content).toBeNull();
   });
 
   it("stops during hostname resolution when the scan is cancelled", async () => {
@@ -228,4 +274,32 @@ function mockHtmlResponse(body: string) {
 
     return request as never;
   });
+}
+
+function mockDelayedHtmlHeaders(delayMs: number) {
+  const response = Object.assign(new EventEmitter(), {
+    headers: { "content-type": "text/html" },
+    statusCode: 200,
+    destroy: vi.fn(),
+  });
+
+  requestMock.mockImplementationOnce((...args: unknown[]) => {
+    const callback = args.find(
+      (arg): arg is (response: unknown) => void => typeof arg === "function",
+    );
+    const request = {
+      once: vi.fn(),
+      setTimeout: vi.fn(),
+      destroy: vi.fn(),
+      end: vi.fn(() => {
+        setTimeout(() => {
+          callback?.(response as never);
+        }, delayMs);
+      }),
+    };
+
+    return request as never;
+  });
+
+  return response;
 }

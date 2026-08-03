@@ -10,11 +10,7 @@ import {
   type SignalResult,
   type SignalResults,
 } from "@/lib/domain/types";
-import {
-  analysisCache,
-  DEGRADED_RESULT_TTL_MS,
-  FULL_RESULT_TTL_MS,
-} from "@/lib/server/cache";
+import { analysisCache, FULL_RESULT_TTL_MS } from "@/lib/server/cache";
 import { logError, logInfo, createSafeLogContext } from "@/lib/server/logger";
 import { runGoogleSafeBrowsingProvider } from "@/lib/server/providers/google-safe-browsing";
 import { runMlEnsembleProvider } from "@/lib/server/providers/ml-ensemble";
@@ -167,17 +163,14 @@ export async function runAnalysis(
     },
   };
 
-  // Cache anything with an actionable verdict. Degraded (partial-failure)
-  // results get a shorter TTL so a provider hiccup doesn't pin stale data;
-  // aborted scans are never cached.
-  if (verdict !== "error" && !signal?.aborted) {
-    await analysisCache.set(
-      cacheKey,
-      result,
-      result.metadata.partialFailure
-        ? DEGRADED_RESULT_TTL_MS
-        : FULL_RESULT_TTL_MS,
-    );
+  // Reuse only complete scans. A retry after a provider outage must be able to
+  // collect recovered evidence instead of replaying a degraded verdict.
+  if (
+    verdict !== "error" &&
+    !result.metadata.partialFailure &&
+    !signal?.aborted
+  ) {
+    await analysisCache.set(cacheKey, result, FULL_RESULT_TTL_MS);
   }
 
   logInfo(

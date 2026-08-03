@@ -731,7 +731,9 @@ describe("buildThreatAssessment", () => {
         matchType: "url",
       },
     ]);
-    expect(buildThreatAssessment(exact).verdict).toBe("malicious");
+    const exactResult = buildThreatAssessment(exact);
+    expect(exactResult.verdict).toBe("malicious");
+    expect(exactResult.threatInfo?.score).toBe(55);
 
     const hostLevel = createPendingSignalResults();
     withThreatFeedMatches(hostLevel, [
@@ -745,6 +747,61 @@ describe("buildThreatAssessment", () => {
     ]);
     const hostResult = buildThreatAssessment(hostLevel);
     expect(hostResult.verdict).toBe("suspicious");
+    expect(hostResult.threatInfo?.score).toBe(25);
+  });
+
+  it("counts exact feed evidence, but not hostname fallbacks, as high-confidence support", () => {
+    const googleMatch = {
+      status: "success" as const,
+      error: null,
+      durationMs: 8,
+      data: {
+        checkedAt: "2026-03-06T00:00:00.000Z",
+        matches: [
+          {
+            threatType: "SOCIAL_ENGINEERING",
+            platformType: "ANY_PLATFORM",
+            threatEntryType: "URL",
+          },
+        ],
+      },
+    };
+    const exact = createPendingSignalResults();
+    exact.googleSafeBrowsing = googleMatch;
+    withThreatFeedMatches(exact, [
+      {
+        feed: "urlhaus",
+        matchedUrl: "https://bad.example/payload",
+        detail: "malware_download",
+        confidence: "high",
+        matchType: "url",
+      },
+    ]);
+
+    const hostLevel = createPendingSignalResults();
+    hostLevel.googleSafeBrowsing = googleMatch;
+    withThreatFeedMatches(hostLevel, [
+      {
+        feed: "urlhaus",
+        matchedUrl: "bad.example",
+        detail: "host has 12 malware URL listings in URLhaus",
+        confidence: "medium",
+        matchType: "host",
+      },
+    ]);
+
+    const exactResult = buildThreatAssessment(exact);
+    const hostResult = buildThreatAssessment(hostLevel);
+
+    expect(exactResult.threatInfo?.confidence).toBeCloseTo(
+      (hostResult.threatInfo?.confidence ?? 0) + 0.16,
+    );
+    expect(exactResult.threatInfo?.confidenceReasons.join(" ")).toMatch(
+      /2 high-confidence sources independently supported/,
+    );
+    expect(hostResult.threatInfo?.confidenceReasons.join(" ")).toMatch(
+      /1 high-confidence sources independently supported/,
+    );
   });
 
   it("scores a Spamhaus DBL phishing listing into the suspicious band", () => {

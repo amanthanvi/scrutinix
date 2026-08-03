@@ -8,7 +8,6 @@ import { withTimeout } from "@/lib/server/http";
 import { getRedisRestConfig } from "@/lib/server/redis-config";
 
 export const FULL_RESULT_TTL_MS = 1000 * 60 * 15;
-export const DEGRADED_RESULT_TTL_MS = 1000 * 60 * 5;
 const REMOTE_CACHE_TIMEOUT_MS = 1_000;
 
 interface RemoteCacheEntry {
