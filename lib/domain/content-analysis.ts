@@ -64,35 +64,47 @@ function extractFormFindings(
   const hosts = new Set<string>();
   const passwordHosts = new Set<string>();
   const passwordInputs = extractPasswordInputs(html);
+  const submitOverrides = extractSubmitOverrides(html);
   const formPattern = /<form\b[^>]*>/gi;
   let form: RegExpExecArray | null;
 
   while ((form = formPattern.exec(html)) !== null) {
+    const scope = resolveFormScope(html, form);
     const action = extractAttribute(form[0], "action");
-    if (!action) {
+    // Every real submission destination: the form's own action plus any
+    // formaction override on a submit control the form owns - the browser
+    // sends the form's fields (password included) to the override target.
+    const destinations = [
+      ...(action === null ? [] : [action]),
+      ...submitOverrides
+        .filter((override) => formOwns(scope, override))
+        .map((override) => override.formaction),
+    ];
+    if (destinations.length === 0) {
       continue;
     }
 
-    let target: URL;
-    try {
-      target = new URL(action, documentBaseUrl);
-    } catch {
-      continue;
-    }
+    const ownsPassword = passwordInputs.some((input) => formOwns(scope, input));
 
-    if (target.protocol !== "http:" && target.protocol !== "https:") {
-      continue;
-    }
-
-    if (getRegistrableDomain(target.hostname) !== pageDomain) {
-      if (hosts.size < MAX_FORM_HOSTS) {
-        hosts.add(target.hostname);
+    for (const destination of destinations) {
+      let target: URL;
+      try {
+        target = new URL(destination, documentBaseUrl);
+      } catch {
+        continue;
       }
-      if (
-        passwordHosts.size < MAX_FORM_HOSTS &&
-        formOwnsPasswordInput(html, form, passwordInputs)
-      ) {
-        passwordHosts.add(target.hostname);
+
+      if (target.protocol !== "http:" && target.protocol !== "https:") {
+        continue;
+      }
+
+      if (getRegistrableDomain(target.hostname) !== pageDomain) {
+        if (hosts.size < MAX_FORM_HOSTS) {
+          hosts.add(target.hostname);
+        }
+        if (ownsPassword && passwordHosts.size < MAX_FORM_HOSTS) {
+          passwordHosts.add(target.hostname);
+        }
       }
     }
   }
@@ -103,13 +115,17 @@ function extractFormFindings(
   };
 }
 
-interface PasswordInput {
+interface OwnedElement {
   index: number;
   ownerId: string | null;
 }
 
-function extractPasswordInputs(html: string): PasswordInput[] {
-  const inputs: PasswordInput[] = [];
+interface SubmitOverride extends OwnedElement {
+  formaction: string;
+}
+
+function extractPasswordInputs(html: string): OwnedElement[] {
+  const inputs: OwnedElement[] = [];
   const inputPattern = /<input\b[^>]*>/gi;
   let input: RegExpExecArray | null;
 
@@ -125,24 +141,68 @@ function extractPasswordInputs(html: string): PasswordInput[] {
   return inputs;
 }
 
-function formOwnsPasswordInput(
-  html: string,
-  form: RegExpExecArray,
-  passwordInputs: PasswordInput[],
-): boolean {
-  const formId = extractAttribute(form[0], "id");
+/**
+ * Submit controls carrying a formaction override. Only controls that can
+ * actually submit qualify: <button> defaults to type=submit, while <input>
+ * must say submit or image - formaction is inert everywhere else.
+ */
+function extractSubmitOverrides(html: string): SubmitOverride[] {
+  const overrides: SubmitOverride[] = [];
+  const controlPattern = /<(?:button|input)\b[^>]*>/gi;
+  let control: RegExpExecArray | null;
+
+  while ((control = controlPattern.exec(html)) !== null) {
+    const tag = control[0];
+    const formaction = extractAttribute(tag, "formaction");
+    if (formaction === null) {
+      continue;
+    }
+
+    const type = extractAttribute(tag, "type")?.toLowerCase() ?? null;
+    const isSubmit = /^<button/i.test(tag)
+      ? type === null || type === "submit"
+      : type === "submit" || type === "image";
+    if (!isSubmit) {
+      continue;
+    }
+
+    overrides.push({
+      index: control.index,
+      ownerId: extractAttribute(tag, "form"),
+      formaction,
+    });
+  }
+
+  return overrides;
+}
+
+interface FormScope {
+  formId: string | null;
+  contentStart: number;
+  contentEnd: number;
+}
+
+function resolveFormScope(html: string, form: RegExpExecArray): FormScope {
   const contentStart = form.index + form[0].length;
   const closingFormPattern = /<\/form\s*>/gi;
   closingFormPattern.lastIndex = contentStart;
   const closingForm = closingFormPattern.exec(html);
-  const contentEnd = closingForm?.index ?? html.length;
 
-  return passwordInputs.some((input) => {
-    if (input.ownerId !== null) {
-      return Boolean(formId) && input.ownerId === formId;
-    }
-    return input.index >= contentStart && input.index < contentEnd;
-  });
+  return {
+    formId: extractAttribute(form[0], "id"),
+    contentStart,
+    contentEnd: closingForm?.index ?? html.length,
+  };
+}
+
+/** HTML form ownership: an explicit form="id" wins; otherwise containment. */
+function formOwns(scope: FormScope, element: OwnedElement): boolean {
+  if (element.ownerId !== null) {
+    return Boolean(scope.formId) && element.ownerId === scope.formId;
+  }
+  return (
+    element.index >= scope.contentStart && element.index < scope.contentEnd
+  );
 }
 
 function extractDocumentBaseUrl(html: string, fallbackUrl: URL): URL {

