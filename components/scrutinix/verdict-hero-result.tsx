@@ -111,7 +111,7 @@ export function VerdictHeroResult({
   const confidenceReasons = threatInfo?.confidenceReasons ?? [];
   const recommendations = threatInfo?.recommendations ?? [];
   const limitations = threatInfo?.limitations ?? [];
-  const confidenceValue = threatInfo?.confidence ?? 1;
+  const confidenceValue = threatInfo?.confidence ?? 0;
   const showLimitedCoverage = Boolean(resultMetadata?.partialFailure);
   const showProvisionalSafe =
     result?.verdict === "safe" && confidenceValue < 0.5;

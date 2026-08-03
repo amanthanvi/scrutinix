@@ -2,6 +2,7 @@ import { http, HttpResponse } from "msw";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { classifyUrlLocally } from "@/lib/server/ml/local-classifier";
+import { runRedirectSignal } from "@/lib/server/signals/redirect-chain";
 import { server } from "@/tests/setup/msw.server";
 
 // DNSBL lookups ride raw DNS, which MSW cannot intercept; stub them out.
@@ -58,24 +59,27 @@ vi.mock("@/lib/server/signals/ssl", () => ({
 }));
 
 vi.mock("@/lib/server/signals/redirect-chain", () => ({
-  runRedirectSignal: vi.fn(async () => ({
-    finalUrl: "https://example.com/",
-    totalHops: 1,
-    httpsUpgraded: true,
-    reachable: true,
-    terminalStatus: 200,
-    terminalError: null,
-    hops: [
-      {
-        url: "http://example.com/",
-        status: 301,
-        location: "https://example.com/",
-      },
-      { url: "https://example.com/", status: 200 },
-    ],
-    observations: [],
-  })),
+  runRedirectSignal: vi.fn(),
 }));
+
+const redirectMock = vi.mocked(runRedirectSignal);
+const cleanRedirectResult = {
+  finalUrl: "https://example.com/",
+  totalHops: 1,
+  httpsUpgraded: true,
+  reachable: true,
+  terminalStatus: 200,
+  terminalError: null,
+  hops: [
+    {
+      url: "http://example.com/",
+      status: 301,
+      location: "https://example.com/",
+    },
+    { url: "https://example.com/", status: 200 },
+  ],
+  observations: [],
+};
 
 beforeEach(() => {
   vi.stubEnv("NODE_ENV", "test");
@@ -83,6 +87,7 @@ beforeEach(() => {
   vi.stubEnv("GOOGLE_SAFE_BROWSING_API_KEY", "gsb-key");
   vi.stubEnv("URLHAUS_AUTH_KEY", "abuse-ch-key");
   classifierMock.mockReset().mockResolvedValue(benignClassification);
+  redirectMock.mockReset().mockResolvedValue(cleanRedirectResult);
 });
 
 describe("analysis routes", () => {
@@ -490,6 +495,72 @@ describe("analysis routes", () => {
       metadata: { cacheHit: false, partialFailure: false },
     });
     expect(classifierMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("re-runs incomplete redirect results after the chain recovers", async () => {
+    const { POST } = await import("@/app/api/analyze/route");
+    installHandlers();
+    const terminalError =
+      "The redirect probe stopped before the chain was fully followed (time budget exhausted).";
+    redirectMock
+      .mockResolvedValueOnce({
+        ...cleanRedirectResult,
+        finalUrl: "http://redirect-recovery.example/",
+        reachable: false,
+        terminalStatus: 302,
+        terminalError,
+        hops: [
+          {
+            url: "http://redirect-recovery.example/",
+            status: 302,
+            location: "https://landing.example/",
+          },
+        ],
+        observations: [terminalError],
+      })
+      .mockResolvedValueOnce(cleanRedirectResult);
+
+    const requestBody = JSON.stringify({ url: "redirect-recovery.example" });
+    const firstResponse = await POST(
+      new Request("http://localhost/api/analyze", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: requestBody,
+      }),
+    );
+    const firstEvents = await parseNdjsonEvents(firstResponse);
+    const secondResponse = await POST(
+      new Request("http://localhost/api/analyze", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: requestBody,
+      }),
+    );
+    const secondEvents = await parseNdjsonEvents(secondResponse);
+
+    expect(firstEvents.at(-1)?.result).toMatchObject({
+      signals: {
+        redirectChain: {
+          status: "success",
+          data: { reachable: false, terminalError },
+        },
+      },
+      metadata: { cacheHit: false, partialFailure: true },
+    });
+    expect(secondEvents[0]).toMatchObject({
+      type: "scan_started",
+      cached: false,
+    });
+    expect(secondEvents.at(-1)?.result).toMatchObject({
+      signals: {
+        redirectChain: {
+          status: "success",
+          data: { reachable: true, terminalError: null },
+        },
+      },
+      metadata: { cacheHit: false, partialFailure: false },
+    });
+    expect(redirectMock).toHaveBeenCalledTimes(2);
   });
 
   it("replays signal_result events and sets cached on cache hits", async () => {

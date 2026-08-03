@@ -25,6 +25,7 @@ export async function runRedirectSignal(
 ): Promise<RedirectData> {
   const hops: RedirectData["hops"] = [];
   let currentUrl = url;
+  let lastProbedUrl = url;
   let reachable = true;
   let terminalStatus: number | null = null;
   let terminalError: string | null = null;
@@ -35,9 +36,12 @@ export async function runRedirectSignal(
 
   for (let attempt = 0; attempt < MAX_REDIRECTS; attempt += 1) {
     if (Date.now() >= deadline || signal?.aborted) {
-      observations.push(
-        "The redirect probe stopped before the chain was fully followed (time budget exhausted).",
-      );
+      reachable = false;
+      terminalError = signal?.aborted
+        ? "The redirect probe was cancelled before the chain was fully followed."
+        : "The redirect probe stopped before the chain was fully followed (time budget exhausted).";
+      currentUrl = lastProbedUrl;
+      observations.push(terminalError);
       break;
     }
 
@@ -69,6 +73,7 @@ export async function runRedirectSignal(
     }
 
     const { status, location } = outcome;
+    lastProbedUrl = currentUrl;
     terminalStatus = status;
     hops.push({
       url: currentUrl,

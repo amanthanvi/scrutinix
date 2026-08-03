@@ -182,6 +182,36 @@ describe("runRedirectSignal", () => {
     ]);
   });
 
+  it("marks the chain incomplete when redirect resolution exhausts the budget", async () => {
+    vi.useFakeTimers();
+    const startedAt = new Date("2026-08-02T12:00:00.000Z");
+    vi.setSystemTime(startedAt);
+    mockLookupAll([{ address: "93.184.216.34", family: 4 }]);
+    lookupMock.mockImplementationOnce(async () => {
+      vi.setSystemTime(startedAt.getTime() + 12_000);
+      return [{ address: "93.184.216.34", family: 4 }] as never;
+    });
+    mockHttpResponse(302, "http://landing.example.test/next");
+
+    const result = await runRedirectSignal("http://example.test/start");
+
+    expect(requestMock).toHaveBeenCalledTimes(1);
+    expect(result.finalUrl).toBe("http://example.test/start");
+    expect(result.reachable).toBe(false);
+    expect(result.terminalStatus).toBe(302);
+    expect(result.terminalError).toBe(
+      "The redirect probe stopped before the chain was fully followed (time budget exhausted).",
+    );
+    expect(result.observations).toEqual([result.terminalError]);
+    expect(result.hops).toEqual([
+      {
+        url: "http://example.test/start",
+        status: 302,
+        location: "http://landing.example.test/next",
+      },
+    ]);
+  });
+
   it("reports an indeterminate result when the redirect limit is exhausted", async () => {
     lookupMock.mockResolvedValue([
       { address: "93.184.216.34", family: 4 },

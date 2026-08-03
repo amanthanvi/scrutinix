@@ -206,7 +206,9 @@ function hasPartialFailure(signals: SignalResults): boolean {
     (signals.mlEnsemble.status === "success" &&
       (signals.mlEnsemble.data?.warnings.length ?? 0) > 0) ||
     (signals.threatFeeds.status === "success" &&
-      (signals.threatFeeds.data?.warnings.length ?? 0) > 0)
+      (signals.threatFeeds.data?.warnings.length ?? 0) > 0) ||
+    (signals.redirectChain.status === "success" &&
+      Boolean(signals.redirectChain.data?.terminalError))
   );
 }
 

@@ -2,6 +2,7 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { VerdictHeroResult } from "@/components/scrutinix/verdict-hero-result";
+import { createErrorAnalysisResult } from "@/lib/domain/analysis-result";
 import {
   createPendingSignalResults,
   type AnalysisResult,
@@ -40,6 +41,27 @@ function buildUnknownResult(): AnalysisResult {
 }
 
 describe("VerdictHeroResult", () => {
+  it("renders zero confidence when an error result has no threat evidence", () => {
+    render(
+      <VerdictHeroResult
+        result={createErrorAnalysisResult({
+          url: "https://failed.example/",
+          scanId: "failed-scan",
+          startedAt: "2026-08-02T12:00:00.000Z",
+          message: "Synthetic batch failure.",
+        })}
+        streamUrl=""
+        sharedSnapshot={null}
+        completedSignals={8}
+      />,
+    );
+
+    expect(screen.getByText("Confidence")).toBeTruthy();
+    expect(screen.getByText("LOW")).toBeTruthy();
+    expect(screen.getByText("0%")).toBeTruthy();
+    expect(screen.queryByText("100%")).toBeNull();
+  });
+
   it("does not present an unreachable result as evidence of safety", () => {
     render(
       <VerdictHeroResult
