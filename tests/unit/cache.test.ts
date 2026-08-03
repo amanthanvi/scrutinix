@@ -1,6 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { ResultCache, type RemoteCacheStore } from "@/lib/server/cache";
+import {
+  FULL_RESULT_TTL_MS,
+  REDUCED_COVERAGE_TTL_MS,
+  ResultCache,
+  resolveResultCacheTtl,
+  type RemoteCacheStore,
+} from "@/lib/server/cache";
 import {
   createPendingSignalResults,
   type AnalysisResult,
@@ -142,6 +148,69 @@ describe("ResultCache", () => {
     await vi.advanceTimersByTimeAsync(1_000);
     await expect(write).resolves.toBeUndefined();
     vi.useRealTimers();
+  });
+});
+
+describe("resolveResultCacheTtl", () => {
+  it("gives complete scans the full TTL", () => {
+    expect(
+      resolveResultCacheTtl(buildResult("https://a.example/"), false),
+    ).toBe(FULL_RESULT_TTL_MS);
+  });
+
+  it("never caches errored, partial-failure, or aborted scans", () => {
+    const errored = buildResult("https://a.example/");
+    errored.verdict = "error";
+    expect(resolveResultCacheTtl(errored, false)).toBeNull();
+
+    const partial = buildResult("https://a.example/");
+    partial.metadata.partialFailure = true;
+    expect(resolveResultCacheTtl(partial, false)).toBeNull();
+
+    expect(
+      resolveResultCacheTtl(buildResult("https://a.example/"), true),
+    ).toBeNull();
+  });
+
+  it("shortens the TTL when a composite signal degraded with warnings", () => {
+    const feedsDegraded = buildResult("https://a.example/");
+    feedsDegraded.signals.threatFeeds = {
+      status: "success",
+      error: null,
+      durationMs: 10,
+      data: {
+        checkedAt: "2026-03-06T00:00:00.000Z",
+        matches: [],
+        observations: [],
+        warnings: ["ThreatFox lookup failed: timeout."],
+      },
+    };
+    expect(resolveResultCacheTtl(feedsDegraded, false)).toBe(
+      REDUCED_COVERAGE_TTL_MS,
+    );
+
+    const mlDegraded = buildResult("https://a.example/");
+    mlDegraded.signals.mlEnsemble = {
+      status: "success",
+      error: null,
+      durationMs: 10,
+      data: {
+        transformerModel: null,
+        lexicalModel: {
+          label: "benign",
+          score: 0.1,
+          reasons: [],
+          model: "lexical-heuristic",
+        },
+        consensusLabel: "benign",
+        consensusScore: 0.1,
+        reasons: [],
+        warnings: ["The local URL classifier failed."],
+      },
+    };
+    expect(resolveResultCacheTtl(mlDegraded, false)).toBe(
+      REDUCED_COVERAGE_TTL_MS,
+    );
   });
 });
 

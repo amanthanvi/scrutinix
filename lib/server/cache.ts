@@ -8,7 +8,38 @@ import { withTimeout } from "@/lib/server/http";
 import { getRedisRestConfig } from "@/lib/server/redis-config";
 
 export const FULL_RESULT_TTL_MS = 1000 * 60 * 15;
+/**
+ * TTL for scans whose signals all succeeded but with reduced coverage
+ * (a composite member such as ThreatFox, a DNSBL zone, or the local
+ * transformer degraded without failing the signal). Short enough that a
+ * retry re-reaches the degraded source soon, long enough that deployments
+ * with a structural gap (no abuse.ch key, blocked DNSBL resolver) still
+ * benefit from caching instead of hammering providers.
+ */
+export const REDUCED_COVERAGE_TTL_MS = 1000 * 60 * 5;
 const REMOTE_CACHE_TIMEOUT_MS = 1_000;
+
+/**
+ * Cache tier for a completed scan: `null` (never reuse) for errored,
+ * partial-failure, or aborted scans; a short TTL when a successful
+ * composite signal carries coverage warnings; the full TTL otherwise.
+ */
+export function resolveResultCacheTtl(
+  result: AnalysisResult,
+  aborted: boolean,
+): number | null {
+  if (result.verdict === "error" || result.metadata.partialFailure || aborted) {
+    return null;
+  }
+
+  const feeds = result.signals.threatFeeds;
+  const ml = result.signals.mlEnsemble;
+  const hasCoverageWarnings =
+    (feeds.status === "success" && (feeds.data?.warnings.length ?? 0) > 0) ||
+    (ml.status === "success" && (ml.data?.warnings.length ?? 0) > 0);
+
+  return hasCoverageWarnings ? REDUCED_COVERAGE_TTL_MS : FULL_RESULT_TTL_MS;
+}
 
 interface RemoteCacheEntry {
   value: unknown;

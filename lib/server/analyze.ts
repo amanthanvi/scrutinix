@@ -10,7 +10,7 @@ import {
   type SignalResult,
   type SignalResults,
 } from "@/lib/domain/types";
-import { analysisCache, FULL_RESULT_TTL_MS } from "@/lib/server/cache";
+import { analysisCache, resolveResultCacheTtl } from "@/lib/server/cache";
 import { logError, logInfo, createSafeLogContext } from "@/lib/server/logger";
 import { runGoogleSafeBrowsingProvider } from "@/lib/server/providers/google-safe-browsing";
 import { runMlEnsembleProvider } from "@/lib/server/providers/ml-ensemble";
@@ -163,14 +163,13 @@ export async function runAnalysis(
     },
   };
 
-  // Reuse only complete scans. A retry after a provider outage must be able to
-  // collect recovered evidence instead of replaying a degraded verdict.
-  if (
-    verdict !== "error" &&
-    !result.metadata.partialFailure &&
-    !signal?.aborted
-  ) {
-    await analysisCache.set(cacheKey, result, FULL_RESULT_TTL_MS);
+  // Three cache tiers: complete scans get the full TTL; successful scans
+  // whose composite signals carry coverage warnings get a short TTL so a
+  // retry can re-reach the degraded source; errored, partial-failure, and
+  // aborted scans are never reused.
+  const cacheTtl = resolveResultCacheTtl(result, signal?.aborted ?? false);
+  if (cacheTtl !== null) {
+    await analysisCache.set(cacheKey, result, cacheTtl);
   }
 
   logInfo(

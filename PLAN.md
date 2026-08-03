@@ -25,7 +25,7 @@ state plus the current analysis-hardening and review-remediation work.
   - IndexedDB stores client-only history, export state, and re-scan sources.
   - The ML ensemble uses a bundled quantized ONNX URL classifier plus lexical heuristics; scans do not call hosted inference.
   - Threat-feed coverage combines URLhaus, cached OpenPhish, ThreatFox, and Spamhaus DBL / SURBL DNSBL lookups.
-  - Complete, non-partial results use a 15-minute process-local LRU plus optional shared Redis cache; error, partial-failure, and aborted results are never reused.
+  - Complete, non-partial results use a 15-minute process-local LRU plus optional shared Redis cache; successful scans whose composite signals carry coverage warnings drop to a 5-minute TTL so retries re-reach the degraded source; error, partial-failure, and aborted results are never reused.
   - The home page now renders scanner-first: a compact top band with the scan dock and minimal product framing, a calmer two-column operational workspace, and a sticky history rail. Method and caveat notes live on `/about`, not under the home workspace.
   - The public site now shares one editorial shell across `/`, `/about`, and `/privacy`, so the trust, methodology, and privacy surfaces stay visually aligned with the scanner.
   - The UI now uses the actual pulled shadcn preset `b1D24VYe` as its baseline language: neutral `radix-mira` tokens, compact controls, and smaller radii adapted onto the branded `components/scrutinix/*` surface.
