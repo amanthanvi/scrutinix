@@ -61,7 +61,7 @@ Completed deployment verification:
 Observed results:
 
 - Unit tests: `29` files passed, `187` tests passed.
-- Integration tests: `2` files passed, `24` tests passed, including full-origin authorization, exact-host ThreatFox isolation, batch per-URL failure isolation, disconnect cancellation, and incomplete DNSBL coverage propagation.
+- Integration tests: `2` files passed, `26` tests passed, including full-origin authorization, exact-host ThreatFox isolation, batch per-URL failure isolation, disconnect cancellation, warning-degraded provider recovery, and incomplete DNSBL coverage propagation.
 - DOM tests: `5` files passed, `12` tests passed.
 - Playwright: `9` tests passed, covering legacy history migration, single-scan, batch-scan, accessibility, keyboard navigation, history undo, and fixture-backed verdicts.
 - Production build: passed with static metadata routes for `/icon`, `/opengraph-image`, `/robots.txt`, and `/sitemap.xml`.
@@ -102,6 +102,7 @@ Observed results:
 - [x] Count only high-quality threat-feed matches as high-confidence verdict corroboration.
 - [x] Keep terminal HTML capture inside the redirect signal's aggregate deadline.
 - [x] Preserve fresh provider recovery by never caching partial, error, or aborted scans.
+- [x] Treat composite-signal warnings as partial coverage so warning-degraded scans also bypass the cache.
 - [x] Centralize runtime schemas and harden request, stream, history, cache, and provider boundaries.
 - [x] Expand unit, integration, DOM, fixture-backed E2E, CI, and dependency-audit coverage.
 - [-] Resolve external review findings, run the full verification chain, and land the reviewed PR stack.

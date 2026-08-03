@@ -142,6 +142,7 @@ export async function runAnalysis(
 
   const completedAt = new Date().toISOString();
   const { verdict, threatInfo } = buildThreatAssessment(signals);
+  const partialFailure = hasPartialFailure(signals);
 
   const result: AnalysisResult = {
     id: scanId,
@@ -154,9 +155,7 @@ export async function runAnalysis(
       startedAt,
       completedAt,
       cacheHit: false,
-      partialFailure: Object.values(signals).some(
-        (signalResult) => signalResult.status === "error",
-      ),
+      partialFailure,
       signalCount: signalNames.length,
       durationMs:
         new Date(completedAt).getTime() - new Date(startedAt).getTime(),
@@ -189,6 +188,26 @@ export async function runAnalysis(
   );
 
   return result;
+}
+
+function hasPartialFailure(signals: SignalResults): boolean {
+  if (
+    Object.values(signals).some(
+      (signalResult) => signalResult.status === "error",
+    )
+  ) {
+    return true;
+  }
+
+  // Composite signals return useful fallback data when only part of their
+  // coverage fails. Their warnings represent that lost coverage; ordinary
+  // threat-feed notes are kept separately in `observations`.
+  return (
+    (signals.mlEnsemble.status === "success" &&
+      (signals.mlEnsemble.data?.warnings.length ?? 0) > 0) ||
+    (signals.threatFeeds.status === "success" &&
+      (signals.threatFeeds.data?.warnings.length ?? 0) > 0)
+  );
 }
 
 function createSignalTask<Name extends SignalName>(

@@ -1,6 +1,7 @@
 import { http, HttpResponse } from "msw";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { classifyUrlLocally } from "@/lib/server/ml/local-classifier";
 import { server } from "@/tests/setup/msw.server";
 
 // DNSBL lookups ride raw DNS, which MSW cannot intercept; stub them out.
@@ -11,6 +12,18 @@ vi.mock("@/lib/server/providers/dnsbl", () => ({
     observations: [],
   })),
 }));
+
+vi.mock("@/lib/server/ml/local-classifier", () => ({
+  classifyUrlLocally: vi.fn(),
+}));
+
+const classifierMock = vi.mocked(classifyUrlLocally);
+const benignClassification = {
+  label: "benign" as const,
+  score: 0.99,
+  reasons: ["The local URL model classified this link as benign."],
+  model: "test-transformer",
+};
 
 vi.mock("@/lib/server/signals/dns", () => ({
   runDnsSignal: vi.fn(async () => ({
@@ -68,6 +81,8 @@ beforeEach(() => {
   vi.stubEnv("NODE_ENV", "test");
   vi.stubEnv("VIRUSTOTAL_API_KEY", "vt-key");
   vi.stubEnv("GOOGLE_SAFE_BROWSING_API_KEY", "gsb-key");
+  vi.stubEnv("URLHAUS_AUTH_KEY", "abuse-ch-key");
+  classifierMock.mockReset().mockResolvedValue(benignClassification);
 });
 
 describe("analysis routes", () => {
@@ -376,6 +391,107 @@ describe("analysis routes", () => {
     ).toHaveLength(8);
   });
 
+  it("re-runs warning-degraded threat-feed results after a source recovers", async () => {
+    const { POST } = await import("@/app/api/analyze/route");
+    const { urlhausLookup } = installHandlers({
+      urlhausStatuses: [503, undefined],
+    });
+
+    const requestBody = JSON.stringify({ url: "feed-recovery.example" });
+    const firstResponse = await POST(
+      new Request("http://localhost/api/analyze", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: requestBody,
+      }),
+    );
+    const firstEvents = await parseNdjsonEvents(firstResponse);
+    const secondResponse = await POST(
+      new Request("http://localhost/api/analyze", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: requestBody,
+      }),
+    );
+    const secondEvents = await parseNdjsonEvents(secondResponse);
+
+    expect(firstEvents.at(-1)?.result).toMatchObject({
+      signals: {
+        threatFeeds: {
+          status: "success",
+          data: { warnings: ["URLhaus lookup failed with status 503."] },
+        },
+      },
+      metadata: { cacheHit: false, partialFailure: true },
+    });
+    expect(secondEvents[0]).toMatchObject({
+      type: "scan_started",
+      cached: false,
+    });
+    expect(secondEvents.at(-1)?.result).toMatchObject({
+      signals: {
+        threatFeeds: { status: "success", data: { warnings: [] } },
+      },
+      metadata: { cacheHit: false, partialFailure: false },
+    });
+    expect(urlhausLookup).toHaveBeenCalledTimes(2);
+  });
+
+  it("re-runs lexical-fallback results after the local classifier recovers", async () => {
+    const { POST } = await import("@/app/api/analyze/route");
+    installHandlers();
+    classifierMock
+      .mockRejectedValueOnce(new Error("Classifier unavailable."))
+      .mockResolvedValue(benignClassification);
+
+    const requestBody = JSON.stringify({ url: "classifier-recovery.example" });
+    const firstResponse = await POST(
+      new Request("http://localhost/api/analyze", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: requestBody,
+      }),
+    );
+    const firstEvents = await parseNdjsonEvents(firstResponse);
+    const secondResponse = await POST(
+      new Request("http://localhost/api/analyze", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: requestBody,
+      }),
+    );
+    const secondEvents = await parseNdjsonEvents(secondResponse);
+
+    expect(firstEvents.at(-1)?.result).toMatchObject({
+      signals: {
+        mlEnsemble: {
+          status: "success",
+          data: {
+            transformerModel: null,
+            warnings: [
+              "Classifier unavailable. Falling back to lexical heuristics only.",
+            ],
+          },
+        },
+      },
+      metadata: { cacheHit: false, partialFailure: true },
+    });
+    expect(secondEvents[0]).toMatchObject({
+      type: "scan_started",
+      cached: false,
+    });
+    expect(secondEvents.at(-1)?.result).toMatchObject({
+      signals: {
+        mlEnsemble: {
+          status: "success",
+          data: { warnings: [] },
+        },
+      },
+      metadata: { cacheHit: false, partialFailure: false },
+    });
+    expect(classifierMock).toHaveBeenCalledTimes(2);
+  });
+
   it("replays signal_result events and sets cached on cache hits", async () => {
     const { POST } = await import("@/app/api/analyze/route");
     installHandlers();
@@ -600,10 +716,20 @@ async function parseNdjsonEvents(response: Response) {
 function installHandlers(
   options: {
     rdapStatus?: number;
+    urlhausStatuses?: readonly (number | undefined)[];
     virusTotalStatus?: number;
     virusTotalStatuses?: readonly (number | undefined)[];
   } = {},
 ) {
+  let urlhausRequest = 0;
+  const urlhausLookup = vi.fn(() => {
+    const status = options.urlhausStatuses?.[urlhausRequest];
+    urlhausRequest += 1;
+
+    return status
+      ? new HttpResponse(null, { status })
+      : HttpResponse.json({ query_status: "no_results" });
+  });
   let virusTotalRequest = 0;
   const virusTotalLookup = vi.fn(() => {
     const status =
@@ -634,11 +760,12 @@ function installHandlers(
     http.post("https://safebrowsing.googleapis.com/v4/threatMatches:find", () =>
       HttpResponse.json({ matches: [] }),
     ),
-    http.post("https://urlhaus-api.abuse.ch/v1/url/", () =>
-      HttpResponse.json({ query_status: "no_results" }),
-    ),
+    http.post("https://urlhaus-api.abuse.ch/v1/url/", urlhausLookup),
     http.post("https://urlhaus-api.abuse.ch/v1/host/", () =>
       HttpResponse.json({ query_status: "no_results" }),
+    ),
+    http.post("https://threatfox-api.abuse.ch/api/v1/", () =>
+      HttpResponse.json({ query_status: "no_result", data: [] }),
     ),
     http.get(
       "https://openphish.com/feed.txt",
@@ -673,5 +800,5 @@ function installHandlers(
     ),
   );
 
-  return { virusTotalLookup };
+  return { urlhausLookup, virusTotalLookup };
 }
