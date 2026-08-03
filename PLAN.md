@@ -33,7 +33,7 @@ state plus the current analysis-hardening and review-remediation work.
   - IndexedDB stores client-only history, export state, and re-scan sources.
   - The ML ensemble uses a bundled quantized ONNX URL classifier plus lexical heuristics; scans do not call hosted inference.
   - Threat-feed coverage combines URLhaus, cached OpenPhish, ThreatFox, and Spamhaus DBL / SURBL DNSBL lookups.
-  - Completed results use a process-local LRU cache plus optional shared Redis storage with explicit TTL and bounded best-effort operations.
+  - Complete, non-partial results use a 15-minute process-local LRU plus optional shared Redis cache; error, partial-failure, and aborted results are never reused.
   - The home page renders as a scanner-first, single-column product tool in a `44rem` shell: scan form, verdict, Summary/Full signal rows, and local history in one flow. Method and caveat notes live on `/about`.
   - The public site now shares one editorial shell across `/`, `/about`, and `/privacy`, so the trust, methodology, and privacy surfaces stay visually aligned with the scanner.
   - The UI now uses the actual pulled shadcn preset `b1D24VYe` as its baseline language: neutral `radix-mira` tokens, compact controls, and smaller radii adapted onto the branded `components/scrutinix/*` surface.
@@ -68,7 +68,7 @@ Completed deployment verification:
 
 Observed results:
 
-- Unit tests: `28` files passed, `172` tests passed.
+- Unit tests: `29` files passed, `187` tests passed.
 - Integration tests: `2` files passed, `24` tests passed, including full-origin authorization, exact-host ThreatFox isolation, batch per-URL failure isolation, disconnect cancellation, and incomplete DNSBL coverage propagation.
 - DOM tests: `5` files passed, `13` tests passed.
 - Playwright: `9` tests passed, covering legacy history migration, single-scan, Summary/Full signals, batch-scan, accessibility, keyboard navigation, history undo, and fixture-backed verdicts.
@@ -104,6 +104,12 @@ Observed results:
 - [x] Report redirect-limit exhaustion without presenting an unprobed destination as reachable.
 - [x] Restrict brand-impersonation exemptions to known official registrable domains, including across private hosting suffixes.
 - [x] Resolve relative form actions against the document's effective base URL before scoring cross-origin credential posts.
+- [x] Resolve relative meta-refresh targets against the same effective document base.
+- [x] Accept only the documented JSON media type, with parameters, at scan request boundaries.
+- [x] Charge rejected requests one rate-limit token while preserving per-URL weighting for admitted batches.
+- [x] Count only high-quality threat-feed matches as high-confidence verdict corroboration.
+- [x] Keep terminal HTML capture inside the redirect signal's aggregate deadline.
+- [x] Preserve fresh provider recovery by never caching partial, error, or aborted scans.
 - [x] Centralize runtime schemas and harden request, stream, history, cache, and provider boundaries.
 - [x] Expand unit, integration, DOM, fixture-backed E2E, CI, and dependency-audit coverage.
 - [-] Resolve external review findings, run the full verification chain, and land the reviewed PR stack.

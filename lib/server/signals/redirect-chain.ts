@@ -179,6 +179,7 @@ async function requestRedirectHop(
       resolution.hostname,
       address,
       Math.min(REQUEST_TIMEOUT_MS, remaining),
+      deadline,
       signal,
     );
     if (!("error" in outcome)) {
@@ -198,6 +199,7 @@ async function requestRedirectHopAtAddress(
   servername: string,
   address: string,
   timeoutMs: number,
+  deadline: number,
   signal?: AbortSignal,
 ) {
   return await new Promise<
@@ -233,7 +235,17 @@ async function requestRedirectHopAtAddress(
         if (isTerminalHtml) {
           // Capture a bounded slice of the final page for content analysis;
           // the same response is already SSRF-gated, so no new fetch happens.
-          void captureBody(response).then((body) => {
+          const captureBudgetMs = Math.min(
+            BODY_CAPTURE_TIMEOUT_MS,
+            deadline - Date.now(),
+          );
+          if (captureBudgetMs <= 0) {
+            response.destroy();
+            resolve({ status, location, body: null });
+            return;
+          }
+
+          void captureBody(response, captureBudgetMs).then((body) => {
             resolve({ status, location, body });
           });
           return;
@@ -273,8 +285,11 @@ async function requestRedirectHopAtAddress(
   });
 }
 
-/** Read up to BODY_CAPTURE_LIMIT_BYTES, then destroy the response. */
-function captureBody(response: IncomingMessage): Promise<string | null> {
+/** Read up to BODY_CAPTURE_LIMIT_BYTES within the remaining signal budget. */
+function captureBody(
+  response: IncomingMessage,
+  timeoutMs: number,
+): Promise<string | null> {
   return new Promise((resolve) => {
     const chunks: Buffer[] = [];
     let total = 0;
@@ -290,7 +305,7 @@ function captureBody(response: IncomingMessage): Promise<string | null> {
       resolve(total > 0 ? Buffer.concat(chunks).toString("utf8") : null);
     };
 
-    const timer = setTimeout(finish, BODY_CAPTURE_TIMEOUT_MS);
+    const timer = setTimeout(finish, timeoutMs);
 
     response.on("data", (chunk: Buffer) => {
       const remaining = BODY_CAPTURE_LIMIT_BYTES - total;

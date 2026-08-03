@@ -46,6 +46,40 @@ describe("analyzePageContent", () => {
     expect(findings.crossOriginFormHosts).toEqual([]);
   });
 
+  it("resolves a relative meta refresh against a cross-origin document base", () => {
+    const findings = analyzePageContent(
+      `<base href="https://evil.example/capture/"><form action="collect"></form><meta http-equiv="refresh" content="0; url=next">`,
+      FINAL_URL,
+    );
+
+    expect(findings.crossOriginFormHosts).toEqual(["evil.example"]);
+    expect(findings.metaRefreshTarget).toBe(
+      "https://evil.example/capture/next",
+    );
+  });
+
+  it("resolves a relative meta refresh against a same-origin document base", () => {
+    const findings = analyzePageContent(
+      `<base href="/account/"><form action="collect"></form><meta http-equiv="refresh" content="0; url=next">`,
+      FINAL_URL,
+    );
+
+    expect(findings.crossOriginFormHosts).toEqual([]);
+    expect(findings.metaRefreshTarget).toBe(
+      "https://landing.example/account/next",
+    );
+  });
+
+  it("preserves absolute meta refresh targets under a cross-origin base", () => {
+    const findings = analyzePageContent(
+      `<base href="https://evil.example/capture/"><form action="collect"></form><meta http-equiv="refresh" content="0; url=https://next.example/page">`,
+      FINAL_URL,
+    );
+
+    expect(findings.crossOriginFormHosts).toEqual(["evil.example"]);
+    expect(findings.metaRefreshTarget).toBe("https://next.example/page");
+  });
+
   it("uses only the first base with an href, falling back when it is invalid", () => {
     const firstBaseWins = analyzePageContent(
       `<base target="_blank"><base href="/account/"><base href="https://evil.example/"><form action="collect"></form>`,

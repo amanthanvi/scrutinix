@@ -946,7 +946,9 @@ function countPositiveHighConfidenceSources(signals: SignalResults) {
   if (
     signals.threatFeeds.status === "success" &&
     signals.threatFeeds.data &&
-    (signals.threatFeeds.data.matches?.length ?? 0) > 0
+    (signals.threatFeeds.data.matches ?? []).some(
+      (match) => feedMatchWeight(match).quality === "high",
+    )
   ) {
     count += 1;
   }

@@ -18,7 +18,8 @@ export async function parseScanRequest(
   shape: "single" | "batch",
 ): Promise<ScanRequestOutcome> {
   const contentType = request.headers.get("content-type") ?? "";
-  if (!contentType.toLowerCase().includes("application/json")) {
+  const mediaType = contentType.split(";", 1)[0]?.trim().toLowerCase();
+  if (mediaType !== "application/json") {
     return reject(
       415,
       "unsupported_media_type",

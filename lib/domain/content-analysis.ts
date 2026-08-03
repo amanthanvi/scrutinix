@@ -174,7 +174,9 @@ function extractMetaRefreshTarget(
   }
 
   try {
-    const target = new URL(urlPart[1], finalUrl);
+    const pageUrl = new URL(finalUrl);
+    const documentBaseUrl = extractDocumentBaseUrl(html, pageUrl);
+    const target = new URL(urlPart[1], documentBaseUrl);
     if (target.protocol !== "http:" && target.protocol !== "https:") {
       return null;
     }

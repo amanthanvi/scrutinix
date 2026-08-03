@@ -293,13 +293,13 @@ BatchUpdate: { type: 'url_complete', url: string, result: AnalysisResult }
 Implementation note: batch streams also emit `batch_started`, `url_started`, and `batch_error`, with a concurrency limit of 3 URLs in flight.
 
 - **Error model:** `{ error: { code: string, message: string, retryable: boolean } }`
-- **Idempotency:** Cache-keyed by normalized URL. Same URL within TTL returns cached result (but new scan ID)
-- **Rate limits:** 10 req/min per IP, 50 req/day per IP (enforced in `proxy.ts` before analysis work starts)
+- **Idempotency:** Same normalized URL returns a cached result with a new scan ID only when a complete, non-partial result remains inside the 15-minute TTL
+- **Rate limits:** 10 tokens/min per IP, 50 tokens/day per IP. An admitted batch costs one token per URL; rejected requests cost one token (enforced in `proxy.ts` before analysis work starts)
 
 ### 4.4 State, caching, concurrency
 
 - **Source of truth:** Each scan is ephemeral server-side (computed, cached briefly, not persisted). Client-side IndexedDB is the only persistence layer
-- **Server cache:** LRU cache (200 items, 15-min TTL) keyed by normalized URL. Cache hit returns immediately, cache miss triggers full pipeline
+- **Server cache:** LRU cache (200 items, 15-min TTL) keyed by normalized URL, with optional shared Redis. Only complete, non-partial results are eligible; error, partial-failure, and aborted scans always trigger fresh work
 - **Concurrency:** Enrichment pipeline runs all 8 sources via `Promise.allSettled()`. Batch mode uses a concurrency limiter (max 3 URLs in-flight simultaneously to stay within API quotas)
 - **Hazards:** VT rate limit (4 req/min on free tier) — queue VT calls with backoff. Bound bundled-model initialization to 10 seconds and each local inference to 2 seconds so cold starts cannot consume the full scan budget
 
@@ -331,7 +331,7 @@ Implementation note: batch streams also emit `batch_started`, `url_started`, and
 ## 5) Security, Privacy, Compliance
 
 - **Authn/authz:** None. Anonymous usage. No user accounts
-- **PII:** No PII collected or stored server-side. URLs submitted are cached temporarily (15 min) then discarded. Client-side history is user-controlled
+- **PII:** No PII collected or stored server-side. URLs attached to eligible complete results may be cached for up to 15 minutes, then discarded; partial/error/aborted scans are not cached. Client-side history is user-controlled
 - **Public disclosure:** `/privacy` explains local history, hashed server logging, and client-only share links; `/about` explains the scoring and signal model
 - **Abuse cases + mitigations:**
 

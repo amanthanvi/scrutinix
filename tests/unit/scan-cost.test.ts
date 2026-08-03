@@ -16,6 +16,7 @@ describe("getScanRequestCost", () => {
     const request = new Request("https://scrutinix.test/api/analyze/batch", {
       method: "POST",
       body: JSON.stringify({ urls: ["a.example", "b.example", "c.example"] }),
+      headers: { "content-type": "application/json" },
     });
 
     await expect(
@@ -23,7 +24,7 @@ describe("getScanRequestCost", () => {
     ).resolves.toBe(3);
   });
 
-  it("bounds chunked batch reads and charges oversized bodies the maximum", async () => {
+  it("bounds chunked batch reads and charges rejected oversized bodies once", async () => {
     let chunksProduced = 0;
     const body = new ReadableStream<Uint8Array>({
       pull(controller) {
@@ -36,6 +37,7 @@ describe("getScanRequestCost", () => {
       method: "POST",
       body,
       duplex: "half",
+      headers: { "content-type": "application/json" },
     };
 
     const cost = await getScanRequestCost(
@@ -43,7 +45,7 @@ describe("getScanRequestCost", () => {
       "/api/analyze/batch",
     );
 
-    expect(cost).toBe(10);
+    expect(cost).toBe(1);
     expect(chunksProduced).toBeLessThan(10);
   });
 });
