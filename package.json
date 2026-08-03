@@ -71,7 +71,7 @@
     "@vitejs/plugin-react": "^6.0.5",
     "@vitest/coverage-v8": "^4.1.10",
     "chrome-launcher": "^1.2.1",
-    "eslint": "^9.38.0",
+    "eslint": "^10.8.0",
     "eslint-config-next": "16.2.12",
     "fake-indexeddb": "^6.2.5",
     "jsdom": "^30.0.1",
