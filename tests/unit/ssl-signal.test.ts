@@ -28,6 +28,13 @@ describe("getTlsProbeTarget", () => {
     const { port } = getTlsProbeTarget("http://example.com/path");
     expect(port).toBe(80);
   });
+
+  it("preserves an explicit port 0 instead of the scheme default", () => {
+    // The redirect probe targets the URL's literal port; substituting 80/443
+    // here would let one scan mix evidence from two different endpoints.
+    expect(getTlsProbeTarget("http://example.test:0/start").port).toBe(0);
+    expect(getTlsProbeTarget("https://example.test:0/start").port).toBe(0);
+  });
 });
 
 describe("runSslSignal", () => {

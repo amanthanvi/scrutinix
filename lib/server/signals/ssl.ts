@@ -15,8 +15,11 @@ export function getTlsProbeTarget(url: string): {
   const target = new URL(url);
   const hostname = target.hostname;
   const defaultPort = target.protocol === "https:" ? 443 : 80;
-  const port =
-    target.port !== "" ? Number(target.port) || defaultPort : defaultPort;
+  // WHATWG URL leaves port as "" when absent and otherwise guarantees an
+  // in-range numeric string, so only emptiness signals "use the default" -
+  // an explicit :0 must stay 0 to keep the TLS probe on the same endpoint
+  // as the redirect probe.
+  const port = target.port === "" ? defaultPort : Number(target.port);
 
   return { hostname, port };
 }
