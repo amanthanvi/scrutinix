@@ -153,7 +153,7 @@ Both personas use the same tool. A **view mode toggle** (Summary / Full Report) 
 - **FR-6** MUST perform SSL certificate analysis (issuer, validity, expiry, chain trust)
 - **FR-7** MUST perform WHOIS lookup (domain age, registrar, registration date)
 - **FR-8** MUST perform DNS analysis (record types, anomalies, MX/A/CNAME)
-- **FR-9** MUST trace HTTP redirect chain (hops, final destination, status codes)
+- **FR-9** MUST trace HTTP redirect chain (hops, final destination, status codes) and associate password inputs with their submitting form before scoring cross-origin credential posts
 - **FR-10** MUST compute an overall threat verdict from all available signals
 
 ### UX & Presentation
@@ -166,7 +166,7 @@ Both personas use the same tool. A **view mode toggle** (Summary / Full Report) 
 
 ### History & Export
 
-- **FR-16** SHOULD persist scan history in IndexedDB with search/filter
+- **FR-16** SHOULD persist scan history in IndexedDB with search/filter across every verdict, including unreachable-host `unknown` results
 - **FR-17** SHOULD support CSV/JSON export for individual and batch results
 - **FR-18** SHOULD support history export and a short undo window after clearing local history
 
@@ -237,7 +237,13 @@ interface AnalysisResult {
   metadata: ScanMetadata; // timing, cache hit, etc.
 }
 
-type Verdict = "safe" | "suspicious" | "malicious" | "critical" | "error";
+type Verdict =
+  | "safe"
+  | "suspicious"
+  | "malicious"
+  | "critical"
+  | "unknown"
+  | "error";
 
 interface SignalResults {
   virusTotal: SignalResult<VirusTotalData>;

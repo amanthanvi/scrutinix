@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { analyzePageContent } from "@/lib/domain/content-analysis";
+import { pageContentFindingsSchema } from "@/lib/domain/schemas";
 
 const FINAL_URL = "https://landing.example/login";
 
@@ -25,6 +26,41 @@ describe("analyzePageContent", () => {
     const findings = analyzePageContent(html, FINAL_URL);
 
     expect(findings.crossOriginFormHosts).toEqual(["collector.evil"]);
+    expect(findings.crossOriginPasswordFormHosts).toEqual([]);
+  });
+
+  it("does not associate a local password input with an unrelated cross-origin form", () => {
+    const findings = analyzePageContent(
+      `
+        <form action="/login"><input type="password"></form>
+        <form action="https://newsletter.other/subscribe"><input type="email"></form>
+      `,
+      FINAL_URL,
+    );
+
+    expect(findings.passwordInputCount).toBe(1);
+    expect(findings.crossOriginFormHosts).toEqual(["newsletter.other"]);
+    expect(findings.crossOriginPasswordFormHosts).toEqual([]);
+  });
+
+  it("honors explicit password-input form ownership", () => {
+    const findings = analyzePageContent(
+      `
+        <form id="remote" action="https://collector.evil/submit"></form>
+        <input type="password" form="remote">
+        <form action="https://decoy.evil/submit">
+          <input type="password" form="local">
+        </form>
+        <form id="local" action="/login"></form>
+      `,
+      FINAL_URL,
+    );
+
+    expect(findings.crossOriginFormHosts).toEqual([
+      "collector.evil",
+      "decoy.evil",
+    ]);
+    expect(findings.crossOriginPasswordFormHosts).toEqual(["collector.evil"]);
   });
 
   it("resolves relative form actions against a cross-origin document base", () => {
@@ -34,6 +70,7 @@ describe("analyzePageContent", () => {
     );
 
     expect(findings.crossOriginFormHosts).toEqual(["evil.example"]);
+    expect(findings.crossOriginPasswordFormHosts).toEqual(["evil.example"]);
     expect(findings.passwordInputCount).toBe(1);
   });
 
@@ -164,11 +201,26 @@ describe("analyzePageContent", () => {
     expect(findings).toEqual({
       title: null,
       crossOriginFormHosts: [],
+      crossOriginPasswordFormHosts: [],
       passwordInputCount: 0,
       iframeCount: 0,
       hiddenIframeCount: 0,
       obfuscationHints: [],
       metaRefreshTarget: null,
     });
+  });
+
+  it("keeps content findings from before form association parseable", () => {
+    const findings = pageContentFindingsSchema.parse({
+      title: "Login",
+      crossOriginFormHosts: ["collector.evil"],
+      passwordInputCount: 1,
+      iframeCount: 0,
+      hiddenIframeCount: 0,
+      obfuscationHints: [],
+      metaRefreshTarget: null,
+    });
+
+    expect(findings.crossOriginPasswordFormHosts).toBeUndefined();
   });
 });

@@ -34,6 +34,7 @@ const verdictFilters = [
   "suspicious",
   "malicious",
   "critical",
+  "unknown",
   "error",
 ] as const;
 

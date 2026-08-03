@@ -480,14 +480,12 @@ function scoreRedirects(signals: SignalResults): Contribution[] {
 
   const content = data.content;
   if (content) {
-    if (
-      content.passwordInputCount > 0 &&
-      content.crossOriginFormHosts.length > 0
-    ) {
+    const crossOriginPasswordHost = content.crossOriginPasswordFormHosts?.[0];
+    if (content.passwordInputCount > 0 && crossOriginPasswordHost) {
       contributions.push({
         score: 20,
         category: "Page Content",
-        reason: `The final page asks for credentials but submits its form to a different domain (${content.crossOriginFormHosts[0]}).`,
+        reason: `The final page asks for credentials but submits its form to a different domain (${crossOriginPasswordHost}).`,
         quality: "medium",
       });
     }
