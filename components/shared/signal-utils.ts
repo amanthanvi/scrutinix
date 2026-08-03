@@ -119,10 +119,29 @@ export function getSignalDetailEntries(
   switch (name) {
     case "virusTotal": {
       const d = data as VirusTotalData;
-      return (d.results ?? []).slice(0, 5).map((r) => ({
+      const entries: DetailEntry[] = (d.results ?? []).slice(0, 5).map((r) => ({
         label: r.engine,
         value: r.result ?? r.category,
       }));
+      if (d.lastAnalysisDate) {
+        entries.push({
+          label: "Last analyzed",
+          value: new Date(d.lastAnalysisDate).toLocaleDateString(),
+        });
+      }
+      if (d.domain) {
+        entries.push({
+          label: "Domain reputation",
+          value: `${d.domain.malicious} malicious engine${d.domain.malicious === 1 ? "" : "s"}, reputation ${d.domain.reputation}`,
+        });
+        if (d.domain.categories.length) {
+          entries.push({
+            label: "Domain categories",
+            value: d.domain.categories.join(", "),
+          });
+        }
+      }
+      return entries;
     }
     case "mlEnsemble": {
       const d = data as MLSignalData;
@@ -136,10 +155,10 @@ export function getSignalDetailEntries(
           value: `${d.lexicalModel.label} (${(d.lexicalModel.score * 100).toFixed(0)}%)`,
         },
       ];
-      if (d.hostedModel) {
+      if (d.transformerModel) {
         entries.push({
-          label: "Hosted model",
-          value: `${d.hostedModel.label} (${((d.hostedModel.score ?? 0) * 100).toFixed(0)}%)`,
+          label: "Local model",
+          value: `${d.transformerModel.label} (${((d.transformerModel.score ?? 0) * 100).toFixed(0)}%)`,
         });
       }
       if (d.reasons?.length) {
@@ -160,7 +179,7 @@ export function getSignalDetailEntries(
     case "threatFeeds": {
       const d = data as ThreatFeedsData;
       const entries: DetailEntry[] = (d.matches ?? []).map((m) => ({
-        label: m.feed,
+        label: m.matchType === "host" ? `${m.feed} (host)` : m.feed,
         value: m.detail,
       }));
       if (d.observations?.length) {
@@ -196,6 +215,13 @@ export function getSignalDetailEntries(
             : "Unknown",
         },
       ];
+      const certAgeDays = getCertificateAgeDays(d.validFrom);
+      if (certAgeDays !== null) {
+        entries.push({
+          label: "Certificate age",
+          value: `${certAgeDays} day${certAgeDays === 1 ? "" : "s"}`,
+        });
+      }
       if (d.observations?.length) {
         entries.push({
           label: "Notes",
@@ -250,7 +276,9 @@ export function getSignalDetailEntries(
     }
     case "redirectChain": {
       const d = data as RedirectData;
-      const entries = (d.hops ?? []).map((hop) => ({
+      // SignalRow renders exactly these entries, so the hop list itself
+      // must be here - each observed response, in order.
+      const entries: DetailEntry[] = (d.hops ?? []).map((hop) => ({
         label: `${hop.status}`,
         value: hop.location ? `${hop.url} → ${hop.location}` : hop.url,
       }));
@@ -259,6 +287,35 @@ export function getSignalDetailEntries(
           label: "Probe",
           value: d.terminalError,
         });
+      }
+      if (d.content) {
+        if (d.content.title) {
+          entries.push({ label: "Page title", value: d.content.title });
+        }
+        if (d.content.crossOriginFormHosts.length) {
+          entries.push({
+            label: "Cross-origin forms",
+            value: `Submits to ${d.content.crossOriginFormHosts.join(", ")}`,
+          });
+        }
+        if (d.content.passwordInputCount > 0) {
+          entries.push({
+            label: "Credential fields",
+            value: `${d.content.passwordInputCount} password input${d.content.passwordInputCount === 1 ? "" : "s"} on the final page`,
+          });
+        }
+        if (d.content.obfuscationHints.length) {
+          entries.push({
+            label: "Obfuscation hints",
+            value: d.content.obfuscationHints.join(", "),
+          });
+        }
+        if (d.content.metaRefreshTarget) {
+          entries.push({
+            label: "Meta refresh",
+            value: d.content.metaRefreshTarget,
+          });
+        }
       }
       if (d.observations?.length) {
         entries.push({
@@ -271,4 +328,18 @@ export function getSignalDetailEntries(
     default:
       return [];
   }
+}
+
+/** Whole days since the certificate's validFrom; null when unknown/invalid. */
+export function getCertificateAgeDays(validFrom: string | null): number | null {
+  if (!validFrom) {
+    return null;
+  }
+
+  const issued = new Date(validFrom).getTime();
+  if (Number.isNaN(issued) || issued > Date.now()) {
+    return null;
+  }
+
+  return Math.floor((Date.now() - issued) / (1000 * 60 * 60 * 24));
 }

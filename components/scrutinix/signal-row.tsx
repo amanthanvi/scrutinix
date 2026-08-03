@@ -15,13 +15,17 @@ import {
   type SignalPayloadMap,
 } from "@/lib/domain/types";
 
-interface SignalRowProps {
-  name: SignalName;
-  result: SignalResult<SignalPayloadMap[SignalName]>;
+interface SignalRowProps<N extends SignalName> {
+  name: N;
+  result: SignalResult<SignalPayloadMap[N]>;
   index: number;
 }
 
-export function SignalRow({ name, result, index }: SignalRowProps) {
+export function SignalRow<N extends SignalName>({
+  name,
+  result,
+  index,
+}: SignalRowProps<N>) {
   const label = signalLabels[name];
   const severity = getSignalSeverity(result.status, result.data, name);
   const { dot } = severityColor[severity];

@@ -21,9 +21,12 @@ Project-local operating notes for agents working in this repository. Keep this f
 - Domain model:
   - Eight signals are always present in results: `virusTotal`, `mlEnsemble`, `googleSafeBrowsing`, `threatFeeds`, `ssl`, `whois`, `dns`, `redirectChain`.
   - History is client-side only and stored in IndexedDB.
+  - Cache only complete, non-partial, non-error, non-aborted results for 15 minutes. A rerun after degraded coverage must reach providers again.
+  - In composite ML/threat-feed payloads, `warnings` mean lost coverage and set `partialFailure`; benign notes belong in `observations`. Redirect terminal errors also mark partial coverage.
+  - Page-content credential-post evidence requires form-owned password inputs and includes viable submit-control `formaction` overrides; never combine page-wide password and form counts.
   - Rate limiting is enforced in `proxy.ts` with Upstash when configured and a process-local in-memory fallback otherwise; accept either `UPSTASH_REDIS_REST_*` or Vercel KV `KV_REST_API_*` env names.
-  - The hosted classifier uses the Hugging Face router endpoint with the default model `DunnBC22/codebert-base-Malicious_URLs`.
-  - Threat feeds use URLhaus with the documented `Auth-Key` header plus cached OpenPhish community feed data; do not reintroduce the removed PhishTank adapter.
+  - The ML ensemble runs entirely locally: a quantized ONNX transformer (`lib/server/ml/`, urlbert-tiny-v4, Apache-2.0) via `@huggingface/transformers` plus a lexical heuristic scorer. There is no hosted inference call and no `HUGGINGFACE_*` env var.
+  - Threat feeds combine URLhaus (documented `Auth-Key` header), cached OpenPhish community feed data, ThreatFox (reuses the URLhaus key), and Spamhaus DBL / SURBL DNSBL lookups with sentinel-code handling; do not reintroduce the removed PhishTank adapter.
   - The branded UI lives under `components/scrutinix/*`; shared shadcn/ui primitives live under `components/ui/*`.
   - Production responses ship browser-hardening headers from `next.config.ts`. Per-request CSP (nonce `script-src`, narrow `connect-src`) is applied in `proxy.ts` via `lib/server/csp.ts` so document responses get fresh nonces; do not reintroduce a static CSP-only approach in `next.config.ts` without an equivalent nonce path.
 
@@ -32,11 +35,12 @@ Project-local operating notes for agents working in this repository. Keep this f
 - Install deps: `npm install`
 - Dev server: `npm run dev`
 - Lint: `npm run lint`
-- Format check: `npm run format -- --check .`
+- Format check: `npm run format:check`
 - Typecheck: `npm run typecheck`
 - Unit tests: `npm run test:unit -- --run`
 - Integration tests: `npm run test:integration -- --run`
-- E2E smoke: `npm run test:e2e -- --grep @smoke`
+- DOM tests: `npm run test:dom -- --run`
+- E2E (offline, fixture-backed): `npm run test:e2e`
 - Build: `npm run build`
 - Lighthouse: `npm run lighthouse`
 - Security audit: `npm audit`
@@ -48,7 +52,7 @@ Project-local operating notes for agents working in this repository. Keep this f
 - Keep external provider adapters behind stable interfaces. No provider-specific response shapes should leak into UI components.
 - Sanitize and normalize URLs once, centrally. Never duplicate validation logic in route handlers and UI.
 - Never log raw URLs server-side. Log hashes, scan IDs, timings, and result classes only.
-- Default to deterministic test fixtures and mocked provider responses. Do not depend on live third-party services in automated tests.
+- Default to deterministic test fixtures and mocked provider responses. Do not depend on live third-party services in automated tests. The e2e suite runs fully offline: `SCRUTINIX_TEST_FIXTURES=1` (set by `scripts/run-e2e.mjs`) swaps the analyze orchestrator's providers for the per-hostname scenarios in `lib/server/test-fixtures.ts`.
 
 ## Patterns To Follow
 
@@ -64,7 +68,7 @@ Project-local operating notes for agents working in this repository. Keep this f
 
 - No new broad state-management layer unless a concrete need appears in `PLAN.md`.
 - No silent fallback from provider outage to a malicious verdict.
-- No stale documentation drift: if a command, env var, endpoint, or signal contract changes, update `PLAN.md`, `SPEC.md`, and user-facing docs in the same workstream.
+- No stale documentation drift: if a command, env var, endpoint, or signal contract changes, update `PLAN.md`, `SPEC.md`, `CLAUDE.md`, and user-facing docs in the same workstream.
 - No `next lint`; use ESLint directly.
 - No broad shadcnization of branded components; preserve Scrutinix-specific hero, signal, and motion components unless there is a concrete accessibility or maintainability reason to replace them.
 
@@ -78,7 +82,7 @@ Project-local operating notes for agents working in this repository. Keep this f
 - Keep the home layout scanner-first: since the 2026-08 minimal redesign that means one centered 44rem column (form → verdict → signal rows → history), not the earlier two-column intro grid. See `DESIGN.md`.
 - Remove redundant marketing and spec microcopy when the same facts already appear next to the scan workflow (for example duplicate signal counts, batch limits, or NDJSON lines in both the hero and the scan-console footer).
 - Keep method/caveat reference content on `/about` (compact definition list or grouped notes), not as a support card grid under the home scanner.
-- The Summary/Full signal-lane switch was removed in the 2026-08 minimal redesign: all eight signal rows render in fixed order and fill in place, with per-row `<details>` disclosure for evidence. Do not reintroduce view-mode switching without an explicit product decision.
+- For Summary versus Full signal lanes, use an accessible labelled control (for example a `role="switch"` with visible Summary and Full labels) instead of only icon buttons.
 - Prefer non-verbal affordances for common actions when copy would repeat (for example an Enter-style icon on Analyze instead of a separate line saying Press Enter to scan).
 
 ## Learned Workspace Facts

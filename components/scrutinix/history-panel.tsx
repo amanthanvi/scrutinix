@@ -15,8 +15,6 @@ import { Input } from "@/components/ui/input";
 
 interface HistoryPanelProps {
   entries: HistoryEntry[];
-  /** Full unfiltered history — exports always cover this list. */
-  exportEntries: HistoryEntry[];
   totalCount: number;
   historyQuery: string;
   onHistoryQueryChange: (value: string) => void;
@@ -44,7 +42,6 @@ function formatTimestamp(iso: string): string {
 
 export function HistoryPanel({
   entries,
-  exportEntries,
   totalCount,
   historyQuery,
   onHistoryQueryChange,
@@ -83,7 +80,7 @@ export function HistoryPanel({
   };
 
   return (
-    <section aria-label="Scan history" role="region">
+    <section aria-label="Scan history">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h2 className="text-base font-semibold tracking-[-0.01em] text-[var(--sx-text)]">
           History
@@ -155,7 +152,7 @@ export function HistoryPanel({
                 <button
                   type="button"
                   onClick={() => onSelect(entry)}
-                  className="hover:bg-muted/40 flex w-full items-center gap-3 py-2.5 text-left"
+                  className="hover:bg-muted/40 flex min-h-11 w-full items-center gap-3 py-2.5 text-left"
                 >
                   <span
                     className="w-20 shrink-0 text-[0.8125rem] font-medium capitalize"
@@ -178,31 +175,28 @@ export function HistoryPanel({
             <Button
               type="button"
               onClick={() =>
-                downloadTextFile(
-                  "scan-history.csv",
-                  resultsToCsv(exportEntries),
-                )
+                downloadTextFile("scan-history.csv", resultsToCsv(entries))
               }
               variant="ghost"
               size="sm"
-              aria-label="Export history as CSV"
+              aria-label={`Export ${historyQuery ? "filtered " : ""}history as CSV`}
             >
-              Export CSV
+              {historyQuery ? "Export filtered CSV" : "Export CSV"}
             </Button>
             <Button
               type="button"
               onClick={() =>
                 downloadTextFile(
                   "scan-history.json",
-                  resultsToJson(exportEntries),
+                  resultsToJson(entries),
                   "application/json",
                 )
               }
               variant="ghost"
               size="sm"
-              aria-label="Export history as JSON"
+              aria-label={`Export ${historyQuery ? "filtered " : ""}history as JSON`}
             >
-              Export JSON
+              {historyQuery ? "Export filtered JSON" : "Export JSON"}
             </Button>
           </div>
         </>

@@ -25,15 +25,17 @@ and ML scoring in one place.
 
 ## Signals
 
-- `virusTotal`: multi-engine reputation check
+- `virusTotal`: multi-engine URL reputation with analysis-freshness context
 - `googleSafeBrowsing`: browser-protection verdicts
-- `threatFeeds`: URLhaus plus cached OpenPhish community feed coverage
-- `mlEnsemble`: hosted classifier plus local lexical scoring
-- `ssl`: certificate validity and trust signals
+- `threatFeeds`: URLhaus, cached OpenPhish, ThreatFox, and Spamhaus DBL /
+  SURBL DNSBL coverage
+- `mlEnsemble`: bundled local transformer classifier (quantized ONNX) plus
+  lexical scoring
+- `ssl`: certificate validity, trust, and certificate-age signals
 - `whois`: RDAP-backed registration and age context
 - `dns`: record-level infrastructure context
-- `redirectChain`: hop-by-hop redirect tracing with resilient certificate
-  handling
+- `redirectChain`: hop-by-hop redirect tracing with lightweight terminal-page
+  content analysis
 
 ## Product Surface
 
@@ -92,8 +94,6 @@ Core provider and deployment variables:
 ```env
 VIRUSTOTAL_API_KEY=
 GOOGLE_SAFE_BROWSING_API_KEY=
-HUGGINGFACE_API_KEY=
-HUGGINGFACE_URL_MODEL=DunnBC22/codebert-base-Malicious_URLs
 URLHAUS_AUTH_KEY=
 UPSTASH_REDIS_REST_URL=
 UPSTASH_REDIS_REST_TOKEN=
@@ -103,10 +103,12 @@ OPENPHISH_FEED_URL=https://openphish.com/feed.txt
 NEXT_PUBLIC_APP_URL=https://www.scrutinix.net
 ```
 
-Scrutinix still runs in a degraded mode without third-party keys. Local
-enrichment signals remain available, provider failures are surfaced explicitly,
-and safe-result confidence is capped when primary reputation coverage is
-missing.
+The `URLHAUS_AUTH_KEY` also authenticates ThreatFox (both are abuse.ch
+services). Empty values are treated as unset. The ML classifier is bundled
+with the app and needs no key. Scrutinix still runs in a degraded mode without
+third-party keys: local enrichment signals remain available, provider failures
+are surfaced explicitly, and safe-result confidence is capped when primary
+reputation coverage is missing.
 
 ## Quality Bar
 
@@ -114,11 +116,12 @@ Primary local checks:
 
 ```bash
 npm run lint
-npm run format -- --check .
+npm run format:check
 npm run typecheck
 npm run test:unit -- --run
 npm run test:integration -- --run
-npm run test:e2e -- --grep @smoke
+npm run test:dom -- --run
+npm run test:e2e
 npm run build
 ```
 
@@ -136,6 +139,8 @@ npm run lighthouse
 - `proxy.ts`: request gating and rate limiting for `/api/analyze`
 - `lib/server/`: orchestration, provider adapters, caching, logging, and stream
   helpers
+- Complete, non-partial results may be cached for 15 minutes; partial, error,
+  and aborted scans are never reused.
 - `components/scrutinix/`: branded analyzer UI and client runtime islands
 - `hooks/`: NDJSON stream readers and IndexedDB-backed history
 - `tests/`: unit, integration, accessibility, keyboard, and E2E smoke coverage
@@ -143,7 +148,7 @@ npm run lighthouse
 ## Repository Guide
 
 - [`SPEC.md`](./SPEC.md): product and architecture source of truth
-- [`PLAN.md`](./PLAN.md): execution history and validation record
+- [`PLAN.md`](./PLAN.md): live execution plan and delivery status
 - [`CONTRIBUTING.md`](./CONTRIBUTING.md): local setup and contribution rules
 - [`SECURITY.md`](./SECURITY.md): private vulnerability reporting guidance
 - [`LICENSE`](./LICENSE): MIT

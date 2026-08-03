@@ -1,19 +1,15 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
-import { readNdjsonStream } from "@/lib/client/ndjson";
-import { streamFailureApiError } from "@/lib/client/stream-error";
+import { useNdjsonRequest } from "@/hooks/use-ndjson-request";
 import {
   createPendingSignalResults,
   type AnalysisResult,
   type ApiError,
   type SignalResults,
 } from "@/lib/domain/types";
-import {
-  sanitizeAnalyzeEvent,
-  sanitizeApiErrorResponse,
-} from "@/lib/domain/runtime-safety";
+import { sanitizeAnalyzeEvent } from "@/lib/domain/runtime-safety";
 
 interface ScanState {
   url: string;
@@ -23,6 +19,8 @@ interface ScanState {
   result: AnalysisResult | null;
   error: ApiError | null;
   isStreaming: boolean;
+  /** Whether the server answered from its result cache (null until known). */
+  cached: boolean | null;
 }
 
 const initialState = (): ScanState => ({
@@ -33,134 +31,102 @@ const initialState = (): ScanState => ({
   result: null,
   error: null,
   isStreaming: false,
+  cached: null,
 });
 
 export function useScanStream(onComplete?: (result: AnalysisResult) => void) {
   const [state, setState] = useState<ScanState>(initialState);
-  const abortRef = useRef<AbortController | null>(null);
+  const request = useNdjsonRequest({
+    endpoint: "/api/analyze",
+    requestLabel: "Scan request",
+    streamFailureMessage: "The scan stream failed unexpectedly.",
+  });
 
   const startScan = useCallback(
     async (url: string) => {
-      abortRef.current?.abort();
-      const controller = new AbortController();
-      abortRef.current = controller;
+      setState({ ...initialState(), url, isStreaming: true });
 
-      setState({
-        url,
-        startedAt: null,
-        scanId: null,
-        signals: createPendingSignalResults(),
-        result: null,
-        error: null,
-        isStreaming: true,
-      });
+      await request.start(
+        { url },
+        {
+          onEvent: (rawEvent) => {
+            const event = sanitizeAnalyzeEvent(rawEvent);
+            if (!event) {
+              return "continue";
+            }
 
-      try {
-        const response = await fetch("/api/analyze", {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
+            if (event.type === "scan_started") {
+              setState((previous) => ({
+                ...previous,
+                url: event.url,
+                scanId: event.scanId,
+                startedAt: event.startedAt,
+                cached: event.cached,
+              }));
+            }
+
+            if (event.type === "signal_result") {
+              setState((previous) => ({
+                ...previous,
+                signals: {
+                  ...previous.signals,
+                  [event.name]: event.result,
+                },
+              }));
+            }
+
+            if (event.type === "scan_complete") {
+              setState((previous) => ({
+                ...previous,
+                result: event.result,
+                signals: event.result.signals,
+                isStreaming: false,
+                error: null,
+              }));
+              onComplete?.(event.result);
+            }
+
+            if (event.type === "scan_error") {
+              setState((previous) => ({
+                ...previous,
+                error: event.error,
+                isStreaming: false,
+              }));
+            }
+
+            return event.type === "scan_complete" || event.type === "scan_error"
+              ? "terminal"
+              : "continue";
           },
-          body: JSON.stringify({ url }),
-          signal: controller.signal,
-        });
-
-        if (!response.ok) {
-          const payload = await response.json().catch(() => null);
-          const error = sanitizeApiErrorResponse(
-            payload,
-            `Scan request failed with status ${response.status}.`,
-          );
-          setState((previous) => ({
-            ...previous,
-            error,
-            isStreaming: false,
-          }));
-          return;
-        }
-
-        await readNdjsonStream(response, (rawEvent) => {
-          const event = sanitizeAnalyzeEvent(rawEvent);
-          if (!event) {
-            return;
-          }
-
-          if (event.type === "scan_started") {
+          onError: (error) => {
             setState((previous) => ({
               ...previous,
-              url: event.url,
-              scanId: event.scanId,
-              startedAt: event.startedAt,
-            }));
-          }
-
-          if (event.type === "signal_result") {
-            setState((previous) => ({
-              ...previous,
-              signals: {
-                ...previous.signals,
-                [event.name]: event.result,
-              },
-            }));
-          }
-
-          if (event.type === "scan_complete") {
-            setState((previous) => ({
-              ...previous,
-              result: event.result,
-              signals: event.result.signals,
-              isStreaming: false,
-              error: null,
-            }));
-            onComplete?.(event.result);
-          }
-
-          if (event.type === "scan_error") {
-            setState((previous) => ({
-              ...previous,
-              error: event.error,
+              error,
               isStreaming: false,
             }));
-          }
-        });
-      } catch (error) {
-        if (
-          controller.signal.aborted ||
-          (error instanceof DOMException && error.name === "AbortError")
-        ) {
-          setState((previous) => ({
-            ...previous,
-            isStreaming: false,
-          }));
-          return;
-        }
-
-        setState((previous) => ({
-          ...previous,
-          isStreaming: false,
-          error: streamFailureApiError(
-            error,
-            "The scan stream failed unexpectedly.",
-          ),
-        }));
-      }
+          },
+          onAborted: () => {
+            setState((previous) => ({
+              ...previous,
+              isStreaming: false,
+            }));
+          },
+        },
+      );
     },
-    [onComplete],
+    [request, onComplete],
   );
 
   const cancelScan = useCallback(() => {
-    abortRef.current?.abort();
-    abortRef.current = null;
+    request.cancel();
     setState((previous) => ({
       ...previous,
       isStreaming: false,
-      error: previous.error,
     }));
-  }, []);
+  }, [request]);
 
-  return {
-    state,
-    startScan,
-    cancelScan,
-  };
+  return useMemo(
+    () => ({ state, startScan, cancelScan }),
+    [state, startScan, cancelScan],
+  );
 }

@@ -43,6 +43,60 @@ describe("public network target guard", () => {
     expect(result.ok ? "" : result.error).toContain("192.168.1.20");
   });
 
+  it("stops awaiting DNS resolution when the caller aborts", async () => {
+    vi.useFakeTimers();
+    lookupMock.mockImplementationOnce(() => new Promise(() => {}) as never);
+
+    try {
+      const controller = new AbortController();
+      const pending = assertPublicNetworkTarget("https://example.test/", {
+        signal: controller.signal,
+      });
+      const settled = Promise.race([
+        pending,
+        new Promise<"still pending">((resolve) => {
+          setTimeout(() => resolve("still pending"), 25);
+        }),
+      ]);
+
+      controller.abort();
+      await vi.advanceTimersByTimeAsync(25);
+
+      await expect(settled).resolves.toEqual({
+        ok: false,
+        error: expect.stringContaining("cancelled"),
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("bounds DNS resolution by the active probe time budget", async () => {
+    vi.useFakeTimers();
+    lookupMock.mockImplementationOnce(() => new Promise(() => {}) as never);
+
+    try {
+      const pending = assertPublicNetworkTarget("https://example.test/", {
+        timeoutMs: 1_000,
+      });
+      const settled = Promise.race([
+        pending,
+        new Promise<"still pending">((resolve) => {
+          setTimeout(() => resolve("still pending"), 1_500);
+        }),
+      ]);
+
+      await vi.advanceTimersByTimeAsync(1_500);
+
+      await expect(settled).resolves.toEqual({
+        ok: false,
+        error: expect.stringContaining("time budget"),
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("blocks IPv4-mapped IPv6 loopback addresses", () => {
     expect(isBlockedNetworkAddress("::ffff:127.0.0.1")).toBe(true);
   });

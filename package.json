@@ -30,13 +30,17 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "format": "prettier",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "test:unit": "vitest --config vitest.unit.config.ts",
     "test:integration": "vitest --config vitest.integration.config.ts",
-    "test:e2e": "npm run build && node ./scripts/run-e2e.mjs",
+    "test:dom": "vitest --config vitest.dom.config.ts",
+    "test:coverage": "vitest --config vitest.unit.config.ts --coverage --run",
+    "test:e2e": "node ./scripts/run-e2e.mjs",
     "lighthouse": "node ./scripts/run-lighthouse.mjs"
   },
   "dependencies": {
+    "@huggingface/transformers": "^4.2.0",
     "@radix-ui/react-slot": "^1.2.4",
     "@radix-ui/react-tabs": "^1.1.13",
     "@upstash/ratelimit": "^2.0.8",
@@ -45,28 +49,35 @@
     "clsx": "^2.1.1",
     "geist": "^1.7.0",
     "idb": "^8.0.3",
-    "lucide-react": "^0.577.0",
-    "next": "16.2.10",
+    "lucide-react": "^1.28.0",
+    "next": "16.2.12",
     "next-themes": "^0.4.6",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.5.0",
+    "tldts": "^7.4.10",
     "zod": "^4.3.6"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.11.1",
     "@playwright/test": "^1.59.1",
     "@tailwindcss/postcss": "^4.2.1",
-    "@types/node": "^25.3.5",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
+    "@types/node": "^22.20.1",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.5",
+    "@vitest/coverage-v8": "^4.1.10",
     "chrome-launcher": "^1.2.1",
     "eslint": "^9.38.0",
-    "eslint-config-next": "16.2.10",
+    "eslint-config-next": "16.2.12",
+    "fake-indexeddb": "^6.2.5",
+    "jsdom": "^30.0.1",
     "lighthouse": "^13.2.0",
     "msw": "^2.14.2",
-    "postcss": "8.5.13",
+    "postcss": "8.5.25",
     "prettier": "^3.8.1",
     "prettier-plugin-tailwindcss": "^0.7.2",
     "tailwindcss": "^4.2.1",
@@ -74,24 +85,18 @@
     "vitest": "^4.1.5"
   },
   "overrides": {
-    "flat-cache": {
-      "flatted": "3.4.2"
-    },
-    "lighthouse": {
-      "lodash-es": "4.18.1"
-    },
+    "adm-zip": "0.6.0",
     "minimatch@^3.1.0": {
-      "brace-expansion": "1.1.14"
+      "brace-expansion": "1.1.18"
     },
     "minimatch@^9.0.0": {
-      "brace-expansion": "2.1.0"
+      "brace-expansion": "2.1.4"
     },
     "minimatch@^10.0.0": {
-      "brace-expansion": "5.0.5"
+      "brace-expansion": "5.0.9"
     },
-    "postcss": "8.5.13",
-    "vitest": {
-      "picomatch": "4.0.4"
-    }
+    "postcss": "8.5.25",
+    "sharp": "0.35.3",
+    "ws": "8.21.1"
   }
 }

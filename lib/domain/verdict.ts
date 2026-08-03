@@ -1,6 +1,6 @@
+import { getRegistrableDomain } from "@/lib/domain/registrable-domain";
 import type {
   AnalysisResult,
-  ClassificationFinding,
   SignalResults,
   ThreatInfo,
   Verdict,
@@ -14,6 +14,9 @@ interface Contribution {
   reason: string;
   quality: "high" | "medium" | "low";
 }
+
+/** Days after which a stored VirusTotal analysis is considered stale. */
+const VT_STALE_ANALYSIS_DAYS = 30;
 
 export function buildThreatAssessment(
   signals: SignalResults,
@@ -48,12 +51,21 @@ export function buildThreatAssessment(
     ...scoreWhois(signals),
   ];
 
+  applyExculpatoryEvidence(signals, contributions);
+
   const score = clamp(
     contributions.reduce((total, item) => total + item.score, 0),
     0,
     100,
   );
-  const verdict = threatScoreToVerdict(score);
+  const bandedVerdict = threatScoreToVerdict(score);
+  // A dead host must not read as "Safe": nothing was inspected, so nothing
+  // was cleared. Positive-scored verdicts are never downgraded - threat
+  // feeds can rightfully convict a currently-unreachable domain.
+  const verdict: Verdict =
+    bandedVerdict === "safe" && isUnreachable(signals)
+      ? "unknown"
+      : bandedVerdict;
   const reasons = [...new Set(contributions.map((item) => item.reason))];
   const categories = [...new Set(contributions.map((item) => item.category))];
   const limitations = buildLimitations(signals);
@@ -72,7 +84,7 @@ export function buildThreatAssessment(
     verdict,
     confidence: Number(confidence.toFixed(2)),
     confidenceLabel: scoreToConfidenceLabel(confidence),
-    hasPositiveEvidence: reasons.length > 0,
+    hasPositiveEvidence: contributions.some((item) => item.score > 0),
     confidenceReasons: buildConfidenceReasons(
       signals,
       verdict,
@@ -99,18 +111,122 @@ export function buildThreatAssessment(
   };
 }
 
+/**
+ * True when no live probe got anything out of the host: the redirect probe
+ * failed or received no HTTP status AND no TLS service answered. (A host
+ * that doesn't resolve at all fails both probes by construction.)
+ */
+function isUnreachable(signals: SignalResults): boolean {
+  const redirect = signals.redirectChain;
+  const redirectUninspectable =
+    redirect.status === "error" ||
+    (redirect.status === "success" && redirect.data
+      ? !redirect.data.reachable && redirect.data.terminalStatus === null
+      : false);
+
+  const ssl = signals.ssl;
+  const sslUnavailable =
+    ssl.status === "error" ||
+    (ssl.status === "success" && ssl.data ? !ssl.data.available : false);
+
+  return redirectUninspectable && sslUnavailable;
+}
+
+/**
+ * Negative evidence: overwhelming clean reputation and long domain history
+ * subtract from the score - but never haggle down a confirmed hit (any
+ * single contribution >= 45 disables the discounts).
+ */
+function applyExculpatoryEvidence(
+  signals: SignalResults,
+  contributions: Contribution[],
+) {
+  const maxPositive = contributions.reduce(
+    (max, item) => Math.max(max, item.score),
+    0,
+  );
+  if (maxPositive >= 45) {
+    return;
+  }
+
+  const vt = signals.virusTotal;
+  const vtAgeDays = vtAnalysisAgeDays(signals);
+  if (
+    vt.status === "success" &&
+    vt.data &&
+    (vtAgeDays === null || vtAgeDays <= VT_STALE_ANALYSIS_DAYS) &&
+    vt.data.harmless >= 60 &&
+    vt.data.malicious === 0 &&
+    vt.data.suspicious === 0
+  ) {
+    contributions.push({
+      score: -10,
+      category: "Reputation",
+      reason: `${vt.data.harmless} VirusTotal engines independently rate this URL harmless.`,
+      quality: "high",
+    });
+  }
+
+  const hasReputationHit = contributions.some(
+    (item) =>
+      item.score > 0 &&
+      (item.category === "Reputation" ||
+        item.category === "Google Safe Browsing" ||
+        item.category === "Threat Feed"),
+  );
+  const whois = signals.whois;
+  if (
+    !hasReputationHit &&
+    whois.status === "success" &&
+    whois.data &&
+    whois.data.ageDays !== null &&
+    whois.data.ageDays >= 365 * 5
+  ) {
+    contributions.push({
+      score: -8,
+      category: "Domain Age",
+      reason: `The domain has ${Math.floor(whois.data.ageDays / 365)} years of registration history, which weighs against impersonation.`,
+      quality: "medium",
+    });
+  }
+}
+
+/** Age of the VirusTotal analysis backing the verdict, in whole days. */
+function vtAnalysisAgeDays(signals: SignalResults): number | null {
+  const vt = signals.virusTotal;
+  if (vt.status !== "success" || !vt.data?.lastAnalysisDate) {
+    return null;
+  }
+
+  const analyzedAt = new Date(vt.data.lastAnalysisDate).getTime();
+  if (Number.isNaN(analyzedAt) || analyzedAt > Date.now()) {
+    return null;
+  }
+
+  return Math.floor((Date.now() - analyzedAt) / (1000 * 60 * 60 * 24));
+}
+
+/** Sub-conviction ladder: one detection and two detections must differ. */
+const VT_MALICIOUS_LADDER = [12, 22, 32, 42] as const;
+
 function scoreVirusTotal(signals: SignalResults): Contribution[] {
   const signal = signals.virusTotal;
   if (signal.status !== "success" || !signal.data) {
     return [];
   }
 
-  const { malicious, suspicious } = signal.data;
+  const { malicious, suspicious, domain } = signal.data;
   const contributions: Contribution[] = [];
 
   if (malicious > 0) {
+    // >= 5 corroborating engines convict on their own (55+); below that the
+    // ladder rises steadily instead of the old flat floor of 18.
+    const score =
+      malicious >= 5
+        ? Math.min(55 + (malicious - 5) * 5, 85)
+        : (VT_MALICIOUS_LADDER[malicious - 1] ?? 12);
     contributions.push({
-      score: clamp(malicious * 7, 18, 52),
+      score,
       category: "Reputation",
       reason: `${malicious} VirusTotal engines marked the URL as malicious.`,
       quality: "high",
@@ -119,10 +235,19 @@ function scoreVirusTotal(signals: SignalResults): Contribution[] {
 
   if (suspicious > 0) {
     contributions.push({
-      score: clamp(suspicious * 4, 8, 20),
+      score: Math.min(suspicious * 4, 16),
       category: "Reputation",
       reason: `${suspicious} VirusTotal engines marked the URL as suspicious.`,
       quality: "high",
+    });
+  }
+
+  if (domain && domain.malicious >= 3) {
+    contributions.push({
+      score: 15,
+      category: "Reputation",
+      reason: `VirusTotal flags this domain beyond this URL (${domain.malicious} engines mark the domain malicious).`,
+      quality: "medium",
     });
   }
 
@@ -139,12 +264,15 @@ function scoreGoogleSafeBrowsing(signals: SignalResults): Contribution[] {
     return [];
   }
 
-  const matchCount = signal.data.matches?.length ?? 0;
+  const matches = signal.data.matches ?? [];
+  const threatTypes = new Set(matches.map((match) => match.threatType));
+  // A confirmed Google match convicts by itself (62 > malicious threshold);
+  // additional distinct threat types stack toward critical.
   return [
     {
-      score: 45,
+      score: Math.min(62 + (threatTypes.size - 1) * 6, 74),
       category: "Google Safe Browsing",
-      reason: `Google Safe Browsing reported ${matchCount} threat match${matchCount === 1 ? "" : "es"}.`,
+      reason: `Google Safe Browsing reported ${matches.length} threat match${matches.length === 1 ? "" : "es"} (${[...threatTypes].join(", ")}).`,
       quality: "high",
     },
   ];
@@ -160,12 +288,48 @@ function scoreThreatFeeds(signals: SignalResults): Contribution[] {
     return [];
   }
 
-  return (signal.data.matches ?? []).map((match) => ({
-    score: match.confidence === "high" ? 32 : 20,
-    category: "Threat Feed",
-    reason: `${match.feed} listed the URL as ${match.detail}.`,
-    quality: "high" as const,
-  }));
+  return (signal.data.matches ?? []).map((match) => {
+    const { score, quality } = feedMatchWeight(match);
+    return {
+      score,
+      category: "Threat Feed",
+      reason: `${match.feed} listed the URL as ${match.detail}.`,
+      quality,
+    };
+  });
+}
+
+type FeedMatch = NonNullable<
+  SignalResults["threatFeeds"]["data"]
+>["matches"][number];
+
+function feedMatchWeight(match: FeedMatch): {
+  score: number;
+  quality: Contribution["quality"];
+} {
+  switch (match.feed) {
+    case "urlhaus":
+    case "openphish":
+      // An exact-URL listing convicts; a host-level listing corroborates.
+      return match.matchType === "host"
+        ? { score: 25, quality: "medium" }
+        : { score: 55, quality: "high" };
+    case "threatfox":
+      return match.confidence === "high"
+        ? { score: 55, quality: "high" }
+        : { score: 40, quality: "medium" };
+    case "spamhaus-dbl":
+      if (match.confidence === "high") {
+        return { score: 45, quality: "high" };
+      }
+      return match.detail.includes("abused")
+        ? { score: 15, quality: "medium" }
+        : { score: 25, quality: "medium" };
+    case "surbl":
+      return match.confidence === "high"
+        ? { score: 35, quality: "high" }
+        : { score: 20, quality: "medium" };
+  }
 }
 
 function scoreMlEnsemble(signals: SignalResults): Contribution[] {
@@ -179,7 +343,7 @@ function scoreMlEnsemble(signals: SignalResults): Contribution[] {
 
   if (signal.data.consensusLabel === "malicious") {
     contributions.push({
-      score: clamp(Math.round(signal.data.consensusScore * 40), 25, 40),
+      score: clamp(Math.round(signal.data.consensusScore * 45), 25, 45),
       category: "Behavioral Model",
       reason:
         consensusReason ??
@@ -188,7 +352,7 @@ function scoreMlEnsemble(signals: SignalResults): Contribution[] {
     });
   } else if (signal.data.consensusLabel === "risky") {
     contributions.push({
-      score: Math.round(signal.data.consensusScore * 14),
+      score: Math.round(signal.data.consensusScore * 16),
       category: "Behavioral Model",
       reason:
         consensusReason ??
@@ -229,6 +393,29 @@ function scoreSsl(signals: SignalResults): Contribution[] {
     });
   }
 
+  // Fresh certificate on a brand-new domain: a classic phishing setup
+  // pattern. The certificate age alone is deliberately NOT scored -
+  // short-lived certificates (Let's Encrypt renewals) make young certs
+  // routine on legitimate sites.
+  const validFrom = signal.data.validFrom;
+  const whois = signals.whois;
+  const domainAgeDays =
+    whois.status === "success" && whois.data ? whois.data.ageDays : null;
+  if (validFrom && domainAgeDays !== null && domainAgeDays < 30) {
+    const issuedAt = new Date(validFrom).getTime();
+    const certAgeDays = Number.isNaN(issuedAt)
+      ? null
+      : Math.floor((Date.now() - issuedAt) / (1000 * 60 * 60 * 24));
+    if (certAgeDays !== null && certAgeDays >= 0 && certAgeDays < 7) {
+      contributions.push({
+        score: 12,
+        category: "TLS",
+        reason: `A TLS certificate issued ${certAgeDays} day${certAgeDays === 1 ? "" : "s"} ago on a domain registered ${domainAgeDays} day${domainAgeDays === 1 ? "" : "s"} ago matches a common phishing setup pattern.`,
+        quality: "medium",
+      });
+    }
+  }
+
   return contributions;
 }
 
@@ -252,18 +439,19 @@ function scoreRedirects(signals: SignalResults): Contribution[] {
     return [];
   }
 
+  const data = signal.data;
   const contributions: Contribution[] = [];
 
-  if (signal.data.totalHops >= 3) {
+  if (data.totalHops >= 3) {
     contributions.push({
       score: 8,
       category: "Redirects",
-      reason: `The URL redirected through ${signal.data.totalHops} hops before settling.`,
+      reason: `The URL redirected through ${data.totalHops} hops before settling.`,
       quality: "low",
     });
   }
 
-  const downgradedToHttp = (signal.data.hops ?? []).some((hop) =>
+  const downgradedToHttp = (data.hops ?? []).some((hop) =>
     hop.location?.startsWith("http://"),
   );
   if (downgradedToHttp) {
@@ -275,7 +463,80 @@ function scoreRedirects(signals: SignalResults): Contribution[] {
     });
   }
 
+  // The classic shortener/lure pattern: any redirect that lands on a
+  // different registrable domain than it started on.
+  if (data.reachable && data.totalHops >= 1) {
+    const fromDomain = registrableDomainOf(data.hops?.[0]?.url);
+    const toDomain = registrableDomainOf(data.finalUrl);
+    if (fromDomain && toDomain && fromDomain !== toDomain) {
+      contributions.push({
+        score: 14,
+        category: "Redirects",
+        reason: `The redirect chain crosses domains, from ${fromDomain} to ${toDomain}.`,
+        quality: "medium",
+      });
+    }
+  }
+
+  const content = data.content;
+  if (content) {
+    const crossOriginPasswordHost = content.crossOriginPasswordFormHosts?.[0];
+    if (content.passwordInputCount > 0 && crossOriginPasswordHost) {
+      contributions.push({
+        score: 20,
+        category: "Page Content",
+        reason: `The final page asks for credentials but submits its form to a different domain (${crossOriginPasswordHost}).`,
+        quality: "medium",
+      });
+    }
+
+    if (content.obfuscationHints.length >= 2) {
+      contributions.push({
+        score: 10,
+        category: "Page Content",
+        reason: `The final page contains obfuscated script (${content.obfuscationHints.slice(0, 2).join(", ")}).`,
+        quality: "low",
+      });
+    }
+
+    if (content.hiddenIframeCount >= 1 || content.iframeCount >= 3) {
+      contributions.push({
+        score: 8,
+        category: "Page Content",
+        reason:
+          content.hiddenIframeCount >= 1
+            ? `The final page embeds ${content.hiddenIframeCount} hidden iframe${content.hiddenIframeCount === 1 ? "" : "s"}.`
+            : `The final page embeds ${content.iframeCount} iframes.`,
+        quality: "low",
+      });
+    }
+
+    if (content.metaRefreshTarget) {
+      const pageDomain = registrableDomainOf(data.finalUrl);
+      const refreshDomain = registrableDomainOf(content.metaRefreshTarget);
+      if (pageDomain && refreshDomain && pageDomain !== refreshDomain) {
+        contributions.push({
+          score: 8,
+          category: "Page Content",
+          reason: `The final page meta-refreshes to another domain (${refreshDomain}).`,
+          quality: "low",
+        });
+      }
+    }
+  }
+
   return contributions;
+}
+
+function registrableDomainOf(url: string | undefined): string | null {
+  if (!url) {
+    return null;
+  }
+  try {
+    return getRegistrableDomain(new URL(url).hostname);
+  } catch {
+    return null;
+  }
 }
 
 function scoreWhois(signals: SignalResults): Contribution[] {
@@ -376,6 +637,13 @@ function buildLimitations(signals: SignalResults) {
     }
   }
 
+  const vtAgeDays = vtAnalysisAgeDays(signals);
+  if (vtAgeDays !== null && vtAgeDays > VT_STALE_ANALYSIS_DAYS) {
+    limitations.push(
+      `${formatSignalName("virusTotal")}: The verdict draws on a VirusTotal analysis from ${vtAgeDays} days ago.`,
+    );
+  }
+
   return [...new Set(limitations)];
 }
 
@@ -406,9 +674,12 @@ function calculateConfidence({
   const modelAgreement = getModelAgreement(signals);
   const corroboratedRiskCategories = new Set(
     contributions
-      .filter((item) => item.quality !== "low")
+      .filter((item) => item.score > 0 && item.quality !== "low")
       .map((item) => item.category),
   ).size;
+  // Unknown means "banded safe but nothing was reachable" - use the
+  // clean-verdict math, then cap hard below.
+  const effectiveVerdict = verdict === "unknown" ? "safe" : verdict;
 
   let confidence = 0.18;
   confidence += dataRichSignals * 0.06;
@@ -417,7 +688,7 @@ function calculateConfidence({
   confidence -= failedSignals * 0.08;
   confidence -= Math.min(0.12, limitations.length * 0.02);
 
-  if (verdict === "safe") {
+  if (effectiveVerdict === "safe") {
     confidence += cleanHighConfidenceSources * 0.14;
     confidence -= unavailableHighConfidenceSources.length * 0.1;
   } else {
@@ -428,26 +699,42 @@ function calculateConfidence({
 
   confidence += modelAgreement * 0.08;
 
-  if (verdict !== "safe" && corroboratedRiskCategories >= 2) {
+  if (effectiveVerdict !== "safe" && corroboratedRiskCategories >= 2) {
     confidence += 0.08;
   }
 
-  if (verdict === "safe" && cleanHighConfidenceSources === 0) {
+  if (effectiveVerdict === "safe" && cleanHighConfidenceSources === 0) {
     confidence -= 0.15;
   }
 
-  if (verdict === "safe" && unavailableHighConfidenceSources.length > 0) {
+  if (
+    effectiveVerdict === "safe" &&
+    unavailableHighConfidenceSources.length > 0
+  ) {
     confidence = Math.min(
       confidence,
       unavailableHighConfidenceSources.length >= 2 ? 0.69 : 0.79,
     );
   }
 
+  const vtAgeDays = vtAnalysisAgeDays(signals);
+  if (
+    effectiveVerdict === "safe" &&
+    vtAgeDays !== null &&
+    vtAgeDays > VT_STALE_ANALYSIS_DAYS
+  ) {
+    confidence = Math.min(confidence, 0.85);
+  }
+
+  if (verdict === "unknown") {
+    confidence = Math.min(confidence, 0.4);
+  }
+
   if (verdict === "error") {
     confidence = 0.15;
   }
 
-  return clamp(confidence, 0.15, verdict === "safe" ? 0.97 : 0.99);
+  return clamp(confidence, 0.15, effectiveVerdict === "safe" ? 0.97 : 0.99);
 }
 
 function buildRecommendations(verdict: Verdict, limitedCoverage: boolean) {
@@ -475,6 +762,11 @@ function buildRecommendations(verdict: Verdict, limitedCoverage: boolean) {
             "No high-confidence malicious indicators were found in this scan.",
             "Continue normal caution for unfamiliar links, especially shortened or time-sensitive ones.",
           ];
+    case "unknown":
+      return [
+        "The host could not be reached, so most signals had nothing to inspect.",
+        "Treat the link with caution; re-scan later or verify the address before visiting.",
+      ];
     default:
       return [
         "The scan could not gather enough data to determine a safe verdict.",
@@ -488,6 +780,10 @@ function buildSummary(
   reasons: string[],
   limitedCoverage: boolean,
 ) {
+  if (verdict === "unknown") {
+    return "The host was unreachable during this scan; the absence of findings is not evidence of safety.";
+  }
+
   if (verdict === "safe") {
     return limitedCoverage
       ? "No strong malicious indicators were found, but some signals were unavailable or only partially verified."
@@ -527,7 +823,11 @@ function buildConfidenceReasons(
   const unavailableHighConfidenceSources =
     getUnavailableHighConfidenceSources(signals);
 
-  if (verdict === "safe") {
+  if (verdict === "unknown") {
+    reasons.push(
+      "The host was unreachable, so the active probes had nothing to inspect.",
+    );
+  } else if (verdict === "safe") {
     if (cleanHighConfidenceSources > 0) {
       reasons.push(
         `${cleanHighConfidenceSources} high-confidence reputation sources returned clean results.`,
@@ -556,14 +856,14 @@ function buildConfidenceReasons(
   }
 
   if (signals.mlEnsemble.status === "success" && signals.mlEnsemble.data) {
-    const { hostedModel, lexicalModel } = signals.mlEnsemble.data;
-    if (hostedModel && hostedModel.label !== lexicalModel.label) {
+    const { transformerModel, lexicalModel } = signals.mlEnsemble.data;
+    if (transformerModel && transformerModel.label !== lexicalModel.label) {
       reasons.push(
         "The ML models disagreed, so the ensemble confidence was reduced.",
       );
-    } else if (hostedModel) {
+    } else if (transformerModel) {
       reasons.push(
-        "The hosted and lexical models agreed on the ensemble direction.",
+        "The transformer and lexical models agreed on the ensemble direction.",
       );
     }
   }
@@ -644,7 +944,9 @@ function countPositiveHighConfidenceSources(signals: SignalResults) {
   if (
     signals.threatFeeds.status === "success" &&
     signals.threatFeeds.data &&
-    (signals.threatFeeds.data.matches?.length ?? 0) > 0
+    (signals.threatFeeds.data.matches ?? []).some(
+      (match) => feedMatchWeight(match).quality === "high",
+    )
   ) {
     count += 1;
   }
@@ -663,7 +965,11 @@ function getUnavailableHighConfidenceSources(signals: SignalResults) {
     unavailable.push("Google Safe Browsing");
   }
 
-  if (signals.threatFeeds.status !== "success") {
+  if (
+    signals.threatFeeds.status !== "success" ||
+    !signals.threatFeeds.data ||
+    (signals.threatFeeds.data.warnings?.length ?? 0) > 0
+  ) {
     unavailable.push("Threat Feeds");
   }
 
@@ -676,11 +982,11 @@ function getModelAgreement(signals: SignalResults) {
     return 0;
   }
 
-  if (!signal.data.hostedModel) {
+  if (!signal.data.transformerModel) {
     return 0.55;
   }
 
-  return signal.data.hostedModel.label === signal.data.lexicalModel?.label
+  return signal.data.transformerModel.label === signal.data.lexicalModel?.label
     ? 1
     : 0.45;
 }
@@ -760,68 +1066,4 @@ function formatSourceList(values: string[]) {
   }
 
   return `${values.slice(0, -1).join(", ")}, and ${values.at(-1)}`;
-}
-
-export function classifyConsensus(
-  hosted: ClassificationFinding | null,
-  lexical: ClassificationFinding,
-) {
-  if (!hosted) {
-    return lexical;
-  }
-
-  const combinedRisk =
-    hosted.score * labelRiskWeight(hosted.label) * 0.7 +
-    lexical.score * labelRiskWeight(lexical.label) * 0.3;
-
-  let effectiveRisk = combinedRisk;
-  if (hosted.label === "benign" && lexical.label !== "benign") {
-    if (lexical.label === "malicious") {
-      effectiveRisk = Math.max(
-        combinedRisk,
-        Math.min(0.95, lexical.score * 0.97),
-      );
-    } else {
-      effectiveRisk = Math.max(combinedRisk, lexical.score * 0.78);
-    }
-  }
-
-  const disagreementNote =
-    hosted.label !== lexical.label
-      ? hosted.label === "benign" && lexical.label !== "benign"
-        ? [
-            "The hosted model scored this link benign, but lexical heuristics disagreed; effective risk was raised to reflect structural evidence.",
-          ]
-        : ["Model disagreement reduced the ensemble certainty."]
-      : [
-          "The hosted and lexical models agreed on the classification direction.",
-        ];
-
-  return {
-    label:
-      (hosted.label === "malicious" &&
-        lexical.label !== "benign" &&
-        effectiveRisk >= 0.55) ||
-      effectiveRisk >= 0.74
-        ? "malicious"
-        : effectiveRisk >= 0.38
-          ? "risky"
-          : "benign",
-    score: Number(effectiveRisk.toFixed(2)),
-    reasons: [
-      ...new Set([...hosted.reasons, ...lexical.reasons, ...disagreementNote]),
-    ],
-    model: "ensemble",
-  } satisfies ClassificationFinding;
-}
-
-function labelRiskWeight(label: ClassificationFinding["label"]) {
-  switch (label) {
-    case "malicious":
-      return 1;
-    case "risky":
-      return 0.6;
-    default:
-      return 0.08;
-  }
 }

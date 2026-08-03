@@ -1,4 +1,5 @@
 import { lookup } from "node:dns/promises";
+import { EventEmitter } from "node:events";
 import http from "node:http";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -25,7 +26,8 @@ const lookupMock = vi.mocked(lookup);
 const requestMock = vi.mocked(http.request);
 
 afterEach(() => {
-  vi.clearAllMocks();
+  vi.useRealTimers();
+  vi.resetAllMocks();
 });
 
 describe("runRedirectSignal", () => {
@@ -48,6 +50,75 @@ describe("runRedirectSignal", () => {
         status: 200,
       },
     ]);
+  });
+
+  it("does not analyze terminal HTML beyond the capture limit", async () => {
+    mockLookupAll([{ address: "93.184.216.34", family: 4 }]);
+    mockHtmlResponse(`${"a".repeat(64 * 1024)}<script>eval('late')</script>`);
+
+    const result = await runRedirectSignal("http://example.test/start");
+
+    expect(result.content?.obfuscationHints).not.toContain("eval() call");
+  });
+
+  it("analyzes terminal HTML captured normally within the deadline", async () => {
+    mockLookupAll([{ address: "93.184.216.34", family: 4 }]);
+    mockHtmlResponse("<html><script>eval('captured')</script></html>");
+
+    const result = await runRedirectSignal("http://example.test/start");
+
+    expect(result.content?.obfuscationHints).toContain("eval() call");
+  });
+
+  it("caps terminal HTML capture by the remaining aggregate deadline", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-02T12:00:00.000Z"));
+    mockLookupAll([{ address: "93.184.216.34", family: 4 }]);
+    const response = mockDelayedHtmlHeaders(11_750);
+
+    const pending = runRedirectSignal("http://example.test/start");
+    await vi.advanceTimersByTimeAsync(11_750);
+    expect(response.destroy).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(249);
+    expect(response.destroy).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(1);
+    const result = await pending;
+
+    expect(response.destroy).toHaveBeenCalledTimes(1);
+    expect(result.terminalStatus).toBe(200);
+    expect(result.content).toBeNull();
+  });
+
+  it("destroys terminal HTML immediately when no signal budget remains", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-02T12:00:00.000Z"));
+    mockLookupAll([{ address: "93.184.216.34", family: 4 }]);
+    const response = mockDelayedHtmlHeaders(12_000);
+
+    const pending = runRedirectSignal("http://example.test/start");
+    await vi.advanceTimersByTimeAsync(12_000);
+    const result = await pending;
+
+    expect(response.destroy).toHaveBeenCalledTimes(1);
+    expect(result.terminalStatus).toBe(200);
+    expect(result.content).toBeNull();
+  });
+
+  it("stops during hostname resolution when the scan is cancelled", async () => {
+    lookupMock.mockImplementationOnce(() => new Promise(() => {}) as never);
+    const controller = new AbortController();
+
+    const pending = runRedirectSignal(
+      "http://example.test/start",
+      controller.signal,
+    );
+    controller.abort();
+    const result = await pending;
+
+    expect(requestMock).not.toHaveBeenCalled();
+    expect(result.terminalError).toContain("cancelled");
   });
 
   it("blocks a redirect target that resolves to a private address", async () => {
@@ -83,6 +154,88 @@ describe("runRedirectSignal", () => {
     expect(result.terminalError).toContain("private");
     expect(result.hops).toEqual([]);
   });
+
+  it("reports a reachable terminal response before the redirect limit", async () => {
+    mockLookupAll([{ address: "93.184.216.34", family: 4 }]);
+    mockLookupAll([{ address: "93.184.216.34", family: 4 }]);
+    mockHttpResponse(302, "/landing");
+    mockHttpResponse(204);
+
+    const result = await runRedirectSignal("http://example.test/start");
+
+    expect(result.finalUrl).toBe("http://example.test/landing");
+    expect(result.totalHops).toBe(1);
+    expect(result.reachable).toBe(true);
+    expect(result.terminalStatus).toBe(204);
+    expect(result.terminalError).toBeNull();
+    expect(result.observations).toEqual([]);
+    expect(result.hops).toEqual([
+      {
+        url: "http://example.test/start",
+        status: 302,
+        location: "/landing",
+      },
+      {
+        url: "http://example.test/landing",
+        status: 204,
+      },
+    ]);
+  });
+
+  it("marks the chain incomplete when redirect resolution exhausts the budget", async () => {
+    vi.useFakeTimers();
+    const startedAt = new Date("2026-08-02T12:00:00.000Z");
+    vi.setSystemTime(startedAt);
+    mockLookupAll([{ address: "93.184.216.34", family: 4 }]);
+    lookupMock.mockImplementationOnce(async () => {
+      vi.setSystemTime(startedAt.getTime() + 12_000);
+      return [{ address: "93.184.216.34", family: 4 }] as never;
+    });
+    mockHttpResponse(302, "http://landing.example.test/next");
+
+    const result = await runRedirectSignal("http://example.test/start");
+
+    expect(requestMock).toHaveBeenCalledTimes(1);
+    expect(result.finalUrl).toBe("http://example.test/start");
+    expect(result.reachable).toBe(false);
+    expect(result.terminalStatus).toBe(302);
+    expect(result.terminalError).toBe(
+      "The redirect probe stopped before the chain was fully followed (time budget exhausted).",
+    );
+    expect(result.observations).toEqual([result.terminalError]);
+    expect(result.hops).toEqual([
+      {
+        url: "http://example.test/start",
+        status: 302,
+        location: "http://landing.example.test/next",
+      },
+    ]);
+  });
+
+  it("reports an indeterminate result when the redirect limit is exhausted", async () => {
+    lookupMock.mockResolvedValue([
+      { address: "93.184.216.34", family: 4 },
+    ] as never);
+    for (let index = 1; index <= 5; index += 1) {
+      mockHttpResponse(302, `/hop-${index}`);
+    }
+
+    const result = await runRedirectSignal("http://example.test/start");
+
+    expect(result.finalUrl).toBe("http://example.test/hop-4");
+    expect(result.totalHops).toBe(5);
+    expect(result.reachable).toBe(false);
+    expect(result.terminalStatus).toBe(302);
+    expect(result.terminalError).toBe(
+      "The redirect chain exceeded the maximum of 5 redirects before reaching a terminal response.",
+    );
+    expect(result.observations).toEqual([result.terminalError]);
+    expect(result.hops.at(-1)).toEqual({
+      url: "http://example.test/hop-4",
+      status: 302,
+      location: "/hop-5",
+    });
+  });
 });
 
 function mockHttpResponse(statusCode: number, location?: string) {
@@ -103,7 +256,7 @@ function mockHttpResponse(statusCode: number, location?: string) {
     const response = {
       headers: location ? { location } : {},
       statusCode,
-      resume: vi.fn(),
+      destroy: vi.fn(),
     };
     const request = {
       once: vi.fn(),
@@ -122,4 +275,61 @@ function mockHttpResponse(statusCode: number, location?: string) {
 
 function mockLookupAll(records: Array<{ address: string; family: 4 | 6 }>) {
   lookupMock.mockResolvedValueOnce(records as never);
+}
+
+function mockHtmlResponse(body: string) {
+  requestMock.mockImplementationOnce((...args: unknown[]) => {
+    const callback = args.find(
+      (arg): arg is (response: unknown) => void => typeof arg === "function",
+    );
+    const response = Object.assign(new EventEmitter(), {
+      headers: { "content-type": "text/html" },
+      statusCode: 200,
+      destroy: vi.fn(),
+    });
+    const request = {
+      once: vi.fn(),
+      setTimeout: vi.fn(),
+      destroy: vi.fn(),
+      end: vi.fn(() => {
+        queueMicrotask(() => {
+          callback?.(response as never);
+          queueMicrotask(() => {
+            response.emit("data", Buffer.from(body));
+            response.emit("end");
+          });
+        });
+      }),
+    };
+
+    return request as never;
+  });
+}
+
+function mockDelayedHtmlHeaders(delayMs: number) {
+  const response = Object.assign(new EventEmitter(), {
+    headers: { "content-type": "text/html" },
+    statusCode: 200,
+    destroy: vi.fn(),
+  });
+
+  requestMock.mockImplementationOnce((...args: unknown[]) => {
+    const callback = args.find(
+      (arg): arg is (response: unknown) => void => typeof arg === "function",
+    );
+    const request = {
+      once: vi.fn(),
+      setTimeout: vi.fn(),
+      destroy: vi.fn(),
+      end: vi.fn(() => {
+        setTimeout(() => {
+          callback?.(response as never);
+        }, delayMs);
+      }),
+    };
+
+    return request as never;
+  });
+
+  return response;
 }

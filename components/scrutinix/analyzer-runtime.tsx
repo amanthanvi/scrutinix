@@ -11,80 +11,57 @@ import {
 } from "react";
 import { toast } from "sonner";
 
-import { type SharedSnapshot } from "@/components/shared/scrutinix-types";
+import { getSignalSeverity } from "@/components/shared/scrutinix-types";
+import type { SharedSnapshot } from "@/components/shared/scrutinix-types";
 import { useBatchStream } from "@/hooks/use-batch-stream";
 import { useScanStream } from "@/hooks/use-scan-stream";
-import type { HistoryEntry } from "@/lib/domain/types";
+import { sharedSnapshotSchema } from "@/lib/domain/schemas";
 import {
   signalNames,
   type AnalysisResult,
-  type Verdict,
+  type HistoryEntry,
 } from "@/lib/domain/types";
 import { normalizeUrlInput } from "@/lib/domain/url";
 
 export type Tab = "single" | "batch";
+export type ViewMode = "summary" | "full";
 
-interface HistoryEvent {
-  nonce: number;
-  result: AnalysisResult;
-}
+const summarySignalOrder = [
+  "googleSafeBrowsing",
+  "threatFeeds",
+  "virusTotal",
+  "mlEnsemble",
+  "ssl",
+  "redirectChain",
+  "whois",
+  "dns",
+] as const;
+
+const severityRank = {
+  malicious: 5,
+  suspicious: 4,
+  error: 3,
+  neutral: 2,
+  skipped: 1,
+  safe: 0,
+  pending: -1,
+} as const;
 
 function readSnapshot(): SharedSnapshot | null {
   if (typeof window === "undefined") return null;
   const payload = new URLSearchParams(window.location.search).get("shared");
   if (!payload) return null;
 
-  const validVerdicts: Verdict[] = [
-    "safe",
-    "suspicious",
-    "malicious",
-    "critical",
-    "error",
-  ];
-  const maxUrlLength = 2048;
-  const maxSummaryLength = 600;
-  const maxCapturedAtLength = 128;
-  const toSnapshot = (value: unknown): SharedSnapshot | null => {
-    if (
-      !value ||
-      typeof value !== "object" ||
-      typeof (value as { url?: unknown }).url !== "string" ||
-      typeof (value as { summary?: unknown }).summary !== "string" ||
-      typeof (value as { capturedAt?: unknown }).capturedAt !== "string" ||
-      typeof (value as { verdict?: unknown }).verdict !== "string"
-    ) {
-      return null;
-    }
-
-    const verdict = (value as { verdict: string }).verdict;
-    if (!validVerdicts.includes(verdict as Verdict)) {
-      return null;
-    }
-
-    const url = (value as { url: string }).url;
-    const summary = (value as { summary: string }).summary;
-    const capturedAt = (value as { capturedAt: string }).capturedAt;
-    if (
-      url.length > maxUrlLength ||
-      summary.length > maxSummaryLength ||
-      capturedAt.length > maxCapturedAtLength
-    ) {
-      return null;
-    }
-
-    return {
-      verdict: verdict as Verdict,
-      url,
-      summary,
-      capturedAt,
-    };
+  const parseSnapshot = (value: unknown): SharedSnapshot | null => {
+    const parsed = sharedSnapshotSchema.safeParse(value);
+    return parsed.success ? parsed.data : null;
   };
 
   try {
-    return toSnapshot(JSON.parse(decodeURIComponent(atob(payload))));
+    return parseSnapshot(JSON.parse(decodeURIComponent(atob(payload))));
   } catch {
     try {
-      return toSnapshot(JSON.parse(atob(payload)));
+      return parseSnapshot(JSON.parse(atob(payload)));
     } catch {
       return null;
     }
@@ -93,6 +70,7 @@ function readSnapshot(): SharedSnapshot | null {
 
 function useCreateAnalyzerRuntime() {
   const [activeTab, setActiveTab] = useState<Tab>("single");
+  const [viewMode, setViewMode] = useState<ViewMode>("summary");
   const [singleUrl, setSingleUrl] = useState("");
   const [batchInput, setBatchInput] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
@@ -102,13 +80,16 @@ function useCreateAnalyzerRuntime() {
   const [sharedSnapshot] = useState<SharedSnapshot | null>(() =>
     readSnapshot(),
   );
-  const [historyEvent, setHistoryEvent] = useState<HistoryEvent | null>(null);
+  // React can batch several url_complete events into one render. Keep every
+  // result so a fast batch cannot silently drop history entries.
+  const [historyQueue, setHistoryQueue] = useState<AnalysisResult[]>([]);
 
   const pushHistoryEvent = useCallback((result: AnalysisResult) => {
-    setHistoryEvent((previous) => ({
-      nonce: (previous?.nonce ?? 0) + 1,
-      result,
-    }));
+    setHistoryQueue((previous) => [...previous, result]);
+  }, []);
+
+  const drainHistoryQueue = useCallback(() => {
+    setHistoryQueue([]);
   }, []);
 
   const scan = useScanStream((result) => {
@@ -122,18 +103,43 @@ function useCreateAnalyzerRuntime() {
 
   const active = selectedResult ?? scan.state.result;
   const signals = active?.signals ?? scan.state.signals;
-
   const live = scan.state.isStreaming || batch.state.isStreaming;
 
   const done = useMemo(
     () =>
-      signalNames.filter(
-        (signalName) =>
-          signals[signalName].status === "success" ||
-          signals[signalName].status === "error" ||
-          signals[signalName].status === "skipped",
+      signalNames.filter((signalName) =>
+        ["success", "error", "skipped"].includes(signals[signalName].status),
       ).length,
     [signals],
+  );
+
+  const summarySignals = useMemo(
+    () =>
+      [...summarySignalOrder]
+        .filter((signalName) => signals[signalName].status !== "pending")
+        .sort((left, right) => {
+          const leftSeverity = getSignalSeverity(
+            signals[left].status,
+            signals[left].data,
+            left,
+          );
+          const rightSeverity = getSignalSeverity(
+            signals[right].status,
+            signals[right].data,
+            right,
+          );
+          return severityRank[rightSeverity] - severityRank[leftSeverity];
+        })
+        .slice(0, 3),
+    [signals],
+  );
+
+  const visibleSignals = useMemo(
+    () =>
+      viewMode === "summary" && summarySignals.length > 0
+        ? summarySignals
+        : [...signalNames],
+    [summarySignals, viewMode],
   );
 
   const startSingleScan = useCallback(async () => {
@@ -158,7 +164,6 @@ function useCreateAnalyzerRuntime() {
       setFormError("Add at least one URL.");
       return;
     }
-
     if (urls.length > 10) {
       setFormError("Batch capped at 10 URLs.");
       return;
@@ -218,24 +223,29 @@ function useCreateAnalyzerRuntime() {
     batch,
     batchInput,
     done,
+    drainHistoryQueue,
     formError,
-    historyEvent,
+    historyQueue,
     live,
+    rescanUrl,
     scan,
     selectedResult,
+    selectHistoryEntry,
     setActiveTab,
     setBatchInput,
     setFormError,
     setSelectedResult,
     setSingleUrl,
+    setViewMode,
     shareResult,
     sharedSnapshot,
     signals,
     singleUrl,
     startBatchScan,
     startSingleScan,
-    rescanUrl,
-    selectHistoryEntry,
+    summarySignals,
+    viewMode,
+    visibleSignals,
   };
 }
 

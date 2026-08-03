@@ -21,7 +21,7 @@ export function AppHeader() {
         {isHome ? (
           wordmark
         ) : (
-          <Link href="/" className="rounded-md">
+          <Link href="/" className="flex min-h-11 items-center rounded-md">
             {wordmark}
           </Link>
         )}
@@ -34,7 +34,7 @@ export function AppHeader() {
             <Link
               key={href}
               href={href}
-              className={`rounded-md px-2.5 py-1.5 text-[0.8125rem] transition-colors ${
+              className={`inline-flex min-h-11 items-center rounded-md px-2.5 py-1.5 text-[0.8125rem] transition-colors ${
                 pathname === href
                   ? "text-[var(--sx-text)]"
                   : "text-[var(--sx-text-muted)] hover:text-[var(--sx-text)]"

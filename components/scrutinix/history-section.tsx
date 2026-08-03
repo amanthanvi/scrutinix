@@ -25,7 +25,8 @@ const HistoryPanel = dynamic(
 );
 
 export function HistorySection() {
-  const { historyEvent, selectHistoryEntry } = useAnalyzerRuntime();
+  const { drainHistoryQueue, historyQueue, selectHistoryEntry } =
+    useAnalyzerRuntime();
   const {
     addResult,
     canUndoClear,
@@ -38,14 +39,16 @@ export function HistorySection() {
   } = useScanHistory();
 
   useEffect(() => {
-    if (!historyEvent) return;
-    void addResult(historyEvent.result);
-  }, [addResult, historyEvent]);
+    if (!historyQueue.length) return;
+    for (const result of historyQueue) {
+      void addResult(result);
+    }
+    drainHistoryQueue();
+  }, [addResult, drainHistoryQueue, historyQueue]);
 
   return (
     <HistoryPanel
       entries={filteredEntries}
-      exportEntries={entries}
       totalCount={entries.length}
       historyQuery={historyQuery}
       onHistoryQueryChange={setHistoryQuery}

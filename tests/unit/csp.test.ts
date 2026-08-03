@@ -11,9 +11,11 @@ describe("buildContentSecurityPolicy", () => {
       .map((part) => part.trim())
       .find((part) => part.startsWith("script-src"));
 
+    // Escape the nonce: base64 can contain regex metacharacters like "+".
+    const escapedNonce = nonce.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     expect(scriptSrc).toMatch(
       new RegExp(
-        `^script-src 'self' 'nonce-${nonce}' 'strict-dynamic'(?: 'unsafe-eval')?$`,
+        `^script-src 'self' 'nonce-${escapedNonce}' 'strict-dynamic'(?: 'unsafe-eval')?$`,
       ),
     );
     expect(scriptSrc).not.toContain("'unsafe-inline'");

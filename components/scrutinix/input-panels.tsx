@@ -48,15 +48,16 @@ export function SingleInput({
           aria-label="URL to analyze"
           aria-invalid={Boolean(error)}
           aria-describedby={error ? "sx-url-error" : undefined}
-          className="h-10 min-w-0 flex-1 font-mono text-sm aria-invalid:border-[var(--sx-suspicious-fg)]"
+          className="h-11 min-w-0 flex-1 font-mono text-sm aria-invalid:border-[var(--sx-suspicious-fg)]"
         />
 
         <Button
           type="button"
+          aria-label="Analyze URL"
           onClick={onSubmit}
           disabled={streaming || !hasUrl}
           variant="primary"
-          className="h-10 shrink-0 px-4 text-sm sm:min-w-24"
+          className="h-11 shrink-0 px-4 text-sm sm:min-w-24"
         >
           Analyze
         </Button>
@@ -158,7 +159,7 @@ export function BatchInput({
           onClick={onSubmit}
           disabled={streaming || !hasUrls}
           variant="primary"
-          className="h-10 px-4 text-sm"
+          className="h-11 px-4 text-sm"
         >
           Start batch
         </Button>

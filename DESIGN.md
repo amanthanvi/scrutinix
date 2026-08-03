@@ -10,11 +10,11 @@ The verdict is a sentence with a number, not a dashboard. One centered column, a
 
 ## Surfaces
 
-| Route      | Role                                                                     |
-| ---------- | ------------------------------------------------------------------------ |
-| `/`        | Title → scan form → verdict panel → 8 signal rows → history, in one flow |
-| `/about`   | Method / trust (same 44rem shell, plain prose)                           |
-| `/privacy` | Privacy boundaries (same shell)                                          |
+| Route      | Role                                                                                |
+| ---------- | ----------------------------------------------------------------------------------- |
+| `/`        | Title → scan form → verdict panel → Summary/Full signal rows → history, in one flow |
+| `/about`   | Method / trust (same 44rem shell, plain prose)                                      |
+| `/privacy` | Privacy boundaries (same shell)                                                     |
 
 ## Visual system
 
@@ -28,7 +28,7 @@ The verdict is a sentence with a number, not a dashboard. One centered column, a
 ## Component grammar
 
 - **Verdict:** a typographic block, not a card — verdict word (colored `-fg`) + `role="meter"` score + confidence as text; mono URL; summary sentence; one merged amber caveat sentence; plain reason list; native `<details>` for recommendations, caveats, and scan metadata; result actions (Export/Share/Re-scan) below it.
-- **Signal rows:** eight stable `<details>` rows in a hairline table (`border-y` + `divide-y`), fixed order, filled in place. One severity encoding: a 6px dot. Evidence is a mono `<dl>` from `getSignalDetailEntries`.
+- **Signal rows:** an accessible Summary/Full switch selects either the three most relevant completed signals or all eight signals in fixed order. Each lane uses `<details>` rows in a hairline table (`border-y` + `divide-y`) with one severity encoding, a 6px dot. Evidence is a mono `<dl>` from `getSignalDetailEntries`.
 - **Tabs:** text tabs with a 2px accent underline on the active trigger (Radix) — no pill container.
 - **History:** hairline-divided in-flow list — verdict word, mono URL, time. Search filters URL, verdict, and summary. Confirm-clear with undo; exports as quiet text buttons.
 - **Batch:** hairline-divided list — index, verdict word, mono URL, Open.
@@ -47,4 +47,4 @@ No CRT/terminal/radar/glow. No casefile/dossier/stamp costume. No cream/purple S
 
 ## Accessibility contracts (tests depend on these)
 
-`role="meter"` "Threat score" (post-scan), region "Scan history", per-signal `aria-label="{Label} signal: {status}"`, textbox names "URL to analyze"/"URLs to analyze", buttons Analyze / Start batch / Clear all history / Confirm clear all history / Undo clear, skip link, `id="scan-console"`, `id="main-content"`. Axe runs at zero violations; colored text always uses `-fg` tokens.
+`role="meter"` "Threat score" (post-scan), labelled `role="switch"` with visible Summary/Full labels, region "Scan history", per-signal `aria-label="{Label} signal: {status}"`, textbox names "URL to analyze"/"URLs to analyze", buttons Analyze / Start batch / Clear all history / Confirm clear all history / Undo clear, skip link, `id="scan-console"`, `id="main-content"`. Axe runs at zero violations; colored text always uses `-fg` tokens.

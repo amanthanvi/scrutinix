@@ -1,6 +1,8 @@
 import http from "node:http";
 import https from "node:https";
+import type { IncomingMessage } from "node:http";
 
+import { analyzePageContent } from "@/lib/domain/content-analysis";
 import type { RedirectData } from "@/lib/domain/types";
 import {
   assertPublicNetworkTarget,
@@ -11,19 +13,43 @@ import {
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
 const MAX_REDIRECTS = 5;
 const REQUEST_TIMEOUT_MS = 8_000;
+/** Aggregate budget across the whole chain (all hops, all addresses). */
+const REDIRECT_SIGNAL_BUDGET_MS = 12_000;
+/** Cap on captured terminal-page HTML; enough for head, forms, and inline scripts. */
+const BODY_CAPTURE_LIMIT_BYTES = 64 * 1024;
+const BODY_CAPTURE_TIMEOUT_MS = 3_000;
 
-export async function runRedirectSignal(url: string): Promise<RedirectData> {
+export async function runRedirectSignal(
+  url: string,
+  signal?: AbortSignal,
+): Promise<RedirectData> {
   const hops: RedirectData["hops"] = [];
   let currentUrl = url;
+  let lastProbedUrl = url;
   let reachable = true;
   let terminalStatus: number | null = null;
   let terminalError: string | null = null;
   let currentResolution: PublicNetworkTargetResolution | null = null;
+  let terminalBody: string | null = null;
   const observations: string[] = [];
+  const deadline = Date.now() + REDIRECT_SIGNAL_BUDGET_MS;
 
   for (let attempt = 0; attempt < MAX_REDIRECTS; attempt += 1) {
+    if (Date.now() >= deadline || signal?.aborted) {
+      reachable = false;
+      terminalError = signal?.aborted
+        ? "The redirect probe was cancelled before the chain was fully followed."
+        : "The redirect probe stopped before the chain was fully followed (time budget exhausted).";
+      currentUrl = lastProbedUrl;
+      observations.push(terminalError);
+      break;
+    }
+
     if (!currentResolution) {
-      const publicTarget = await assertPublicNetworkTarget(currentUrl);
+      const publicTarget = await assertPublicNetworkTarget(currentUrl, {
+        signal,
+        timeoutMs: Math.max(0, deadline - Date.now()),
+      });
       if (!publicTarget.ok) {
         reachable = false;
         terminalError = publicTarget.error;
@@ -33,7 +59,12 @@ export async function runRedirectSignal(url: string): Promise<RedirectData> {
       currentResolution = publicTarget.resolution;
     }
 
-    const outcome = await requestRedirectHop(currentUrl, currentResolution);
+    const outcome = await requestRedirectHop(
+      currentUrl,
+      currentResolution,
+      deadline,
+      signal,
+    );
     if ("error" in outcome) {
       reachable = false;
       terminalError = outcome.error;
@@ -42,6 +73,7 @@ export async function runRedirectSignal(url: string): Promise<RedirectData> {
     }
 
     const { status, location } = outcome;
+    lastProbedUrl = currentUrl;
     terminalStatus = status;
     hops.push({
       url: currentUrl,
@@ -50,21 +82,53 @@ export async function runRedirectSignal(url: string): Promise<RedirectData> {
     });
 
     if (!location || !REDIRECT_STATUSES.has(status)) {
+      terminalBody = outcome.body ?? null;
       break;
     }
 
-    const nextUrl = new URL(location, currentUrl).toString();
-    const publicRedirectTarget = await assertPublicNetworkTarget(nextUrl);
+    let nextUrl: URL;
+    try {
+      nextUrl = new URL(location, currentUrl);
+    } catch {
+      observations.push(
+        "The redirect chain stopped at a Location header that is not a valid URL.",
+      );
+      break;
+    }
+
+    // Only follow web schemes; a redirect into file:/data:/ftp: territory is
+    // recorded as an observation and never fetched.
+    if (nextUrl.protocol !== "http:" && nextUrl.protocol !== "https:") {
+      observations.push(
+        `The redirect chain stopped at a non-HTTP scheme (${nextUrl.protocol.replace(/:$/, "")}).`,
+      );
+      break;
+    }
+
+    if (attempt === MAX_REDIRECTS - 1) {
+      reachable = false;
+      terminalError = `The redirect chain exceeded the maximum of ${MAX_REDIRECTS} redirects before reaching a terminal response.`;
+      observations.push(terminalError);
+      break;
+    }
+
+    const publicRedirectTarget = await assertPublicNetworkTarget(
+      nextUrl.toString(),
+      {
+        signal,
+        timeoutMs: Math.max(0, deadline - Date.now()),
+      },
+    );
 
     if (!publicRedirectTarget.ok) {
-      currentUrl = nextUrl;
+      currentUrl = nextUrl.toString();
       reachable = false;
       terminalError = publicRedirectTarget.error;
       observations.push(publicRedirectTarget.error);
       break;
     }
 
-    currentUrl = nextUrl;
+    currentUrl = nextUrl.toString();
     currentResolution = publicRedirectTarget.resolution;
   }
 
@@ -81,12 +145,15 @@ export async function runRedirectSignal(url: string): Promise<RedirectData> {
     terminalError,
     hops,
     observations,
+    content: terminalBody ? analyzePageContent(terminalBody, currentUrl) : null,
   };
 }
 
 async function requestRedirectHop(
   url: string,
   resolution: PublicNetworkTargetResolution,
+  deadline: number,
+  signal?: AbortSignal,
 ) {
   const target = new URL(url);
   const client = target.protocol === "https:" ? https : http;
@@ -102,11 +169,23 @@ async function requestRedirectHop(
   let lastError: string | null = null;
 
   for (const address of addresses) {
+    const remaining = deadline - Date.now();
+    if (remaining <= 0 || signal?.aborted) {
+      return {
+        error:
+          lastError ??
+          "The redirect probe ran out of time before the host responded.",
+      };
+    }
+
     const outcome = await requestRedirectHopAtAddress(
       client,
       target,
       resolution.hostname,
       address,
+      Math.min(REQUEST_TIMEOUT_MS, remaining),
+      deadline,
+      signal,
     );
     if (!("error" in outcome)) {
       return outcome;
@@ -124,9 +203,13 @@ async function requestRedirectHopAtAddress(
   target: URL,
   servername: string,
   address: string,
+  timeoutMs: number,
+  deadline: number,
+  signal?: AbortSignal,
 ) {
   return await new Promise<
-    { status: number; location: string | null } | { error: string }
+    | { status: number; location: string | null; body: string | null }
+    | { error: string }
   >((resolve) => {
     const request = client.request(
       {
@@ -147,15 +230,48 @@ async function requestRedirectHopAtAddress(
         const location = Array.isArray(locationHeader)
           ? (locationHeader[0] ?? null)
           : (locationHeader ?? null);
+        const status = response.statusCode ?? 0;
+        const contentType = response.headers["content-type"] ?? "";
+        const isTerminalHtml =
+          !(location && REDIRECT_STATUSES.has(status)) &&
+          typeof contentType === "string" &&
+          contentType.toLowerCase().includes("text/html");
 
-        resolve({
-          status: response.statusCode ?? 0,
-          location,
-        });
+        if (isTerminalHtml) {
+          // Capture a bounded slice of the final page for content analysis;
+          // the same response is already SSRF-gated, so no new fetch happens.
+          const captureBudgetMs = Math.min(
+            BODY_CAPTURE_TIMEOUT_MS,
+            deadline - Date.now(),
+          );
+          if (captureBudgetMs <= 0) {
+            response.destroy();
+            resolve({ status, location, body: null });
+            return;
+          }
 
-        response.resume();
+          void captureBody(response, captureBudgetMs).then((body) => {
+            resolve({ status, location, body });
+          });
+          return;
+        }
+
+        resolve({ status, location, body: null });
+
+        // Headers are all we need; destroy instead of draining the body so
+        // a link to a multi-gigabyte file doesn't transfer the whole thing.
+        response.destroy();
       },
     );
+
+    const onAbort = () => {
+      request.destroy();
+      resolve({ error: "The redirect probe was cancelled." });
+    };
+    signal?.addEventListener("abort", onAbort, { once: true });
+    request.once("close", () => {
+      signal?.removeEventListener("abort", onAbort);
+    });
 
     request.once("error", (error) => {
       resolve({
@@ -163,7 +279,7 @@ async function requestRedirectHopAtAddress(
       });
     });
 
-    request.setTimeout(REQUEST_TIMEOUT_MS, () => {
+    request.setTimeout(timeoutMs, () => {
       request.destroy();
       resolve({
         error: `The host did not respond to the redirect probe within ${REQUEST_TIMEOUT_MS}ms.`,
@@ -171,6 +287,47 @@ async function requestRedirectHopAtAddress(
     });
 
     request.end();
+  });
+}
+
+/** Read up to BODY_CAPTURE_LIMIT_BYTES within the remaining signal budget. */
+function captureBody(
+  response: IncomingMessage,
+  timeoutMs: number,
+): Promise<string | null> {
+  return new Promise((resolve) => {
+    const chunks: Buffer[] = [];
+    let total = 0;
+    let settled = false;
+
+    const finish = () => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      clearTimeout(timer);
+      response.destroy();
+      resolve(total > 0 ? Buffer.concat(chunks).toString("utf8") : null);
+    };
+
+    const timer = setTimeout(finish, timeoutMs);
+
+    response.on("data", (chunk: Buffer) => {
+      const remaining = BODY_CAPTURE_LIMIT_BYTES - total;
+      if (remaining <= 0) {
+        finish();
+        return;
+      }
+
+      const captured = chunk.subarray(0, remaining);
+      chunks.push(captured);
+      total += captured.length;
+      if (total >= BODY_CAPTURE_LIMIT_BYTES) {
+        finish();
+      }
+    });
+    response.once("end", finish);
+    response.once("error", finish);
   });
 }
 

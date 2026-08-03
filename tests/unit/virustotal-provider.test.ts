@@ -176,4 +176,40 @@ describe("runVirusTotalProvider", () => {
     );
     expect(analysisPolls).toHaveLength(8);
   });
+
+  it("preserves the URL report without spending quota on domain enrichment", async () => {
+    const target = "https://evil.example/path";
+    const lastAnalysisUnix = 1_750_000_000;
+
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      void input;
+      return Response.json({
+        data: {
+          attributes: {
+            last_analysis_stats: {
+              malicious: 4,
+              suspicious: 1,
+              harmless: 60,
+              undetected: 10,
+              timeout: 0,
+            },
+            last_analysis_results: {},
+            last_analysis_date: lastAnalysisUnix,
+          },
+        },
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await runVirusTotalProvider(target);
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain("/urls/");
+    expect(result.malicious).toBe(4);
+    expect(result.suspicious).toBe(1);
+    expect(result.lastAnalysisDate).toBe(
+      new Date(lastAnalysisUnix * 1000).toISOString(),
+    );
+    expect(result.domain).toBeUndefined();
+  });
 });

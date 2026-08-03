@@ -9,7 +9,11 @@ import { VerdictPanel } from "@/components/scrutinix/verdict-panel";
 import { SIGNAL_COUNT } from "@/components/shared/scrutinix-types";
 import { Button } from "@/components/ui/button";
 import { downloadTextFile } from "@/lib/client/export";
-import { signalNames } from "@/lib/domain/types";
+import {
+  signalNames,
+  type SignalName,
+  type SignalResults,
+} from "@/lib/domain/types";
 
 const BatchTable = dynamic(
   () =>
@@ -25,6 +29,18 @@ const BatchTable = dynamic(
   },
 );
 
+function RuntimeSignalRow<N extends SignalName>({
+  index,
+  name,
+  signals,
+}: {
+  index: number;
+  name: N;
+  signals: SignalResults;
+}) {
+  return <SignalRow name={name} result={signals[name]} index={index} />;
+}
+
 export function ResultsSection() {
   const {
     active,
@@ -37,9 +53,12 @@ export function ResultsSection() {
     setActiveTab,
     setSelectedResult,
     setSingleUrl,
+    setViewMode,
     shareResult,
     sharedSnapshot,
     signals,
+    viewMode,
+    visibleSignals,
   } = useAnalyzerRuntime();
 
   const hasSignalActivity =
@@ -123,15 +142,48 @@ export function ResultsSection() {
       )}
 
       {activeTab === "single" && hasSignalActivity ? (
-        <div className="border-border divide-border divide-y border-y">
-          {signalNames.map((signalName, index) => (
-            <SignalRow
-              key={signalName}
-              name={signalName}
-              result={signals[signalName]}
-              index={index}
-            />
-          ))}
+        <div className="flex flex-col gap-3">
+          <div className="flex justify-end">
+            <button
+              type="button"
+              role="switch"
+              aria-checked={viewMode === "full"}
+              aria-label="Show full signal list"
+              onClick={() =>
+                setViewMode(viewMode === "summary" ? "full" : "summary")
+              }
+              className="border-border bg-muted/40 inline-flex min-h-11 items-center rounded-md border p-1 text-xs font-medium"
+            >
+              <span
+                className={`rounded px-2.5 py-1.5 ${
+                  viewMode === "summary"
+                    ? "bg-card text-[var(--sx-text)] shadow-sm"
+                    : "text-[var(--sx-text-muted)]"
+                }`}
+              >
+                Summary
+              </span>
+              <span
+                className={`rounded px-2.5 py-1.5 ${
+                  viewMode === "full"
+                    ? "bg-card text-[var(--sx-text)] shadow-sm"
+                    : "text-[var(--sx-text-muted)]"
+                }`}
+              >
+                Full
+              </span>
+            </button>
+          </div>
+          <div className="border-border divide-border divide-y border-y">
+            {visibleSignals.map((signalName, index) => (
+              <RuntimeSignalRow
+                key={signalName}
+                name={signalName}
+                signals={signals}
+                index={index}
+              />
+            ))}
+          </div>
         </div>
       ) : null}
     </section>

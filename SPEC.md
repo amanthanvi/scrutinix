@@ -4,20 +4,22 @@
 
 - Status update: the current implementation is live, verified locally, and deployed to Vercel preview and production.
 - Rationale: the audit confirmed meaningful drift between docs and code, including missing batch API support, no test harness, vulnerable production dependencies, missing metadata assets, and misleading error-to-threat behavior.
-- Toolchain decision: the current implementation targets `next@16.1.6`, `react@19.2.4`, and Node `22.x` for engines and CI so Vercel stays on the Node 22 major line without auto-upgrading to a future major.
+- Toolchain decision: the current implementation targets `next@16.2.12`, `react@19.2.4`, and Node `22.x` for engines and CI so Vercel stays on the Node 22 major line without auto-upgrading to a future major.
 - Linting decision: use ESLint directly from npm scripts; do not use `next lint`.
 - Streaming decision: API responses stream `application/x-ndjson` over `fetch`, not SSE.
 - Framework decision: Next.js 16 deprecates `middleware.ts`, so request gating is implemented in `proxy.ts`.
 - Provider decision:
   - Keep the public `whois` signal name, but back it with RDAP-style domain registration data where raw WHOIS is unreliable.
   - Treat OpenPhish as a cached community feed, not a per-request live lookup.
-  - Use the Hugging Face router endpoint with the default hosted model `DunnBC22/codebert-base-Malicious_URLs`; the previous `api-inference` host and legacy model path are no longer viable.
+  - Run the ML classifier locally: a quantized ONNX transformer bundled under `lib/server/ml/` (urlbert-tiny-v4, Apache-2.0) via `@huggingface/transformers`, paired with the lexical heuristic scorer. The earlier hosted Hugging Face inference path was removed after the router endpoint proved unreliable in production.
   - Prefer Upstash-backed rate limiting when configured, but degrade to process-local in-memory limits rather than fail closed when Redis credentials are absent.
   - Accept either `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` or Vercel KV `KV_REST_API_URL` / `KV_REST_API_TOKEN` for shared Redis configuration.
   - URLhaus authorization must use the documented `Auth-Key` header.
   - Use the free OpenPhish community TXT feed for phishing-feed coverage instead of the removed PhishTank path.
+  - Extend feed coverage with ThreatFox (reusing the URLhaus `Auth-Key`) and Spamhaus DBL / SURBL DNSBL lookups over plain DNS, treating sentinel/blocked-resolver responses as unavailable rather than clean.
 - Runtime decision:
   - Redirect tracing should not fail on invalid certificate chains that are already reported by the SSL signal; trace redirects through header-only Node HTTP(S) requests with relaxed certificate validation.
+  - Resolve registrable domains with the Public Suffix List and private suffixes enabled so reputation, DNSBL, and redirect comparisons preserve tenant boundaries on shared hosting platforms; keep ThreatFox IOC scoring bound to the exact scanned hostname so sibling tenants cannot contaminate one another.
 - Testing decision: harness-first is required; Vitest, MSW, Playwright, and Lighthouse land before large feature clusters.
 - Tooling decision:
   - Replace `@lhci/cli` with a direct `lighthouse` + `chrome-launcher` script so the verification path does not carry stale vulnerable transitive dependencies.
@@ -27,14 +29,16 @@
   - Restore dark/light theme support through the shared semantic token layer in `app/globals.css` while keeping `app/scrutinix.css` for the branded motion/effects layer.
   - When a theme toggle sits inside a server-rendered header, gate any `resolvedTheme`-dependent icon or label behind a mount-safe client snapshot to avoid hydration mismatches.
   - Keep the top header metrics truthful in idle state: the threat meter stays visually inert and the coverage badge reads as idle until a scan actually runs.
-  - The public site now uses a dashboard-first home route: a compact scanner-first top band on `/`, a calmer two-column operational workspace with a sticky history rail, and method/caveat detail on `/about` and `/privacy`, all expressed through the preset-aligned neutral system.
+  - The public site uses a scanner-first, single-column `44rem` flow on `/`: scan form, verdict, accessible Summary/Full signal rows, and in-flow history. Method/caveat detail lives on `/about` and `/privacy`.
   - Sans-serif typography is the default reading mode; mono is reserved for telemetry, timings, hashes, and other code-like labels.
   - Favicons and manifest are served from checked-in `public/` assets with explicit metadata links instead of a generated icon route.
 - Verdict decision:
   - Clean verdict confidence must be capped when a primary reputation source such as VirusTotal, Google Safe Browsing, or threat feeds does not complete, even if the remaining signals stay clean.
-- Security decision: ship CSP and related browser hardening headers from `next.config.ts` in production responses.
-- Verification note: local verification passed for lint, format, typecheck, unit, integration, E2E smoke, production build, audit, and Lighthouse, and Vercel preview/production deployments were verified with `vercel inspect` plus a public production API smoke.
-- Documentation decision: `PLAN.md` is the live execution tracker and must stay in sync with this spec.
+- Provider decision: an uncached VirusTotal report lookup uses the primary URL report endpoint only; optional domain enrichment is omitted so one scan does not consume two of the free tier's four requests per minute.
+- Redirect decision: once the five-response redirect budget is exhausted, retain the last probed URL as the final URL and report the unprobed next location only as hop metadata.
+- Security decision: generate per-request nonce CSP in `proxy.ts` via `lib/server/csp.ts`; keep the remaining browser-hardening headers in `next.config.ts`.
+- Verification note: the shipped baseline passed lint, format, typecheck, unit, integration, E2E smoke, production build, audit, and Lighthouse; current P21 revalidation and review status are tracked in `PLAN.md`.
+- Documentation decision: `PLAN.md` is the live execution source of truth; keep it aligned with `SPEC.md`, `CLAUDE.md`, and `AGENTS.md` whenever architecture or delivery status changes.
 
 ## 0) Metadata
 
@@ -42,7 +46,7 @@
 - **Owner (DRI):** Aman Thanvi (@amanthanvi)
 - **Stakeholders:** Aman Thanvi
 - **Status:** Deployed on Vercel preview and production
-- **Last updated:** 2026-03-23
+- **Last updated:** 2026-08-02
 - **Shipping model:** Continuous delivery
 - **Links:** [GitHub](https://github.com/amanthanvi/scrutinix)
 
@@ -119,12 +123,12 @@ Both personas use the same tool. A **view mode toggle** (Summary / Full Report) 
 1. Previous scans stored in IndexedDB (client-side)
 2. History panel shows recent scans with status badges
 3. Click to view cached result, re-scan button for fresh analysis
-4. Export history as CSV or JSON, or undo a local clear immediately from the history rail
+4. Export the visible history results as CSV or JSON, or undo a local clear immediately from the in-flow history list
 
 ### 2.3 UX states checklist
 
-- **Loading/streaming:** Skeleton cards per enrichment source. Each card populates independently as its API resolves. Progress indicator shows which sources are still pending
-- **Empty:** Dashboard-first landing state with the scanner dock, brief product framing, and chrome links to privacy/methodology; deeper explanation lives on `/about` and `/privacy`
+- **Loading/streaming:** Pending signal rows update independently as each source resolves. A transform-only progress line shows aggregate completion
+- **Empty:** Scanner-first landing state in the centered product shell, with brief framing and links to privacy/methodology; deeper explanation lives on `/about` and `/privacy`
 - **Error (partial):** Failed or non-applicable sources show "failed", "caveat", or "n/a" state with the reason surfaced inline. Verdict is computed from available data, safe-result confidence is capped when primary reputation coverage is missing, and the user can rerun the full scan from the primary controls
 - **Error (total):** All sources failed — show error message with "Retry All" button and suggestion to check network
 - **Offline/degraded:** N/A (server-side tool, requires network). Client-side history remains accessible offline via IndexedDB
@@ -132,10 +136,10 @@ Both personas use the same tool. A **view mode toggle** (Summary / Full Report) 
 
 ### 2.4 View modes
 
-| Mode            | Content                                                                                                                                                                      | Target                     |
-| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- |
-| **Summary**     | Overall verdict (Safe/Suspicious/Malicious/Critical) with confidence indicator, top 3 most relevant signals as compact cards, one-line recommendation                        | Casual users, quick checks |
-| **Full Report** | All enrichment signals in structured sections, raw engine results, confidence breakdowns per model, WHOIS/SSL/DNS details, redirect chain visualization, threat feed matches | Power users, investigation |
+| Mode            | Content                                                                                                                                                          | Target                     |
+| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- |
+| **Summary**     | Overall verdict (Safe/Suspicious/Malicious/Critical) with confidence, the three most relevant completed signals as disclosure rows, and a concise recommendation | Casual users, quick checks |
+| **Full Report** | All eight signals in fixed-order disclosure rows, with engine results, classifier details, WHOIS/SSL/DNS evidence, redirect hops, and threat-feed matches        | Power users, investigation |
 
 ## 3) Functional Requirements
 
@@ -144,12 +148,12 @@ Both personas use the same tool. A **view mode toggle** (Summary / Full Report) 
 - **FR-1** MUST accept a single URL input, validate it, and return a multi-signal threat analysis
 - **FR-2** MUST query VirusTotal API and return engine-level detection results
 - **FR-3** MUST run URL through multiple ML classification models and aggregate predictions
-- **FR-4** MUST check URL against threat intelligence feeds (URLhaus and OpenPhish)
+- **FR-4** MUST check URL against threat intelligence feeds (URLhaus, OpenPhish, ThreatFox, and DNSBL sources)
 - **FR-5** MUST check URL against Google Safe Browsing API
 - **FR-6** MUST perform SSL certificate analysis (issuer, validity, expiry, chain trust)
 - **FR-7** MUST perform WHOIS lookup (domain age, registrar, registration date)
 - **FR-8** MUST perform DNS analysis (record types, anomalies, MX/A/CNAME)
-- **FR-9** MUST trace HTTP redirect chain (hops, final destination, status codes)
+- **FR-9** MUST trace HTTP redirect chain (hops, final destination, status codes) and associate password inputs with their submitting form and viable `formaction` overrides before scoring cross-origin credential posts
 - **FR-10** MUST compute an overall threat verdict from all available signals
 
 ### UX & Presentation
@@ -162,7 +166,7 @@ Both personas use the same tool. A **view mode toggle** (Summary / Full Report) 
 
 ### History & Export
 
-- **FR-16** SHOULD persist scan history in IndexedDB with search/filter
+- **FR-16** SHOULD persist scan history in IndexedDB with search/filter across every verdict, including unreachable-host `unknown` results
 - **FR-17** SHOULD support CSV/JSON export for individual and batch results
 - **FR-18** SHOULD support history export and a short undo window after clearing local history
 
@@ -203,18 +207,17 @@ Both personas use the same tool. A **view mode toggle** (Summary / Full Report) 
                          │
 ┌──────────────────────────────────────────────────────┐
 │                    Signal Sources                   │
-│  VT | GSB | Threat feeds | ML | TLS | DNS | RDAP | │
-│  Redirect chain                                     │
+│  VT | ML ensemble | GSB | Threat feeds | SSL |      │
+│  WHOIS/RDAP | DNS | Redirect chain                  │
 └──────────────────────────────────────────────────────┘
                          │
 ┌──────────────────────────────────────────────────────┐
 │                  Client Experience                  │
-│  - onboarding/value layer + trust routes            │
-│  - server-rendered shell + smaller client islands   │
-│  - streamed result hero and signal cards            │
-│  - batch result table                               │
-│  - IndexedDB history, export, re-scan, and undo     │
-│  - theme toggle, share links, educational guidance  │
+│  - single-column server-rendered shell               │
+│  - streamed verdict + Summary/Full signal rows       │
+│  - batch result list                                 │
+│  - in-flow IndexedDB history, export, re-scan, undo │
+│  - theme toggle, share links, trust routes           │
 └──────────────────────────────────────────────────────┘
 ```
 
@@ -233,7 +236,13 @@ interface AnalysisResult {
   metadata: ScanMetadata; // timing, cache hit, etc.
 }
 
-type Verdict = "safe" | "suspicious" | "malicious" | "critical" | "error";
+type Verdict =
+  | "safe"
+  | "suspicious"
+  | "malicious"
+  | "critical"
+  | "unknown"
+  | "error";
 
 interface SignalResults {
   virusTotal: SignalResult<VirusTotalData>;
@@ -290,15 +299,15 @@ BatchUpdate: { type: 'url_complete', url: string, result: AnalysisResult }
 Implementation note: batch streams also emit `batch_started`, `url_started`, and `batch_error`, with a concurrency limit of 3 URLs in flight.
 
 - **Error model:** `{ error: { code: string, message: string, retryable: boolean } }`
-- **Idempotency:** Cache-keyed by normalized URL. Same URL within TTL returns cached result (but new scan ID)
-- **Rate limits:** 10 req/min per IP, 50 req/day per IP (enforced in `proxy.ts` before analysis work starts)
+- **Idempotency:** Same normalized URL returns a cached result with a new scan ID only when a complete, non-partial result remains inside the 15-minute TTL
+- **Rate limits:** 10 tokens/min per IP, 50 tokens/day per IP. An admitted batch costs one token per URL; rejected requests cost one token (enforced in `proxy.ts` before analysis work starts)
 
 ### 4.4 State, caching, concurrency
 
 - **Source of truth:** Each scan is ephemeral server-side (computed, cached briefly, not persisted). Client-side IndexedDB is the only persistence layer
-- **Server cache:** LRU cache (200 items, 15-min TTL) keyed by normalized URL. Cache hit returns immediately, cache miss triggers full pipeline
+- **Server cache:** LRU cache (200 items, 15-min TTL) keyed by normalized URL, with optional shared Redis. Only complete, non-partial results are eligible; error, warning-degraded composite, incomplete redirect, partial-failure, and aborted scans always trigger fresh work. Composite `warnings` and redirect terminal errors represent lost coverage; informational feed notes use `observations`
 - **Concurrency:** Enrichment pipeline runs all 8 sources via `Promise.allSettled()`. Batch mode uses a concurrency limiter (max 3 URLs in-flight simultaneously to stay within API quotas)
-- **Hazards:** VT rate limit (4 req/min on free tier) — queue VT calls with backoff. HuggingFace inference can be slow on cold start — set 30s timeout
+- **Hazards:** VT rate limit (4 req/min on free tier) — queue VT calls with backoff. Bound bundled-model initialization to 10 seconds and each local inference to 2 seconds so cold starts cannot consume the full scan budget
 
 ### 4.5 Performance targets
 
@@ -310,22 +319,25 @@ Implementation note: batch streams also emit `batch_started`, `url_started`, and
 
 ### 4.6 Dependencies / integrations
 
-| Dependency                  | Type              | Free Tier                 | Failure Behavior                                                 |
-| --------------------------- | ----------------- | ------------------------- | ---------------------------------------------------------------- |
-| VirusTotal API v3           | External          | 4 req/min, 500 req/day    | Signal marked unavailable; verdict computed without it           |
-| HuggingFace Inference API   | External          | Rate limited, cold starts | Signal marked unavailable; lexical model still contributes       |
-| Google Safe Browsing API v4 | External          | 10k req/day               | Signal marked unavailable; verdict remains partial               |
-| URLhaus API                 | External          | Unlimited                 | Signal marked unavailable; verdict remains partial               |
-| OpenPhish feed              | External          | Public feed               | Signal marked unavailable; verdict remains partial               |
-| DNS resolution              | Self-computed     | N/A                       | Prefer success-with-observation over hard failure where possible |
-| SSL cert inspection         | Self-computed     | N/A                       | Prefer success-with-validation-state over hard failure           |
-| WHOIS lookup                | Self-computed/API | Varies                    | Prefer success-with-observation or skipped where applicable      |
-| Redirect chain              | Self-computed     | N/A                       | Prefer success-with-observation over hard failure where possible |
+| Dependency                   | Type              | Free Tier              | Failure Behavior                                                              |
+| ---------------------------- | ----------------- | ---------------------- | ----------------------------------------------------------------------------- |
+| VirusTotal API v3            | External          | 4 req/min, 500 req/day | One primary report request per uncached lookup; signal unavailable on failure |
+| Bundled URL classifier       | Self-computed     | N/A                    | Signal degrades to the lexical model on init/inference failure                |
+| Google Safe Browsing API v4  | External          | 10k req/day            | Signal marked unavailable; verdict remains partial                            |
+| URLhaus API                  | External          | Unlimited              | Signal marked unavailable; verdict remains partial                            |
+| OpenPhish feed               | External          | Public feed            | Signal marked unavailable; verdict remains partial                            |
+| ThreatFox API                | External          | abuse.ch account key   | Source warning recorded; other threat feeds still contribute                  |
+| Spamhaus DBL / SURBL DNSBL   | External DNS      | Public DNS             | Blocked/wildcard resolvers are treated as unavailable, not clean              |
+| DNS resolution               | Self-computed     | N/A                    | Prefer success-with-observation over hard failure where possible              |
+| SSL cert inspection          | Self-computed     | N/A                    | Prefer success-with-validation-state over hard failure                        |
+| WHOIS lookup                 | Self-computed/API | Varies                 | Prefer success-with-observation or skipped where applicable                   |
+| Redirect chain               | Self-computed     | N/A                    | Prefer success-with-observation over hard failure where possible              |
+| Public Suffix List (`tldts`) | Bundled data      | N/A                    | Fall back to the normalized host when no registrable domain exists            |
 
 ## 5) Security, Privacy, Compliance
 
 - **Authn/authz:** None. Anonymous usage. No user accounts
-- **PII:** No PII collected or stored server-side. URLs submitted are cached temporarily (15 min) then discarded. Client-side history is user-controlled
+- **PII:** No PII collected or stored server-side. URLs attached to eligible complete results may be cached for up to 15 minutes, then discarded; partial/error/aborted scans are not cached. Client-side history is user-controlled
 - **Public disclosure:** `/privacy` explains local history, hashed server logging, and client-only share links; `/about` explains the scoring and signal model
 - **Abuse cases + mitigations:**
 
@@ -342,18 +354,18 @@ Implementation note: batch streams also emit `batch_started`, `url_started`, and
 
 ### 6.1 Failure modes table
 
-| Failure                   | Detection                 | User Impact                   | System Behavior                                                        | Recovery                    | Blast Radius      |
-| ------------------------- | ------------------------- | ----------------------------- | ---------------------------------------------------------------------- | --------------------------- | ----------------- |
-| VT API down/timeout       | HTTP error / 30s timeout  | Missing VT signal             | Signal card shows "unavailable"                                        | Full scan rerun             | Single signal     |
-| VT rate limit exceeded    | 429 response              | Delayed/missing VT signal     | Surface partial coverage and keep verdict provisional                  | Retry after cooldown window | VT signal only    |
-| HF model cold start       | > 30s response            | Delayed ML signal             | Lexical scorer still returns a partial ML result                       | Full scan rerun             | ML signal only    |
-| HF model unavailable      | HTTP error                | Missing ML signal             | Hosted model warning; lexical scorer still contributes                 | Full scan rerun             | ML signal         |
-| Google Safe Browsing down | HTTP error                | Missing GSB signal            | Signal card shows "unavailable"                                        | Full scan rerun             | Single signal     |
-| DNS resolution failure    | Lookup error              | Reduced DNS coverage          | Prefer a caveat or unavailable state over a threat-colored failure     | None needed                 | DNS signal        |
-| SSL handshake failure     | Connection error          | Reduced TLS coverage          | Prefer validation-state or unavailable state without inventing malware | None needed                 | SSL signal        |
-| WHOIS lookup failure      | API error / timeout       | Reduced registration coverage | Show caveat / unavailable / skipped as appropriate                     | Full scan rerun             | WHOIS signal      |
-| All sources fail          | All signals error         | No useful analysis            | Show error state with a full rerun path                                | Full retry                  | Complete          |
-| Vercel function timeout   | 10s edge / 60s serverless | Partial results               | Stream whatever completed before timeout                               | Retry                       | Depends on timing |
+| Failure                   | Detection                      | User Impact                   | System Behavior                                                        | Recovery                    | Blast Radius      |
+| ------------------------- | ------------------------------ | ----------------------------- | ---------------------------------------------------------------------- | --------------------------- | ----------------- |
+| VT API down/timeout       | HTTP error / 30s timeout       | Missing VT signal             | Signal row shows "unavailable"                                         | Full scan rerun             | Single signal     |
+| VT rate limit exceeded    | 429 response                   | Delayed/missing VT signal     | Surface partial coverage and keep verdict provisional                  | Retry after cooldown window | VT signal only    |
+| Local model load slow     | Classifier budget exhausted    | Delayed/partial ML signal     | Lexical scorer still returns a partial ML result                       | Full scan rerun             | ML signal only    |
+| Local model unavailable   | Init or inference error        | Reduced ML coverage           | Local-model warning; lexical scorer still contributes                  | Full scan rerun             | ML signal         |
+| Google Safe Browsing down | HTTP error                     | Missing GSB signal            | Signal row shows "unavailable"                                         | Full scan rerun             | Single signal     |
+| DNS resolution failure    | Lookup error / bounded timeout | Reduced DNS coverage          | Prefer a caveat or unavailable state over a threat-colored failure     | None needed                 | DNS signal        |
+| SSL handshake failure     | Connection error               | Reduced TLS coverage          | Prefer validation-state or unavailable state without inventing malware | None needed                 | SSL signal        |
+| WHOIS lookup failure      | API error / timeout            | Reduced registration coverage | Show caveat / unavailable / skipped as appropriate                     | Full scan rerun             | WHOIS signal      |
+| All sources fail          | All signals error              | No useful analysis            | Show error state with a full rerun path                                | Full retry                  | Complete          |
+| Vercel function timeout   | 10s edge / 60s serverless      | Partial results               | Stream whatever completed before timeout                               | Retry                       | Depends on timing |
 
 ### 6.2 Retries/timeouts/circuit breakers
 
@@ -476,34 +488,34 @@ Then all content is readable and interactive without horizontal scrolling
 
 ## 10) Decision Log
 
-| Date       | Decision                                                                                  | Alternatives                              | Rationale                                                                                                      | Consequences                                                                   |
-| ---------- | ----------------------------------------------------------------------------------------- | ----------------------------------------- | -------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| 2026-03-04 | Complete greenfield rewrite                                                               | Incremental upgrade                       | Starting fresh reduced risk versus carrying forward broken assumptions and stale dependencies                  | Lose git history of old code                                                   |
-| 2026-03-04 | Next.js + Vercel (web-first)                                                              | SPA + separate API; Astro; Remix          | Web-first product, Vercel free tier fits budget, familiar ecosystem                                            | API not independently consumable                                               |
-| 2026-03-04 | Multi-model ML ensemble + threat feeds                                                    | Single model; drop ML; train own          | Multiple signals = higher confidence. Feeds catch known-bad URLs                                               | Higher aggregation complexity                                                  |
-| 2026-03-04 | Free APIs + self-computed enrichment                                                      | Premium threat intel APIs                 | Keeps the default deployment public, low-cost, and easy to self-host                                           | Less reliable data sources                                                     |
-| 2026-03-04 | IP-based rate limiting                                                                    | Token bucket + fingerprint; auth-based    | Simple, effective, no auth needed                                                                              | Shared IP could hit limits unfairly                                            |
-| 2026-03-04 | IndexedDB for history                                                                     | localStorage; server-side DB              | Richer than localStorage, no server cost, privacy-friendly                                                     | More complex, but idb library helps                                            |
-| 2026-03-04 | Streaming results                                                                         | Wait for all; polling                     | Best UX — data within seconds vs 30s+ wait                                                                     | More complex client/server impl                                                |
-| 2026-03-04 | Single-release initial launch                                                             | Phased; MVP + fast follow                 | Reduced coordination overhead while the public product surface was still being finalized                       | Longer time to first deploy                                                    |
-| 2026-03-04 | Modern bold aesthetic                                                                     | Dark hacker; clinical; brutalist          | Stands out, avoids AI-slop, signals quality                                                                    | Need custom design investment                                                  |
-| 2026-03-04 | Full test pyramid                                                                         | E2E only; unit + integration; minimal     | Security tool demands confidence                                                                               | More upfront test writing                                                      |
-| 2026-03-06 | Upgrade to the latest stable Next/React baseline                                          | Stay on Next 14.1                         | Existing baseline was already stale and carried known vulnerabilities plus removed tooling assumptions         | Re-scaffold was required                                                       |
-| 2026-03-06 | Use NDJSON over fetch for streaming contracts                                             | SSE; wait-for-all JSON                    | Works cleanly with App Router route handlers and shared client parsers                                         | Client needs a stream reader                                                   |
-| 2026-03-06 | Keep public `whois` signal name but implement via RDAP-style registration data            | Raw WHOIS only; rename the signal         | Preserves the user-facing contract while avoiding brittle raw WHOIS assumptions                                | UI copy should mention registration lookup rather than raw WHOIS where needed  |
-| 2026-03-06 | Add Upstash-backed `proxy.ts` rate limiting with an in-memory degraded fallback           | Dev/prod in-memory only                   | Shared state is preferred for deployed abuse controls, but the app should remain usable when Redis is absent   | Multi-instance deployments lose shared rate-limit state until Upstash is set   |
-| 2026-03-06 | Add production security headers in `next.config.ts`                                       | no CSP; reverse-proxy-only hardening      | The app renders untrusted URL text and should ship browser-enforced guardrails alongside safe React rendering  | CSP must allow Next runtime scripts and local dev websocket connections        |
-| 2026-03-06 | Switch hosted classifier to Hugging Face router + `DunnBC22/codebert-base-Malicious_URLs` | Keep retired endpoint/model; lexical only | The old Hugging Face inference host was retired and the previous model was not served on the supported router  | Hosted ML depends on a currently routed third-party model                      |
-| 2026-03-09 | Add onboarding/trust surfaces on `/`, `/about`, and `/privacy`                            | Tool-only landing page                    | The UI audit showed that first-time visitors lacked value framing, methodology context, and privacy disclosure | Slightly larger static surface area that must stay aligned with implementation |
+| Date       | Decision                                                                                  | Alternatives                              | Rationale                                                                                                      | Consequences                                                                    |
+| ---------- | ----------------------------------------------------------------------------------------- | ----------------------------------------- | -------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| 2026-03-04 | Complete greenfield rewrite                                                               | Incremental upgrade                       | Starting fresh reduced risk versus carrying forward broken assumptions and stale dependencies                  | Lose git history of old code                                                    |
+| 2026-03-04 | Next.js + Vercel (web-first)                                                              | SPA + separate API; Astro; Remix          | Web-first product, Vercel free tier fits budget, familiar ecosystem                                            | API not independently consumable                                                |
+| 2026-03-04 | Multi-model ML ensemble + threat feeds                                                    | Single model; drop ML; train own          | Multiple signals = higher confidence. Feeds catch known-bad URLs                                               | Higher aggregation complexity                                                   |
+| 2026-03-04 | Free APIs + self-computed enrichment                                                      | Premium threat intel APIs                 | Keeps the default deployment public, low-cost, and easy to self-host                                           | Less reliable data sources                                                      |
+| 2026-03-04 | IP-based rate limiting                                                                    | Token bucket + fingerprint; auth-based    | Simple, effective, no auth needed                                                                              | Shared IP could hit limits unfairly                                             |
+| 2026-03-04 | IndexedDB for history                                                                     | localStorage; server-side DB              | Richer than localStorage, no server cost, privacy-friendly                                                     | More complex, but idb library helps                                             |
+| 2026-03-04 | Streaming results                                                                         | Wait for all; polling                     | Best UX — data within seconds vs 30s+ wait                                                                     | More complex client/server impl                                                 |
+| 2026-03-04 | Single-release initial launch                                                             | Phased; MVP + fast follow                 | Reduced coordination overhead while the public product surface was still being finalized                       | Longer time to first deploy                                                     |
+| 2026-03-04 | Modern bold aesthetic                                                                     | Dark hacker; clinical; brutalist          | Stands out, avoids AI-slop, signals quality                                                                    | Need custom design investment                                                   |
+| 2026-03-04 | Full test pyramid                                                                         | E2E only; unit + integration; minimal     | Security tool demands confidence                                                                               | More upfront test writing                                                       |
+| 2026-03-06 | Upgrade to the latest stable Next/React baseline                                          | Stay on Next 14.1                         | Existing baseline was already stale and carried known vulnerabilities plus removed tooling assumptions         | Re-scaffold was required                                                        |
+| 2026-03-06 | Use NDJSON over fetch for streaming contracts                                             | SSE; wait-for-all JSON                    | Works cleanly with App Router route handlers and shared client parsers                                         | Client needs a stream reader                                                    |
+| 2026-03-06 | Keep public `whois` signal name but implement via RDAP-style registration data            | Raw WHOIS only; rename the signal         | Preserves the user-facing contract while avoiding brittle raw WHOIS assumptions                                | UI copy should mention registration lookup rather than raw WHOIS where needed   |
+| 2026-03-06 | Add Upstash-backed `proxy.ts` rate limiting with an in-memory degraded fallback           | Dev/prod in-memory only                   | Shared state is preferred for deployed abuse controls, but the app should remain usable when Redis is absent   | Multi-instance deployments lose shared rate-limit state until Upstash is set    |
+| 2026-03-06 | Add production security headers in `next.config.ts`                                       | no CSP; reverse-proxy-only hardening      | The app renders untrusted URL text and should ship browser-enforced guardrails alongside safe React rendering  | CSP must allow Next runtime scripts and local dev websocket connections         |
+| 2026-03-06 | Switch hosted classifier to Hugging Face router + `DunnBC22/codebert-base-Malicious_URLs` | Keep retired endpoint/model; lexical only | The old Hugging Face inference host was retired and the previous model was not served on the supported router  | Hosted ML depends on a currently routed third-party model                       |
+| 2026-08-01 | Replace hosted inference with a bundled quantized ONNX URL classifier                     | Keep router dependency; lexical only      | Hosted inference was unreliable and made scan coverage depend on a third-party runtime                         | Larger deployment artifact; deterministic local inference with bounded fallback |
+| 2026-03-09 | Add onboarding/trust surfaces on `/`, `/about`, and `/privacy`                            | Tool-only landing page                    | The UI audit showed that first-time visitors lacked value framing, methodology context, and privacy disclosure | Slightly larger static surface area that must stay aligned with implementation  |
 
 ## 11) Assumptions, Open Questions, Risks
 
 ### Assumptions
 
 - VirusTotal free tier (4 req/min, 500 req/day) is sufficient for initial public traffic
-- HuggingFace Inference API will remain free for the models we select
 - Google Safe Browsing API free tier (10k req/day) is more than adequate
-- URLhaus and the OpenPhish public feed remain accessible
+- URLhaus, OpenPhish, ThreatFox, and DNSBL sources remain accessible enough for best-effort feed coverage
 - Vercel Hobby plan ($0) or Pro plan ($20/mo) covers compute needs
 - Self-computed signals (DNS, SSL, redirect) can execute within Vercel serverless function limits (60s timeout)
 
@@ -518,7 +530,7 @@ Then all content is readable and interactive without horizontal scrolling
 | Risk                                  | Likelihood | Impact | Mitigation                                                                       |
 | ------------------------------------- | ---------- | ------ | -------------------------------------------------------------------------------- |
 | VT free tier quota exhausted          | Medium     | High   | Rate limiting + caching + partial-failure-safe verdicts                          |
-| Hugging Face hosted inference drifts  | Medium     | Medium | Keep the lexical scorer as a local fallback and surface hosted-model errors      |
+| Bundled model init/artifact drift     | Low        | Medium | Verify the checked-in model offline and retain lexical-only degradation          |
 | RDAP source instability               | Medium     | Medium | Treat registration data as one signal, not a hard requirement for completion     |
 | Upstash credentials missing in deploy | Medium     | Medium | Process-local fallback keeps the app usable, but shared rate-limit state is lost |
 | Real preview environment drift        | Low        | Medium | Preview and production deployments were both validated on Vercel                 |

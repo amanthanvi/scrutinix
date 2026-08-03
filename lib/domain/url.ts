@@ -83,7 +83,10 @@ export function normalizeUrlInput(input: string): UrlValidationResult {
 }
 
 export function createCacheKey(normalizedUrl: string) {
-  return normalizedUrl.toLowerCase();
+  // The WHATWG URL parser already lowercased the hostname during
+  // normalization. Lowercasing the whole URL here would collide distinct
+  // case-sensitive paths (/AdminPanel vs /adminpanel) onto one entry.
+  return normalizedUrl;
 }
 
 export function formatDisplayUrl(url: string) {

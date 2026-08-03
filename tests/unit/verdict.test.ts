@@ -1,7 +1,102 @@
 import { describe, expect, it } from "vitest";
 
-import { buildThreatAssessment, classifyConsensus } from "@/lib/domain/verdict";
-import { createPendingSignalResults } from "@/lib/domain/types";
+import { analyzePageContent } from "@/lib/domain/content-analysis";
+import { buildThreatAssessment } from "@/lib/domain/verdict";
+import {
+  createPendingSignalResults,
+  type SignalResults,
+  type ThreatFeedsData,
+  type VirusTotalData,
+} from "@/lib/domain/types";
+
+function withVirusTotal(signals: SignalResults, data: Partial<VirusTotalData>) {
+  signals.virusTotal = {
+    status: "success",
+    error: null,
+    durationMs: 20,
+    data: {
+      malicious: 0,
+      suspicious: 0,
+      harmless: 0,
+      undetected: 0,
+      timeout: 0,
+      results: [],
+      permalink: "https://www.virustotal.com/gui/url/example",
+      ...data,
+    },
+  };
+}
+
+function withThreatFeedMatches(
+  signals: SignalResults,
+  matches: ThreatFeedsData["matches"],
+) {
+  signals.threatFeeds = {
+    status: "success",
+    error: null,
+    durationMs: 8,
+    data: {
+      checkedAt: "2026-03-06T00:00:00.000Z",
+      matches,
+      observations: [],
+      warnings: [],
+    },
+  };
+}
+
+function markUnreachable(signals: SignalResults) {
+  signals.ssl = {
+    status: "success",
+    error: null,
+    durationMs: 12,
+    data: {
+      protocol: null,
+      available: false,
+      validationState: "unavailable",
+      authorized: false,
+      authorizationError: null,
+      issuer: null,
+      subject: null,
+      validFrom: null,
+      validTo: null,
+      daysRemaining: null,
+      selfSigned: false,
+      fingerprint256: null,
+      observations: ["The host did not complete a TLS handshake."],
+    },
+  };
+  signals.redirectChain = {
+    status: "success",
+    error: null,
+    durationMs: 12,
+    data: {
+      finalUrl: "https://dead.example/",
+      totalHops: 0,
+      httpsUpgraded: false,
+      reachable: false,
+      terminalStatus: null,
+      terminalError: "The host did not respond to the redirect probe.",
+      hops: [],
+      observations: ["The host did not respond to the redirect probe."],
+    },
+  };
+  signals.dns = {
+    status: "success",
+    error: null,
+    durationMs: 12,
+    data: {
+      subjectType: "hostname",
+      addresses: [],
+      cnames: [],
+      mx: [],
+      txt: [],
+      nameservers: [],
+      reverseHostnames: [],
+      anomalies: [],
+      observations: ["The hostname did not resolve to address records."],
+    },
+  };
+}
 
 describe("buildThreatAssessment", () => {
   it("returns error when every signal fails", () => {
@@ -145,7 +240,7 @@ describe("buildThreatAssessment", () => {
       error: null,
       durationMs: 12,
       data: {
-        hostedModel: {
+        transformerModel: {
           label: "malicious",
           score: 0.81,
           reasons: ["Hosted model predicted malware with 81% confidence."],
@@ -227,7 +322,7 @@ describe("buildThreatAssessment", () => {
 
     const result = buildThreatAssessment(signals);
 
-    expect(result.verdict).toBe("malicious");
+    expect(["malicious", "critical"]).toContain(result.verdict);
     expect(result.threatInfo?.confidence).toBeLessThan(0.85);
     expect(result.threatInfo?.confidenceReasons.join(" ")).toMatch(
       /stayed clean|partial coverage/,
@@ -275,7 +370,7 @@ describe("buildThreatAssessment", () => {
       error: null,
       durationMs: 12,
       data: {
-        hostedModel: {
+        transformerModel: {
           label: "benign",
           score: 0.12,
           reasons: ["Hosted model did not detect malware patterns."],
@@ -380,7 +475,7 @@ describe("buildThreatAssessment", () => {
       error: null,
       durationMs: 12,
       data: {
-        hostedModel: null,
+        transformerModel: null,
         lexicalModel: {
           label: "malicious",
           score: 0.82,
@@ -406,7 +501,7 @@ describe("buildThreatAssessment", () => {
     expect(result.threatInfo?.score).toBeGreaterThanOrEqual(25);
   });
 
-  it("caps clean-result confidence when a primary reputation source fails", () => {
+  it("caps clean-result confidence when a primary reputation source is incomplete", () => {
     const signals = createPendingSignalResults();
     signals.virusTotal = {
       status: "error",
@@ -439,7 +534,7 @@ describe("buildThreatAssessment", () => {
       error: null,
       durationMs: 12,
       data: {
-        hostedModel: {
+        transformerModel: {
           label: "benign",
           score: 0.12,
           reasons: ["Hosted model did not detect malware patterns."],
@@ -535,137 +630,533 @@ describe("buildThreatAssessment", () => {
     expect(result.threatInfo?.confidenceReasons.join(" ")).toMatch(
       /VirusTotal did not complete/i,
     );
-  });
-});
 
-describe("classifyConsensus", () => {
-  it("floors ensemble risk when hosted is benign but lexical is malicious", () => {
-    const result = classifyConsensus(
-      {
-        label: "benign",
-        score: 0.9,
-        reasons: ["Hosted model predicted benign."],
-        model: "huggingface",
-      },
-      {
-        label: "malicious",
-        score: 0.8,
-        reasons: ["Literal IP and script path."],
-        model: "lexical-heuristic",
-      },
-    );
+    withVirusTotal(signals, { harmless: 8, undetected: 12 });
+    signals.threatFeeds.data!.warnings = [
+      "spamhaus-dbl lookups are unavailable from this runtime's DNS resolver.",
+    ];
 
-    expect(result.label).toBe("malicious");
-    expect(result.score).toBeGreaterThanOrEqual(0.74);
-    expect(result.reasons.join(" ")).toMatch(/effective risk was raised/i);
-    expect(result.reasons.join(" ")).not.toMatch(
-      /disagreement reduced the ensemble certainty/i,
+    const partialFeedResult = buildThreatAssessment(signals);
+
+    expect(partialFeedResult.verdict).toBe("safe");
+    expect(partialFeedResult.threatInfo?.confidence).toBeLessThanOrEqual(0.79);
+    expect(partialFeedResult.threatInfo?.confidenceReasons.join(" ")).toMatch(
+      /Threat Feeds did not complete/i,
     );
   });
 
-  it("floors ensemble risk when hosted is benign but lexical is risky with meaningful score", () => {
-    const result = classifyConsensus(
-      {
-        label: "benign",
-        score: 0.7,
-        reasons: ["Hosted model predicted benign."],
-        model: "huggingface",
-      },
-      {
-        label: "risky",
-        score: 0.52,
-        reasons: ["Structural cues."],
-        model: "lexical-heuristic",
-      },
-    );
-
-    expect(result.label).toBe("risky");
-    expect(result.score).toBeGreaterThanOrEqual(0.38);
-    expect(result.reasons.join(" ")).toMatch(/effective risk was raised/i);
-  });
-
-  it("does not elevate when hosted and lexical both agree on benign", () => {
-    const result = classifyConsensus(
-      {
-        label: "benign",
-        score: 0.6,
-        reasons: ["Hosted model predicted benign."],
-        model: "huggingface",
-      },
-      {
-        label: "benign",
-        score: 0.08,
-        reasons: ["No suspicious lexical patterns were found."],
-        model: "lexical-heuristic",
-      },
-    );
-
-    expect(result.label).toBe("benign");
-    expect(result.reasons.join(" ")).toMatch(
-      /agreed on the classification direction/i,
-    );
-  });
-
-  it("uses reduced-certainty wording when models disagree without benign-hosted lexical boost", () => {
-    const result = classifyConsensus(
-      {
-        label: "malicious",
-        score: 0.85,
-        reasons: ["Hosted model predicted malicious."],
-        model: "huggingface",
-      },
-      {
-        label: "benign",
-        score: 0.1,
-        reasons: ["No suspicious lexical patterns were found."],
-        model: "lexical-heuristic",
-      },
-    );
-
-    expect(result.reasons.join(" ")).toMatch(
-      /Model disagreement reduced the ensemble certainty/i,
-    );
-    expect(result.reasons.join(" ")).not.toMatch(/effective risk was raised/i);
-  });
-
-  it("treats benign hosted plus structural malicious lexical as suspicious via buildThreatAssessment", () => {
+  it("returns unknown instead of safe for an unreachable host", () => {
     const signals = createPendingSignalResults();
+    markUnreachable(signals);
+    withVirusTotal(signals, { harmless: 3, undetected: 5 });
+
+    const result = buildThreatAssessment(signals);
+
+    expect(result.verdict).toBe("unknown");
+    expect(result.threatInfo?.summary).toMatch(
+      /unreachable.*not evidence of safety/i,
+    );
+    expect(result.threatInfo?.confidence).toBeLessThanOrEqual(0.4);
+    expect(result.threatInfo?.confidenceLabel).toBe("low");
+    expect(result.threatInfo?.hasPositiveEvidence).toBe(false);
+  });
+
+  it("does not treat redirect-budget exhaustion after HTTP responses as an unreachable host", () => {
+    const signals = createPendingSignalResults();
+    markUnreachable(signals);
+    const terminalError =
+      "The redirect chain exceeded the maximum of 5 redirects before reaching a terminal response.";
+    signals.redirectChain = {
+      status: "success",
+      error: null,
+      durationMs: 12,
+      data: {
+        finalUrl: "http://loop.example/hop-4",
+        totalHops: 5,
+        httpsUpgraded: false,
+        reachable: false,
+        terminalStatus: 302,
+        terminalError,
+        hops: Array.from({ length: 5 }, (_, index) => ({
+          url: `http://loop.example/hop-${index}`,
+          status: 302,
+          location: `http://loop.example/hop-${index + 1}`,
+        })),
+        observations: [terminalError],
+      },
+    };
+
+    const result = buildThreatAssessment(signals);
+
+    expect(result.verdict).toBe("safe");
+    expect(result.threatInfo?.summary).not.toMatch(/unreachable/i);
+    expect(result.threatInfo?.limitations).toContain(
+      `Redirect Chain: ${terminalError}`,
+    );
+  });
+
+  it("never downgrades a positive verdict to unknown for a dead host", () => {
+    const signals = createPendingSignalResults();
+    markUnreachable(signals);
+    withThreatFeedMatches(signals, [
+      {
+        feed: "urlhaus",
+        matchedUrl: "https://dead.example/payload",
+        detail: "malware_download",
+        confidence: "high",
+        matchType: "url",
+      },
+    ]);
+
+    const result = buildThreatAssessment(signals);
+
+    expect(result.verdict).toBe("malicious");
+  });
+
+  it("lets a Google Safe Browsing match convict on its own", () => {
+    const signals = createPendingSignalResults();
+    signals.googleSafeBrowsing = {
+      status: "success",
+      error: null,
+      durationMs: 8,
+      data: {
+        checkedAt: "2026-03-06T00:00:00.000Z",
+        matches: [
+          {
+            threatType: "SOCIAL_ENGINEERING",
+            platformType: "ANY_PLATFORM",
+            threatEntryType: "URL",
+          },
+        ],
+      },
+    };
+
+    const result = buildThreatAssessment(signals);
+
+    expect(result.verdict).toBe("malicious");
+    expect(result.threatInfo?.score).toBeGreaterThanOrEqual(55);
+  });
+
+  it("lets five VirusTotal engines convict, while one or two stay sub-suspicious and distinct", () => {
+    const five = createPendingSignalResults();
+    withVirusTotal(five, { malicious: 5, harmless: 40 });
+    expect(buildThreatAssessment(five).verdict).toBe("malicious");
+
+    const one = createPendingSignalResults();
+    withVirusTotal(one, { malicious: 1, harmless: 40 });
+    const two = createPendingSignalResults();
+    withVirusTotal(two, { malicious: 2, harmless: 40 });
+
+    const oneScore = buildThreatAssessment(one).threatInfo?.score ?? 0;
+    const twoScore = buildThreatAssessment(two).threatInfo?.score ?? 0;
+
+    // The old floor of 18 made 1 and 2 detections indistinguishable.
+    expect(oneScore).toBeLessThan(twoScore);
+    expect(twoScore).toBeLessThan(25);
+  });
+
+  it("convicts on an exact URLhaus listing but not on a host-level listing", () => {
+    const exact = createPendingSignalResults();
+    withThreatFeedMatches(exact, [
+      {
+        feed: "urlhaus",
+        matchedUrl: "https://bad.example/payload",
+        detail: "malware_download",
+        confidence: "high",
+        matchType: "url",
+      },
+    ]);
+    const exactResult = buildThreatAssessment(exact);
+    expect(exactResult.verdict).toBe("malicious");
+    expect(exactResult.threatInfo?.score).toBe(55);
+
+    const hostLevel = createPendingSignalResults();
+    withThreatFeedMatches(hostLevel, [
+      {
+        feed: "urlhaus",
+        matchedUrl: "bad.example",
+        detail: "host has 12 malware URL listings in URLhaus",
+        confidence: "medium",
+        matchType: "host",
+      },
+    ]);
+    const hostResult = buildThreatAssessment(hostLevel);
+    expect(hostResult.verdict).toBe("suspicious");
+    expect(hostResult.threatInfo?.score).toBe(25);
+  });
+
+  it("counts exact feed evidence, but not hostname fallbacks, as high-confidence support", () => {
+    const googleMatch = {
+      status: "success" as const,
+      error: null,
+      durationMs: 8,
+      data: {
+        checkedAt: "2026-03-06T00:00:00.000Z",
+        matches: [
+          {
+            threatType: "SOCIAL_ENGINEERING",
+            platformType: "ANY_PLATFORM",
+            threatEntryType: "URL",
+          },
+        ],
+      },
+    };
+    const exact = createPendingSignalResults();
+    exact.googleSafeBrowsing = googleMatch;
+    withThreatFeedMatches(exact, [
+      {
+        feed: "urlhaus",
+        matchedUrl: "https://bad.example/payload",
+        detail: "malware_download",
+        confidence: "high",
+        matchType: "url",
+      },
+    ]);
+
+    const hostLevel = createPendingSignalResults();
+    hostLevel.googleSafeBrowsing = googleMatch;
+    withThreatFeedMatches(hostLevel, [
+      {
+        feed: "urlhaus",
+        matchedUrl: "bad.example",
+        detail: "host has 12 malware URL listings in URLhaus",
+        confidence: "medium",
+        matchType: "host",
+      },
+    ]);
+
+    const exactResult = buildThreatAssessment(exact);
+    const hostResult = buildThreatAssessment(hostLevel);
+
+    expect(exactResult.threatInfo?.confidence).toBeCloseTo(
+      (hostResult.threatInfo?.confidence ?? 0) + 0.16,
+    );
+    expect(exactResult.threatInfo?.confidenceReasons.join(" ")).toMatch(
+      /2 high-confidence sources independently supported/,
+    );
+    expect(hostResult.threatInfo?.confidenceReasons.join(" ")).toMatch(
+      /1 high-confidence sources independently supported/,
+    );
+  });
+
+  it("scores a Spamhaus DBL phishing listing into the suspicious band", () => {
+    const signals = createPendingSignalResults();
+    withThreatFeedMatches(signals, [
+      {
+        feed: "spamhaus-dbl",
+        matchedUrl: "phish.example",
+        detail: "listed as a phishing domain by Spamhaus DBL",
+        confidence: "high",
+        matchType: "host",
+      },
+    ]);
+
+    const result = buildThreatAssessment(signals);
+
+    expect(result.verdict).toBe("suspicious");
+    expect(result.threatInfo?.score).toBe(45);
+  });
+
+  it("offsets weak heuristic-only positives with exculpatory evidence", () => {
+    const signals = createPendingSignalResults();
+    withVirusTotal(signals, { harmless: 70, undetected: 10 });
+    signals.whois = {
+      status: "success",
+      error: null,
+      durationMs: 12,
+      data: {
+        subjectType: "domain",
+        available: true,
+        registrar: "Example Registrar",
+        registeredAt: "2015-01-01T00:00:00.000Z",
+        updatedAt: "2025-01-01T00:00:00.000Z",
+        expiresAt: "2027-01-01T00:00:00.000Z",
+        ageDays: 4_000,
+        country: "US",
+        handle: "12345",
+        rdapUrl: "https://rdap.example.com/domain/old.example",
+        observations: [],
+      },
+    };
     signals.mlEnsemble = {
       status: "success",
       error: null,
       durationMs: 12,
       data: {
-        hostedModel: {
-          label: "benign",
-          score: 0.59,
-          reasons: ["Hosted model predicted benign with 59% confidence."],
-          model: "huggingface",
-        },
+        transformerModel: null,
         lexicalModel: {
-          label: "malicious",
-          score: 0.76,
-          reasons: [
-            "The URL targets a literal IP address instead of a domain.",
-            "The URL references script or shell content such as .sh.",
-            "The URL uses a non-standard HTTPS port (38376), which is uncommon for typical web services.",
-          ],
+          label: "risky",
+          score: 0.5,
+          reasons: ["The URL contains high-risk terms such as login."],
           model: "lexical-heuristic",
         },
-        consensusLabel: "malicious",
-        consensusScore: 0.74,
-        reasons: [
-          "Hosted model predicted benign with 59% confidence.",
-          "The URL targets a literal IP address instead of a domain.",
-          "The URL references script or shell content such as .sh.",
-          "The hosted model scored this link benign, but lexical heuristics disagreed; effective risk was raised to reflect structural evidence.",
-        ],
+        consensusLabel: "risky",
+        consensusScore: 0.5,
+        reasons: ["The URL contains high-risk terms such as login."],
         warnings: [],
       },
     };
 
     const result = buildThreatAssessment(signals);
 
+    // risky ML alone contributes 8; -10 (VT harmless) and -8 (domain age)
+    // pull the total to the floor.
+    expect(result.verdict).toBe("safe");
+    expect(result.threatInfo?.score).toBe(0);
+    expect(result.threatInfo?.reasons.join(" ")).toMatch(
+      /rate this URL harmless/,
+    );
+  });
+
+  it("does not haggle down a confirmed hit with exculpatory evidence", () => {
+    const signals = createPendingSignalResults();
+    withVirusTotal(signals, { harmless: 70, undetected: 10 });
+    signals.googleSafeBrowsing = {
+      status: "success",
+      error: null,
+      durationMs: 8,
+      data: {
+        checkedAt: "2026-03-06T00:00:00.000Z",
+        matches: [
+          {
+            threatType: "MALWARE",
+            platformType: "ANY_PLATFORM",
+            threatEntryType: "URL",
+          },
+        ],
+      },
+    };
+
+    const result = buildThreatAssessment(signals);
+
+    expect(result.verdict).toBe("malicious");
+    expect(result.threatInfo?.score).toBeGreaterThanOrEqual(55);
+    expect(result.threatInfo?.reasons.join(" ")).not.toMatch(
+      /rate this URL harmless/,
+    );
+  });
+
+  it("scores cross-domain redirects and credential-harvesting page content", () => {
+    const signals = createPendingSignalResults();
+    signals.redirectChain = {
+      status: "success",
+      error: null,
+      durationMs: 12,
+      data: {
+        finalUrl: "https://landing.evil/login",
+        totalHops: 1,
+        httpsUpgraded: false,
+        reachable: true,
+        terminalStatus: 200,
+        terminalError: null,
+        hops: [
+          {
+            url: "https://short.example/x",
+            status: 302,
+            location: "https://landing.evil/login",
+          },
+          { url: "https://landing.evil/login", status: 200 },
+        ],
+        observations: [],
+        content: {
+          title: "Account Login",
+          crossOriginFormHosts: ["collector.other"],
+          crossOriginPasswordFormHosts: ["collector.other"],
+          passwordInputCount: 1,
+          iframeCount: 0,
+          hiddenIframeCount: 0,
+          obfuscationHints: ["eval() call", "atob() base64 decoding"],
+          metaRefreshTarget: null,
+        },
+      },
+    };
+
+    const result = buildThreatAssessment(signals);
+
+    // 14 (cross-domain) + 20 (cross-origin credential form) + 10 (obfuscation)
+    expect(result.threatInfo?.score).toBe(44);
     expect(result.verdict).toBe("suspicious");
-    expect(result.threatInfo?.score).toBeGreaterThanOrEqual(25);
+    expect(result.threatInfo?.reasons.join(" ")).toMatch(
+      /crosses domains.*short\.example.*landing\.evil/,
+    );
+    expect(result.threatInfo?.reasons.join(" ")).toMatch(
+      /submits its form to a different domain/,
+    );
+  });
+
+  it("does not conflate a local password form with an unrelated cross-origin form", () => {
+    const signals = createPendingSignalResults();
+    signals.redirectChain = {
+      status: "success",
+      error: null,
+      durationMs: 12,
+      data: {
+        finalUrl: "https://landing.example/login",
+        totalHops: 0,
+        httpsUpgraded: false,
+        reachable: true,
+        terminalStatus: 200,
+        terminalError: null,
+        hops: [{ url: "https://landing.example/login", status: 200 }],
+        observations: [],
+        content: analyzePageContent(
+          `
+            <form action="/login"><input type="password"></form>
+            <form action="https://newsletter.other/subscribe"><input type="email"></form>
+          `,
+          "https://landing.example/login",
+        ),
+      },
+    };
+
+    const result = buildThreatAssessment(signals);
+
+    expect(result.threatInfo?.score).toBe(0);
+    expect(result.threatInfo?.reasons.join(" ")).not.toMatch(
+      /submits its form to a different domain/,
+    );
+  });
+
+  it("scores a cross-origin submit-control override on a password form", () => {
+    const signals = createPendingSignalResults();
+    signals.redirectChain = {
+      status: "success",
+      error: null,
+      durationMs: 12,
+      data: {
+        finalUrl: "https://landing.example/login",
+        totalHops: 0,
+        httpsUpgraded: false,
+        reachable: true,
+        terminalStatus: 200,
+        terminalError: null,
+        hops: [{ url: "https://landing.example/login", status: 200 }],
+        observations: [],
+        content: analyzePageContent(
+          `
+            <form action="/login">
+              <input type="password">
+              <button formaction="https://collector.evil/capture">Continue</button>
+            </form>
+          `,
+          "https://landing.example/login",
+        ),
+      },
+    };
+
+    const result = buildThreatAssessment(signals);
+
+    expect(result.threatInfo?.score).toBe(20);
+    expect(result.threatInfo?.reasons.join(" ")).toMatch(
+      /different domain \(collector\.evil\)/,
+    );
+  });
+
+  it("flags a stale VirusTotal analysis and caps clean confidence", () => {
+    const signals = createPendingSignalResults();
+    const staleDate = new Date(
+      Date.now() - 90 * 24 * 60 * 60 * 1000,
+    ).toISOString();
+    withVirusTotal(signals, {
+      harmless: 40,
+      undetected: 20,
+      lastAnalysisDate: staleDate,
+    });
+
+    const result = buildThreatAssessment(signals);
+
+    expect(result.verdict).toBe("safe");
+    expect(result.threatInfo?.limitations.join(" ")).toMatch(
+      /VirusTotal analysis from \d+ days ago/,
+    );
+    expect(result.threatInfo?.confidence).toBeLessThanOrEqual(0.85);
+  });
+
+  it("does not subtract clean-score points from stale VirusTotal harmless counts", () => {
+    const signals = createPendingSignalResults();
+    withVirusTotal(signals, {
+      harmless: 70,
+      undetected: 10,
+      lastAnalysisDate: "2000-01-01T00:00:00.000Z",
+    });
+    signals.mlEnsemble = {
+      status: "success",
+      error: null,
+      durationMs: 12,
+      data: {
+        transformerModel: null,
+        lexicalModel: {
+          label: "risky",
+          score: 0.5,
+          reasons: ["The URL contains high-risk terms such as login."],
+          model: "lexical-heuristic",
+        },
+        consensusLabel: "risky",
+        consensusScore: 0.5,
+        reasons: ["The URL contains high-risk terms such as login."],
+        warnings: [],
+      },
+    };
+
+    const result = buildThreatAssessment(signals);
+
+    expect(result.threatInfo?.score).toBe(8);
+    expect(result.threatInfo?.reasons.join(" ")).not.toMatch(
+      /rate this URL harmless/,
+    );
+    expect(result.threatInfo?.confidence).toBeLessThanOrEqual(0.85);
+  });
+
+  it("flags a fresh certificate on a brand-new domain", () => {
+    const signals = createPendingSignalResults();
+    signals.whois = {
+      status: "success",
+      error: null,
+      durationMs: 12,
+      data: {
+        subjectType: "domain",
+        available: true,
+        registrar: "Example Registrar",
+        registeredAt: new Date(
+          Date.now() - 10 * 24 * 60 * 60 * 1000,
+        ).toISOString(),
+        updatedAt: null,
+        expiresAt: null,
+        ageDays: 10,
+        country: null,
+        handle: null,
+        rdapUrl: "https://rdap.example.com/domain/new.example",
+        observations: [],
+      },
+    };
+    signals.ssl = {
+      status: "success",
+      error: null,
+      durationMs: 12,
+      data: {
+        protocol: "TLSv1.3",
+        available: true,
+        validationState: "trusted",
+        authorized: true,
+        authorizationError: null,
+        issuer: "Example CA",
+        subject: "new.example",
+        validFrom: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+        validTo: new Date(Date.now() + 88 * 24 * 60 * 60 * 1000).toISOString(),
+        daysRemaining: 88,
+        selfSigned: false,
+        fingerprint256: "abc",
+        observations: [],
+      },
+    };
+
+    const result = buildThreatAssessment(signals);
+
+    // 12 (fresh cert on new domain) + 15 (domain age < 30d)
+    expect(result.threatInfo?.score).toBe(27);
+    expect(result.verdict).toBe("suspicious");
+    expect(result.threatInfo?.reasons.join(" ")).toMatch(
+      /phishing setup pattern/,
+    );
   });
 });

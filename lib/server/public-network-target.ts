@@ -18,11 +18,18 @@ export type PublicNetworkTargetResult =
       error: string;
     };
 
+export interface PublicNetworkTargetOptions {
+  signal?: AbortSignal;
+  timeoutMs?: number;
+}
+
 const BLOCKED_TARGET_MESSAGE =
   "The active network probe was blocked because the target resolves to a private, local, multicast, or reserved network address.";
+const DNS_LOOKUP_TIMEOUT_MS = 10_000;
 
 export async function assertPublicNetworkTarget(
   urlOrHostname: string | URL,
+  options: PublicNetworkTargetOptions = {},
 ): Promise<PublicNetworkTargetResult> {
   const hostname = normalizeHostname(
     urlOrHostname instanceof URL
@@ -45,13 +52,56 @@ export async function assertPublicNetworkTarget(
 
   let records: Array<{ address: string }>;
 
+  const aborted = Symbol("DNS lookup aborted");
+  const timedOut = Symbol("DNS lookup timed out");
+  let onAbort: (() => void) | undefined;
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  const interruptionPromise = new Promise<never>((_, reject) => {
+    onAbort = () => reject(aborted);
+    if (options.signal?.aborted) {
+      onAbort();
+      return;
+    }
+    options.signal?.addEventListener("abort", onAbort, { once: true });
+    timeout = setTimeout(
+      () => reject(timedOut),
+      Math.max(0, options.timeoutMs ?? DNS_LOOKUP_TIMEOUT_MS),
+    );
+  });
+
   try {
-    records = await lookup(hostname, { all: true, verbatim: true });
-  } catch {
+    records = await Promise.race([
+      lookup(hostname, { all: true, verbatim: true }),
+      interruptionPromise,
+    ]);
+  } catch (error) {
+    if (error === aborted) {
+      return {
+        ok: false,
+        error:
+          "The hostname resolution was cancelled before the active network probe could start.",
+      };
+    }
+
+    if (error === timedOut) {
+      return {
+        ok: false,
+        error:
+          "The hostname resolution exceeded the active network probe time budget.",
+      };
+    }
+
     return {
       ok: false,
       error: "The hostname could not be resolved for the active network probe.",
     };
+  } finally {
+    if (onAbort) {
+      options.signal?.removeEventListener("abort", onAbort);
+    }
+    if (timeout) {
+      clearTimeout(timeout);
+    }
   }
 
   const addresses = records.map((record) => record.address);
@@ -109,8 +159,15 @@ function normalizeHostname(hostname: string) {
   return trimmed;
 }
 
+/**
+ * Cap active probes at one IPv4 plus one IPv6 address. Hosts with many A
+ * records would otherwise multiply per-address timeouts into minutes of
+ * probing for no additional evidence.
+ */
 export function selectPublicProbeAddresses(
   resolution: PublicNetworkTargetResolution,
 ) {
-  return resolution.addresses;
+  const ipv4 = resolution.addresses.find((address) => isIP(address) === 4);
+  const ipv6 = resolution.addresses.find((address) => isIP(address) === 6);
+  return [ipv4, ipv6].filter((address): address is string => Boolean(address));
 }

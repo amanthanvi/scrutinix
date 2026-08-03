@@ -3,6 +3,7 @@ import type { NextRequest } from "next/server";
 
 import { buildContentSecurityPolicy, createCspNonce } from "@/lib/server/csp";
 import { applyRateLimit, getClientRateLimitId } from "@/lib/server/rate-limit";
+import { getScanRequestCost } from "@/lib/server/scan-cost";
 
 export async function proxy(request: NextRequest) {
   if (request.nextUrl.pathname.startsWith("/api/analyze")) {
@@ -15,7 +16,10 @@ export async function proxy(request: NextRequest) {
 async function enforceRateLimit(request: NextRequest) {
   // Identity trusts platform/proxy headers; see getClientRateLimitId.
   const identifier = getClientRateLimitId(request.headers);
-  const limit = await applyRateLimit(identifier);
+  const limit = await applyRateLimit(
+    identifier,
+    await getScanRequestCost(request, request.nextUrl.pathname),
+  );
 
   if (!limit.success) {
     const retryAfter = Math.max(

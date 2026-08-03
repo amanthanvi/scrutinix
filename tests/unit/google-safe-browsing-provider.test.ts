@@ -27,10 +27,18 @@ describe("runGoogleSafeBrowsingProvider", () => {
     resetEnvForTests();
 
     const fetchMock = vi.fn(
-      async (input: RequestInfo | URL): Promise<Response> => {
+      async (
+        input: RequestInfo | URL,
+        init?: RequestInit,
+      ): Promise<Response> => {
         const u = typeof input === "string" ? input : input.toString();
         expect(u.includes("threatMatches:find")).toBe(true);
-        expect(u.includes("key=")).toBe(true);
+        // The key must travel in a header, never the query string, so it
+        // stays out of proxy/CDN access logs.
+        expect(u.includes("key=")).toBe(false);
+        expect(new Headers(init?.headers).get("x-goog-api-key")).toBe(
+          "gsb-test-key",
+        );
         return Response.json({
           matches: [
             {

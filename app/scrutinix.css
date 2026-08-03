@@ -1,14 +1,12 @@
-/* ── Scrutinix — minimal product tool ── */
+/* Scrutinix — minimal product tool */
 
 .scrutinix-theme {
-  --sx-ease: cubic-bezier(0.23, 1, 0.32, 1);
-
+  min-height: 100vh;
   background: var(--sx-bg);
   color: var(--sx-text);
-  min-height: 100vh;
 }
 
-/* Entry — already-visible default, @starting-style opt-in, interruptible */
+/* Entry — visible by default, @starting-style opt-in, interruptible. */
 .sx-enter {
   opacity: 1;
   translate: 0 0;
@@ -24,7 +22,6 @@
   }
 }
 
-/* Progress fill — transform-only; parent is the track, span is the fill */
 .sx-progress {
   height: 2px;
   overflow: hidden;
@@ -36,10 +33,10 @@
   height: 100%;
   background: var(--sx-accent);
   transform-origin: left;
-  transition: transform 250ms var(--sx-ease);
+  transition: transform 280ms var(--sx-ease);
 }
 
-/* Live indicator — the only infinite animation in the app */
+/* The live dot is the app's only infinite animation. */
 @keyframes sx-live {
   0%,
   100% {
@@ -54,7 +51,6 @@
   animation: sx-live 1.2s ease-in-out infinite;
 }
 
-/* Disclosure rows (native <details>) */
 .sx-disclosure > summary {
   cursor: pointer;
   list-style: none;
@@ -72,7 +68,6 @@
   rotate: 90deg;
 }
 
-/* Press feedback on all pressable elements */
 .sx-btn-press {
   transition:
     scale 160ms var(--sx-ease),
@@ -86,12 +81,14 @@
   scale: 0.97;
 }
 
+.sx-skip-link:focus-visible,
 .scrutinix-theme button:focus-visible,
 .scrutinix-theme input:focus-visible,
 .scrutinix-theme textarea:focus-visible,
 .scrutinix-theme a:focus-visible,
 .scrutinix-theme summary:focus-visible,
 .scrutinix-theme [role="tab"]:focus-visible,
+.scrutinix-theme [role="switch"]:focus-visible,
 .scrutinix-theme [tabindex]:focus-visible {
   outline: 2px solid var(--sx-focus-ring);
   outline-offset: 2px;
@@ -102,6 +99,7 @@
   top: 0.75rem;
   left: 1rem;
   z-index: 50;
+  min-height: 2.75rem;
   transform: translateY(-180%);
   border: 1px solid var(--sx-border);
   border-radius: var(--radius);
@@ -119,9 +117,9 @@
 
 @media (prefers-reduced-motion: reduce) {
   .sx-enter {
-    transition-property: opacity;
-    transition-duration: 150ms;
     translate: none;
+    transition-duration: 150ms;
+    transition-property: opacity;
   }
 
   .sx-live {

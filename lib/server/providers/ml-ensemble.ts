@@ -1,15 +1,11 @@
 import { isIP } from "node:net";
 
-import { getEnv } from "@/lib/config/env";
+import { classifyConsensus } from "@/lib/domain/ml-consensus";
 import type { ClassificationFinding, MLSignalData } from "@/lib/domain/types";
 import { getUrlStructureRisk } from "@/lib/domain/url-structure-risk";
-import { classifyConsensus } from "@/lib/domain/verdict";
 import { normalizeUrlInput } from "@/lib/domain/url";
-import { fetchWithTimeout } from "@/lib/server/http";
+import { classifyUrlLocally } from "@/lib/server/ml/local-classifier";
 import { getErrorMessage } from "@/lib/server/signal-error";
-
-const HUGGING_FACE_ROUTER_BASE =
-  "https://router.huggingface.co/hf-inference/models";
 
 const HIGH_RISK_KEYWORDS = [
   "login",
@@ -46,23 +42,27 @@ const EXECUTABLE_INDICATORS = [
 
 const RISKY_TLDS = new Set(["zip", "click", "top", "gq", "work", "country"]);
 
+// No AbortSignal: inference is local, offline, and bounded by its own
+// init/inference timeouts.
 export async function runMlEnsembleProvider(
   url: string,
 ): Promise<MLSignalData> {
   const lexicalModel = buildLexicalModel(url);
   const warnings: string[] = [];
-  let hostedModel: ClassificationFinding | null = null;
+  let transformerModel: ClassificationFinding | null = null;
 
   try {
-    hostedModel = await runHostedModel(url);
+    transformerModel = await classifyUrlLocally(url);
   } catch (error) {
-    warnings.push(getErrorMessage(error, "Hosted classifier failed."));
+    warnings.push(
+      `${getErrorMessage(error, "The local URL classifier failed.")} Falling back to lexical heuristics only.`,
+    );
   }
 
-  const consensus = classifyConsensus(hostedModel, lexicalModel);
+  const consensus = classifyConsensus(transformerModel, lexicalModel);
 
   return {
-    hostedModel,
+    transformerModel,
     lexicalModel,
     consensusLabel: consensus.label,
     consensusScore: consensus.score,
@@ -161,86 +161,5 @@ function buildLexicalModel(url: string): ClassificationFinding {
       ? reasons
       : ["No suspicious lexical patterns were found."],
     model: "lexical-heuristic",
-  };
-}
-
-async function runHostedModel(url: string): Promise<ClassificationFinding> {
-  const env = getEnv();
-  if (!env.HUGGINGFACE_API_KEY) {
-    throw new Error("Hugging Face API key is not configured.");
-  }
-
-  const response = await fetchWithTimeout(
-    `${HUGGING_FACE_ROUTER_BASE}/${env.HUGGINGFACE_URL_MODEL}`,
-    {
-      method: "POST",
-      headers: {
-        authorization: `Bearer ${env.HUGGINGFACE_API_KEY}`,
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({ inputs: url }),
-    },
-    12_000,
-  );
-
-  if (!response.ok) {
-    if (response.status === 404) {
-      throw new Error(
-        `Hosted classifier model "${env.HUGGINGFACE_URL_MODEL}" is not available from the Hugging Face router.`,
-      );
-    }
-
-    if (response.status === 410) {
-      throw new Error(
-        `Hosted classifier model "${env.HUGGINGFACE_URL_MODEL}" is deprecated by the Hugging Face provider.`,
-      );
-    }
-
-    throw new Error(`Hosted classifier failed with status ${response.status}.`);
-  }
-
-  const payload = await response.json();
-  const predictions = Array.isArray(payload?.[0])
-    ? payload[0]
-    : Array.isArray(payload)
-      ? payload
-      : [];
-  const topPrediction = predictions.reduce(
-    (
-      best: { label?: string; score?: number } | null,
-      item: { label?: string; score?: number },
-    ) => (!best || (item.score ?? 0) > (best.score ?? 0) ? item : best),
-    null,
-  );
-
-  if (!topPrediction?.label) {
-    throw new Error("Hosted classifier returned an unexpected payload.");
-  }
-
-  const normalizedLabel = topPrediction.label.toLowerCase();
-  const label =
-    normalizedLabel.includes("malicious") ||
-    normalizedLabel.includes("phish") ||
-    normalizedLabel.includes("malware") ||
-    normalizedLabel.includes("deface")
-      ? "malicious"
-      : normalizedLabel.includes("benign") ||
-          normalizedLabel.includes("safe") ||
-          normalizedLabel.includes("clean")
-        ? "benign"
-        : normalizedLabel.includes("risk") ||
-            normalizedLabel.includes("suspicious")
-          ? "risky"
-          : topPrediction.score && topPrediction.score > 0.45
-            ? "risky"
-            : "benign";
-
-  return {
-    label,
-    score: Number((topPrediction.score ?? 0).toFixed(2)),
-    reasons: [
-      `Hosted model predicted ${topPrediction.label} with ${((topPrediction.score ?? 0) * 100).toFixed(0)}% confidence.`,
-    ],
-    model: "huggingface",
   };
 }

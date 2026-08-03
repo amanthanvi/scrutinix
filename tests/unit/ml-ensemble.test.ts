@@ -1,115 +1,76 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { classifyUrlLocally } from "@/lib/server/ml/local-classifier";
 import { runMlEnsembleProvider } from "@/lib/server/providers/ml-ensemble";
 
+vi.mock("@/lib/server/ml/local-classifier", () => ({
+  classifyUrlLocally: vi.fn(),
+}));
+
+const classifierMock = vi.mocked(classifyUrlLocally);
+
 describe("runMlEnsembleProvider", () => {
-  afterEach(() => {
-    vi.restoreAllMocks();
+  beforeEach(() => {
+    classifierMock.mockReset();
   });
 
-  it("maps the supported Hugging Face router payload to a malicious verdict", async () => {
-    vi.stubEnv("HUGGINGFACE_API_KEY", "hf-test-key");
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(
-        JSON.stringify([
-          [
-            { label: "phishing", score: 0.91 },
-            { label: "benign", score: 0.09 },
-          ],
-        ]),
-        {
-          status: 200,
-          headers: {
-            "content-type": "application/json",
-          },
-        },
-      ),
-    );
+  it("combines a phishing transformer call with risky lexical structure", async () => {
+    classifierMock.mockResolvedValue({
+      label: "malicious",
+      score: 0.91,
+      reasons: [
+        "The local URL model classified this link as phishing with 91% confidence.",
+      ],
+      model: "urlbert-tiny-v4-phishing-q8",
+    });
 
     const result = await runMlEnsembleProvider(
       "https://xn--secure-account.top/login/verify/update?token=%2Fabc",
     );
 
-    expect(result.hostedModel).toMatchObject({
+    expect(result.transformerModel).toMatchObject({
       label: "malicious",
-      model: "huggingface",
+      model: "urlbert-tiny-v4-phishing-q8",
     });
     expect(result.lexicalModel.label).toBe("risky");
     expect(result.consensusLabel).toBe("malicious");
-    expect(globalThis.fetch).toHaveBeenCalledWith(
-      expect.stringContaining(
-        "https://router.huggingface.co/hf-inference/models/",
-      ),
-      expect.objectContaining({
-        method: "POST",
-      }),
+    expect(classifierMock).toHaveBeenCalledWith(
+      "https://xn--secure-account.top/login/verify/update?token=%2Fabc",
     );
   });
 
-  it("surfaces an explicit warning when the configured model is not hosted", async () => {
-    vi.stubEnv("HUGGINGFACE_API_KEY", "hf-test-key");
-    vi.stubEnv("HUGGINGFACE_URL_MODEL", "missing/model");
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response("Not Found", { status: 404 }),
-    );
-
-    const result = await runMlEnsembleProvider("https://example.com/");
-
-    expect(result.hostedModel).toBeNull();
-    expect(result.warnings[0]).toContain("is not available");
-  });
-
-  it("keeps benign hosted predictions benign even when their class confidence is above 45%", async () => {
-    vi.stubEnv("HUGGINGFACE_API_KEY", "hf-test-key");
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(
-        JSON.stringify([
-          [
-            { label: "benign", score: 0.59 },
-            { label: "phishing", score: 0.41 },
-          ],
-        ]),
-        {
-          status: 200,
-          headers: {
-            "content-type": "application/json",
-          },
-        },
-      ),
-    );
-
-    const result = await runMlEnsembleProvider("https://example.com/");
-
-    expect(result.hostedModel).toMatchObject({
+  it("keeps benign transformer predictions benign for clean URLs", async () => {
+    classifierMock.mockResolvedValue({
       label: "benign",
+      score: 0.99,
+      reasons: [
+        "The local URL model classified this link as benign with 99% confidence.",
+      ],
+      model: "urlbert-tiny-v4-phishing-q8",
     });
+
+    const result = await runMlEnsembleProvider("https://example.com/");
+
+    expect(result.transformerModel).toMatchObject({ label: "benign" });
     expect(result.consensusLabel).toBe("benign");
+    expect(result.warnings).toEqual([]);
   });
 
-  it("elevates IP, non-default HTTPS port, and script path when hosted model is benign", async () => {
-    vi.stubEnv("HUGGINGFACE_API_KEY", "hf-test-key");
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(
-        JSON.stringify([
-          [
-            { label: "benign", score: 0.88 },
-            { label: "malicious", score: 0.12 },
-          ],
-        ]),
-        {
-          status: 200,
-          headers: {
-            "content-type": "application/json",
-          },
-        },
-      ),
-    );
+  it("elevates IP, non-default HTTPS port, and script path over a benign transformer call", async () => {
+    classifierMock.mockResolvedValue({
+      label: "benign",
+      score: 0.88,
+      reasons: [
+        "The local URL model classified this link as benign with 88% confidence.",
+      ],
+      model: "urlbert-tiny-v4-phishing-q8",
+    });
 
     const result = await runMlEnsembleProvider(
       "https://15.58.86.110:38376/bin.sh",
     );
 
-    expect(result.hostedModel).toMatchObject({ label: "benign" });
+    expect(result.transformerModel).toMatchObject({ label: "benign" });
     expect(result.lexicalModel.label).toBe("malicious");
     expect(result.consensusLabel).toBe("malicious");
     expect(result.lexicalModel.reasons.join(" ")).toMatch(
@@ -117,17 +78,17 @@ describe("runMlEnsembleProvider", () => {
     );
   });
 
-  it("elevates literal-IP executable paths even when the hosted model is unavailable", async () => {
-    vi.stubEnv("HUGGINGFACE_API_KEY", "hf-test-key");
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response("gateway error", { status: 502 }),
+  it("falls back to lexical heuristics with a warning when the classifier fails", async () => {
+    classifierMock.mockRejectedValue(
+      new Error("Local URL classifier initialization timed out after 10000ms"),
     );
 
     const result = await runMlEnsembleProvider(
       "https://45.151.155.223/x86_64?download=setup",
     );
 
-    expect(result.hostedModel).toBeNull();
+    expect(result.transformerModel).toBeNull();
+    expect(result.warnings[0]).toMatch(/Falling back to lexical heuristics/);
     expect(result.lexicalModel.label).toBe("malicious");
     expect(result.consensusLabel).toBe("malicious");
     expect(result.lexicalModel.reasons.join(" ")).toMatch(

@@ -5,14 +5,9 @@ import {
   type Verdict,
 } from "@/lib/domain/types";
 
-export const SIGNAL_COUNT = signalNames.length;
+export type { SharedSnapshot } from "@/lib/domain/types";
 
-export interface SharedSnapshot {
-  verdict: Verdict;
-  url: string;
-  summary: string;
-  capturedAt: string;
-}
+export const SIGNAL_COUNT = signalNames.length;
 
 /** AA-contrast text color for a stated verdict. */
 export function verdictFg(verdict: Verdict | string): string {
@@ -25,11 +20,14 @@ export function verdictFg(verdict: Verdict | string): string {
       return "var(--sx-malicious-fg)";
     case "critical":
       return "var(--sx-critical-fg)";
+    case "unknown":
+      return "var(--sx-info-fg)";
+    case "error":
+      return "var(--sx-error-fg)";
     default:
       return "var(--sx-error-fg)";
   }
 }
-
 export type Severity =
   | "safe"
   | "neutral"

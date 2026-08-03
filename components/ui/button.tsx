@@ -7,7 +7,7 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
-  "sx-btn-press inline-flex shrink-0 items-center justify-center gap-1.5 rounded-md border border-transparent text-[0.8125rem]/relaxed font-medium whitespace-nowrap outline-none select-none disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-3.5",
+  "sx-btn-press inline-flex min-h-11 shrink-0 items-center justify-center gap-1.5 rounded-md border border-transparent text-[0.8125rem]/relaxed font-medium whitespace-nowrap outline-none select-none disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-3.5",
   {
     variants: {
       variant: {
@@ -20,7 +20,7 @@ const buttonVariants = cva(
       size: {
         default: "h-8 px-3",
         sm: "h-7 px-2",
-        icon: "size-8 px-0 py-0",
+        icon: "size-8 min-w-11 px-0 py-0",
       },
     },
     defaultVariants: {
@@ -53,4 +53,4 @@ function Button({
   );
 }
 
-export { Button, buttonVariants };
+export { Button };

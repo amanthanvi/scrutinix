@@ -2,6 +2,8 @@ import { expect, test } from "@playwright/test";
 
 import { createPendingSignalResults } from "@/lib/domain/types";
 
+import { gotoApp, submitSingleScan } from "./helpers";
+
 const legacyHistoryEntry = buildLegacyHistoryEntry();
 
 test("legacy history migrates into the Scrutinix database @smoke", async ({
@@ -45,8 +47,7 @@ test("legacy history migrates into the Scrutinix database @smoke", async ({
     { entry: legacyHistoryEntry },
   );
 
-  await page.goto("/", { waitUntil: "domcontentloaded" });
-  await page.waitForTimeout(1_000);
+  await gotoApp(page);
 
   const historyRegion = page.getByRole("region", { name: /scan history/i });
   await expect(historyRegion.getByText(/legacy\.example/i)).toBeVisible();
@@ -88,7 +89,7 @@ function buildLegacyHistoryEntry() {
     error: null,
     durationMs: 14,
     data: {
-      hostedModel: null,
+      transformerModel: null,
       lexicalModel: {
         label: "benign",
         score: 0.08,
@@ -231,27 +232,34 @@ function buildLegacyHistoryEntry() {
 }
 
 test("single scan flow @smoke", async ({ page }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
-  await page.waitForTimeout(1_000);
+  await gotoApp(page);
 
   const singleUrlInput = page.getByRole("textbox", {
     name: /url to analyze/i,
   });
   await expect(page.getByRole("tab", { name: /^single$/i })).toBeVisible();
   await expect(singleUrlInput).toBeVisible();
-  await expect(page.getByRole("button", { name: /^analyze$/i })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: /analyze url/i }),
+  ).toBeVisible();
   await expect(
     page.getByRole("region", { name: /scan history/i }),
   ).toBeVisible();
 
-  await expect(async () => {
-    await singleUrlInput.fill("example.com");
-    await expect(singleUrlInput).toHaveValue("example.com");
-  }).toPass();
-  await page.getByRole("button", { name: /^analyze$/i }).click();
+  await submitSingleScan(page, "example.com");
 
   await expect(page.getByText(/example\.com/i).first()).toBeVisible();
   await expect(page.getByLabel(/VirusTotal signal:/i)).toBeVisible();
+  const signalView = page.getByRole("switch", {
+    name: /show full signal list/i,
+  });
+  await expect(signalView).toHaveAttribute("aria-checked", "false");
+  await expect(signalView.getByText("Summary")).toBeVisible();
+  await expect(signalView.getByText("Full")).toBeVisible();
+  await signalView.click();
+  await expect(signalView).toHaveAttribute("aria-checked", "true");
+  await expect(page.getByLabel(/DNS Profile signal:/i)).toBeVisible();
+  await expect(page.getByLabel(/Redirect Chain signal:/i)).toBeVisible();
   await expect(page.getByRole("meter", { name: /threat score/i })).toBeVisible({
     timeout: 30_000,
   });
@@ -261,8 +269,7 @@ test("single scan flow @smoke", async ({ page }) => {
 });
 
 test("batch scan flow @smoke", async ({ page }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
-  await page.waitForTimeout(1_000);
+  await gotoApp(page);
 
   await page.getByRole("tab", { name: /^batch$/i }).click();
   const batchInput = page.getByRole("textbox", {
@@ -278,14 +285,9 @@ test("batch scan flow @smoke", async ({ page }) => {
 });
 
 test("history clear can be undone @smoke", async ({ page }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
-  await page.waitForTimeout(1_000);
+  await gotoApp(page);
 
-  const singleUrlInput = page.getByRole("textbox", {
-    name: /url to analyze/i,
-  });
-  await singleUrlInput.fill("example.com");
-  await page.getByRole("button", { name: /^analyze$/i }).click();
+  await submitSingleScan(page, "example.com");
 
   const historyRegion = page.getByRole("region", { name: /scan history/i });
   await expect(historyRegion.getByText(/example\.com/i).first()).toBeVisible();

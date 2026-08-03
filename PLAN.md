@@ -1,14 +1,13 @@
 # PLAN.md
 
 Living execution plan for Scrutinix. This file reflects the implemented ship
-state plus the 2026-03-23 public-repo polish follow-up after the rename
-cleanup.
+state plus the current analysis-hardening and review-remediation work.
 
 > **Superseded — 2026-08 minimal redesign.** The frontend entries below
 > describe the pre-redesign UI and are kept as history. The shipped system is
 > now a single-column minimal shell (`max-w-[44rem]`): no two-column
-> workspace, no sticky history rail, no Summary/Full toggle (per-row
-> `<details>` disclosure replaced it), no verdict-driven accent. `DESIGN.md`
+> workspace, no sticky history rail, an accessible Summary/Full signal switch
+> over per-row `<details>` disclosure, and no verdict-driven accent. `DESIGN.md`
 > is the current source of truth for the visual system; `CLAUDE.md` for the
 > component map.
 
@@ -22,17 +21,20 @@ cleanup.
 ## Current Snapshot
 
 - Date: 2026-08-02
-- Execution status: `2026-08 minimal frontend redesign shipped on PR #13`
+- Execution status: `P21 analysis expansion and P22 interface simplification review remediation in progress`
 - Platform:
-  - Next.js `16.2.10`
+  - Next.js `16.2.12`
   - React `19.2.x`
-  - Node `22 LTS`
+  - Node `22.23.2 LTS` (`.nvmrc`; deploy compatibility remains `22.x`)
   - NDJSON streaming over `fetch`
 - Architecture:
   - `proxy.ts` enforces rate limits on `/api/analyze` request paths.
   - Node.js route handlers orchestrate eight signals and stream normalized results.
   - IndexedDB stores client-only history, export state, and re-scan sources.
-  - The home page renders scanner-first in a single centered column (2026-08 redesign): scan form, verdict block, eight signal rows, and in-flow history. Method and caveat notes live on `/about`, not under the home scanner.
+  - The ML ensemble uses a bundled quantized ONNX URL classifier plus lexical heuristics; scans do not call hosted inference.
+  - Threat-feed coverage combines URLhaus, cached OpenPhish, ThreatFox, and Spamhaus DBL / SURBL DNSBL lookups.
+  - Complete, non-partial results use a 15-minute process-local LRU plus optional shared Redis cache; error, partial-failure, and aborted results are never reused.
+  - The home page renders as a scanner-first, single-column product tool in a `44rem` shell: scan form, verdict, Summary/Full signal rows, and local history in one flow. Method and caveat notes live on `/about`.
   - The public site now shares one editorial shell across `/`, `/about`, and `/privacy`, so the trust, methodology, and privacy surfaces stay visually aligned with the scanner.
   - The UI now uses the actual pulled shadcn preset `b1D24VYe` as its baseline language: neutral `radix-mira` tokens, compact controls, and smaller radii adapted onto the branded `components/scrutinix/*` surface.
   - Dark/light theme tokens stay in `app/globals.css`, while `app/scrutinix.css` is now limited to the lighter motion/effects layer needed for live scan states.
@@ -51,7 +53,8 @@ Completed local verification:
 - `npm run typecheck`
 - `npm run test:unit -- --run`
 - `npm run test:integration -- --run`
-- `npm run test:e2e -- --grep @smoke`
+- `npm run test:dom -- --run`
+- `npm run test:e2e`
 - `npm run build`
 - `npm audit`
 - `npm run lighthouse`
@@ -65,15 +68,16 @@ Completed deployment verification:
 
 Observed results:
 
-- Unit tests: `8` files passed, `27` tests passed.
-- Integration tests: `2` files passed, `6` tests passed, including batch per-URL failure isolation.
-- Playwright smoke: `6` tests passed, covering legacy history migration, single-scan, batch-scan, accessibility, keyboard navigation, and history clear undo.
+- Unit tests: `29` files passed, `198` tests passed.
+- Integration tests: `2` files passed, `30` tests passed, including full-origin authorization, exact-host ThreatFox isolation, batch per-URL failure isolation, disconnect cancellation, warning/redirect-degraded provider recovery (including URLhaus exact and host fallback outages), and incomplete DNSBL coverage propagation.
+- DOM tests: `5` files passed, `15` tests passed.
+- Playwright: `9` tests passed, covering legacy history migration, single-scan, Summary/Full signals, batch-scan, accessibility, keyboard navigation, history undo, and fixture-backed verdicts.
 - Production build: passed with static metadata routes for `/icon`, `/opengraph-image`, `/robots.txt`, and `/sitemap.xml`.
 - Security audit: `0` vulnerabilities reported across prod and dev dependencies after the 2026-05-01 dependency refresh.
 - Lighthouse:
   - Performance `0.91`
   - Accessibility `1.00`
-  - Best Practices `1.00`
+  - Best Practices `0.96`
   - SEO `1.00`
 - Vercel preview deployments: protected and verified via `vercel inspect`
 - Vercel production deployment: `Ready` at `https://www.scrutinix.net`
@@ -88,8 +92,39 @@ Observed results:
 
 ### P20 Advisory wave execute (001-006)
 
-- [x] Merged local advisor branches on dvisor/execute-all-merge: 006 (incl. 004), 001, 002, 003, 005.
-- See plans/README.md for DONE status and per-plan detail.
+- [x] Merged local advisor branches on `advisor/execute-all-merge`: 006 (incl. 004), 001, 002, 003, 005.
+- Historical executor plans and their per-plan details remain available in git history.
+
+### P21 Expand local intelligence and verification
+
+- [x] Replace hosted ML inference with a bundled quantized ONNX classifier plus lexical consensus.
+- [x] Add ThreatFox and DNSBL coverage inside the existing eight-signal contract.
+- [x] Use the Public Suffix List, including private suffixes, for registrable-domain feed and redirect boundaries.
+- [x] Preserve the VirusTotal free-tier request budget by limiting each uncached report lookup to the primary URL endpoint.
+- [x] Report redirect-limit exhaustion without presenting an unprobed destination as reachable.
+- [x] Restrict brand-impersonation exemptions to known official registrable domains, including across private hosting suffixes.
+- [x] Resolve form and submit-control destinations against the document's effective base URL and require password inputs to belong to the submitting form before scoring credential posts.
+- [x] Resolve relative meta-refresh targets against the same effective document base.
+- [x] Accept only the documented JSON media type, with parameters, at scan request boundaries.
+- [x] Charge rejected requests one rate-limit token while preserving per-URL weighting for admitted batches.
+- [x] Count only high-quality threat-feed matches as high-confidence verdict corroboration.
+- [x] Keep terminal HTML capture inside the redirect signal's aggregate deadline.
+- [x] Preserve fresh provider recovery by never caching partial, error, or aborted scans.
+- [x] Treat composite-signal warnings as partial coverage so warning-degraded scans also bypass the cache.
+- [x] Keep redirect exhaustion truthful, cache-ineligible, and distinct from a wholly uninspectable host.
+- [x] Include unreachable-host `unknown` verdicts in history filtering.
+- [x] Centralize runtime schemas and harden request, stream, history, cache, and provider boundaries.
+- [x] Expand unit, integration, DOM, fixture-backed E2E, CI, and dependency-audit coverage.
+- [-] Resolve external review findings, run the full verification chain, and land the reviewed PR stack.
+
+### P22 Simplify the scanner interface
+
+- [x] Replace the dashboard/card composition with a minimal single-column scan, verdict, signal, and history flow.
+- [x] Keep one static accent and reserve verdict colors for stated verdict/severity facts.
+- [x] Preserve the accessible Summary/Full signal control and at least 44px interactive targets.
+- [x] Keep batch, history, export, share, re-scan, unknown verdict, and partial-coverage behavior intact.
+- [x] Reconcile privacy and architecture copy with server-side scan processing and client-only history.
+- [-] Complete the merged validation and external review loop before landing.
 
 ### P01 Reset the baseline and living docs
 
@@ -124,22 +159,25 @@ Observed results:
 - [x] DNS enrichment.
 - [x] TLS/certificate enrichment.
 - [x] Redirect chain enrichment.
+- [x] Bound active-probe hostname resolution by the scan signal and each signal's aggregate time budget.
 - [x] RDAP-backed registration enrichment behind the public `whois` signal name.
 
 ### P06 Implement external threat intel and classifier adapters
 
 - [x] VirusTotal adapter.
+- [x] Keep VirusTotal URL-report lookups to one request per uncached report path; omit optional domain enrichment that would double free-tier consumption.
 - [x] Google Safe Browsing adapter.
 - [x] URLhaus adapter.
 - [x] OpenPhish cached feed ingestion.
 - [x] Remove the deprecated PhishTank path and standardize on the OpenPhish community feed.
-- [x] Hosted Hugging Face classifier plus local lexical scorer ensemble.
+- [x] Bundled quantized ONNX classifier plus local lexical scorer fallback; no hosted inference dependency.
 
 ### P07 Build orchestration and streaming APIs
 
 - [x] Shared orchestration service for all eight signals.
 - [x] `POST /api/analyze` NDJSON stream.
 - [x] `POST /api/analyze/batch` NDJSON stream with concurrency cap of `3`.
+- [x] Stop dispatching queued batch items when the client disconnects.
 - [x] Cache-aware short-circuit path with fresh scan IDs on cached hits.
 - [x] Final verdict logic that never fabricates threat info on total failure.
 
@@ -271,4 +309,5 @@ Observed results:
 - 2026-05-01: Next `16.2.4` resolves the direct Next advisories but still pins vulnerable `postcss`; keep the npm `overrides` block until upstream package pins move past the audited vulnerable leaves.
 - 2026-05-01: Active network probes must validate every resolved address and pin outbound sockets to the validated public address; checking only the hostname or first DNS answer leaves room for private-address redirects and rebinding.
 - 2026-05-01: Cache only complete non-error analysis results; a clean verdict with provider partial failures can otherwise mask upstream outages for the full cache TTL.
+- 2026-08-02: Registrable-domain comparisons must include private Public Suffix List entries so unrelated platform tenants such as `safe.github.io` never collapse to `github.io`.
 - 2026-05-01: Keeping parallel PRs out of `PLAN.md` avoided artificial merge conflicts; use one consolidated plan update after the code branches land.

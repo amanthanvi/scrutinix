@@ -1,11 +1,5 @@
 import type { Verdict } from "@/lib/domain/types";
 
-export const THREAT_SCORE_MARKERS = [
-  { value: 25, label: "SUSP" },
-  { value: 55, label: "MAL" },
-  { value: 80, label: "CRIT" },
-] as const;
-
 export function threatScoreToVerdict(score: number): Verdict {
   if (score >= 80) {
     return "critical";
