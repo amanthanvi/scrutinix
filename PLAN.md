@@ -60,7 +60,7 @@ Completed deployment verification:
 
 Observed results:
 
-- Unit tests: `29` files passed, `189` tests passed.
+- Unit tests: `29` files passed, `190` tests passed.
 - Integration tests: `2` files passed, `27` tests passed, including full-origin authorization, exact-host ThreatFox isolation, batch per-URL failure isolation, disconnect cancellation, warning/redirect-degraded provider recovery, and incomplete DNSBL coverage propagation.
 - DOM tests: `5` files passed, `13` tests passed.
 - Playwright: `9` tests passed, covering legacy history migration, single-scan, batch-scan, accessibility, keyboard navigation, history undo, and fixture-backed verdicts.
