@@ -21,7 +21,7 @@ state plus the landed analysis-hardening and review-remediation work.
 ## Current Snapshot
 
 - Date: 2026-08-10
-- Execution status: `P21/P22 landed and locally verified; P23 workflow landed, remote execution blocked by disabled GitHub Actions`
+- Execution status: `P21/P22 landed and verified; P23 browser-gate workflow enabled and remotely verified`
 - Platform:
   - Next.js `16.2.12`
   - React `19.2.x`
@@ -41,7 +41,7 @@ state plus the landed analysis-hardening and review-remediation work.
   - Body typography defaults to Geist Sans, while mono styling is reserved for telemetry, timings, hashes, and other code-like labels.
   - Favicons and manifest are now served from checked-in assets under `public/` instead of a generated `app/icon.tsx` route.
   - Production headers include CSP, permissions policy, referrer policy, and anti-sniff/frame protections.
-  - The CI workflow is configured to run fixture-backed Playwright plus blocking Lighthouse Performance `>= 0.90` and Accessibility `>= 0.95` gates against an explicitly provisioned Chromium executable; repository-level GitHub Actions execution is currently disabled.
+  - Pull requests and `main` pushes run fixture-backed Playwright plus blocking Lighthouse Performance `>= 0.90` and Accessibility `>= 0.95` gates against an explicitly provisioned Chromium executable.
 - Intentional baseline decision:
   - `package-lock.json` drift from the platform refresh bootstrap was kept intentionally because the project was fully re-scaffolded onto the new dependency graph.
 
@@ -133,7 +133,7 @@ Observed results:
 - [x] Provision one Chromium installation explicitly and pass its executable path to Playwright and `chrome-launcher`.
 - [x] Make Lighthouse Performance `>= 0.90` and Accessibility `>= 0.95` blocking thresholds.
 - [x] Pass the full CI-equivalent validation locally on Node 22.23.2, including browser smoke and Lighthouse.
-- [!] Re-enable repository-level GitHub Actions and validate the final `main` workflow; external review and local CI-equivalent validation passed, but remote workflow execution is disabled.
+- [x] Re-enable repository-level GitHub Actions and validate the final `main` workflow after external review and local CI-equivalent validation.
 
 ### P01 Reset the baseline and living docs
 
@@ -320,5 +320,5 @@ Observed results:
 - 2026-05-01: Cache only complete non-error analysis results; a clean verdict with provider partial failures can otherwise mask upstream outages for the full cache TTL.
 - 2026-08-02: Registrable-domain comparisons must include private Public Suffix List entries so unrelated platform tenants such as `safe.github.io` never collapse to `github.io`.
 - 2026-08-10: Resolved the seven-PR queue by merging the six current implementation/dependency PRs and closing the conflicted, superseded spec-reconciliation draft; the final aggregate passed the full local CI-equivalent chain on Node 22.23.2.
-- 2026-08-10: GitHub Actions is disabled at the repository level even though the CI and Lighthouse workflows are active in the tree; browser-gate enforcement remains blocked until that repository setting is re-enabled and the final `main` workflow passes.
+- 2026-08-10: Re-enabled repository-level GitHub Actions after clearing the open PR queue; the final `main` CI workflow passed install, audit, format, lint, typecheck, unit/integration/DOM tests, build, fixture-backed Playwright, and Lighthouse.
 - 2026-05-01: Keeping parallel PRs out of `PLAN.md` avoided artificial merge conflicts; use one consolidated plan update after the code branches land.
