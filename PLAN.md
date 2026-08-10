@@ -1,7 +1,7 @@
 # PLAN.md
 
 Living execution plan for Scrutinix. This file reflects the implemented ship
-state plus the current analysis-hardening and review-remediation work.
+state plus the landed analysis-hardening and review-remediation work.
 
 > **Superseded — 2026-08 minimal redesign.** The frontend entries below
 > describe the pre-redesign UI and are kept as history. The shipped system is
@@ -20,8 +20,8 @@ state plus the current analysis-hardening and review-remediation work.
 
 ## Current Snapshot
 
-- Date: 2026-08-02
-- Execution status: `P21 analysis expansion and P22 interface simplification review remediation in progress`
+- Date: 2026-08-10
+- Execution status: `P21/P22 landed and locally verified; P23 workflow landed, remote execution blocked by disabled GitHub Actions`
 - Platform:
   - Next.js `16.2.12`
   - React `19.2.x`
@@ -41,7 +41,7 @@ state plus the current analysis-hardening and review-remediation work.
   - Body typography defaults to Geist Sans, while mono styling is reserved for telemetry, timings, hashes, and other code-like labels.
   - Favicons and manifest are now served from checked-in assets under `public/` instead of a generated `app/icon.tsx` route.
   - Production headers include CSP, permissions policy, referrer policy, and anti-sniff/frame protections.
-  - Pull requests and `main` pushes run fixture-backed Playwright plus blocking Lighthouse Performance `>= 0.90` and Accessibility `>= 0.95` gates against an explicitly provisioned Chromium executable.
+  - The CI workflow is configured to run fixture-backed Playwright plus blocking Lighthouse Performance `>= 0.90` and Accessibility `>= 0.95` gates against an explicitly provisioned Chromium executable; repository-level GitHub Actions execution is currently disabled.
 - Intentional baseline decision:
   - `package-lock.json` drift from the platform refresh bootstrap was kept intentionally because the project was fully re-scaffolded onto the new dependency graph.
 
@@ -74,9 +74,9 @@ Observed results:
 - DOM tests: `5` files passed, `15` tests passed.
 - Playwright: `9` tests passed, covering legacy history migration, single-scan, Summary/Full signals, batch-scan, accessibility, keyboard navigation, history undo, and fixture-backed verdicts.
 - Production build: passed with static metadata routes for `/icon`, `/opengraph-image`, `/robots.txt`, and `/sitemap.xml`.
-- Security audit: `0` vulnerabilities reported across prod and dev dependencies after the 2026-05-01 dependency refresh.
+- Security audit: `0` vulnerabilities reported across prod and dev dependencies after the 2026-08-10 dependency refresh.
 - Lighthouse:
-  - Performance `0.93`
+  - Performance `0.91`
   - Accessibility `1.00`
   - Best Practices `0.96`
   - SEO `1.00`
@@ -116,7 +116,7 @@ Observed results:
 - [x] Include unreachable-host `unknown` verdicts in history filtering.
 - [x] Centralize runtime schemas and harden request, stream, history, cache, and provider boundaries.
 - [x] Expand unit, integration, DOM, fixture-backed E2E, CI, and dependency-audit coverage.
-- [-] Resolve external review findings, run the full verification chain, and land the reviewed PR stack.
+- [x] Resolve external review findings, run the full verification chain, and land the reviewed PR stack.
 
 ### P22 Simplify the scanner interface
 
@@ -125,15 +125,15 @@ Observed results:
 - [x] Preserve the accessible Summary/Full signal control and at least 44px interactive targets.
 - [x] Keep batch, history, export, share, re-scan, unknown verdict, and partial-coverage behavior intact.
 - [x] Reconcile privacy and architecture copy with server-side scan processing and client-only history.
-- [-] Complete the merged validation and external review loop before landing.
+- [x] Complete the merged validation and external review loop before landing.
 
 ### P23 Enforce browser quality gates on every change
 
-- [x] Run fixture-backed Playwright and Lighthouse in pull-request and `main` CI after fast-fail static/test/build checks.
+- [x] Configure fixture-backed Playwright and Lighthouse in pull-request and `main` CI after fast-fail static/test/build checks.
 - [x] Provision one Chromium installation explicitly and pass its executable path to Playwright and `chrome-launcher`.
 - [x] Make Lighthouse Performance `>= 0.90` and Accessibility `>= 0.95` blocking thresholds.
 - [x] Pass the full CI-equivalent validation locally on Node 22.23.2, including browser smoke and Lighthouse.
-- [-] Validate the rebuilt PR in GitHub Actions and complete external review before landing.
+- [!] Re-enable repository-level GitHub Actions and validate the final `main` workflow; external review and local CI-equivalent validation passed, but remote workflow execution is disabled.
 
 ### P01 Reset the baseline and living docs
 
@@ -319,4 +319,6 @@ Observed results:
 - 2026-05-01: Active network probes must validate every resolved address and pin outbound sockets to the validated public address; checking only the hostname or first DNS answer leaves room for private-address redirects and rebinding.
 - 2026-05-01: Cache only complete non-error analysis results; a clean verdict with provider partial failures can otherwise mask upstream outages for the full cache TTL.
 - 2026-08-02: Registrable-domain comparisons must include private Public Suffix List entries so unrelated platform tenants such as `safe.github.io` never collapse to `github.io`.
+- 2026-08-10: Resolved the seven-PR queue by merging the six current implementation/dependency PRs and closing the conflicted, superseded spec-reconciliation draft; the final aggregate passed the full local CI-equivalent chain on Node 22.23.2.
+- 2026-08-10: GitHub Actions is disabled at the repository level even though the CI and Lighthouse workflows are active in the tree; browser-gate enforcement remains blocked until that repository setting is re-enabled and the final `main` workflow passes.
 - 2026-05-01: Keeping parallel PRs out of `PLAN.md` avoided artificial merge conflicts; use one consolidated plan update after the code branches land.
