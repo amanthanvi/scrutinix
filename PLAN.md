@@ -21,11 +21,12 @@ state plus the landed analysis-hardening and review-remediation work.
 ## Current Snapshot
 
 - Date: 2026-09-03
-- Execution status: `P21-P23 complete; P24 dependency maintenance resolved and audit-clean`
+- Execution status: `P21-P25 complete and verified on Node 24 LTS`
 - Platform:
-  - Next.js `16.3.3`
+  - Next.js `16.3.4`
   - React `19.2.x`
-  - Node `22.23.2 LTS` (`.nvmrc`; deploy compatibility remains `22.x`)
+  - Node `24.20.0 LTS` (`.nvmrc`; deploy compatibility remains `24.x`)
+  - ESLint `10.x` with direct Next.js, React, hooks, TypeScript, and JSX accessibility plugins
   - NDJSON streaming over `fetch`
 - Architecture:
   - `proxy.ts` enforces rate limits on `/api/analyze` request paths.
@@ -69,7 +70,7 @@ Completed deployment verification:
 
 Observed results:
 
-- Unit tests: `30` files passed, `200` tests passed.
+- Unit tests: `31` files passed, `218` tests passed.
 - Integration tests: `2` files passed, `30` tests passed, including full-origin authorization, exact-host ThreatFox isolation, batch per-URL failure isolation, disconnect cancellation, warning/redirect-degraded provider recovery (including URLhaus exact and host fallback outages), and incomplete DNSBL coverage propagation.
 - DOM tests: `5` files passed, `15` tests passed.
 - Playwright: `9` tests passed, covering legacy history migration, single-scan, Summary/Full signals, batch-scan, accessibility, keyboard navigation, history undo, and fixture-backed verdicts.
@@ -139,9 +140,19 @@ Observed results:
 
 - [x] Merge the green minor-and-patch dependency group, including the Next.js `16.3.3` security update.
 - [x] Keep ESLint on major `9` until the Next.js plugin stack supports ESLint `10` without lint crashes.
-- [x] Keep `@types/node` on major `22` so compile-time APIs match the Node `22.x` runtime contract.
+- [x] Keep `@types/node` aligned with the supported runtime until the Node 24 migration in P25.
 - [x] Refresh the lockfile to `@humanfs/node` `0.16.8` after its moderate advisory entered the audit database.
 - [x] Confirm no pull requests remain open and the final `main` verification run passes.
+
+### P25 Close toolchain and PSL residual risks
+
+- [x] Replace the ESLint 9-only `eslint-config-next` dependency graph with a peer-clean ESLint 10 flat configuration.
+- [x] Move the production contract to Vercel-supported Node 24 LTS and align local, CI, engine, and type versions.
+- [x] Explicitly allow the native ONNX runtime installer required by the bundled classifier on Vercel.
+- [x] Add a unit guard that fails when the executing Node major, `.nvmrc`, `engines.node`, or `@types/node` diverge.
+- [x] Cover every private Public Suffix List rule changed by `tldts` 7.4.11, including tenant-isolation and brand-impersonation cases.
+- [x] Keep fixture-backed E2E runs offline even when local Redis credentials are configured.
+- [x] Pass the complete Node 24 CI-equivalent chain and verify the Vercel deployment runtime.
 
 ### P01 Reset the baseline and living docs
 
@@ -152,7 +163,7 @@ Observed results:
 
 ### P02 Re-scaffold the platform and scripts
 
-- [x] Upgrade to current stable Next/React stack and pin Node 22 engines.
+- [x] Upgrade to the current stable Next/React stack and pin the production Node major explicitly.
 - [x] Reduce direct dependencies to the set used by the rebuilt app.
 - [x] Replace `next lint` with ESLint CLI.
 - [x] Add `typecheck`, `format`, and fresh metadata/static asset plumbing.

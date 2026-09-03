@@ -4,8 +4,9 @@
 
 - Status update: the current implementation is live, verified locally, and deployed to Vercel preview and production.
 - Rationale: the audit confirmed meaningful drift between docs and code, including missing batch API support, no test harness, vulnerable production dependencies, missing metadata assets, and misleading error-to-threat behavior.
-- Toolchain decision: the current implementation targets `next@16.3.3`, `react@19.2.8`, and Node `22.x` for engines and CI so Vercel stays on the Node 22 major line without auto-upgrading to a future major.
-- Linting decision: use ESLint directly from npm scripts; do not use `next lint`.
+- Toolchain decision: the current implementation targets `next@16.3.4`, `react@19.2.8`, and Node `24.x` for local development, CI, and Vercel deployment; `@types/node` stays on the same major and a unit guard enforces the contract.
+- Native-runtime decision: `onnxruntime-node` is the only explicitly approved install script because the bundled local classifier requires its platform binary.
+- Linting decision: use ESLint 10 directly with peer-compatible Next.js, React, hooks, TypeScript, and JSX accessibility plugins; do not use `next lint` or the ESLint 9-only `eslint-config-next` dependency graph.
 - Streaming decision: API responses stream `application/x-ndjson` over `fetch`, not SSE.
 - Framework decision: Next.js 16 deprecates `middleware.ts`, so request gating is implemented in `proxy.ts`.
 - Provider decision:
@@ -20,6 +21,7 @@
 - Runtime decision:
   - Redirect tracing should not fail on invalid certificate chains that are already reported by the SSL signal; trace redirects through header-only Node HTTP(S) requests with relaxed certificate validation.
   - Resolve registrable domains with the Public Suffix List and private suffixes enabled so reputation, DNSBL, and redirect comparisons preserve tenant boundaries on shared hosting platforms; keep ThreatFox IOC scoring bound to the exact scanned hostname so sibling tenants cannot contaminate one another.
+  - Treat Public Suffix List updates as security-sensitive data changes: every private rule changed by the adopted `tldts` release must have an explicit registrable-domain regression case.
 - Testing decision: harness-first is required; Vitest, MSW, Playwright, and Lighthouse land before large feature clusters.
 - Tooling decision:
   - Replace `@lhci/cli` with a direct `lighthouse` + `chrome-launcher` script so the verification path does not carry stale vulnerable transitive dependencies.

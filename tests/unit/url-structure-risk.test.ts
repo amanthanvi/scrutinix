@@ -75,6 +75,9 @@ describe("getUrlStructureRisk", () => {
       "https://google.support/account",
       "https://paypal.github.io/login",
       "https://paypal.pages.dev/login",
+      "https://paypal.claudeusercontent.com/login",
+      "https://paypal.tenant.cursorusercontent.com/login",
+      "https://paypal.tenant.aivencloud.com/login",
     ]) {
       const risk = getUrlStructureRisk(url);
       expect(risk.reasons.join(" ")).toMatch(/unrelated domain/i);

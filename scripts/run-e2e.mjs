@@ -19,6 +19,13 @@ const childEnv = {
   SCRUTINIX_TEST_FIXTURES: process.env.SCRUTINIX_TEST_FIXTURES ?? "1",
 };
 
+if (childEnv.SCRUTINIX_TEST_FIXTURES === "1") {
+  childEnv.UPSTASH_REDIS_REST_URL = "";
+  childEnv.UPSTASH_REDIS_REST_TOKEN = "";
+  childEnv.KV_REST_API_URL = "";
+  childEnv.KV_REST_API_TOKEN = "";
+}
+
 // CI builds once in its own step and sets SKIP_BUILD=1.
 if (process.env.SKIP_BUILD !== "1") {
   const build = spawnSync(process.execPath, [nextBin, "build"], {

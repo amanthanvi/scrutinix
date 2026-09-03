@@ -104,9 +104,10 @@ tests/
 
 ## Stack
 
-- Next.js 16, React 19, TypeScript 5.9 (strict + noUncheckedIndexedAccess)
+- Node 24 LTS, Next.js 16, React 19, TypeScript 5.9 (strict + noUncheckedIndexedAccess)
 - Tailwind CSS v4, Geist Sans/Mono, Radix, Lucide, Zod 4, idb, sonner,
   next-themes, local `@huggingface/transformers`
+- ESLint 10 with direct Next.js, React, hooks, TypeScript, and JSX accessibility plugins
 - Vitest, MSW, fake-indexeddb, Playwright, axe-core, Lighthouse
 
 ## Env

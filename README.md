@@ -52,6 +52,7 @@ and ML scoring in one place.
 
 ## Stack
 
+- Node.js `24` LTS
 - Next.js `16`
 - React `19`
 - TypeScript `5.9`

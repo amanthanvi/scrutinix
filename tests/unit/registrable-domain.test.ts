@@ -25,6 +25,36 @@ describe("getRegistrableDomain", () => {
     expect(getRegistrableDomain("tenant.vercel.app")).toBe("tenant.vercel.app");
   });
 
+  it.each([
+    ["www.tenant.adaptable.app", "adaptable.app"],
+    ["www.tenant.aivencloud.com", "www.tenant.aivencloud.com"],
+    ["tenant.claudeusercontent.com", "tenant.claudeusercontent.com"],
+    [
+      "tenant.frame.claudeusercontent.com",
+      "tenant.frame.claudeusercontent.com",
+    ],
+    ["app.tenant.cursorusercontent.com", "app.tenant.cursorusercontent.com"],
+    ["tenant.codepen.app", "tenant.codepen.app"],
+    ["tenant.codepen.dev", "tenant.codepen.dev"],
+    ["tenant.here.now", "tenant.here.now"],
+    ["tenant.online-server.cloud", "tenant.online-server.cloud"],
+    ["tenant.scw.site", "tenant.scw.site"],
+    ["tenant.ams.scw.site", "tenant.ams.scw.site"],
+    ["tenant.waw.scw.site", "tenant.waw.scw.site"],
+    ["tenant.vps.hrsn.au", "hrsn.au"],
+    ["tenant.vps.hrsn.net", "tenant.vps.hrsn.net"],
+  ])("locks the reviewed PSL boundary for %s", (hostname, expected) => {
+    expect(getRegistrableDomain(hostname)).toBe(expected);
+  });
+
+  it.each([
+    ["safe.claudeusercontent.com", "evil.claudeusercontent.com"],
+    ["app.safe.cursorusercontent.com", "app.evil.cursorusercontent.com"],
+    ["safe.ams.scw.site", "evil.ams.scw.site"],
+  ])("keeps private tenants distinct: %s and %s", (safe, evil) => {
+    expect(getRegistrableDomain(safe)).not.toBe(getRegistrableDomain(evil));
+  });
+
   it("passes through IPs, single labels, and trailing dots", () => {
     expect(getRegistrableDomain("192.0.2.10")).toBe("192.0.2.10");
     expect(getRegistrableDomain("localhost")).toBe("localhost");
