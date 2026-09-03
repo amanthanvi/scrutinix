@@ -20,10 +20,10 @@ state plus the landed analysis-hardening and review-remediation work.
 
 ## Current Snapshot
 
-- Date: 2026-08-10
-- Execution status: `P21/P22 landed and verified; P23 browser-gate workflow enabled and remotely verified`
+- Date: 2026-09-03
+- Execution status: `P21-P23 complete; P24 dependency maintenance resolved and audit-clean`
 - Platform:
-  - Next.js `16.2.12`
+  - Next.js `16.3.3`
   - React `19.2.x`
   - Node `22.23.2 LTS` (`.nvmrc`; deploy compatibility remains `22.x`)
   - NDJSON streaming over `fetch`
@@ -74,7 +74,7 @@ Observed results:
 - DOM tests: `5` files passed, `15` tests passed.
 - Playwright: `9` tests passed, covering legacy history migration, single-scan, Summary/Full signals, batch-scan, accessibility, keyboard navigation, history undo, and fixture-backed verdicts.
 - Production build: passed with static metadata routes for `/icon`, `/opengraph-image`, `/robots.txt`, and `/sitemap.xml`.
-- Security audit: `0` vulnerabilities reported across prod and dev dependencies after the 2026-08-10 dependency refresh.
+- Security audit: `0` vulnerabilities reported across prod and dev dependencies after the 2026-09-03 dependency refresh.
 - Lighthouse:
   - Performance `0.91`
   - Accessibility `1.00`
@@ -134,6 +134,14 @@ Observed results:
 - [x] Make Lighthouse Performance `>= 0.90` and Accessibility `>= 0.95` blocking thresholds.
 - [x] Pass the full CI-equivalent validation locally on Node 22.23.2, including browser smoke and Lighthouse.
 - [x] Re-enable repository-level GitHub Actions and validate the final `main` workflow after external review and local CI-equivalent validation.
+
+### P24 Resolve September dependency maintenance
+
+- [x] Merge the green minor-and-patch dependency group, including the Next.js `16.3.3` security update.
+- [x] Keep ESLint on major `9` until the Next.js plugin stack supports ESLint `10` without lint crashes.
+- [x] Keep `@types/node` on major `22` so compile-time APIs match the Node `22.x` runtime contract.
+- [x] Refresh the lockfile to `@humanfs/node` `0.16.8` after its moderate advisory entered the audit database.
+- [x] Confirm no pull requests remain open and the final `main` verification run passes.
 
 ### P01 Reset the baseline and living docs
 

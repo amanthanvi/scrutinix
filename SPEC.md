@@ -4,7 +4,7 @@
 
 - Status update: the current implementation is live, verified locally, and deployed to Vercel preview and production.
 - Rationale: the audit confirmed meaningful drift between docs and code, including missing batch API support, no test harness, vulnerable production dependencies, missing metadata assets, and misleading error-to-threat behavior.
-- Toolchain decision: the current implementation targets `next@16.2.12`, `react@19.2.8`, and Node `22.x` for engines and CI so Vercel stays on the Node 22 major line without auto-upgrading to a future major.
+- Toolchain decision: the current implementation targets `next@16.3.3`, `react@19.2.8`, and Node `22.x` for engines and CI so Vercel stays on the Node 22 major line without auto-upgrading to a future major.
 - Linting decision: use ESLint directly from npm scripts; do not use `next lint`.
 - Streaming decision: API responses stream `application/x-ndjson` over `fetch`, not SSE.
 - Framework decision: Next.js 16 deprecates `middleware.ts`, so request gating is implemented in `proxy.ts`.
@@ -46,7 +46,7 @@
 - **Owner (DRI):** Aman Thanvi (@amanthanvi)
 - **Stakeholders:** Aman Thanvi
 - **Status:** Deployed on Vercel preview and production
-- **Last updated:** 2026-08-02
+- **Last updated:** 2026-09-03
 - **Shipping model:** Continuous delivery
 - **Links:** [GitHub](https://github.com/amanthanvi/scrutinix)
 
