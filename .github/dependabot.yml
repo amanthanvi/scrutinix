@@ -5,6 +5,13 @@ updates:
     schedule:
       interval: weekly
     groups:
+      # Listed before minor-and-patch so it also claims major bumps.
+      # @vitest/* declares an exact peer on vitest, so splitting the two into
+      # separate PRs makes each one individually unsatisfiable (ERESOLVE).
+      vitest:
+        patterns:
+          - "vitest"
+          - "@vitest/*"
       minor-and-patch:
         update-types:
           - minor
