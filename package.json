@@ -40,6 +40,7 @@
     "test:dom": "vitest --config vitest.dom.config.ts",
     "test:coverage": "vitest --config vitest.unit.config.ts --coverage --run",
     "test:e2e": "node ./scripts/run-e2e.mjs",
+    "audit:ci": "node ./scripts/audit-gate.mjs",
     "lighthouse": "node ./scripts/run-lighthouse.mjs"
   },
   "dependencies": {
