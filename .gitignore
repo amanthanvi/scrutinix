@@ -57,3 +57,6 @@ __pycache__/
 .venv
 env/
 venv/
+
+# Written by the audit gate in CI for the scheduled review issue.
+audit-gate-report.md

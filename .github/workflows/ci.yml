@@ -5,6 +5,13 @@ on:
   push:
     branches:
       - main
+  # The audit gate depends on facts that change without anyone touching the
+  # repo: a new advisory is published, a fix ships, or an accepted exception
+  # reaches its review date. Without a schedule none of that surfaces until
+  # the next PR happens to run. Off the hour, because GitHub's scheduler
+  # queues everything pinned to :00 behind everyone else's.
+  schedule:
+    - cron: "17 6 * * 1"
   workflow_dispatch:
 
 permissions:
@@ -24,6 +31,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
+    # Scoped to this job so Verify keeps read-only credentials. Only the
+    # scheduled path actually files an issue.
+    permissions:
+      contents: read
+      issues: write
+
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -39,11 +52,35 @@ jobs:
 
       - name: Audit dependencies
         run: npm run audit:ci
+        env:
+          AUDIT_GATE_REPORT: audit-gate-report.md
+
+      # On a PR the red check is the notification. On a schedule nobody is
+      # watching, so anything needing attention becomes a tracked issue.
+      - name: File review issue
+        if: always() && github.event_name == 'schedule' && hashFiles('audit-gate-report.md') != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE_TITLE: "Audit gate: reviewed advisory needs attention"
+        run: |
+          existing=$(gh issue list --state open --search "in:title $ISSUE_TITLE" \
+            --json number,title --jq \
+            ".[] | select(.title == \"$ISSUE_TITLE\") | .number" | head -1)
+
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body-file audit-gate-report.md
+          else
+            gh issue create --title "$ISSUE_TITLE" --body-file audit-gate-report.md
+          fi
 
   verify:
     name: Verify
     runs-on: ubuntu-latest
     timeout-minutes: 30
+
+    # The scheduled run exists for the audit gate. Rebuilding and re-running
+    # the whole suite against an unchanged commit would prove nothing.
+    if: github.event_name != 'schedule'
 
     steps:
       - name: Checkout
