@@ -42,24 +42,10 @@ const REQUIRED_FIELDS = ["id", "package", "reviewed", "expires", "reason"];
 //   1. It stops matching a real advisory      -> STALE
 //   2. A fixed version is published           -> FIXABLE
 //   3. `expires` passes without a re-review   -> EXPIRED
-const ACCEPTED_ADVISORIES = [
-  {
-    id: "GHSA-vwc7-r8mq-g2x9",
-    package: "adm-zip",
-    reviewed: "2026-09-09",
-    expires: "2026-12-08",
-    reason:
-      "Reached only through onnxruntime-node, which uses adm-zip to unpack " +
-      "its own native binaries at install time. No attacker-controlled " +
-      "archive reaches adm-zip on the request path, so the symlink " +
-      "traversal is not exposed by the scan pipeline. There is no patched " +
-      "release to move to (0.6.0 is the latest publish and sits inside the " +
-      "affected range), and @huggingface/transformers pins onnxruntime-node " +
-      "exactly, so npm's only offered fix is a breaking downgrade to " +
-      "@huggingface/transformers 3.8.1 -- which would trade a working ONNX " +
-      "classifier for an install-time issue.",
-  },
-];
+//
+// Entries take the shape { id, package, reviewed, expires, reason } -- see
+// REQUIRED_FIELDS. Empty is the healthy state.
+const ACCEPTED_ADVISORIES = [];
 
 await main();
 
