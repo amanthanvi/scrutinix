@@ -187,6 +187,61 @@ describe("applyRateLimit", () => {
     warnSpy.mockRestore();
   });
 
+  it("preserves an Upstash deny when the sibling window throws", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("UPSTASH_REDIS_REST_URL", "https://example.upstash.io");
+    vi.stubEnv("UPSTASH_REDIS_REST_TOKEN", "token");
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    // Minute denies; day rejects. Must not degrade to in-memory (which would admit).
+    limitImpl
+      .mockResolvedValueOnce({
+        success: false,
+        remaining: 0,
+        reset: 1_900_000_000_000,
+      })
+      .mockRejectedValueOnce(new Error("day fetch failed"));
+
+    const result = await applyRateLimit("203.0.113.42");
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.status).toBe(429);
+      expect(result.remaining).toBe(0);
+    }
+    expect(globalThis.__devRateLimitStore).toBeUndefined();
+    expect(globalThis.__scrutinixRateLimiters).toBeUndefined();
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('"event":"rate_limit.partial_upstash_failure"'),
+    );
+    expect(warnSpy).not.toHaveBeenCalledWith(
+      expect.stringContaining('"event":"rate_limit.degraded"'),
+    );
+    warnSpy.mockRestore();
+  });
+
+  it("preserves a day-window Upstash deny when the minute window throws", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("UPSTASH_REDIS_REST_URL", "https://example.upstash.io");
+    vi.stubEnv("UPSTASH_REDIS_REST_TOKEN", "token");
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    limitImpl
+      .mockRejectedValueOnce(new Error("minute fetch failed"))
+      .mockResolvedValueOnce({
+        success: false,
+        remaining: 0,
+        reset: 1_900_000_000_100,
+      });
+
+    const result = await applyRateLimit("203.0.113.43");
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.status).toBe(429);
+    }
+    expect(globalThis.__devRateLimitStore).toBeUndefined();
+    warnSpy.mockRestore();
+  });
+
   it("rebuilds the Upstash client after a prior failure", async () => {
     vi.stubEnv("NODE_ENV", "production");
     vi.stubEnv("UPSTASH_REDIS_REST_URL", "https://example.upstash.io");

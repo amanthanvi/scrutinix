@@ -180,12 +180,61 @@ export async function applyRateLimit(
       redisToken,
     );
 
-    const [minute, day] = await Promise.all([
+    // allSettled so a throw in one window cannot discard a deny from the other.
+    const [minuteSettled, daySettled] = await Promise.allSettled([
       minuteLimiter.limit(identifier, { rate: cost }),
       dayLimiter.limit(identifier, { rate: cost }),
     ]);
 
-    return toLimitResult(minute, day);
+    const minute =
+      minuteSettled.status === "fulfilled" ? minuteSettled.value : undefined;
+    const day =
+      daySettled.status === "fulfilled" ? daySettled.value : undefined;
+
+    if (minute && day) {
+      return toLimitResult(minute, day);
+    }
+
+    const rejection =
+      minuteSettled.status === "rejected"
+        ? minuteSettled.reason
+        : daySettled.status === "rejected"
+          ? daySettled.reason
+          : undefined;
+
+    // Shared Redis already denied — never admit via process-local fallback.
+    const deniedWindow =
+      minute && !minute.success
+        ? minute
+        : day && !day.success
+          ? day
+          : undefined;
+
+    if (deniedWindow) {
+      // Sibling window failed; drop the client so the next call can rebuild.
+      globalThis.__scrutinixRateLimiters = undefined;
+      logWarn("rate_limit.partial_upstash_failure", {
+        reason: "upstash_error",
+        ...(rejection instanceof Error
+          ? { detail: rejection.message }
+          : typeof rejection === "string"
+            ? { detail: rejection }
+            : {}),
+        message:
+          "Preserving Upstash deny despite sibling window failure; not degrading to in-memory.",
+      });
+      // Neutral stand-in so toLimitResult keeps remaining/reset from the deny.
+      const passthrough: WindowOutcome = {
+        success: true,
+        remaining: Number.MAX_SAFE_INTEGER,
+        reset: Number.MAX_SAFE_INTEGER,
+      };
+      return toLimitResult(minute ?? passthrough, day ?? passthrough);
+    }
+
+    // Both threw, or the only successful window allowed — intended prod-500 fix.
+    globalThis.__scrutinixRateLimiters = undefined;
+    return degradeToInMemory(identifier, cost, "upstash_error", rejection);
   } catch (error) {
     // Drop the singleton so the next request can rebuild against Redis if it
     // recovers; otherwise every subsequent call would keep a dead client.
