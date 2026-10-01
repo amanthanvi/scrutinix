@@ -76,7 +76,17 @@ function lastForwardedHop(value: string | null): string | undefined {
 
 function getUpstashLimiters(redisUrl: string, redisToken: string) {
   if (!globalThis.__scrutinixRateLimiters) {
-    const redis = new Redis({ url: redisUrl, token: redisToken });
+    // Fail fast when Redis is unreachable: the default 5 retries with
+    // exponential backoff can stall the analyze proxy for ~4s before throwing.
+    // Callers degrade to process-local limiting instead of surfacing HTTP 500.
+    const redis = new Redis({
+      url: redisUrl,
+      token: redisToken,
+      retry: {
+        retries: 1,
+        backoff: (retryCount) => Math.min(200, 50 * (retryCount + 1)),
+      },
+    });
     globalThis.__scrutinixRateLimiters = {
       minute: new Ratelimit({
         redis,
@@ -93,6 +103,38 @@ function getUpstashLimiters(redisUrl: string, redisToken: string) {
   return globalThis.__scrutinixRateLimiters;
 }
 
+function resetUpstashLimiters() {
+  globalThis.__scrutinixRateLimiters = undefined;
+}
+
+function degradeToInMemory(
+  identifier: string,
+  cost: number,
+  reason: string,
+  cause?: unknown,
+): LimitResult {
+  const detail =
+    cause instanceof Error
+      ? cause.message
+      : typeof cause === "string"
+        ? cause
+        : undefined;
+
+  console.warn(
+    JSON.stringify({
+      level: "warn",
+      event: "rate_limit.degraded",
+      mode: "in-memory",
+      reason,
+      ...(detail ? { detail } : {}),
+      message:
+        "Falling back to process-local rate limiting so analyze requests keep working.",
+    }),
+  );
+
+  return applyInMemoryLimit(identifier, cost);
+}
+
 export async function applyRateLimit(
   identifier: string,
   cost = 1,
@@ -107,49 +149,46 @@ export async function applyRateLimit(
   const { url: redisUrl, token: redisToken } = getRedisRestConfig();
 
   if (!redisUrl || !redisToken) {
-    console.warn(
-      JSON.stringify({
-        level: "warn",
-        event: "rate_limit.degraded",
-        mode: "in-memory",
-        message:
-          "Upstash credentials are missing; falling back to process-local rate limiting.",
-      }),
+    return degradeToInMemory(identifier, cost, "missing_credentials");
+  }
+
+  try {
+    const { minute: minuteLimiter, day: dayLimiter } = getUpstashLimiters(
+      redisUrl,
+      redisToken,
     );
 
-    return applyInMemoryLimit(identifier, cost);
-  }
+    const [minute, day] = await Promise.all([
+      minuteLimiter.limit(identifier, { rate: cost }),
+      dayLimiter.limit(identifier, { rate: cost }),
+    ]);
 
-  const { minute: minuteLimiter, day: dayLimiter } = getUpstashLimiters(
-    redisUrl,
-    redisToken,
-  );
+    if (!minute.success || !day.success) {
+      const reset = Math.min(minute.reset, day.reset);
+      return {
+        success: false,
+        remaining: Math.min(minute.remaining, day.remaining),
+        reset,
+        status: 429,
+        error: createApiError(
+          "rate_limited",
+          "Rate limit exceeded. Please retry after the cooldown window.",
+          true,
+        ),
+      };
+    }
 
-  const [minute, day] = await Promise.all([
-    minuteLimiter.limit(identifier, { rate: cost }),
-    dayLimiter.limit(identifier, { rate: cost }),
-  ]);
-
-  if (!minute.success || !day.success) {
-    const reset = Math.min(minute.reset, day.reset);
     return {
-      success: false,
+      success: true,
       remaining: Math.min(minute.remaining, day.remaining),
-      reset,
-      status: 429,
-      error: createApiError(
-        "rate_limited",
-        "Rate limit exceeded. Please retry after the cooldown window.",
-        true,
-      ),
+      reset: Math.min(minute.reset, day.reset),
     };
+  } catch (error) {
+    // Drop the singleton so the next request can rebuild against Redis if it
+    // recovers; otherwise every subsequent call would keep a dead client.
+    resetUpstashLimiters();
+    return degradeToInMemory(identifier, cost, "upstash_error", error);
   }
-
-  return {
-    success: true,
-    remaining: Math.min(minute.remaining, day.remaining),
-    reset: Math.min(minute.reset, day.reset),
-  };
 }
 
 /** Entry count that triggers a sweep of expired windows (one-off IPs otherwise accumulate forever). */

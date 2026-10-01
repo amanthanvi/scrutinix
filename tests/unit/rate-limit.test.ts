@@ -10,19 +10,21 @@ vi.mock("@upstash/redis", () => ({
   Redis: redisConstructor,
 }));
 
+const limitImpl = vi.hoisted(() =>
+  vi.fn(async () => ({
+    success: true,
+    remaining: 9,
+    reset: 1_900_000_000_000,
+  })),
+);
+
 vi.mock("@upstash/ratelimit", () => {
   class MockRatelimit {
     static slidingWindow(limit: number, window: string) {
       return { limit, window };
     }
 
-    async limit() {
-      return {
-        success: true,
-        remaining: 9,
-        reset: 1_900_000_000_000,
-      };
-    }
+    limit = limitImpl;
   }
 
   return {
@@ -70,6 +72,12 @@ describe("getClientRateLimitId", () => {
 describe("applyRateLimit", () => {
   beforeEach(() => {
     redisConstructor.mockClear();
+    limitImpl.mockReset();
+    limitImpl.mockResolvedValue({
+      success: true,
+      remaining: 9,
+      reset: 1_900_000_000_000,
+    });
     globalThis.__scrutinixRateLimiters = undefined;
     globalThis.__devRateLimitStore = undefined;
   });
@@ -140,6 +148,10 @@ describe("applyRateLimit", () => {
     expect(redisConstructor).toHaveBeenCalledWith({
       url: "https://example-kv.upstash.io",
       token: "kv-token",
+      retry: {
+        retries: 1,
+        backoff: expect.any(Function),
+      },
     });
   });
 
@@ -156,6 +168,45 @@ describe("applyRateLimit", () => {
     expect(first.success).toBe(true);
     expect(second.success).toBe(true);
     expect(redisConstructor).toHaveBeenCalledTimes(1);
+  });
+
+  it("falls back to in-memory limits when Upstash throws in production", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("UPSTASH_REDIS_REST_URL", "https://example.upstash.io");
+    vi.stubEnv("UPSTASH_REDIS_REST_TOKEN", "token");
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    limitImpl.mockRejectedValueOnce(new Error("fetch failed"));
+
+    const result = await applyRateLimit("203.0.113.40");
+
+    expect(result.success).toBe(true);
+    expect(globalThis.__scrutinixRateLimiters).toBeUndefined();
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('"reason":"upstash_error"'),
+    );
+    warnSpy.mockRestore();
+  });
+
+  it("rebuilds the Upstash client after a prior failure", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("UPSTASH_REDIS_REST_URL", "https://example.upstash.io");
+    vi.stubEnv("UPSTASH_REDIS_REST_TOKEN", "token");
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    limitImpl.mockRejectedValueOnce(new Error("fetch failed"));
+
+    await applyRateLimit("203.0.113.41");
+    expect(redisConstructor).toHaveBeenCalledTimes(1);
+
+    limitImpl.mockResolvedValue({
+      success: true,
+      remaining: 8,
+      reset: 1_900_000_000_000,
+    });
+    const recovered = await applyRateLimit("203.0.113.41");
+
+    expect(recovered.success).toBe(true);
+    expect(redisConstructor).toHaveBeenCalledTimes(2);
+    warnSpy.mockRestore();
   });
 
   it("charges the full batch cost against the window", async () => {
