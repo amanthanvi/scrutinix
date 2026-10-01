@@ -37,8 +37,7 @@ type DegradeReason = "missing_credentials" | "upstash_error";
 declare global {
   var __devRateLimitStore: Map<string, WindowRecord> | undefined;
   var __scrutinixRateLimiters:
-    | { minute: Ratelimit; day: Ratelimit }
-    | undefined;
+    { minute: Ratelimit; day: Ratelimit } | undefined;
 }
 
 const MINUTE_LIMIT = 10;
