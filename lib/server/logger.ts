@@ -18,6 +18,10 @@ export function logInfo(event: string, fields: Record<string, unknown>) {
   console.info(JSON.stringify({ level: "info", event, ...fields }));
 }
 
+export function logWarn(event: string, fields: Record<string, unknown>) {
+  console.warn(JSON.stringify({ level: "warn", event, ...fields }));
+}
+
 export function logError(event: string, fields: Record<string, unknown>) {
   console.error(JSON.stringify({ level: "error", event, ...fields }));
 }

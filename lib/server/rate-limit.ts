@@ -2,6 +2,7 @@ import { Ratelimit } from "@upstash/ratelimit";
 import { Redis } from "@upstash/redis";
 
 import { createApiError } from "@/lib/server/api-error";
+import { logWarn } from "@/lib/server/logger";
 import { getRedisRestConfig } from "@/lib/server/redis-config";
 
 export { getRedisRestConfig };
@@ -20,10 +21,18 @@ type LimitResult =
       error: ReturnType<typeof createApiError>;
     };
 
+type WindowOutcome = {
+  success: boolean;
+  remaining: number;
+  reset: number;
+};
+
 type WindowRecord = {
   count: number;
   resetAt: number;
 };
+
+type DegradeReason = "missing_credentials" | "upstash_error";
 
 declare global {
   var __devRateLimitStore: Map<string, WindowRecord> | undefined;
@@ -33,6 +42,12 @@ declare global {
 
 const MINUTE_LIMIT = 10;
 const DAY_LIMIT = 50;
+
+/** Fail fast when Redis is unreachable so callers can degrade instead of stalling ~4s. */
+const UPSTASH_REDIS_RETRY = {
+  retries: 1,
+  backoff: (retryCount: number) => Math.min(200, 50 * (retryCount + 1)),
+} as const;
 
 /**
  * Rate-limit identity from request headers.
@@ -76,7 +91,11 @@ function lastForwardedHop(value: string | null): string | undefined {
 
 function getUpstashLimiters(redisUrl: string, redisToken: string) {
   if (!globalThis.__scrutinixRateLimiters) {
-    const redis = new Redis({ url: redisUrl, token: redisToken });
+    const redis = new Redis({
+      url: redisUrl,
+      token: redisToken,
+      retry: UPSTASH_REDIS_RETRY,
+    });
     globalThis.__scrutinixRateLimiters = {
       minute: new Ratelimit({
         redis,
@@ -93,6 +112,51 @@ function getUpstashLimiters(redisUrl: string, redisToken: string) {
   return globalThis.__scrutinixRateLimiters;
 }
 
+function toLimitResult(minute: WindowOutcome, day: WindowOutcome): LimitResult {
+  const remaining = Math.min(minute.remaining, day.remaining);
+  const reset = Math.min(minute.reset, day.reset);
+
+  if (!minute.success || !day.success) {
+    return {
+      success: false,
+      remaining,
+      reset,
+      status: 429,
+      error: createApiError(
+        "rate_limited",
+        "Rate limit exceeded. Please retry after the cooldown window.",
+        true,
+      ),
+    };
+  }
+
+  return { success: true, remaining, reset };
+}
+
+function degradeToInMemory(
+  identifier: string,
+  cost: number,
+  reason: DegradeReason,
+  cause?: unknown,
+): LimitResult {
+  const detail =
+    cause instanceof Error
+      ? cause.message
+      : typeof cause === "string"
+        ? cause
+        : undefined;
+
+  logWarn("rate_limit.degraded", {
+    mode: "in-memory",
+    reason,
+    ...(detail ? { detail } : {}),
+    message:
+      "Falling back to process-local rate limiting so analyze requests keep working.",
+  });
+
+  return applyInMemoryLimit(identifier, cost);
+}
+
 export async function applyRateLimit(
   identifier: string,
   cost = 1,
@@ -107,49 +171,76 @@ export async function applyRateLimit(
   const { url: redisUrl, token: redisToken } = getRedisRestConfig();
 
   if (!redisUrl || !redisToken) {
-    console.warn(
-      JSON.stringify({
-        level: "warn",
-        event: "rate_limit.degraded",
-        mode: "in-memory",
-        message:
-          "Upstash credentials are missing; falling back to process-local rate limiting.",
-      }),
+    return degradeToInMemory(identifier, cost, "missing_credentials");
+  }
+
+  try {
+    const { minute: minuteLimiter, day: dayLimiter } = getUpstashLimiters(
+      redisUrl,
+      redisToken,
     );
 
-    return applyInMemoryLimit(identifier, cost);
+    // allSettled so a throw in one window cannot discard a deny from the other.
+    const [minuteSettled, daySettled] = await Promise.allSettled([
+      minuteLimiter.limit(identifier, { rate: cost }),
+      dayLimiter.limit(identifier, { rate: cost }),
+    ]);
+
+    const minute =
+      minuteSettled.status === "fulfilled" ? minuteSettled.value : undefined;
+    const day =
+      daySettled.status === "fulfilled" ? daySettled.value : undefined;
+
+    if (minute && day) {
+      return toLimitResult(minute, day);
+    }
+
+    const rejection =
+      minuteSettled.status === "rejected"
+        ? minuteSettled.reason
+        : daySettled.status === "rejected"
+          ? daySettled.reason
+          : undefined;
+
+    // Shared Redis already denied — never admit via process-local fallback.
+    const deniedWindow =
+      minute && !minute.success
+        ? minute
+        : day && !day.success
+          ? day
+          : undefined;
+
+    if (deniedWindow) {
+      // Sibling window failed; drop the client so the next call can rebuild.
+      globalThis.__scrutinixRateLimiters = undefined;
+      logWarn("rate_limit.partial_upstash_failure", {
+        reason: "upstash_error",
+        ...(rejection instanceof Error
+          ? { detail: rejection.message }
+          : typeof rejection === "string"
+            ? { detail: rejection }
+            : {}),
+        message:
+          "Preserving Upstash deny despite sibling window failure; not degrading to in-memory.",
+      });
+      // Neutral stand-in so toLimitResult keeps remaining/reset from the deny.
+      const passthrough: WindowOutcome = {
+        success: true,
+        remaining: Number.MAX_SAFE_INTEGER,
+        reset: Number.MAX_SAFE_INTEGER,
+      };
+      return toLimitResult(minute ?? passthrough, day ?? passthrough);
+    }
+
+    // Both threw, or the only successful window allowed — intended prod-500 fix.
+    globalThis.__scrutinixRateLimiters = undefined;
+    return degradeToInMemory(identifier, cost, "upstash_error", rejection);
+  } catch (error) {
+    // Drop the singleton so the next request can rebuild against Redis if it
+    // recovers; otherwise every subsequent call would keep a dead client.
+    globalThis.__scrutinixRateLimiters = undefined;
+    return degradeToInMemory(identifier, cost, "upstash_error", error);
   }
-
-  const { minute: minuteLimiter, day: dayLimiter } = getUpstashLimiters(
-    redisUrl,
-    redisToken,
-  );
-
-  const [minute, day] = await Promise.all([
-    minuteLimiter.limit(identifier, { rate: cost }),
-    dayLimiter.limit(identifier, { rate: cost }),
-  ]);
-
-  if (!minute.success || !day.success) {
-    const reset = Math.min(minute.reset, day.reset);
-    return {
-      success: false,
-      remaining: Math.min(minute.remaining, day.remaining),
-      reset,
-      status: 429,
-      error: createApiError(
-        "rate_limited",
-        "Rate limit exceeded. Please retry after the cooldown window.",
-        true,
-      ),
-    };
-  }
-
-  return {
-    success: true,
-    remaining: Math.min(minute.remaining, day.remaining),
-    reset: Math.min(minute.reset, day.reset),
-  };
 }
 
 /** Entry count that triggers a sweep of expired windows (one-off IPs otherwise accumulate forever). */
@@ -186,25 +277,7 @@ function applyInMemoryLimit(identifier: string, cost: number): LimitResult {
     cost,
   );
 
-  if (!minute.success || !day.success) {
-    return {
-      success: false,
-      remaining: Math.min(minute.remaining, day.remaining),
-      reset: Math.min(minute.reset, day.reset),
-      status: 429,
-      error: createApiError(
-        "rate_limited",
-        "Rate limit exceeded. Please retry after the cooldown window.",
-        true,
-      ),
-    };
-  }
-
-  return {
-    success: true,
-    remaining: Math.min(minute.remaining, day.remaining),
-    reset: Math.min(minute.reset, day.reset),
-  };
+  return toLimitResult(minute, day);
 }
 
 function incrementWindow(
@@ -214,7 +287,7 @@ function incrementWindow(
   windowMs: number,
   now: number,
   cost: number,
-) {
+): WindowOutcome {
   const current = store.get(key);
   if (!current || current.resetAt <= now) {
     const next = {
