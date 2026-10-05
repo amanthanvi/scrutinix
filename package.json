@@ -85,7 +85,7 @@
     "globals": "^17.13.0",
     "jsdom": "^30.1.1",
     "lighthouse": "^13.5.0",
-    "msw": "^2.15.0",
+    "msw": "^3.0.1",
     "postcss": "8.5.28",
     "prettier": "^3.9.9",
     "prettier-plugin-tailwindcss": "^0.8.1",
