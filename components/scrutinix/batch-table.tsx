@@ -1,9 +1,18 @@
 "use client";
 
+import {
+  ROW_LAYOUT,
+  ROW_TRAILING,
+  RowLink,
+  RowVerdict,
+  useRowAnatomy,
+} from "@/components/scrutinix/result-row";
+import { SignalGlyph } from "@/components/scrutinix/signal-strip";
+import { Button } from "@/components/ui/button";
 import { formatDisplayUrl } from "@/lib/domain/url";
 import type { AnalysisResult } from "@/lib/domain/types";
-import { verdictFg } from "@/components/shared/scrutinix-types";
-import { Button } from "@/components/ui/button";
+import { isLookAlikeSafe } from "@/lib/domain/verdict-guidance";
+import { cn } from "@/lib/utils";
 
 interface BatchItem {
   index: number;
@@ -19,6 +28,12 @@ interface BatchTableProps {
   onSelectResult: (result: AnalysisResult) => void;
 }
 
+/**
+ * Batch results. A row without a result is "Checking" only while the batch
+ * runs; once it stops (finished, cancelled, rate-limited, or failed) such a
+ * row is "Not checked" and stops animating, and the header says the batch
+ * stopped rather than claiming results.
+ */
 export function BatchTable({
   items,
   isStreaming,
@@ -29,63 +44,84 @@ export function BatchTable({
     return null;
   }
 
+  const stopped = !isStreaming && results.length < items.length;
+
   return (
     <section aria-label="Batch scan results" className="sx-enter">
-      <div className="flex items-baseline justify-between gap-3">
-        <p className="text-[0.8125rem] text-[var(--sx-text-muted)]">
-          {isStreaming ? "Scanning batch" : "Batch complete"}
-        </p>
-        <p className="font-mono text-xs text-[var(--sx-text-muted)] tabular-nums">
+      <div className="flex items-baseline justify-between gap-3 border-b border-[var(--sx-border)] pb-3">
+        <h2 className="text-title font-semibold text-[var(--sx-text)]">
+          {isStreaming
+            ? "Checking links"
+            : stopped
+              ? "Batch stopped"
+              : "Batch results"}
+        </h2>
+        <p className="text-meta font-mono text-[var(--sx-text-muted)]">
           {results.length}/{items.length}
         </p>
       </div>
 
-      {isStreaming ? (
-        <div className="sx-progress mt-2 rounded-full" aria-hidden="true">
-          <span
-            style={{ transform: `scaleX(${results.length / items.length})` }}
-          />
-        </div>
-      ) : null}
-
-      <ul className="border-border divide-border mt-3 divide-y border-y">
+      <ul className="divide-y divide-[var(--sx-border)] border-b border-[var(--sx-border)]">
         {items.map((item) => (
-          <li
+          <BatchRow
             key={`${item.index}-${item.url}`}
-            className="flex items-center gap-3 py-2"
-          >
-            <span className="w-5 shrink-0 font-mono text-xs text-[var(--sx-text-soft)] tabular-nums">
-              {item.index + 1}
-            </span>
-            <span
-              className="w-20 shrink-0 text-[0.8125rem] font-medium capitalize"
-              style={{
-                color: item.result
-                  ? verdictFg(item.result.verdict)
-                  : "var(--sx-text-muted)",
-              }}
-            >
-              {item.result ? item.result.verdict : "Queued"}
-            </span>
-            <span className="min-w-0 flex-1 truncate font-mono text-[0.8125rem] text-[var(--sx-text-muted)]">
-              {formatDisplayUrl(item.url)}
-            </span>
-            {item.result ? (
-              <Button
-                type="button"
-                onClick={() => {
-                  if (item.result) onSelectResult(item.result);
-                }}
-                variant="ghost"
-                size="sm"
-                className="shrink-0"
-              >
-                Open
-              </Button>
-            ) : null}
-          </li>
+            item={item}
+            isStreaming={isStreaming}
+            onSelectResult={onSelectResult}
+          />
         ))}
       </ul>
     </section>
+  );
+}
+
+function BatchRow({
+  item,
+  isStreaming,
+  onSelectResult,
+}: {
+  item: BatchItem;
+  isStreaming: boolean;
+  onSelectResult: (result: AnalysisResult) => void;
+}) {
+  const anatomy = useRowAnatomy(item.url);
+  const impersonates = anatomy?.impersonates ?? null;
+  const live = !item.result && isStreaming;
+  const lookAlike = item.result
+    ? isLookAlikeSafe({ verdict: item.result.verdict, impersonates })
+    : false;
+
+  return (
+    <li className={cn(ROW_LAYOUT, "py-1.5")}>
+      <span className="text-caption hidden w-5 shrink-0 font-mono text-[var(--sx-text-soft)] sm:inline">
+        {item.index + 1}
+      </span>
+      <SignalGlyph
+        result={item.result}
+        className={live ? "sx-live" : undefined}
+      />
+      <RowVerdict
+        verdict={item.result?.verdict ?? null}
+        impersonates={impersonates}
+        label={isStreaming ? "Checking" : "Not checked"}
+      />
+      <RowLink url={item.url} anatomy={anatomy} />
+      {item.result ? (
+        <Button
+          type="button"
+          onClick={() => {
+            if (item.result) onSelectResult(item.result);
+          }}
+          variant="ghost"
+          size="sm"
+          className={cn(ROW_TRAILING, "-mr-2.5")}
+          aria-label={`Open result for ${formatDisplayUrl(item.url)}${lookAlike ? " (look-alike link)" : ""}`}
+        >
+          Open
+        </Button>
+      ) : (
+        <span aria-hidden="true" className={cn(ROW_TRAILING, "w-12")} />
+      )}
+    </li>
   );
 }

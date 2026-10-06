@@ -1,5 +1,7 @@
 import * as z from "zod";
 
+import { severities } from "@/lib/domain/signal-severity";
+
 /**
  * Single source of truth for every data shape that crosses a trust boundary:
  * the NDJSON stream, the shared result cache, IndexedDB history, and shared
@@ -324,7 +326,9 @@ export type SignalResults = {
   [K in SignalName]: SignalResult<SignalPayloadMap[K]>;
 };
 
-const MISSING_SIGNAL_DATA = "Signal data was missing from the stored result.";
+/** What the sanitizer writes for a check a stored record never had. */
+export const MISSING_SIGNAL_DATA =
+  "Signal data was missing from the stored result.";
 
 function parseSignalResult<K extends SignalName>(
   name: K,
@@ -686,11 +690,24 @@ export const batchEventSchema = z.discriminatedUnion("type", [
  * Shared snapshots ride in a URL query parameter, so unlike stored results
  * this gate is strict: wrong types or oversized fields reject outright.
  */
+/**
+ * The eight-cell signature: one per-signal severity in `signalNames` order.
+ * Shared snapshots carry it so the shared view and its preview image can
+ * draw the strip without the full signal payloads.
+ */
+export const signalSignatureSchema = z
+  .array(z.enum(severities))
+  .length(signalNames.length);
+
+export type SignalSignature = z.infer<typeof signalSignatureSchema>;
+
 export const sharedSnapshotSchema = z.object({
   verdict: verdictSchema,
   url: z.string().max(2048),
   summary: z.string().max(600),
   capturedAt: z.string().max(128),
+  // Added with the eight-cell strip; links shared before it still parse.
+  signature: signalSignatureSchema.optional().catch(undefined),
 });
 
 export type SharedSnapshot = z.infer<typeof sharedSnapshotSchema>;

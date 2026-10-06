@@ -4,6 +4,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -14,7 +15,10 @@ import {
 import { ResultsSection } from "@/components/scrutinix/results-section";
 import { ScanForm } from "@/components/scrutinix/scan-form";
 import { VERDICT_HEADING_ID } from "@/components/scrutinix/verdict-panel";
+import { sanitizeHistoryEntry } from "@/lib/domain/runtime-safety";
+import { encodeSharedSnapshot } from "@/lib/domain/signal-signature";
 import { buildThreatAssessment } from "@/lib/domain/verdict";
+import { describeSharedSnapshot } from "@/lib/server/share-metadata";
 import {
   createPendingSignalResults,
   signalNames,
@@ -118,9 +122,19 @@ function OpenStored({ result }: { result: AnalysisResult }) {
   );
 }
 
-function renderApp(extra?: React.ReactNode) {
+function renderApp(
+  extra?: React.ReactNode,
+  shared?: { payload: string; withServerAnatomy?: boolean },
+) {
+  const sharedAnatomy =
+    shared?.withServerAnatomy === false
+      ? null
+      : (describeSharedSnapshot(shared?.payload)?.anatomy ?? null);
   return render(
-    <AnalyzerRuntimeProvider>
+    <AnalyzerRuntimeProvider
+      sharedPayload={shared?.payload ?? null}
+      sharedAnatomy={sharedAnatomy}
+    >
       <ScanForm />
       <ResultsSection />
       {extra}
@@ -130,6 +144,59 @@ function renderApp(extra?: React.ReactNode) {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+});
+
+const lookalikeShare = encodeSharedSnapshot({
+  verdict: "safe",
+  url: "https://paypal.com.secure-login.xyz/verify",
+  summary: "No check flagged this link.",
+  capturedAt: "2026-10-06T09:00:00.000Z",
+  signature: Array(8).fill("clear"),
+});
+
+// First in the file on purpose: the Public Suffix List parser is cached at
+// module level once any test loads it, which would hide the server path.
+describe("shared snapshot first paint", () => {
+  it("hedges a shared look-alike from the first render, before the parser loads", () => {
+    renderApp(undefined, { payload: lookalikeShare });
+    expect(document.querySelector("#sx-link-anatomy")?.textContent).toBe(
+      "https://paypal.com.secure-login.xyz/verify",
+    );
+
+    // Synchronous: no waiting on the lazily loaded parser.
+    const band = screen.getByLabelText(/^scan result: safe$/i);
+    expect(
+      within(band).getByText("Don't sign in or enter details here."),
+    ).toBeTruthy();
+    expect(band.getAttribute("style")).toContain("var(--sx-unknown-surface)");
+    expect(
+      screen.getByText(
+        (_, node) =>
+          node?.tagName === "P" &&
+          /This link belongs to secure-login\.xyz, not paypal\.com\./.test(
+            node.textContent ?? "",
+          ),
+      ),
+    ).toBeTruthy();
+  });
+
+  it("names the impersonated brand in one visible sentence", () => {
+    renderApp(undefined, { payload: lookalikeShare });
+    // Visible prose outside the anatomy breakdown (the link itself) and
+    // outside screen-reader-only text.
+    const sentences = Array.from(
+      document.querySelectorAll("p, li, dd, h2, h3"),
+    ).filter(
+      (node) =>
+        node.id !== "sx-link-anatomy" &&
+        !node.closest(".sr-only, [aria-live]") &&
+        /paypal\.com/.test(node.textContent ?? ""),
+    );
+    expect(sentences).toHaveLength(1);
+    expect(sentences[0]?.textContent).toBe(
+      "This link belongs to secure-login.xyz, not paypal.com.",
+    );
+  });
 });
 
 describe("ResultsSection", () => {
@@ -398,7 +465,7 @@ describe("ResultsSection", () => {
 
   it("states each driving fact once on the default Summary view", async () => {
     for (const [host, fact, pattern] of [
-      ["malicious.scrutinix.test", "VirusTotal engines", /VirusTotal engines/g],
+      ["malicious.scrutinix.test", "engines flagged", /engines flagged/g],
       ["feed-hit.scrutinix.test", "lists this link", /lists this link/g],
     ] as const) {
       const result = resultFrom(
@@ -414,6 +481,218 @@ describe("ResultsSection", () => {
       expect(visible.match(pattern)?.length, `${host}: ${fact}`).toBe(1);
       unmount();
     }
+  });
+
+  it("names each strip cell by its finding and reveals its row", async () => {
+    const signals = buildSignals(7);
+    signals.dns = cleanSignals().dns;
+    renderApp(
+      <OpenStored
+        result={resultFrom("strip", signals, "https://evil.example/")}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "open stored" }));
+
+    const strip = await screen.findByRole("toolbar", { name: "Checks" });
+    const cells = within(strip).getAllByRole("button");
+    expect(cells).toHaveLength(8);
+    expect(cells[0]?.getAttribute("aria-label")).toBe(
+      "VirusTotal: 7 engines flagged this link as malicious.",
+    );
+    // One cell in the tab order; arrows move between them.
+    expect(cells.filter((cell) => cell.tabIndex === 0)).toHaveLength(1);
+    cells[0]?.focus();
+    fireEvent.keyDown(cells[0]!, { key: "ArrowRight" });
+    expect(document.activeElement).toBe(cells[1]);
+    fireEvent.keyDown(cells[1]!, { key: "End" });
+    expect(document.activeElement).toBe(cells[7]);
+
+    // DNS is hidden on Summary: its cell switches to Full, opens the row,
+    // and focuses it.
+    expect(screen.queryByLabelText(/^DNS Profile signal:/)).toBeNull();
+    const dnsCell = cells.find(
+      (cell) => cell.dataset.signal === "dns",
+    ) as HTMLElement;
+    fireEvent.click(dnsCell);
+    await waitFor(() => {
+      const row = screen.getByLabelText(/^DNS Profile signal:/);
+      expect(document.activeElement).toBe(row);
+      expect(row.closest("details")?.open).toBe(true);
+    });
+    expect(
+      screen
+        .getByRole("switch", { name: /^Summary Full/ })
+        .getAttribute("aria-checked"),
+    ).toBe("true");
+  });
+
+  it("keeps keyboard focus on the band through a Re-scan", async () => {
+    const stored = buildResult("stored-rescan", 7);
+    const fresh = buildResult("fresh-rescan", 7);
+    const stream: {
+      controller?: ReadableStreamDefaultController<Uint8Array>;
+    } = {};
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        stream.controller = controller;
+      },
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(body, {
+            status: 200,
+            headers: { "content-type": "application/x-ndjson" },
+          }),
+      ),
+    );
+    renderApp(<OpenStored result={stored} />);
+    fireEvent.click(screen.getByRole("button", { name: "open stored" }));
+
+    const rescan = await screen.findByRole("button", { name: "Re-scan" });
+    rescan.focus();
+    await act(async () => {
+      fireEvent.click(rescan);
+    });
+
+    // The button is gone; focus is parked on the band, not <body>.
+    await waitFor(() => {
+      expect(screen.queryByRole("button", { name: "Re-scan" })).toBeNull();
+      expect(document.activeElement?.id).toBe(VERDICT_HEADING_ID);
+      expect(document.activeElement?.textContent).toBe("Checking");
+    });
+
+    await act(async () => {
+      stream.controller?.enqueue(new TextEncoder().encode(scanNdjson(fresh)));
+      stream.controller?.close();
+    });
+    await waitFor(() => {
+      expect(document.activeElement?.id).toBe(VERDICT_HEADING_ID);
+      expect(document.activeElement?.textContent).toBe("malicious");
+    });
+  });
+});
+
+/** A held-open scan stream the test can finish later. */
+function stubHeldStream() {
+  const stream: {
+    controller?: ReadableStreamDefaultController<Uint8Array>;
+  } = {};
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) {
+      stream.controller = controller;
+    },
+  });
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(
+      async () =>
+        new Response(body, {
+          status: 200,
+          headers: { "content-type": "application/x-ndjson" },
+        }),
+    ),
+  );
+  return stream;
+}
+
+describe("ResultsSection focus and states", () => {
+  it("keeps focus on the band when a shared snapshot's fresh scan starts", async () => {
+    const stream = stubHeldStream();
+    const fresh = buildResult(
+      "fresh-shared",
+      7,
+      "https://paypal.com.secure-login.xyz/verify",
+    );
+    renderApp(undefined, { payload: lookalikeShare });
+
+    const run = screen.getByRole("button", { name: "Run a fresh scan" });
+    run.focus();
+    await act(async () => {
+      fireEvent.click(run);
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("button", { name: "Run a fresh scan" }),
+      ).toBeNull();
+      expect(document.activeElement?.id).toBe(VERDICT_HEADING_ID);
+      expect(document.activeElement?.textContent).toBe("Checking");
+    });
+
+    await act(async () => {
+      stream.controller?.enqueue(new TextEncoder().encode(scanNdjson(fresh)));
+      stream.controller?.close();
+    });
+    await waitFor(() => {
+      expect(document.activeElement?.id).toBe(VERDICT_HEADING_ID);
+      expect(document.activeElement?.textContent).toBe("malicious");
+    });
+  });
+
+  it("hands focus to the link field when a scan is cancelled", async () => {
+    stubHeldStream();
+    renderApp();
+    fireEvent.change(screen.getByRole("textbox", { name: "URL to analyze" }), {
+      target: { value: "slow.example" },
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Analyze URL" }));
+    });
+
+    const cancel = await screen.findByRole("button", { name: "Cancel scan" });
+    cancel.focus();
+    await act(async () => {
+      fireEvent.click(cancel);
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByRole("button", { name: "Cancel scan" })).toBeNull();
+      expect(document.activeElement).toBe(
+        screen.getByRole("textbox", { name: "URL to analyze" }),
+      );
+    });
+  });
+
+  it("says plainly when a saved entry predates per-check results", async () => {
+    const legacy = sanitizeHistoryEntry({
+      id: "legacy-1",
+      url: "https://old.example/",
+      verdict: "safe",
+      signals: {},
+      metadata: { scanId: "legacy-1" },
+      savedAt: "2025-01-01T00:00:00.000Z",
+    });
+    expect(legacy).not.toBeNull();
+    renderApp(<OpenStored result={legacy!} />);
+    fireEvent.click(screen.getByRole("button", { name: "open stored" }));
+
+    expect(
+      await screen.findByText(/saved before per-check results were kept/),
+    ).toBeTruthy();
+    // No strip claiming eight failed checks, and no rows.
+    expect(screen.queryByRole("toolbar", { name: "Checks" })).toBeNull();
+    expect(screen.queryByRole("list", { name: "Signals" })).toBeNull();
+  });
+
+  it("draws eight failed cells for a real scan whose checks all failed", async () => {
+    const signals = createPendingSignalResults();
+    for (const name of signalNames) {
+      signals[name] = {
+        status: "error",
+        data: null,
+        error: "The provider timed out.",
+        durationMs: 0,
+      };
+    }
+    const failed = resultFrom("all-failed", signals, "https://down.example/");
+    renderApp(<OpenStored result={failed} />);
+    fireEvent.click(screen.getByRole("button", { name: "open stored" }));
+
+    const strip = await screen.findByRole("toolbar", { name: "Checks" });
+    expect(strip.querySelectorAll('[data-severity="error"]').length).toBe(8);
+    expect(screen.queryByText(/saved before per-check results/)).toBeNull();
   });
 });
 

@@ -14,8 +14,14 @@ import { toast } from "sonner";
 import type { SharedSnapshot } from "@/components/shared/scrutinix-types";
 import { selectSummarySignals } from "@/components/shared/signal-selection";
 import { useBatchStream } from "@/hooks/use-batch-stream";
+import { warmLinkParser } from "@/hooks/use-link-anatomy";
 import { useScanStream } from "@/hooks/use-scan-stream";
-import { sharedSnapshotSchema } from "@/lib/domain/schemas";
+import type { LinkAnatomy } from "@/lib/domain/link-anatomy";
+import {
+  buildSharedSnapshot,
+  decodeSharedSnapshot,
+  encodeSharedSnapshot,
+} from "@/lib/domain/signal-signature";
 import {
   signalNames,
   type AnalysisResult,
@@ -24,30 +30,25 @@ import {
 import { normalizeUrlInput } from "@/lib/domain/url";
 
 export type Tab = "single" | "batch";
+
+/** The share link, read-only and selected on focus, when copying failed. */
+function ShareLinkField({ link }: { link: string }) {
+  return (
+    <input
+      readOnly
+      value={link}
+      aria-label="Share link"
+      onFocus={(event) => event.currentTarget.select()}
+      className="text-caption mt-1 w-full rounded-md border border-[var(--sx-control)] bg-[var(--sx-surface)] px-2 py-1.5 font-mono text-[var(--sx-text)]"
+    />
+  );
+}
 export type ViewMode = "summary" | "full";
 
-function readSnapshot(): SharedSnapshot | null {
-  if (typeof window === "undefined") return null;
-  const payload = new URLSearchParams(window.location.search).get("shared");
-  if (!payload) return null;
-
-  const parseSnapshot = (value: unknown): SharedSnapshot | null => {
-    const parsed = sharedSnapshotSchema.safeParse(value);
-    return parsed.success ? parsed.data : null;
-  };
-
-  try {
-    return parseSnapshot(JSON.parse(decodeURIComponent(atob(payload))));
-  } catch {
-    try {
-      return parseSnapshot(JSON.parse(atob(payload)));
-    } catch {
-      return null;
-    }
-  }
-}
-
-function useCreateAnalyzerRuntime() {
+function useCreateAnalyzerRuntime(
+  sharedPayload: string | null,
+  sharedAnatomy: LinkAnatomy | null,
+) {
   const [activeTab, setActiveTab] = useState<Tab>("single");
   const [viewMode, setViewMode] = useState<ViewMode>("summary");
   const [singleUrl, setSingleUrl] = useState("");
@@ -62,8 +63,11 @@ function useCreateAnalyzerRuntime() {
   // Bumped when a stored result (history, batch "Open") replaces the view,
   // so the results section can move focus to the verdict heading.
   const [verdictFocusRequest, setVerdictFocusRequest] = useState(0);
-  const [sharedSnapshot] = useState<SharedSnapshot | null>(() =>
-    readSnapshot(),
+  // Decoded from the page's `?shared=` value, which the server passes in,
+  // so the server render and hydration agree.
+  const sharedSnapshot = useMemo<SharedSnapshot | null>(
+    () => decodeSharedSnapshot(sharedPayload),
+    [sharedPayload],
   );
   // React can batch several url_complete events into one render. Keep every
   // result so a fast batch cannot silently drop history entries.
@@ -124,6 +128,7 @@ function useCreateAnalyzerRuntime() {
       setFormError(value.error);
       return;
     }
+    warmLinkParser();
     await scan.startScan(value.value.normalizedUrl);
   }, [scan, singleUrl]);
 
@@ -139,7 +144,9 @@ function useCreateAnalyzerRuntime() {
       return;
     }
     if (urls.length > 10) {
-      setFormError("Batch capped at 10 URLs.");
+      setFormError(
+        `That's ${urls.length} links. A batch checks up to 10 — remove some and try again.`,
+      );
       return;
     }
 
@@ -155,22 +162,39 @@ function useCreateAnalyzerRuntime() {
   }, [batch, batchInput]);
 
   const shareResult = useCallback(async (result: AnalysisResult) => {
-    const capturedAt = result.metadata?.completedAt ?? new Date().toISOString();
-    const payload = JSON.stringify({
-      verdict: result.verdict,
-      url: result.url,
-      summary: result.threatInfo?.summary ?? "",
-      capturedAt,
-    });
-    const encodedPayload = btoa(encodeURIComponent(payload));
-    const targetUrl = new URL(window.location.href);
-    targetUrl.searchParams.set("shared", encodedPayload);
+    // The snapshot (verdict, link, summary, and the eight-cell signature)
+    // travels in the link itself; the server keeps no share database.
+    const targetUrl = new URL(window.location.origin);
+    targetUrl.searchParams.set(
+      "shared",
+      encodeSharedSnapshot(buildSharedSnapshot(result)),
+    );
 
+    const link = targetUrl.toString();
     try {
-      await navigator.clipboard.writeText(targetUrl.toString());
+      await navigator.clipboard.writeText(link);
       toast.success("Link copied to clipboard");
     } catch {
-      toast.error("Clipboard access was blocked");
+      // Never drop the link: hand it to the system share sheet, or keep it
+      // on screen to copy by hand.
+      if (typeof navigator.share === "function") {
+        try {
+          await navigator.share({ url: link });
+          return;
+        } catch (error) {
+          if (error instanceof DOMException && error.name === "AbortError") {
+            return;
+          }
+        }
+      }
+      toast.error(
+        "Couldn't copy the link — select it below and copy it yourself.",
+        {
+          duration: Infinity,
+          closeButton: true,
+          description: <ShareLinkField link={link} />,
+        },
+      );
     }
   }, []);
 
@@ -181,6 +205,7 @@ function useCreateAnalyzerRuntime() {
       setSingleUrl(url);
       setInputEditedSinceResult(false);
       setActiveTab("single");
+      warmLinkParser();
       await scan.startScan(url);
     },
     [scan],
@@ -224,6 +249,7 @@ function useCreateAnalyzerRuntime() {
     setViewMode,
     updateSingleUrl,
     shareResult,
+    sharedAnatomy,
     sharedSnapshot,
     signals,
     singleUrl,
@@ -248,8 +274,21 @@ export function useAnalyzerRuntime() {
   return context;
 }
 
-export function AnalyzerRuntimeProvider({ children }: { children: ReactNode }) {
-  const value = useCreateAnalyzerRuntime();
+export function AnalyzerRuntimeProvider({
+  children,
+  sharedPayload = null,
+  sharedAnatomy = null,
+}: {
+  children: ReactNode;
+  /** The raw `?shared=` value, when the page was opened from a share. */
+  sharedPayload?: string | null;
+  /**
+   * The shared link's anatomy, computed on the server, so the first render
+   * of a shared look-alike already hedges before the browser parser loads.
+   */
+  sharedAnatomy?: LinkAnatomy | null;
+}) {
+  const value = useCreateAnalyzerRuntime(sharedPayload, sharedAnatomy);
   return (
     <AnalyzerRuntimeContext.Provider value={value}>
       {children}

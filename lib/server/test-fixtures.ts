@@ -11,6 +11,8 @@ import type { NormalizedUrl } from "@/lib/domain/url";
  *   malicious.scrutinix.test    -> VirusTotal conviction (malicious)
  *   unreachable.scrutinix.test  -> dead host (unknown)
  *   feed-hit.scrutinix.test     -> URLhaus exact listing (malicious)
+ *   critical.scrutinix.test     -> VirusTotal + Safe Browsing + feed (critical)
+ *   error.scrutinix.test        -> every check fails (error)
  *   anything else               -> clean (safe)
  *
  * This module is inert in production: it only activates through the explicit
@@ -26,6 +28,22 @@ export function getFixtureSignalProviders(
 ): SignalProviderTable | null {
   if (process.env.SCRUTINIX_TEST_FIXTURES !== "1") {
     return null;
+  }
+
+  if (target.hostname === "error.scrutinix.test") {
+    const fail = async (): Promise<never> => {
+      throw new Error("Fixture provider failure.");
+    };
+    return {
+      virusTotal: fail,
+      mlEnsemble: fail,
+      googleSafeBrowsing: fail,
+      threatFeeds: fail,
+      ssl: fail,
+      whois: fail,
+      dns: fail,
+      redirectChain: fail,
+    };
   }
 
   const signals = buildFixtureSignals(target);
@@ -98,6 +116,52 @@ function buildFixtureSignals(target: NormalizedUrl): SignalPayloadMap {
           content: null,
         },
       };
+    case "critical.scrutinix.test":
+      return {
+        ...clean,
+        virusTotal: {
+          ...clean.virusTotal,
+          malicious: 24,
+          suspicious: 4,
+          harmless: 30,
+          undetected: 12,
+          results: [
+            { engine: "FixtureAV", category: "malicious", result: "phishing" },
+            {
+              engine: "FixtureGuard",
+              category: "malicious",
+              result: "malware",
+            },
+          ],
+        },
+        googleSafeBrowsing: {
+          ...clean.googleSafeBrowsing,
+          matches: [
+            {
+              threatType: "SOCIAL_ENGINEERING",
+              platformType: "ANY_PLATFORM",
+              threatEntryType: "URL",
+            },
+            {
+              threatType: "MALWARE",
+              platformType: "ANY_PLATFORM",
+              threatEntryType: "URL",
+            },
+          ],
+        },
+        threatFeeds: {
+          ...clean.threatFeeds,
+          matches: [
+            {
+              feed: "urlhaus",
+              matchedUrl: target.normalizedUrl,
+              detail: "lists this link as active malware distribution",
+              confidence: "high",
+              matchType: "url",
+            },
+          ],
+        },
+      };
     case "feed-hit.scrutinix.test":
       return {
         ...clean,
@@ -144,12 +208,12 @@ function buildCleanSignals(target: NormalizedUrl): SignalPayloadMap {
       lexicalModel: {
         label: "benign",
         score: 0.05,
-        reasons: ["No suspicious lexical patterns were found."],
+        reasons: ["Nothing unusual in the link's wording or structure."],
         model: "lexical-heuristic",
       },
       consensusLabel: "benign",
       consensusScore: 0.05,
-      reasons: ["No suspicious lexical patterns were found."],
+      reasons: ["Nothing unusual in the link's wording or structure."],
       warnings: [],
     },
     googleSafeBrowsing: {

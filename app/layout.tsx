@@ -13,12 +13,13 @@ const siteUrl = getSiteUrl();
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
-  title: "Scrutinix — Multi-Signal URL Threat Analyzer",
+  title: "Scrutinix — Check a link before you click",
   description:
-    "Inspect suspicious links with streamed evidence from browser-protection lists, threat feeds, redirects, DNS, TLS, and ML scoring.",
+    "Paste a link from an email, text, or chat. Eight independent checks tell you whether it's safe to open, and who really owns it.",
   icons: {
     icon: [
       { url: "/favicon.ico", sizes: "any" },
+      { url: "/icon.svg", type: "image/svg+xml" },
       { url: "/favicon-16x16.png", sizes: "16x16", type: "image/png" },
       { url: "/favicon-32x32.png", sizes: "32x32", type: "image/png" },
     ],
@@ -33,26 +34,26 @@ export const metadata: Metadata = {
   },
   manifest: "/site.webmanifest",
   openGraph: {
-    title: "Scrutinix — Multi-Signal URL Threat Analyzer",
+    title: "Scrutinix — Check a link before you click",
     description:
-      "Streamed, evidence-first URL threat analysis for suspicious links.",
+      "Check a link before you click. Eight independent checks, one plain verdict.",
     url: siteUrl,
     siteName: "Scrutinix",
     images: ["/opengraph-image"],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Scrutinix — Multi-Signal URL Threat Analyzer",
+    title: "Scrutinix — Check a link before you click",
     description:
-      "Streamed, evidence-first URL threat analysis for suspicious links.",
+      "Check a link before you click. Eight independent checks, one plain verdict.",
     images: ["/opengraph-image"],
   },
 };
 
 export const viewport: Viewport = {
   themeColor: [
-    { media: "(prefers-color-scheme: dark)", color: "#1d1e22" },
-    { media: "(prefers-color-scheme: light)", color: "#fcfcfc" },
+    { media: "(prefers-color-scheme: dark)", color: "#0c0e12" },
+    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
   ],
 };
 

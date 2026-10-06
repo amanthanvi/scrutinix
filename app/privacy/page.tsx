@@ -1,51 +1,46 @@
 import type { Metadata } from "next";
 
 import {
-  PROSE_MEASURE,
+  PROSE,
   PublicPageShell,
+  SectionHeading,
 } from "@/components/scrutinix/public-page-shell";
 
 export const metadata: Metadata = {
   title: "Scrutinix Privacy",
   description:
-    "What Scrutinix stores locally, what the server processes, and how shared links work.",
+    "What Scrutinix keeps in your browser, which services check your link, and how shared links work.",
 };
 
 const sections = [
   {
     title: "What stays local",
-    body: "Finished scans are stored in IndexedDB on your device only, one entry per link: a new scan of the same link replaces the older one. Clearing history removes the browser-side archive, with an immediate undo in the same session.",
+    body: "Finished scans are saved in your browser on this device only, one entry per link. A new scan of the same link replaces the older one. Clearing history removes them, and you can undo that right away.",
   },
   {
     title: "What the server does",
-    body: "Submitted URLs are processed on the server to query providers, compute the verdict, and stream results back. That processing is necessary for the product to function; nothing about your history is stored server-side.",
+    body: "To check a link, our server sends it to VirusTotal, Google Safe Browsing, and the abuse.ch threat feeds (URLhaus and ThreatFox). It sends the domain name to the Spamhaus and SURBL blocklists and the domain registry (WHOIS). It also visits the site to read its security certificate, DNS records, and redirects. Each of these services handles the link under its own privacy policy. We keep each result for about 15 minutes so a repeat check is fast. We never store your history.",
   },
   {
     title: "Logging",
-    body: "Operational logs keep scan identifiers, timings, cache state, and hashed URL context rather than the original raw URL string.",
+    body: "Our logs keep timings and a scrambled fingerprint of the link, never the link itself.",
   },
   {
     title: "Shared links",
-    body: "Share links embed a browser-generated snapshot in the URL itself — there is no server-side share database. A snapshot is a point-in-time record; run a fresh scan to verify against current provider responses.",
+    body: "A shared link carries the result inside the link itself: the verdict, the link, a one-line summary, and the eight check results. We have no database of shared links. When a chat app previews a shared link, our server draws the preview image from what is in the link and doesn't save it, though the image may be cached for up to a day so previews load fast. A shared result shows one moment in time, so run a new scan to check again.",
   },
 ] as const;
 
 export default function PrivacyPage() {
   return (
     <PublicPageShell
-      title="History stays in the browser."
-      lead="The server processes submitted URLs to run a live analysis, but saved history and shareable snapshots remain client-side."
+      title="Your history stays in your browser."
+      lead="To check a link, our server visits it and asks outside services about it. Your history stays in your browser, and shared links carry their result inside the link."
     >
       {sections.map((section) => (
-        <section key={section.title} className="space-y-2">
-          <h2 className="text-base font-semibold tracking-[-0.01em] text-[var(--sx-text)]">
-            {section.title}
-          </h2>
-          <p
-            className={`${PROSE_MEASURE} text-sm leading-6 text-[var(--sx-text-muted)]`}
-          >
-            {section.body}
-          </p>
+        <section key={section.title} className="flex flex-col gap-4">
+          <SectionHeading>{section.title}</SectionHeading>
+          <p className={PROSE}>{section.body}</p>
         </section>
       ))}
     </PublicPageShell>

@@ -2,6 +2,7 @@ import { capitalize } from "@/lib/domain/copy";
 import { describeLimitedChecks, getLimitedChecks } from "@/lib/domain/coverage";
 import type { AnalysisResult, Verdict } from "@/lib/domain/types";
 import { hasConfirmedReputationHit } from "@/lib/domain/reputation";
+import { isLegacySignalRecord } from "@/lib/domain/signal-signature";
 
 /**
  * Pure presentation logic for a finished verdict: the one-line instruction,
@@ -16,17 +17,70 @@ type GuidanceInput = Pick<AnalysisResult, "verdict" | "threatInfo"> & {
   signals?: AnalysisResult["signals"] | null;
   /** When present, the announcement names the host it is about. */
   url?: string | null;
+  /**
+   * A domain the link spells out but does not belong to
+   * (`LinkAnatomy.impersonates`). Presentation only, never the score or
+   * the verdict word: on a Safe verdict it hardens the instruction, swaps
+   * the reassuring confidence line for a plain note, and turns the band
+   * neutral. Unknown keeps its own instruction. The owner fact itself is
+   * said once, by `ownershipSentence`, in the anatomy line.
+   */
+  impersonates?: string | null;
+  /**
+   * The link's registered domain (`LinkAnatomy.registeredDomain`). Channels
+   * with no anatomy line (the live region) append the ownership sentence.
+   */
+  registeredDomain?: string | null;
 };
+
+const VERDICTS: readonly Verdict[] = [
+  "safe",
+  "suspicious",
+  "malicious",
+  "critical",
+  "unknown",
+  "error",
+];
 
 export interface VerdictGuidance {
   /** What the person should do, shown directly under the verdict word. */
   imperative: string;
   /** False when a number would imply a check that never happened. */
   showScore: boolean;
+  /**
+   * The band's colour. Normally the verdict; a look-alike Safe takes the
+   * neutral Unknown surface so the one colour encoding never reassures
+   * while the instruction warns.
+   */
+  tone: Verdict;
+  /**
+   * Replaces the "<X> confidence" line when the verdict's confidence would
+   * read as an endorsement of a look-alike. Null otherwise.
+   */
+  confidenceNote: string | null;
 }
 
 export function verdictLabel(verdict: Verdict | string): string {
   return capitalize(verdict);
+}
+
+/** A Safe verdict on a link that spells out another site's domain. */
+export function isLookAlikeSafe(
+  result: Pick<GuidanceInput, "verdict" | "impersonates">,
+): boolean {
+  return result.verdict === "safe" && Boolean(result.impersonates);
+}
+
+/**
+ * The one sentence that states a look-alike's real owner: "This link
+ * belongs to secure-login.xyz, not paypal.com." Every surface that states
+ * the fact (anatomy, live region, share description, share card) uses it.
+ */
+export function ownershipSentence(
+  registeredDomain: string,
+  impersonates: string,
+): string {
+  return `This link belongs to ${registeredDomain}, not ${impersonates}.`;
 }
 
 /**
@@ -47,6 +101,18 @@ export function isProvisionalSafe(result: GuidanceInput): boolean {
 }
 
 export function getVerdictGuidance(result: GuidanceInput): VerdictGuidance {
+  const verdict = result.verdict;
+  const base = {
+    tone: VERDICTS.includes(verdict) ? verdict : ("error" as const),
+    confidenceNote: null,
+  };
+  return { ...base, ...getInstruction(result) };
+}
+
+function getInstruction(
+  result: GuidanceInput,
+): Pick<VerdictGuidance, "imperative" | "showScore"> &
+  Partial<Pick<VerdictGuidance, "tone" | "confidenceNote">> {
   switch (result.verdict) {
     case "critical":
       // Critical can come from local heuristics alone; "known threat" is
@@ -66,6 +132,16 @@ export function getVerdictGuidance(result: GuidanceInput): VerdictGuidance {
         showScore: true,
       };
     case "safe":
+      if (result.impersonates) {
+        // No check flagged it, but a green band and "High confidence"
+        // would contradict the instruction. The score and word stay.
+        return {
+          imperative: "Don't sign in or enter details here.",
+          showScore: true,
+          tone: "unknown",
+          confidenceNote: "No check flagged it, but the name is misleading.",
+        };
+      }
       return {
         imperative: isProvisionalSafe(result)
           ? "Probably safe — still check who sent it."
@@ -108,7 +184,45 @@ export function getVerdictAnnouncement(result: GuidanceInput): string {
     : "";
   const host = result.url ? announcementHost(result.url) : null;
   const subject = host ? `Result for ${host}` : "Result";
-  return `${subject}: ${verdictLabel(result.verdict)}${score}. ${guidance.imperative}`;
+  // The live region has no anatomy line: it states the owner itself.
+  const owner =
+    result.impersonates && result.registeredDomain
+      ? ` ${ownershipSentence(result.registeredDomain, result.impersonates)}`
+      : "";
+  return `${subject}: ${verdictLabel(result.verdict)}${score}. ${guidance.imperative}${owner}`;
+}
+
+/**
+ * "What to do" in the verdict details. A look-alike that no check flagged
+ * gets the hedged steps instead of the engine's ("Still check who sent the
+ * link before you sign in"), which would read as permission to sign in.
+ */
+export function getVerdictRecommendations(result: GuidanceInput): string[] {
+  if (
+    result.impersonates &&
+    (result.verdict === "safe" || result.verdict === "unknown")
+  ) {
+    return [
+      "Don't sign in, pay, or enter codes on this site.",
+      `To reach ${result.impersonates}, type its address yourself or use its app.`,
+    ];
+  }
+  return result.threatInfo?.recommendations ?? [];
+}
+
+/**
+ * "Why <X> confidence" in the details. Confidence measures reputation
+ * coverage only, so a look-alike Safe says that its address still imitates
+ * another site.
+ */
+export function getConfidenceReasons(result: GuidanceInput): string[] {
+  const reasons = result.threatInfo?.confidenceReasons ?? [];
+  return isLookAlikeSafe(result)
+    ? [
+        ...reasons.slice(0, 3),
+        `Confidence covers reputation only; the address still imitates ${result.impersonates}.`,
+      ]
+    : reasons;
 }
 
 function announcementHost(url: string): string | null {
@@ -120,18 +234,24 @@ function announcementHost(url: string): string | null {
 }
 
 /**
- * Whether the verdict panel should show the one-line summary. A clean,
- * fully covered Safe result has nothing to add beyond "Looks safe to open."
- * and the quiet-checks line ("All 8 checks found nothing."), so saying
- * "No check flagged this link." as well would state one fact twice. The
- * summary stays in the data for shares, exports, and history search.
+ * Whether the verdict band should show the one-line summary as its
+ * "because" line. It only appears when it adds information:
+ *
+ * - Not when Summary already shows driver rows: "7 VirusTotal engines
+ *   flagged this link." above a VirusTotal row saying the same thing
+ *   states one fact twice (`driverRows`).
+ * - Not for a clean, fully covered Safe result: "Looks safe to open." and
+ *   the quiet-checks line ("All 8 checks found nothing.") already say it.
+ *
+ * The summary stays in the data for shares, exports, and history search.
  */
 export function shouldShowVerdictSummary(
   result: Pick<AnalysisResult, "verdict" | "threatInfo"> & {
     metadata?: Pick<AnalysisResult["metadata"], "partialFailure"> | null;
   },
+  driverRows = 0,
 ): boolean {
-  if (!result.threatInfo?.summary) {
+  if (!result.threatInfo?.summary || driverRows > 0) {
     return false;
   }
   if (result.verdict !== "safe") {
@@ -150,7 +270,10 @@ export function shouldShowVerdictSummary(
  * didn't finish; TLS Certificate couldn't be fully verified." Built from
  * the same `getLimitedChecks` list the verdict summary's "some checks were
  * limited" comes from, so the two always agree. Null when every check ran
- * in full - or when the verdict line already says the scan failed. A stale
+ * in full - or when the verdict line already says the scan failed. Legacy
+ * records get no caveat either: their checks finished but were never
+ * stored (the sanitizer fills each as a "missing" error), and the legacy
+ * notice beside the result says exactly that. A stale
  * VirusTotal analysis is aged at the scan's completion time, so a reopened
  * result says what its verdict was built on.
  */
@@ -159,7 +282,7 @@ export function getCoverageCaveat(
     metadata?: Pick<AnalysisResult["metadata"], "completedAt"> | null;
   },
 ): string | null {
-  if (result.verdict === "error") {
+  if (result.verdict === "error" || isLegacySignalRecord(result.signals)) {
     return null;
   }
 

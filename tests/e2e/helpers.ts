@@ -7,6 +7,7 @@ import { expect, type Page } from "@playwright/test";
  * fixed sleeps needed.
  */
 export async function gotoApp(page: Page) {
+  await isolateRateLimit(page);
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await expect(
     page.getByRole("button", { name: /switch to (light|dark) theme/i }),
@@ -21,4 +22,19 @@ export async function submitSingleScan(page: Page, url: string) {
     await expect(input).toHaveValue(url);
   }).toPass();
   await page.getByRole("button", { name: /analyze url/i }).click();
+}
+
+let clientCounter = 0;
+
+/**
+ * Give each test its own rate-limit identity. The suite runs more scans
+ * than one client may start per minute (lib/server/rate-limit.ts), so the
+ * limit stays as shipped and each test presents a distinct documentation
+ * address (198.51.100.0/24) through the x-real-ip header the limiter trusts.
+ */
+export async function isolateRateLimit(page: Page) {
+  clientCounter += 1;
+  await page.setExtraHTTPHeaders({
+    "x-real-ip": `198.51.100.${(process.pid + clientCounter) % 250}`,
+  });
 }

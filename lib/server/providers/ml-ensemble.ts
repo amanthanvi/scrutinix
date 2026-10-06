@@ -66,7 +66,7 @@ export async function runMlEnsembleProvider(
         .join("[host]"),
     });
     warnings.push(
-      "The local URL classifier is unavailable. Falling back to lexical heuristics only.",
+      "The link pattern model was unavailable, so only the structure checks ran.",
     );
   }
 
@@ -170,7 +170,7 @@ function buildLexicalModel(url: string): ClassificationFinding {
     score: Number(Math.min(score, 0.95).toFixed(2)),
     reasons: reasons.length
       ? reasons
-      : ["No suspicious lexical patterns were found."],
+      : ["Nothing unusual in the link's wording or structure."],
     model: "lexical-heuristic",
   };
 }

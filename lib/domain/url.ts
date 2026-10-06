@@ -29,7 +29,7 @@ export function normalizeUrlInput(input: string): UrlValidationResult {
   if (trimmed.length > MAX_URL_LENGTH) {
     return {
       ok: false,
-      error: "URLs longer than 2048 characters are not supported.",
+      error: "That link is too long to check (over 2,048 characters).",
     };
   }
 
@@ -49,19 +49,22 @@ export function normalizeUrlInput(input: string): UrlValidationResult {
   }
 
   if (!["http:", "https:"].includes(url.protocol)) {
-    return { ok: false, error: "Only HTTP and HTTPS URLs are supported." };
+    return {
+      ok: false,
+      error: "Only web links (http or https) can be checked.",
+    };
   }
 
   const hostname = url.hostname.toLowerCase();
 
   if (!hostname) {
-    return { ok: false, error: "A hostname is required." };
+    return { ok: false, error: "That link is missing a site name." };
   }
 
   if (isPrivateHostname(hostname)) {
     return {
       ok: false,
-      error: "Private, localhost, and internal network URLs are not allowed.",
+      error: "Links to your own computer or private network can't be checked.",
     };
   }
 

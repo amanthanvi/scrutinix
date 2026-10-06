@@ -13,7 +13,10 @@ import {
   VT_STALE_ANALYSIS_DAYS,
   vtAnalysisAgeDays,
 } from "@/lib/domain/reputation";
-import { getSignalSeverity } from "@/lib/domain/signal-severity";
+import {
+  getSignalSeverity,
+  YOUNG_DOMAIN_DAYS,
+} from "@/lib/domain/signal-severity";
 import type {
   AnalysisResult,
   SignalName,
@@ -682,7 +685,10 @@ function scoreWhois(signals: SignalResults): ScoredItem[] {
         group: "domain-age",
       },
     });
-  } else if (signal.data.ageDays !== null && signal.data.ageDays < 180) {
+  } else if (
+    signal.data.ageDays !== null &&
+    signal.data.ageDays < YOUNG_DOMAIN_DAYS
+  ) {
     contributions.push({
       score: 8,
       category: "Domain Age",
@@ -1083,10 +1089,10 @@ function buildConfidenceReasons(
     const { transformerModel, lexicalModel } = signals.mlEnsemble.data;
     if (transformerModel && transformerModel.label !== lexicalModel.label) {
       reasons.push(
-        "The link pattern model and its rule-based check disagreed, so that signal counts for less.",
+        "The link pattern model and the structure checks disagreed, so that signal counts for less.",
       );
     } else if (transformerModel) {
-      reasons.push("The link pattern model and its rule-based check agreed.");
+      reasons.push("The link pattern model and the structure checks agreed.");
     }
   }
 

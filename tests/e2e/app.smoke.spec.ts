@@ -50,7 +50,9 @@ test("legacy history migrates into the Scrutinix database @smoke", async ({
   await gotoApp(page);
 
   const historyRegion = page.getByRole("region", { name: /scan history/i });
-  await expect(historyRegion.getByText(/legacy\.example/i)).toBeVisible();
+  await expect(
+    historyRegion.getByRole("button", { name: /legacy\.example/i }),
+  ).toBeVisible();
 
   const databaseNames = await page.evaluate(async () => {
     if (typeof indexedDB.databases !== "function") {
@@ -241,9 +243,10 @@ test("single scan flow @smoke", async ({ page }) => {
   await expect(page.getByRole("tab", { name: /^single$/i })).toBeVisible();
   await expect(singleUrlInput).toBeVisible();
   await expect(analyze).toBeEnabled();
-  await expect(
-    page.getByRole("region", { name: /scan history/i }),
-  ).toBeVisible();
+  // Absence is the empty state: the region exists but draws nothing.
+  const historyRegion = page.getByRole("region", { name: /scan history/i });
+  await expect(historyRegion).toBeAttached();
+  await expect(historyRegion).toBeEmpty();
 
   // An empty submit explains itself instead of a dead, disabled button.
   await analyze.click();
@@ -345,3 +348,110 @@ test("history clear can be undone @smoke", async ({ page }) => {
   await historyRegion.getByRole("button", { name: /undo clear/i }).click();
   await expect(historyRegion.getByText(/example\.com/i).first()).toBeVisible();
 });
+
+test("a shared result link shows its verdict, instruction, and strip @smoke", async ({
+  page,
+  request,
+}) => {
+  const snapshot = {
+    verdict: "malicious",
+    url: "https://paypal.com.secure-login.xyz/verify",
+    summary: "Google Safe Browsing flagged this link.",
+    capturedAt: "2026-10-06T09:00:00.000Z",
+    signature: [
+      "clear",
+      "suspicious",
+      "malicious",
+      "clear",
+      "clear",
+      "clear",
+      "clear",
+      "clear",
+    ],
+  };
+  const payload = Buffer.from(
+    encodeURIComponent(JSON.stringify(snapshot)),
+  ).toString("base64");
+
+  await page.goto(`/?shared=${encodeURIComponent(payload)}`);
+  const verdict = page.getByLabel(/^scan result: malicious$/i);
+  await expect(verdict).toBeVisible();
+  await expect(verdict.getByText("Don't open this link.")).toBeVisible();
+  await expect(
+    page.getByRole("list", { name: "Checks" }).getByRole("listitem"),
+  ).toHaveCount(8);
+  await expect(
+    page.getByRole("button", { name: "Run a fresh scan" }),
+  ).toBeVisible();
+
+  // The page previews as this result, through the per-result image.
+  const ogImage = await page
+    .locator('meta[property="og:image"]')
+    .getAttribute("content");
+  expect(ogImage).toContain("/og/result?shared=");
+  // og:image is absolute (metadataBase); fetch it from the test server.
+  const imageUrl = new URL(ogImage!);
+  const image = await request.get(`${imageUrl.pathname}${imageUrl.search}`);
+  expect(image.status()).toBe(200);
+  expect(image.headers()["content-type"]).toBe("image/png");
+});
+
+test("a shared link from before the strip still opens @smoke", async ({
+  page,
+}) => {
+  const payload = Buffer.from(
+    encodeURIComponent(
+      JSON.stringify({
+        verdict: "safe",
+        url: "https://example.com/",
+        summary: "No check flagged this link.",
+        capturedAt: "2026-03-01T00:00:00.000Z",
+      }),
+    ),
+  ).toString("base64");
+
+  await page.goto(`/?shared=${encodeURIComponent(payload)}`);
+  await expect(page.getByLabel(/^scan result: safe$/i)).toBeVisible();
+  await expect(
+    page.getByText("Probably safe — still check who sent it."),
+  ).toBeVisible();
+});
+
+for (const reducedMotion of ["no-preference", "reduce"] as const) {
+  test(`on a phone a re-scan's verdict comes into view (${reducedMotion} motion) @smoke`, async ({
+    page,
+  }) => {
+    await page.emulateMedia({ reducedMotion });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await gotoApp(page);
+    // Two saved scans lengthen the page below the band.
+    await submitSingleScan(page, "example.com");
+    await expect(page.getByLabel(/^scan result: safe$/i)).toBeVisible();
+    await submitSingleScan(page, "https://malicious.scrutinix.test/login");
+    const band = page.getByLabel(/^scan result: malicious$/i);
+    const answer = band.getByText("Don't open this link.");
+    await expect(answer).toBeVisible();
+
+    // Re-scan from the action row at the end of the evidence: the band
+    // now starts far above the fold, so only the landing scroll can bring
+    // the answer back into view.
+    await page.evaluate(() =>
+      window.scrollTo(0, document.documentElement.scrollHeight),
+    );
+    await expect(answer).not.toBeInViewport();
+    await page.getByRole("button", { name: "Re-scan" }).click();
+
+    // Fully in view, not just a sliver: the verdict word and the answer.
+    const heading = page.getByRole("heading", {
+      level: 2,
+      name: /^malicious$/i,
+    });
+    await expect(heading).toBeInViewport({ ratio: 1 });
+    await expect(
+      page
+        .getByLabel(/^scan result: malicious$/i)
+        .getByText("Don't open this link."),
+    ).toBeInViewport({ ratio: 1 });
+    await expect(heading).toBeFocused();
+  });
+}

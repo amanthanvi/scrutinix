@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import { useEffect } from "react";
 
 import { useAnalyzerRuntime } from "@/components/scrutinix/analyzer-runtime";
+import { warmLinkParser } from "@/hooks/use-link-anatomy";
 import { useScanHistory } from "@/hooks/use-scan-history";
 
 const HistoryPanel = dynamic(
@@ -13,13 +14,8 @@ const HistoryPanel = dynamic(
     ),
   {
     loading: () => (
-      <div
-        role="region"
-        aria-label="Scan history"
-        className="text-[0.8125rem] text-[var(--sx-text-soft)]"
-      >
-        Loading history…
-      </div>
+      // Nothing visible while history loads: most visits have none.
+      <div role="region" aria-label="Scan history" aria-busy="true" />
     ),
   },
 );
@@ -37,6 +33,14 @@ export function HistorySection() {
     setHistoryQuery,
     undoClearHistory,
   } = useScanHistory();
+
+  // An opened entry shows its link anatomy (and any look-alike hedge) at
+  // once only if the parser is already here: load it as soon as there is
+  // history to open, not on the click.
+  const hasEntries = entries.length > 0;
+  useEffect(() => {
+    if (hasEntries) warmLinkParser();
+  }, [hasEntries]);
 
   useEffect(() => {
     if (!historyQueue.length) return;
