@@ -146,7 +146,28 @@ if (!globalThis.__analysisCache) {
 
 /** Hash cache keys so raw scanned URLs never appear as Redis keys. */
 function remoteKey(key: string) {
-  return `sx:result:${createHash("sha256").update(key).digest("hex")}`;
+  return `sx:result:${cacheNamespace()}:${createHash("sha256").update(key).digest("hex")}`;
+}
+
+/**
+ * One Redis store serves every Vercel environment, so results are
+ * namespaced: a preview running different code must never answer production
+ * scans. Each preview commit gets its own namespace for the same reason;
+ * production keeps one so the cache stays warm across releases. Outside
+ * Vercel (local dev with real credentials) the namespace is "local".
+ */
+function cacheNamespace() {
+  const env = process.env.VERCEL_ENV?.trim().toLowerCase();
+  if (env === "production" || env === "development") {
+    return env;
+  }
+  if (env === "preview") {
+    const sha = process.env.VERCEL_GIT_COMMIT_SHA?.trim().toLowerCase();
+    return sha && /^[0-9a-f]{7,40}$/.test(sha)
+      ? `preview-${sha.slice(0, 12)}`
+      : "preview";
+  }
+  return "local";
 }
 
 function getSharedRedisStore(): RemoteCacheStore | null {

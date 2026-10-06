@@ -91,8 +91,52 @@ describe("ResultCache", () => {
       60_000,
     );
 
-    expect(seen[0]).toMatch(/^sx:result:[0-9a-f]{64}$/);
+    expect(seen[0]).toMatch(/^sx:result:local:[0-9a-f]{64}$/);
     expect(seen[0]).not.toContain("secret.example");
+  });
+
+  it("namespaces remote keys by Vercel environment and preview commit", async () => {
+    const keyFor = async (env: Record<string, string>) => {
+      vi.unstubAllEnvs();
+      vi.stubEnv("VERCEL_ENV", "");
+      vi.stubEnv("VERCEL_GIT_COMMIT_SHA", "");
+      for (const [name, value] of Object.entries(env)) {
+        vi.stubEnv(name, value);
+      }
+      const seen: string[] = [];
+      const remote: RemoteCacheStore = {
+        get: vi.fn(async () => null),
+        set: vi.fn(async (key: string) => {
+          seen.push(key);
+          return "OK";
+        }),
+      };
+      await new ResultCache(2, () => remote).set(
+        "https://example.com/",
+        buildResult("https://example.com/"),
+        60_000,
+      );
+      return (seen[0] ?? "").split(":").slice(0, 3).join(":");
+    };
+
+    try {
+      const sha = "0123456789abcdef0123456789abcdef01234567";
+      expect(await keyFor({ VERCEL_ENV: "production" })).toBe(
+        "sx:result:production",
+      );
+      expect(
+        await keyFor({ VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_SHA: sha }),
+      ).toBe("sx:result:preview-0123456789ab");
+      expect(
+        await keyFor({ VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_SHA: "x:y" }),
+      ).toBe("sx:result:preview");
+      expect(await keyFor({ VERCEL_ENV: "weird:value" })).toBe(
+        "sx:result:local",
+      );
+      expect(await keyFor({})).toBe("sx:result:local");
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 
   it("survives a throwing remote store", async () => {
