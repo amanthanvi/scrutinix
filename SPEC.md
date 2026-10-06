@@ -31,9 +31,13 @@
   - Restore dark/light theme support through the shared semantic token layer in `app/globals.css` while keeping `app/scrutinix.css` for the branded motion/effects layer.
   - When a theme toggle sits inside a server-rendered header, gate any `resolvedTheme`-dependent icon or label behind a mount-safe client snapshot to avoid hydration mismatches.
   - Keep the top header metrics truthful in idle state: the threat meter stays visually inert and the coverage badge reads as idle until a scan actually runs.
-  - The public site uses a scanner-first, single-column `44rem` flow on `/`: scan form, verdict, accessible Summary/Full signal rows, and in-flow history. Method/caveat detail lives on `/about` and `/privacy`.
+  - The public site uses a scanner-first, single-column `46rem` flow on `/`: a visible headline, the scan form, then the verdict band (verdict word, imperative, score only when scored), the link anatomy (registered domain emphasised, look-alike stated plainly), the eight-cell signal strip, accessible Summary/Full evidence rows, and in-flow history. Method/caveat detail lives on `/about` and `/privacy`.
+  - Visual lane (2026-10-06): the canonical minimal product tool on a cool crisp white ground (light) and a deep neutral-cool ground (dark). One blue accent; verdict hues only where a verdict is stated. The eight-cell strip is the one signature: progress, evidence index, history/batch glyph, brand mark, icons, and share images.
+  - Shared result links (`/?shared=`) carry an optional eight-severity signature and preview through a per-result image (`/og/result`), rendered from the link's own payload and never stored. The image route has its own rate-limit tier (30/min, 600/day per IP) and renders payloads up to 6,000 characters; larger or invalid payloads redirect to the default card.
+  - Strip states are distinguished by shape as well as colour (flagged solid, caution hatched, found-nothing a thin dash, partial half, failed outline, didn't-apply dashed, running empty). Empty history draws nothing; the `Scan history` region stays as an empty landmark.
+  - Look-alike detection tests every contiguous run of two or more subdomain labels; a two-letter country-code run counts only for a listed brand, so regional and tenant hosts (`acme.us.auth0.com`) are not called impersonations. Presentation only: scores are unchanged.
   - Sans-serif typography is the default reading mode; mono is reserved for telemetry, timings, hashes, and other code-like labels.
-  - Favicons and manifest are served from checked-in `public/` assets with explicit metadata links instead of a generated icon route.
+  - Favicons and manifest are served from checked-in `public/` assets with explicit metadata links instead of a generated icon route; they are regenerated from `lib/brand-mark.ts` with `npm run icons`.
 - Verdict decision:
   - Clean verdict confidence must be capped when a primary reputation source such as VirusTotal, Google Safe Browsing, or threat feeds does not complete, even if the remaining signals stay clean.
 - Provider decision: an uncached VirusTotal report lookup uses the primary URL report endpoint only; optional domain enrichment is omitted so one scan does not consume two of the free tier's four requests per minute.
@@ -298,7 +302,7 @@ Implementation note: batch streams also emit `batch_started`, `url_started`, and
 
 - **Error model:** `{ error: { code: string, message: string, retryable: boolean } }`
 - **Idempotency:** Same normalized URL returns a cached result with a new scan ID only when a complete, non-partial result remains inside the 15-minute TTL
-- **Rate limits:** 10 tokens/min per IP, 50 tokens/day per IP. An admitted batch costs one token per URL; rejected requests cost one token (enforced in `proxy.ts` before analysis work starts)
+- **Rate limits:** 10 tokens/min per IP, 50 tokens/day per IP. An admitted batch costs one token per URL; rejected requests cost one token (enforced in `proxy.ts` before analysis work starts). The per-result share image route is metered separately (30/min, 600/day per IP) so link previews never spend scan quota
 
 ### 4.4 State, caching, concurrency
 

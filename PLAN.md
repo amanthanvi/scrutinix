@@ -21,7 +21,7 @@ state plus the landed analysis-hardening and review-remediation work.
 ## Current Snapshot
 
 - Date: 2026-10-06
-- Execution status: `P21-P26 complete and verified on Node 24 LTS`
+- Execution status: `P21-P27 complete; P28 canonical redesign implemented, verified locally, and documented (DESIGN.md)`
 - Platform:
   - Next.js `16.3.4`
   - React `19.2.x`
@@ -29,18 +29,17 @@ state plus the landed analysis-hardening and review-remediation work.
   - ESLint `10.x` with direct Next.js, React, hooks, TypeScript, and JSX accessibility plugins
   - NDJSON streaming over `fetch`
 - Architecture:
-  - `proxy.ts` enforces rate limits on `/api/analyze` request paths.
+  - `proxy.ts` enforces rate limits on `/api/analyze` request paths (scan tier: 10/min, 50/day) and on the per-result share image `/og/result` (its own image tier: 30/min, 600/day, so previews never spend scan quota).
   - Node.js route handlers orchestrate eight signals and stream normalized results.
   - IndexedDB stores client-only history, export state, and re-scan sources.
-  - The ML ensemble uses a bundled quantized ONNX URL classifier plus lexical heuristics; scans do not call hosted inference.
+  - The ML ensemble uses a bundled quantized ONNX URL classifier plus lexical heuristics (shown to people as "link pattern model" and "structure checks"); scans do not call hosted inference.
   - Threat-feed coverage combines URLhaus, cached OpenPhish, ThreatFox, and Spamhaus DBL (via DQS when `SPAMHAUS_DQS_KEY` is set) / SURBL DNSBL lookups. On path-tenanted shared platforms only exact-URL feed evidence scores.
   - Complete, non-partial results use a 15-minute process-local LRU plus optional shared Redis cache; error, partial-failure, and aborted results are never reused. Production uses the Vercel-connected Upstash store (`KV_REST_API_*`) for rate limiting and the shared cache. Cached results are namespaced per environment (and per preview commit).
-  - The home page renders as a scanner-first, single-column product tool in a `44rem` shell: scan form, verdict, Summary/Full signal rows, and local history in one flow. Method and caveat notes live on `/about`.
-  - The public site now shares one editorial shell across `/`, `/about`, and `/privacy`, so the trust, methodology, and privacy surfaces stay visually aligned with the scanner.
-  - The UI now uses the actual pulled shadcn preset `b1D24VYe` as its baseline language: neutral `radix-mira` tokens, compact controls, and smaller radii adapted onto the branded `components/scrutinix/*` surface.
-  - Dark/light theme tokens stay in `app/globals.css`, while `app/scrutinix.css` is now limited to the lighter motion/effects layer needed for live scan states.
-  - Body typography defaults to Geist Sans, while mono styling is reserved for telemetry, timings, hashes, and other code-like labels.
-  - Favicons and manifest are now served from checked-in assets under `public/` instead of a generated `app/icon.tsx` route.
+  - The home page renders as the canonical minimal product tool in a `46rem` column (P28): a display headline, the scan form, then the verdict band, link anatomy, the eight-cell strip, Summary/Full evidence rows, and local history in one flow. Method and caveat notes live on `/about`.
+  - The public site shares one column, header, and footer across `/`, `/about`, and `/privacy` (`public-page-shell.tsx`), so the method and privacy pages stay visually aligned with the scanner.
+  - The UI is its own token system (P28), not a shadcn preset: `app/globals.css` holds the cool-white light and deep neutral-cool dark tokens, one blue accent, per-verdict graphic/`-fg`/`-surface`/`-edge` tokens, a non-verdict `--sx-danger-*` pair for UI errors, and the eight-cell ramp; `app/scrutinix.css` holds CSS-only motion and the cell shapes. `scripts/check-contrast.mjs` guards every pair in both themes.
+  - Geist Sans carries UI and display type on a custom scale; Geist Mono is reserved for links, the registered domain, scores, and other data.
+  - Favicons, app icons, and the manifest icons are checked-in assets under `public/`, regenerated from `lib/brand-mark.ts` by `npm run icons` (sharp, pinned devDependency).
   - Production headers include CSP, permissions policy, referrer policy, and anti-sniff/frame protections.
   - Pull requests and `main` pushes run fixture-backed Playwright plus blocking Lighthouse Performance `>= 0.90` and Accessibility `>= 0.95` gates against an explicitly provisioned Chromium executable.
 - Intentional baseline decision:
@@ -165,6 +164,50 @@ visual redesign stacks on top and consumes the new pure modules.
 - [x] Verified: lint, typecheck, format, unit, integration, DOM, fixture-backed e2e, and production build.
 - [x] Second review round (G1-G6): history saved before `scoredSignals` re-derives its drivers on load (engine loaded lazily; `registrable-domain` dropped `node:net`), the coverage caveat names a stale VirusTotal analysis aged at scan time, a VirusTotal domain-only flag reads as a warning sign about the domain instead of "flagged this link", an opened saved verdict outranks scan progress in the live region, and "Show all checks" focuses the first newly revealed expandable check. Scores and thresholds unchanged.
 - [x] One source of truth for limited coverage (`lib/domain/coverage.ts` `getLimitedChecks`): the Safe summary says "some checks were limited" only when the caveat names them, now including an unverified TLS certificate, an unreachable redirect chain, and an unavailable registration lookup. Scores and verdicts unchanged.
+
+### P28 Canonical minimal redesign (2026-10-06, PR B of the redesign stack)
+
+After a critique ("bland and underwhelming") and a live round of three
+committed alternate worlds (label, signage, line), the user re-chose the
+canonical minimal product tool at Linear/Vercel craft level, made sharper,
+on a cool crisp white ground. Direction contract:
+`.impeccable/surfaces/app-page-tsx.md`.
+
+- [x] Visual system: rebuilt `app/globals.css` tokens (cool white / deep neutral-cool dark, near-black ink, one blue accent, verdict graphic + `-fg` + low-chroma `-surface`/`-edge` per verdict, an eight-cell ramp), a real type scale (`text-caption` … `text-verdict`, taught to `tailwind-merge` in `lib/utils.ts`), themed selection/caret/scrollbars/focus/tabular numerals. Motion stays CSS-only in `app/scrutinix.css`; the one authored moment is cells filling and the verdict band arriving.
+- [x] First viewport: eight-square mark + wordmark, visible display headline and one supporting line, Single/Batch tabs (Batch carries an "up to 10 links" hint outside its accessible name), input with Paste (only where `navigator.clipboard.readText` exists) and a ready primary Analyze. Empty-state noise removed (gap-fill round: the empty History heading and its device note no longer draw; the `Scan history` region stays as an empty landmark, and its gap collapses).
+- [x] S1 verdict band (`components/scrutinix/verdict-panel.tsx`): tinted band, ink verdict word at 40/52px, imperative beneath, score and band only when scored. The summary sentence becomes the band's "because" line only when Summary shows no driver row (`shouldShowVerdictSummary(result, driverRows)`), so a fact is never stated twice. Cancel lives inside the "Checking" band so nothing reflows when the verdict lands.
+- [x] S2 link anatomy: one isomorphic splitter (`lib/domain/link-anatomy.ts`, tldts passed in; server `registrable-domain.ts` delegates to it, the browser loads tldts lazily via `hooks/use-link-anatomy.ts`). Every contiguous run of two or more subdomain labels that is exactly a recognised domain is tested for impersonation; a look-alike Safe hedges its instruction ("Don't sign in or enter details here.") and band tone, and the anatomy states the owner once ("This link belongs to secure-login.xyz, not paypal.com."). Presentation only: scores unchanged.
+- [x] S3 eight-cell strip (`components/scrutinix/signal-strip.tsx`, atoms in `signal-cell.tsx`, data in `lib/domain/signal-signature.ts`): streaming progress, evidence index (roving-tabindex toolbar; a cell reveals, opens, and focuses its row), row marker, history/batch glyph (legacy entries draw empty slots), brand mark, icons, and share images.
+- [x] Share/OG: default card and a per-result image route (`app/og/result/route.tsx`) drawn with bundled Geist; `generateMetadata` on `/` validates `?shared=` and points og/twitter images at it. Snapshots gained an optional `signature`; old links still parse. The server passes the payload into the runtime so SSR and hydration agree.
+- [x] Re-scan keeps focus on the band heading (same node from "Checking" to the verdict); a landed scan whose answer is off-screen scrolls into view (reduced-motion aware).
+- [x] Icons regenerated from `lib/brand-mark.ts` by `npm run icons` (`scripts/generate-icons.mjs`, authored geometry only, rasterised with sharp, provenance embedded in each PNG).
+- [x] Contrast guard: `scripts/check-contrast.mjs` (`npm run check:contrast`) asserts 4.5:1 text and 3:1 graphics/control pairs in both themes; `tests/unit/contrast.test.ts` runs it in the unit suite.
+- [x] Link Pattern Model notes no longer say "transformer" or "lexical heuristics".
+- [x] Verified: lint, typecheck, format, unit, integration, DOM, fixture-backed e2e (axe zero in light and dark), build, and one batched screenshot round plus a confirm round (`.impeccable/review/`, ignored). Re-verified after the gap-fill round: unit 39 files / 416 tests, integration 3 / 33, DOM 7 / 43, e2e 21 passed, build green, and a full screenshot refresh (64 page captures plus three share cards).
+- [ ] Follow-up (scoring, out of scope here): `lib/domain/url-structure-risk.ts` scores a brand in the subdomain only for its listed `IMPERSONATED_BRANDS`. A generic domain spelled in the subdomain (`<anything>.com.<owner>`) is surfaced by the link anatomy but adds no score, so such links can still read Safe. Consider a scored brand-agnostic signal.
+- [x] Gap-fill round (completeness critique F1-F16):
+  - Look-alike detection: a two-letter country-code run counts only for a listed brand (`impersonated-brands.ts`, shared with scoring), so `acme.us.auth0.com`, `api.us.example.com`, `shop.de.example.com`, `docs.ai.example.com`, `bank.ca.example.com`, and `news.uk.example.com` no longer claim a false owner; `amazon.de.<owner>` still does.
+  - Strip states differ by shape, not hue alone: caution is hatched and found-nothing is a thin dash (flagged stays solid); the contrast guard adds mark-on-track pairs and a shape-distinctness test; OG cards mirror the shapes.
+  - Shared "Run a fresh scan" parks focus on the band like Re-scan; Cancel hands focus to the link field.
+  - The mobile bring-into-view e2e now re-scans from the bottom of a long page and asserts the verdict is fully in view (fails with the scroll removed), with a reduced-motion variant.
+  - Link anatomy facts are keyed by the segment they describe (`https://`, the registered domain) and a long path has a "Show full link" toggle.
+  - Shared links render with server-side anatomy (no hedge flicker); verdict announcements wait for the parser; history and batch results preload it.
+  - UI errors use a non-verdict `--sx-danger-*` pair; `/about` and `/privacy` prose sits at 30rem (63-73 characters per rendered line).
+  - Entries saved before per-check results show a plain note instead of eight "failed" cells; a real all-failed (Error) scan is no longer mistaken for one.
+  - One name per ML member ("link pattern model", "structure checks"); sharp pinned as a devDependency; `/og/result` rate-limited on its own tier and capped at 6,000 payload characters (oversize or invalid redirects to the default card).
+  - New fixtures `critical.scrutinix.test` and `error.scrutinix.test`; review captures added for Critical, Error, stream error, form error, and the error boundary in both themes.
+- [x] Lighthouse on the P28 build (`LIGHTHOUSE_PORT=3332 npm run lighthouse`, two runs, identical): Performance `0.90` (gate `0.90`), Accessibility `1.00`, Best Practices `0.96`, SEO `1.00`. `scripts/run-lighthouse.mjs` now honours `LIGHTHOUSE_PORT` like `E2E_PORT`.
+- [x] Performance margin: after the finish round the mobile run fell to `0.89` (simulated LCP 3.8 s on the headline's supporting line; observed FCP = LCP = 41 ms, so the gap is Lantern charging every script requested before LCP). The home page's eager chunk was 408 KB raw / 97 KB on the wire because `import { z } from "zod"` keeps Zod 4's whole `z` namespace, every locale included. `import * as z from "zod"` lets Turbopack tree-shake it to 126 KB / 37 KB: simulated LCP 3.5 s, Performance `0.91`.
+- [x] Finish round (M1-M5, m1-m7):
+  - A look-alike Safe keeps its word, score, and band text, but the band (and OG card) takes the neutral Unknown tone and "No check flagged it, but the name is misleading." replaces "High confidence" (`getVerdictGuidance().tone` / `confidenceNote`). Its imperative is action-only ("Don't sign in or enter details here."); Unknown keeps its own.
+  - The owner fact is said once, by `ownershipSentence`: anatomy line, OG card, share description, and the live region (which has no anatomy line). A DOM test asserts "paypal.com" sits in one visible sentence.
+  - History and batch rows use `LinkAnatomyCompact`: the subdomain truncates from its left, the registered domain never truncates, and the path gives way first, so a phone shows "secure-login.xyz" for a look-alike. Look-alike Safe rows use the neutral tone.
+  - The partial-answer cell is a centred short block (not a half-length fill that reads as progress).
+  - Default share card breaks the headline into explicit lines; the hero steps down to the headline size once the verdict band mounts (CSS `:has`, before the verdict lands); score numeral in Geist Sans (no slashed zero); anatomy block on the column edge; an unreachable https link says "Couldn't check the certificate"; an Error verdict states no confidence; the rate-limit message names the wait from the window that denied ("Too many scans from this connection. Try again in about a minute.") and Retry-After uses the same seconds; placeholder "Paste a link".
+  - Verified: lint, typecheck, format, unit 39 files / 429 tests, integration 3 / 33, DOM 8 / 49, e2e 23 passed (`E2E_PORT=3351`, axe zero light and dark), build green; full review recapture with full-page mobile captures.
+- [x] Document phase: `DESIGN.md` rewritten from the built world (token frontmatter in OKLCH for both themes, type scale, verdict/strip/danger colour roles, the verdict band, link anatomy, the strip at every scale, evidence rows, history/batch, share images, motion, the accessibility contract tests depend on, the ban list, and provenance: canon chosen over three dealt drafts, seed `ccccb7f7`), plus the `.impeccable/design.json` sidecar (colour metadata and ramps, motion, breakpoints, nine rendered component snippets, narrative). `scripts/generate-icons.mjs` now writes each PNG's origin into an `impeccable:prompt` tEXt chunk; regenerating left every icon's pixels, `favicon.ico`, and `icon.svg` byte-identical, and `impeccable embed-prompt --scan public` reports 0 missing.
+- [x] Final gate (`E2E_PORT=3361`): lint, typecheck, format clean; unit 39 files / 429 tests, integration 3 / 33, DOM 8 / 49, e2e 23 passed, build green, `npm audit --omit=dev` 0 vulnerabilities. Lighthouse on a production server: mobile Performance `0.91`, Accessibility `1.00`, Best Practices `0.96` (a pre-existing CSP entry in the Issues panel), SEO `1.00`; desktop `1.00` / `1.00` / `0.96` / `1.00`.
+- [ ] Follow-up (drift found while documenting, not canonized in DESIGN.md): `components/ui/sonner.tsx` keeps `richColors`, whose unlayered `[data-rich-colors][data-type=success]` rules beat the token classes, so success toasts ("Downloaded scan.json", "Link copied to clipboard") paint green outside a Safe verdict; its toast class also pairs a border with `shadow-lg`, the system's only shadow. The share card's didn't-apply cell (`lib/og/cards.tsx`, `#8f9297`) is one step off `--sx-cell-na` (`#898c91`).
 
 ### P24 Resolve September dependency maintenance
 

@@ -151,7 +151,9 @@ npm run lighthouse
   helpers
 - Complete, non-partial results may be cached for 15 minutes; partial, error,
   and aborted scans are never reused.
-- `components/scrutinix/`: branded analyzer UI and client runtime islands
+- `components/scrutinix/`: the analyzer UI: verdict band, link anatomy, the
+  eight-cell signal strip, evidence rows, history, and client runtime islands
+- `app/og/result/`: per-result share images for `?shared=` links
 - `hooks/`: NDJSON stream readers and IndexedDB-backed history
 - `tests/`: unit, integration, accessibility, keyboard, and E2E smoke coverage
 
