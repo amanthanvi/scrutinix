@@ -86,7 +86,9 @@ export async function checkThreatFox(
     }
   }
 
-  if (exact) {
+  // An exact listing wins unless a host IOC is more confident: a weak URL
+  // entry must not mask a strong listing of the whole host.
+  if (exact && confidenceLevel(exact) >= confidenceLevel(hostIoc)) {
     return {
       match: toMatch(exact, "url", simplifyUrlForMatching(url)),
       warning: null,

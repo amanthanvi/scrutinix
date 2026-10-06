@@ -173,6 +173,38 @@ describe("checkThreatFox", () => {
     expect(fetchMock).toHaveBeenCalledOnce();
   });
 
+  it("does not let a weak exact-URL IOC mask a strong host IOC", async () => {
+    vi.stubEnv("URLHAUS_AUTH_KEY", "abusech-key");
+    resetEnvForTests();
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        Response.json({
+          query_status: "ok",
+          data: [
+            {
+              ioc: "http://evil.example/kit",
+              threat_type: "payload_delivery",
+              confidence_level: 50,
+            },
+            {
+              ioc: "evil.example",
+              threat_type: "botnet_cc",
+              confidence_level: 100,
+            },
+          ],
+        }),
+      ),
+    );
+
+    const outcome = await checkThreatFox("https://evil.example/kit");
+    expect(outcome.match).toMatchObject({
+      matchType: "host",
+      confidence: "high",
+    });
+  });
+
   it("treats domain and host-root IOCs as host-level indicators", async () => {
     vi.stubEnv("URLHAUS_AUTH_KEY", "abusech-key");
     resetEnvForTests();
