@@ -146,18 +146,25 @@ function getUpstashLimiters(
 export function describeRateLimitWait(
   seconds: number,
   dayLimit: boolean,
+  tier: RateLimitTier = "scan",
 ): string {
+  // Name what was actually limited: a share-image fetch is not a scan.
+  const what = tier === "image" ? "share-image requests" : "scans";
   if (dayLimit || seconds >= 3600) {
     const hours = Math.max(1, Math.ceil(seconds / 3600));
-    return `Too many scans from this connection today. Try again in about ${hours === 1 ? "an hour" : `${hours} hours`}.`;
+    return `Too many ${what} from this connection today. Try again in about ${hours === 1 ? "an hour" : `${hours} hours`}.`;
   }
   if (seconds <= 90) {
-    return "Too many scans from this connection. Try again in about a minute.";
+    return `Too many ${what} from this connection. Try again in about a minute.`;
   }
-  return `Too many scans from this connection. Try again in about ${Math.ceil(seconds / 60)} minutes.`;
+  return `Too many ${what} from this connection. Try again in about ${Math.ceil(seconds / 60)} minutes.`;
 }
 
-function toLimitResult(minute: WindowOutcome, day: WindowOutcome): LimitResult {
+function toLimitResult(
+  minute: WindowOutcome,
+  day: WindowOutcome,
+  tier: RateLimitTier,
+): LimitResult {
   const remaining = Math.min(minute.remaining, day.remaining);
 
   if (!minute.success || !day.success) {
@@ -180,7 +187,7 @@ function toLimitResult(minute: WindowOutcome, day: WindowOutcome): LimitResult {
       status: 429,
       error: createApiError(
         "rate_limited",
-        describeRateLimitWait(retryAfterSeconds, !day.success),
+        describeRateLimitWait(retryAfterSeconds, !day.success, tier),
         true,
       ),
     };
@@ -251,7 +258,7 @@ export async function applyRateLimit(
       daySettled.status === "fulfilled" ? daySettled.value : undefined;
 
     if (minute && day) {
-      return toLimitResult(minute, day);
+      return toLimitResult(minute, day, tier);
     }
 
     const rejection =
@@ -288,7 +295,7 @@ export async function applyRateLimit(
         remaining: Number.MAX_SAFE_INTEGER,
         reset: Number.MAX_SAFE_INTEGER,
       };
-      return toLimitResult(minute ?? passthrough, day ?? passthrough);
+      return toLimitResult(minute ?? passthrough, day ?? passthrough, tier);
     }
 
     // Both threw, or the only successful window allowed — intended prod-500 fix.
@@ -349,7 +356,7 @@ function applyInMemoryLimit(
     cost,
   );
 
-  return toLimitResult(minute, day);
+  return toLimitResult(minute, day, tier);
 }
 
 function incrementWindow(
