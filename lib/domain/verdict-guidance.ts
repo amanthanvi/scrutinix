@@ -1,15 +1,7 @@
-import { capitalize, countOf, formatList } from "@/lib/domain/copy";
-import {
-  signalLabels,
-  signalNames,
-  type AnalysisResult,
-  type Verdict,
-} from "@/lib/domain/types";
-import {
-  hasConfirmedReputationHit,
-  VT_STALE_ANALYSIS_DAYS,
-  vtAnalysisAgeDays,
-} from "@/lib/domain/reputation";
+import { capitalize } from "@/lib/domain/copy";
+import { describeLimitedChecks, getLimitedChecks } from "@/lib/domain/coverage";
+import type { AnalysisResult, Verdict } from "@/lib/domain/types";
+import { hasConfirmedReputationHit } from "@/lib/domain/reputation";
 
 /**
  * Pure presentation logic for a finished verdict: the one-line instruction,
@@ -155,10 +147,12 @@ export function shouldShowVerdictSummary(
 
 /**
  * One sentence naming the checks that limited coverage, e.g. "VirusTotal
- * didn't finish; Threat Feeds only partly finished." Null when every check
- * ran in full - or when the verdict line already says the scan failed.
- * A stale VirusTotal analysis is aged at the scan's completion time, so a
- * reopened result says what its verdict was built on.
+ * didn't finish; TLS Certificate couldn't be fully verified." Built from
+ * the same `getLimitedChecks` list the verdict summary's "some checks were
+ * limited" comes from, so the two always agree. Null when every check ran
+ * in full - or when the verdict line already says the scan failed. A stale
+ * VirusTotal analysis is aged at the scan's completion time, so a reopened
+ * result says what its verdict was built on.
  */
 export function getCoverageCaveat(
   result: Pick<AnalysisResult, "verdict" | "signals"> & {
@@ -169,52 +163,14 @@ export function getCoverageCaveat(
     return null;
   }
 
-  const failed: string[] = [];
-  const partial: string[] = [];
-  const notApplicable: string[] = [];
-
-  for (const name of signalNames) {
-    const signal = result.signals[name];
-    if (signal.status === "error") {
-      failed.push(signalLabels[name]);
-    } else if (signal.status === "skipped") {
-      notApplicable.push(signalLabels[name]);
-    } else if (signal.status === "success" && hasWarnings(signal.data)) {
-      partial.push(signalLabels[name]);
-    }
-  }
-
-  const parts: string[] = [];
-  if (failed.length > 0) {
-    parts.push(`${formatList(failed)} didn't finish`);
-  }
-  if (partial.length > 0) {
-    parts.push(`${formatList(partial)} only partly finished`);
-  }
-  // Only a successful check has an analysis date, so this never repeats
-  // "VirusTotal didn't finish".
   const completedAt = Date.parse(result.metadata?.completedAt ?? "");
-  const vtAgeDays = vtAnalysisAgeDays(
+  const checks = getLimitedChecks(
     result.signals,
     Number.isNaN(completedAt) ? Date.now() : completedAt,
+  ).filter(
+    // Unknown's summary already says the site didn't respond.
+    (check) => !(result.verdict === "unknown" && check.kind === "unreachable"),
   );
-  if (vtAgeDays !== null && vtAgeDays > VT_STALE_ANALYSIS_DAYS) {
-    parts.push(`VirusTotal's analysis is ${countOf(vtAgeDays, "day")} old`);
-  }
-  if (notApplicable.length > 0) {
-    parts.push(
-      `${formatList(notApplicable)} ${notApplicable.length === 1 ? "doesn't" : "don't"} apply to this link`,
-    );
-  }
 
-  return parts.length > 0 ? `${capitalize(parts.join("; "))}.` : null;
-}
-
-function hasWarnings(data: unknown): boolean {
-  if (!data || typeof data !== "object" || !("warnings" in data)) {
-    return false;
-  }
-
-  const warnings = (data as { warnings?: unknown }).warnings;
-  return Array.isArray(warnings) && warnings.length > 0;
+  return describeLimitedChecks(checks);
 }
