@@ -5,7 +5,10 @@ import {
   type Verdict,
 } from "@/lib/domain/schemas";
 import type { Severity } from "@/lib/domain/signal-severity";
-import { ownershipSentence, verdictLabel } from "@/lib/domain/verdict-guidance";
+import {
+  ownershipSentence,
+  shareHeadline,
+} from "@/lib/domain/verdict-guidance";
 
 /**
  * Share cards (1200 x 630) in the light theme: the cool white ground, ink,
@@ -405,7 +408,7 @@ export function ResultCard({
             letterSpacing: "-0.04em",
           }}
         >
-          {verdictLabel(verdict)}
+          {shareHeadline({ verdict, impersonates }, { short: true })}
         </div>
         <div style={{ display: "flex", fontSize: 36, fontWeight: 500 }}>
           {imperative}

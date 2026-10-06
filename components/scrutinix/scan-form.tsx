@@ -34,7 +34,7 @@ export function ScanForm() {
     setActiveTab,
     setBatchInput,
     setFormError,
-    sharedSnapshot,
+    shared,
     singleUrl,
     startBatchScan,
     startSingleScan,
@@ -75,11 +75,12 @@ export function ScanForm() {
             }}
             error={activeTab === "single" ? formError : null}
             streaming={scan.state.isStreaming}
-            // A shared snapshot's band counts as a result on screen: its
-            // "Run a fresh scan" is then the one primary action.
+            // A shared link's band (verified or not) counts as a result on
+            // screen: its scan button ("Run a fresh scan", or "Scan this
+            // link" when unverified) is then the one primary action.
             showingResult={
               (Boolean(active) ||
-                (Boolean(sharedSnapshot) && !scan.state.isStreaming)) &&
+                (Boolean(shared) && !scan.state.isStreaming)) &&
               !inputEditedSinceResult
             }
             onSubmit={() => void startSingleScan()}

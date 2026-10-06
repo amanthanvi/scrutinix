@@ -5,21 +5,25 @@ import { loadOgFonts } from "@/lib/og/fonts";
 import {
   SHARE_IMAGE_MAX_PAYLOAD,
   describeSharedSnapshot,
+  normalizeSharedPayload,
 } from "@/lib/server/share-metadata";
 
 /**
- * Per-result share image for `/?shared=` links. The payload is the same
- * client-built snapshot the page decodes; it is validated against the
- * shared-snapshot schema, rendered, and never stored. A missing, oversize,
- * or invalid payload, or one whose link is not an http(s) URL, redirects to the static default card rather than
- * rendering anything (or an error image). `proxy.ts` meters this route on
- * its own rate-limit tier.
+ * Per-result share image for `/?shared=` links. The payload is the
+ * snapshot the server built and signed when it streamed the result; it is
+ * verified against `sig`, validated against the shared-snapshot schema,
+ * rendered, and never stored. A missing, oversize, unsigned, tampered, or
+ * invalid payload, or one whose link is not an http(s) URL, redirects to
+ * the static default card: this route never draws a verdict (or any
+ * payload text) Scrutinix did not sign. `proxy.ts` meters it on its own
+ * rate-limit tier.
  */
 export async function GET(request: Request) {
-  const payload = new URL(request.url).searchParams.get("shared");
+  const params = new URL(request.url).searchParams;
+  const payload = normalizeSharedPayload(params.get("shared"));
   const card =
     payload && payload.length <= SHARE_IMAGE_MAX_PAYLOAD
-      ? describeSharedSnapshot(payload)
+      ? describeSharedSnapshot(payload, params.get("sig"))
       : null;
 
   if (!card) {
@@ -40,7 +44,10 @@ export async function GET(request: Request) {
       ...CARD_SIZE,
       fonts: await loadOgFonts(),
       headers: {
-        "Cache-Control": "public, max-age=86400, immutable",
+        // Short and revalidating, never immutable: after a leaked key is
+        // revoked, images already drawn for forged links must age out
+        // within the hour. No stale-while-revalidate for the same reason.
+        "Cache-Control": "public, max-age=3600, s-maxage=3600",
       },
     },
   );

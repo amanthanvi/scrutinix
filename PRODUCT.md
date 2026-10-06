@@ -50,7 +50,13 @@ Honesty is the mechanism a neighboring scanner cannot truthfully copy:
 - Links arrive in mail, texts, chat, and social feeds; the scan happens in the
   moment before clicking or forwarding.
 - Results are shared as snapshot links (`?shared=`) in chats and threads, and
-  previewed through the OG card.
+  previewed through the OG card. Scrutinix signs each link it issues; only a
+  signed link speaks as Scrutinix (verdict, card, "Verified Scrutinix
+  result"). Anything else, including links shared before signing, opens as
+  "Check this shared link yourself", so a shared link can never launder a
+  phishing URL under Scrutinix's name. A signed Safe look-alike previews as
+  "Look-alike of <brand>", never "Safe", and a sender whose link can't be
+  signed is told so when it is copied.
 - Batch mode (up to 10 URLs) serves triage of a suspicious message with several
   links. Exports (JSON/CSV) serve power users and reports.
 - Light and dark themes receive equal treatment; system preference is the

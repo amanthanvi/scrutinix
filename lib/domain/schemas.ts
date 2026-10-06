@@ -407,6 +407,13 @@ export interface ScanMetadata {
   scanId: string;
   startedAt: string;
   completedAt: string;
+  /**
+   * When the providers actually ran. Equal to `completedAt` on a fresh
+   * scan; a cache hit keeps the original time, so a signed share never
+   * claims fresher evidence than it has. Optional for in-memory records;
+   * the sanitizer defaults older records to their own `completedAt`.
+   */
+  checkedAt?: string;
   cacheHit: boolean;
   partialFailure: boolean;
   signalCount: number;
@@ -427,6 +434,7 @@ function parseScanMetadata(
     scanId: tolerantString("").parse(record.scanId),
     startedAt,
     completedAt,
+    checkedAt: tolerantString(completedAt).parse(record.checkedAt),
     cacheHit: tolerantBoolean(false).parse(record.cacheHit),
     partialFailure: tolerantBoolean(false).parse(record.partialFailure),
     signalCount: nonNegative(
@@ -436,6 +444,24 @@ function parseScanMetadata(
   };
 }
 
+/** Longest `?shared=` payload accepted anywhere (page, image, history). */
+export const SHARED_PAYLOAD_MAX_LENGTH = 12_000;
+
+/** base64url of an HMAC-SHA256 digest: 32 bytes, 43 characters, no padding. */
+export const SHARE_SIGNATURE_PATTERN = /^[A-Za-z0-9_-]{43}$/;
+
+/**
+ * The share link the server issued with a result: the canonical snapshot
+ * payload and, when a signing secret is configured, its HMAC. Absent on
+ * results from before signing and on anything the sanitizer rejects.
+ */
+export const resultShareSchema = z.object({
+  payload: z.string().min(1).max(SHARED_PAYLOAD_MAX_LENGTH),
+  sig: z.string().regex(SHARE_SIGNATURE_PATTERN).optional().catch(undefined),
+});
+
+export type ResultShare = z.infer<typeof resultShareSchema>;
+
 export interface AnalysisResult {
   id: string;
   url: string;
@@ -443,6 +469,8 @@ export interface AnalysisResult {
   signals: SignalResults;
   threatInfo: ThreatInfo | null;
   metadata: ScanMetadata;
+  /** Server-issued share link parts; optional so older data still parses. */
+  share?: ResultShare;
 }
 
 export type HistoryEntry = AnalysisResult & { savedAt: string };
@@ -475,6 +503,7 @@ export function createAnalysisResultSchema(fallbackTimestamp: string) {
         : null;
       const metadata = parseScanMetadata(record.metadata, fallbackTimestamp);
       const id = tolerantString("").parse(record.id).trim() || metadata.scanId;
+      const share = resultShareSchema.safeParse(record.share);
 
       return {
         id,
@@ -485,6 +514,7 @@ export function createAnalysisResultSchema(fallbackTimestamp: string) {
         signals: signalResultsSchema.parse(record.signals),
         threatInfo,
         metadata,
+        ...(share.success ? { share: share.data } : {}),
       };
     });
 }

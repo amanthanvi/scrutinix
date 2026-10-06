@@ -11,16 +11,14 @@ import {
 } from "react";
 import { toast } from "sonner";
 
-import type { SharedSnapshot } from "@/components/shared/scrutinix-types";
 import { selectSummarySignals } from "@/components/shared/signal-selection";
 import { useBatchStream } from "@/hooks/use-batch-stream";
 import { warmLinkParser } from "@/hooks/use-link-anatomy";
 import { useScanStream } from "@/hooks/use-scan-stream";
-import type { LinkAnatomy } from "@/lib/domain/link-anatomy";
 import {
   buildSharedSnapshot,
-  decodeSharedSnapshot,
   encodeSharedSnapshot,
+  type SharedView,
 } from "@/lib/domain/signal-signature";
 import {
   signalNames,
@@ -45,10 +43,12 @@ function ShareLinkField({ link }: { link: string }) {
 }
 export type ViewMode = "summary" | "full";
 
-function useCreateAnalyzerRuntime(
-  sharedPayload: string | null,
-  sharedAnatomy: LinkAnatomy | null,
-) {
+/** The toast for a share link without a Scrutinix signature. */
+export const UNVERIFIED_SHARE_TITLE = "Link copied, but it isn't verified";
+const UNVERIFIED_SHARE_NOTE =
+  "Whoever opens it is asked to check the link themselves; it won't show this result.";
+
+function useCreateAnalyzerRuntime(shared: SharedView | null) {
   const [activeTab, setActiveTab] = useState<Tab>("single");
   const [viewMode, setViewMode] = useState<ViewMode>("summary");
   const [singleUrl, setSingleUrl] = useState("");
@@ -63,12 +63,10 @@ function useCreateAnalyzerRuntime(
   // Bumped when a stored result (history, batch "Open") replaces the view,
   // so the results section can move focus to the verdict heading.
   const [verdictFocusRequest, setVerdictFocusRequest] = useState(0);
-  // Decoded from the page's `?shared=` value, which the server passes in,
-  // so the server render and hydration agree.
-  const sharedSnapshot = useMemo<SharedSnapshot | null>(
-    () => decodeSharedSnapshot(sharedPayload),
-    [sharedPayload],
-  );
+  // The page's `?shared=` link, verified and parsed on the server, so the
+  // server render and hydration agree. The snapshot is present only when
+  // Scrutinix signed it; the browser never decodes the payload itself.
+  const sharedSnapshot = shared?.snapshot ?? null;
   // React can batch several url_complete events into one render. Keep every
   // result so a fast batch cannot silently drop history entries.
   const [historyQueue, setHistoryQueue] = useState<AnalysisResult[]>([]);
@@ -161,43 +159,6 @@ function useCreateAnalyzerRuntime(
     await batch.startBatch(urls);
   }, [batch, batchInput]);
 
-  const shareResult = useCallback(async (result: AnalysisResult) => {
-    // The snapshot (verdict, link, summary, and the eight-cell signature)
-    // travels in the link itself; the server keeps no share database.
-    const targetUrl = new URL(window.location.origin);
-    targetUrl.searchParams.set(
-      "shared",
-      encodeSharedSnapshot(buildSharedSnapshot(result)),
-    );
-
-    const link = targetUrl.toString();
-    try {
-      await navigator.clipboard.writeText(link);
-      toast.success("Link copied to clipboard");
-    } catch {
-      // Never drop the link: hand it to the system share sheet, or keep it
-      // on screen to copy by hand.
-      if (typeof navigator.share === "function") {
-        try {
-          await navigator.share({ url: link });
-          return;
-        } catch (error) {
-          if (error instanceof DOMException && error.name === "AbortError") {
-            return;
-          }
-        }
-      }
-      toast.error(
-        "Couldn't copy the link — select it below and copy it yourself.",
-        {
-          duration: Infinity,
-          closeButton: true,
-          description: <ShareLinkField link={link} />,
-        },
-      );
-    }
-  }, []);
-
   const rescanUrl = useCallback(
     async (url: string) => {
       setFormError(null);
@@ -209,6 +170,85 @@ function useCreateAnalyzerRuntime(
       await scan.startScan(url);
     },
     [scan],
+  );
+
+  const shareResult = useCallback(
+    async (result: AnalysisResult) => {
+      // The snapshot (verdict, link, summary, and the eight-cell signature)
+      // travels in the link itself; the server keeps no share database. The
+      // server issued the payload and its signature with the result, and
+      // only a signed link opens as a Scrutinix result. Without one (saved
+      // before signing, or signing off) the link still carries the
+      // snapshot, opens as "check this shared link yourself", and the
+      // sender is told so.
+      const targetUrl = new URL(window.location.origin);
+      targetUrl.searchParams.set(
+        "shared",
+        result.share?.payload ??
+          encodeSharedSnapshot(buildSharedSnapshot(result)),
+      );
+      const verified = Boolean(result.share?.sig);
+      if (result.share?.sig) {
+        targetUrl.searchParams.set("sig", result.share.sig);
+      }
+
+      const link = targetUrl.toString();
+      // Only a result saved before the server issued shares can gain a
+      // signature by scanning again; a current result without one means
+      // signing is off, and a rescan would not change that.
+      const scanAgain = result.share
+        ? undefined
+        : {
+            label: "Scan again",
+            onClick: () => void rescanUrl(result.url),
+          };
+      const tellUnverified = () =>
+        toast(UNVERIFIED_SHARE_TITLE, {
+          description: UNVERIFIED_SHARE_NOTE,
+          ...(scanAgain ? { action: scanAgain } : {}),
+        });
+
+      try {
+        await navigator.clipboard.writeText(link);
+        if (verified) {
+          toast.success("Link copied to clipboard");
+        } else {
+          tellUnverified();
+        }
+      } catch {
+        // Never drop the link: hand it to the system share sheet, or keep
+        // it on screen to copy by hand.
+        if (typeof navigator.share === "function") {
+          try {
+            await navigator.share({ url: link });
+            if (!verified) tellUnverified();
+            return;
+          } catch (error) {
+            if (error instanceof DOMException && error.name === "AbortError") {
+              return;
+            }
+          }
+        }
+        toast.error(
+          "Couldn't copy the link — select it below and copy it yourself.",
+          {
+            duration: Infinity,
+            closeButton: true,
+            description: (
+              <>
+                {verified ? null : (
+                  <span className="block">
+                    It isn&apos;t verified. {UNVERIFIED_SHARE_NOTE}
+                  </span>
+                )}
+                <ShareLinkField link={link} />
+              </>
+            ),
+          },
+        );
+      }
+    },
+    [rescanUrl],
   );
 
   /** Show a stored result (history entry or batch row) as the active one. */
@@ -249,7 +289,7 @@ function useCreateAnalyzerRuntime(
     setViewMode,
     updateSingleUrl,
     shareResult,
-    sharedAnatomy,
+    shared,
     sharedSnapshot,
     signals,
     singleUrl,
@@ -276,19 +316,17 @@ export function useAnalyzerRuntime() {
 
 export function AnalyzerRuntimeProvider({
   children,
-  sharedPayload = null,
-  sharedAnatomy = null,
+  shared = null,
 }: {
   children: ReactNode;
-  /** The raw `?shared=` value, when the page was opened from a share. */
-  sharedPayload?: string | null;
   /**
-   * The shared link's anatomy, computed on the server, so the first render
-   * of a shared look-alike already hedges before the browser parser loads.
+   * The page's `?shared=` link, resolved on the server: the link and its
+   * anatomy (so a shared look-alike hedges before the browser parser
+   * loads), and the snapshot only when Scrutinix signed it.
    */
-  sharedAnatomy?: LinkAnatomy | null;
+  shared?: SharedView | null;
 }) {
-  const value = useCreateAnalyzerRuntime(sharedPayload, sharedAnatomy);
+  const value = useCreateAnalyzerRuntime(shared);
   return (
     <AnalyzerRuntimeContext.Provider value={value}>
       {children}

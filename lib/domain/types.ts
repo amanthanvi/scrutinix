@@ -11,6 +11,7 @@ export type {
   MLSignalData,
   PageContentFindings,
   RedirectData,
+  ResultShare,
   ScanMetadata,
   SharedSnapshot,
   SignalName,

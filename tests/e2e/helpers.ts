@@ -1,3 +1,5 @@
+import { createHmac } from "node:crypto";
+
 import { expect, type Page } from "@playwright/test";
 
 /**
@@ -37,4 +39,36 @@ export async function isolateRateLimit(page: Page) {
   await page.setExtraHTTPHeaders({
     "x-real-ip": `198.51.100.${(process.pid + clientCounter) % 250}`,
   });
+}
+
+/**
+ * A `?shared=` payload: base64 of the URI-encoded JSON snapshot, as
+ * `encodeSharedSnapshot` writes it.
+ */
+export function encodeSharedPayload(snapshot: object): string {
+  return Buffer.from(encodeURIComponent(JSON.stringify(snapshot))).toString(
+    "base64",
+  );
+}
+
+/**
+ * The server's signature of a payload, computed here from the documented
+ * contract (lib/server/share-signing.ts) with the test-only key
+ * `scripts/run-e2e.mjs` hands both the server and this runner.
+ */
+export function signSharedPayload(payload: string): string {
+  const secret = process.env.SHARE_SIGNING_SECRET;
+  if (!secret) {
+    throw new Error("SHARE_SIGNING_SECRET is unset; run via npm run test:e2e.");
+  }
+  return createHmac("sha256", secret)
+    .update(`scrutinix-share-v1\n${payload}`)
+    .digest("base64url");
+}
+
+/** A `/?shared=` path, signed unless `sig` is null. */
+export function sharedPath(payload: string, sig: string | null): string {
+  const params = new URLSearchParams({ shared: payload });
+  if (sig) params.set("sig", sig);
+  return `/?${params.toString()}`;
 }

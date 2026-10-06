@@ -97,7 +97,7 @@ export function ResultsSection() {
     setSingleUrl,
     setViewMode,
     shareResult,
-    sharedAnatomy,
+    shared,
     sharedSnapshot,
     signals,
     summarySelection,
@@ -109,13 +109,13 @@ export function ResultsSection() {
   const linkUrl =
     active?.url ??
     (scan.state.isStreaming ? scan.state.url : null) ??
-    sharedSnapshot?.url ??
+    shared?.url ??
     null;
   // A shared link arrives with the anatomy the server computed (same tldts,
   // same splitLinkAnatomy), so the browser parser is fetched only for other
   // links, and a shared look-alike hedges from the first paint.
   const serverAnatomy =
-    linkUrl && linkUrl === sharedSnapshot?.url ? sharedAnatomy : null;
+    shared && linkUrl === shared.url ? shared.anatomy : null;
   const parsed = useLinkAnatomy(
     activeTab === "single" && !serverAnatomy ? linkUrl : null,
   );
@@ -256,7 +256,9 @@ export function ResultsSection() {
       signalNames.some((name) => signals[name].status !== "pending"));
   const quietChecks =
     viewMode === "summary" ? describeQuietChecks(summarySelection) : null;
-  const showSnapshot = !active && !scan.state.isStreaming && sharedSnapshot;
+  // A shared link with nothing else on screen: its band (verified snapshot
+  // or the neutral "check it yourself") and Scrutinix's own anatomy.
+  const showShared = !active && !scan.state.isStreaming && shared !== null;
 
   return (
     <section aria-label="Results" className="flex flex-col">
@@ -291,6 +293,7 @@ export function ResultsSection() {
             result={active}
             isStreaming={scan.state.isStreaming}
             sharedSnapshot={sharedSnapshot}
+            unverifiedShare={shared !== null && sharedSnapshot === null}
             completedSignals={done}
             impersonates={impersonates}
             driverRows={summarySelection.drivers.length}
@@ -301,10 +304,10 @@ export function ResultsSection() {
               document.getElementById("sx-url-input")?.focus();
             }}
             onRunSharedScan={
-              sharedSnapshot
+              shared
                 ? () => {
-                    setSingleUrl(sharedSnapshot.url);
-                    rescanFromBand(sharedSnapshot.url);
+                    setSingleUrl(shared.url);
+                    rescanFromBand(shared.url);
                   }
                 : undefined
             }
@@ -315,14 +318,14 @@ export function ResultsSection() {
               <LinkAnatomyView
                 url={linkUrl}
                 anatomy={anatomy}
-                signals={showSnapshot ? null : signals}
+                signals={showShared ? null : signals}
                 visibleSignals={visibleSignals}
                 streaming={scan.state.isStreaming && !active}
               />
             </div>
           ) : null}
 
-          {showSnapshot && sharedSnapshot?.signature ? (
+          {showShared && sharedSnapshot?.signature ? (
             <div className="mt-8">
               <SignatureStrip signature={sharedSnapshot.signature} />
             </div>

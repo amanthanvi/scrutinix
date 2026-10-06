@@ -1,5 +1,7 @@
+import type { LinkAnatomy } from "@/lib/domain/link-anatomy";
 import {
   MISSING_SIGNAL_DATA,
+  SHARED_PAYLOAD_MAX_LENGTH,
   sharedSnapshotSchema,
   signalNames,
   type AnalysisResult,
@@ -81,7 +83,10 @@ export function getResultSignature(
 /** What a Share link embeds: a point-in-time snapshot, never the payloads. */
 export function buildSharedSnapshot(
   result: AnalysisResult,
-  capturedAt = result.metadata?.completedAt || new Date().toISOString(),
+  // When the evidence was gathered: a cache hit keeps its original time.
+  capturedAt = result.metadata?.checkedAt ||
+    result.metadata?.completedAt ||
+    new Date().toISOString(),
 ): SharedSnapshot {
   return {
     verdict: result.verdict,
@@ -105,7 +110,7 @@ export function encodeSharedSnapshot(snapshot: SharedSnapshot): string {
 export function decodeSharedSnapshot(
   payload: string | null | undefined,
 ): SharedSnapshot | null {
-  if (!payload || payload.length > 12_000) {
+  if (!payload || payload.length > SHARED_PAYLOAD_MAX_LENGTH) {
     return null;
   }
 
@@ -124,4 +129,19 @@ export function decodeSharedSnapshot(
   } catch {
     return null;
   }
+}
+
+/**
+ * What the server hands the page for a `?shared=` link. `snapshot` is set
+ * only when the payload carries a valid Scrutinix signature; otherwise the
+ * page knows the link and the anatomy Scrutinix computed for it, and
+ * nothing the payload claims about it.
+ */
+export interface SharedView {
+  /** The shared link. */
+  url: string;
+  /** Its anatomy, computed on the server with the Public Suffix List. */
+  anatomy: LinkAnatomy;
+  /** The verified snapshot, or null when the link is unverified. */
+  snapshot: SharedSnapshot | null;
 }

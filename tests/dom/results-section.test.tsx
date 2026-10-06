@@ -18,7 +18,10 @@ import { VERDICT_HEADING_ID } from "@/components/scrutinix/verdict-panel";
 import { sanitizeHistoryEntry } from "@/lib/domain/runtime-safety";
 import { encodeSharedSnapshot } from "@/lib/domain/signal-signature";
 import { buildThreatAssessment } from "@/lib/domain/verdict";
-import { describeSharedSnapshot } from "@/lib/server/share-metadata";
+import { resetEnvForTests } from "@/lib/config/env";
+import type { SharedView } from "@/lib/domain/signal-signature";
+import { resolveSharedView } from "@/lib/server/share-metadata";
+import { signSharePayload } from "@/lib/server/share-signing";
 import {
   createPendingSignalResults,
   signalNames,
@@ -122,18 +125,42 @@ function OpenStored({ result }: { result: AnalysisResult }) {
   );
 }
 
+const TEST_SHARE_SECRET = "dom-test-share-secret-0123456789abcdef";
+
+/**
+ * What `app/page.tsx` hands the runtime for a `?shared=` link, resolved by
+ * the real server code: signed (verified) by default, or as it arrives
+ * without a valid signature.
+ */
+function withTestSecret<T>(run: () => T): T {
+  vi.stubEnv("SHARE_SIGNING_SECRET", TEST_SHARE_SECRET);
+  resetEnvForTests();
+  try {
+    return run();
+  } finally {
+    vi.unstubAllEnvs();
+    resetEnvForTests();
+  }
+}
+
+function sharedViewFor(
+  payload: string,
+  { signed = true }: { signed?: boolean } = {},
+): SharedView | null {
+  return withTestSecret(() =>
+    resolveSharedView(payload, signed ? signSharePayload(payload) : null),
+  );
+}
+
 function renderApp(
   extra?: React.ReactNode,
-  shared?: { payload: string; withServerAnatomy?: boolean },
+  shared?: { payload: string; signed?: boolean },
 ) {
-  const sharedAnatomy =
-    shared?.withServerAnatomy === false
-      ? null
-      : (describeSharedSnapshot(shared?.payload)?.anatomy ?? null);
   return render(
     <AnalyzerRuntimeProvider
-      sharedPayload={shared?.payload ?? null}
-      sharedAnatomy={sharedAnatomy}
+      shared={
+        shared ? sharedViewFor(shared.payload, { signed: shared.signed }) : null
+      }
     >
       <ScanForm />
       <ResultsSection />
@@ -596,6 +623,106 @@ function stubHeldStream() {
   );
   return stream;
 }
+
+describe("shared links and their signature", () => {
+  const maliciousShare = encodeSharedSnapshot({
+    verdict: "malicious",
+    url: "https://example.com/login",
+    summary: "Google Safe Browsing lists this link as phishing.",
+    capturedAt: "2026-10-06T09:00:00.000Z",
+    signature: Array(8).fill("malicious"),
+  });
+  // What an attacker would forge: a reassuring verdict for a look-alike.
+  const forgedSafe = encodeSharedSnapshot({
+    verdict: "safe",
+    url: "https://paypal.com.secure-login.xyz/verify",
+    summary: "Scrutinix checked this link and it is safe.",
+    capturedAt: "2026-10-06T09:00:00.000Z",
+    signature: Array(8).fill("clear"),
+  });
+
+  it("states a signed snapshot's verdict, summary, strip, and verification", () => {
+    renderApp(undefined, { payload: maliciousShare });
+    const band = screen.getByLabelText(/^scan result: malicious$/i);
+    expect(within(band).getByRole("heading").textContent).toBe("malicious");
+    expect(band.getAttribute("style")).toContain("var(--sx-malicious-surface)");
+    expect(
+      within(band).getByText(
+        "Google Safe Browsing lists this link as phishing.",
+      ),
+    ).toBeTruthy();
+    expect(band.textContent).toMatch(
+      /Verified Scrutinix result · checked Oct 6, 09:00 AM UTC\. It may be out of date\./,
+    );
+    expect(
+      within(screen.getByRole("list", { name: "Checks" })).getAllByRole(
+        "listitem",
+      ),
+    ).toHaveLength(8);
+    expect(
+      within(band).getByRole("button", { name: "Run a fresh scan" }),
+    ).toBeTruthy();
+  });
+
+  it("shows nothing an unsigned payload claims", () => {
+    renderApp(undefined, { payload: forgedSafe, signed: false });
+
+    const band = screen.getByLabelText("Shared link, not verified");
+    expect(within(band).getByRole("heading").textContent).toBe(
+      "Check this shared link yourself",
+    );
+    expect(
+      within(band).getByText(
+        "We can't confirm the result in this link came from Scrutinix. It may be old or edited, so we're not showing it.",
+      ),
+    ).toBeTruthy();
+    // The viewer saw no earlier scan, so nothing is "fresh".
+    expect(
+      within(band).getByRole("button", { name: "Scan this link" }),
+    ).toBeTruthy();
+    expect(
+      within(band).queryByRole("button", { name: "Run a fresh scan" }),
+    ).toBeNull();
+    // Neutral surface, no verdict word, score, summary, or strip.
+    expect(band.getAttribute("style")).toContain("var(--sx-pending-surface)");
+    expect(band.textContent).not.toMatch(/safe|malicious|verified scrutinix/i);
+    expect(screen.queryByLabelText(/^scan result/i)).toBeNull();
+    expect(screen.queryByRole("meter")).toBeNull();
+    expect(screen.queryByText(/checked this link and it is safe/)).toBeNull();
+    expect(screen.queryByRole("list", { name: "Checks" })).toBeNull();
+    expect(screen.queryByRole("toolbar")).toBeNull();
+
+    // The link's anatomy is Scrutinix's own computation, so it stays.
+    expect(document.querySelector("#sx-link-anatomy")?.textContent).toBe(
+      "https://paypal.com.secure-login.xyz/verify",
+    );
+    expect(
+      screen.getByText(
+        (_, node) =>
+          node?.tagName === "P" &&
+          /This link belongs to secure-login\.xyz, not paypal\.com\./.test(
+            node.textContent ?? "",
+          ),
+      ),
+    ).toBeTruthy();
+  });
+
+  it("treats a payload edited after signing as unverified", () => {
+    // A real signature, carried over to a different payload.
+    const view = withTestSecret(() =>
+      resolveSharedView(forgedSafe, signSharePayload(maliciousShare)),
+    );
+    expect(view?.snapshot).toBeNull();
+
+    render(
+      <AnalyzerRuntimeProvider shared={view}>
+        <ResultsSection />
+      </AnalyzerRuntimeProvider>,
+    );
+    expect(screen.getByLabelText("Shared link, not verified")).toBeTruthy();
+    expect(screen.queryByLabelText(/^scan result/i)).toBeNull();
+  });
+});
 
 describe("ResultsSection focus and states", () => {
   it("keeps focus on the band when a shared snapshot's fresh scan starts", async () => {

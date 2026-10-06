@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   getEnv,
@@ -47,5 +47,39 @@ describe("env parsing", () => {
 
     delete process.env.UPSTASH_REDIS_REST_URL;
     resetEnvForTests();
+  });
+
+  it("ignores the published e2e key outside an e2e run", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const published = "e2e-only-share-signing-key-not-a-real-secret-0001";
+    vi.stubEnv("SHARE_SIGNING_SECRET", published);
+    vi.stubEnv("SCRUTINIX_E2E", "");
+    resetEnvForTests();
+    expect(getEnv().SHARE_SIGNING_SECRET).toBeUndefined();
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(String(warn.mock.calls[0]?.[0])).toContain("published e2e test key");
+    expect(String(warn.mock.calls[0]?.[0])).not.toContain(published);
+
+    vi.stubEnv("SCRUTINIX_E2E", "1");
+    resetEnvForTests();
+    expect(getEnv().SHARE_SIGNING_SECRET).toBe(published);
+    warn.mockRestore();
+  });
+
+  it("keeps a share-signing secret only when it is at least 32 characters", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.stubEnv("SHARE_SIGNING_SECRET", ` ${"s".repeat(32)} `);
+    vi.stubEnv("SHARE_SIGNING_SECRET_PREVIOUS", "");
+    resetEnvForTests();
+    expect(getEnv().SHARE_SIGNING_SECRET).toBe("s".repeat(32));
+    expect(getEnv().SHARE_SIGNING_SECRET_PREVIOUS).toBeUndefined();
+    expect(warn).not.toHaveBeenCalled();
+
+    vi.stubEnv("SHARE_SIGNING_SECRET_PREVIOUS", "p".repeat(31));
+    resetEnvForTests();
+    expect(getEnv().SHARE_SIGNING_SECRET_PREVIOUS).toBeUndefined();
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(String(warn.mock.calls[0]?.[0])).not.toContain("p".repeat(31));
+    warn.mockRestore();
   });
 });

@@ -200,4 +200,37 @@ describe("shared snapshots", () => {
     });
     expect(buildSharedSnapshot(legacy!).signature).toBeUndefined();
   });
+
+  it("dates a snapshot by when the evidence was gathered", () => {
+    // Saved before checkedAt existed: the sanitizer falls back to its own
+    // completedAt.
+    const old = sanitizeHistoryEntry({
+      id: "old",
+      url: "https://old.example/",
+      verdict: "safe",
+      signals: {},
+      metadata: { scanId: "old", completedAt: "2025-01-01T00:00:00.000Z" },
+    });
+    expect(old?.metadata.checkedAt).toBe("2025-01-01T00:00:00.000Z");
+    expect(buildSharedSnapshot(old!).capturedAt).toBe(
+      "2025-01-01T00:00:00.000Z",
+    );
+
+    // A cache hit finished later than its evidence was gathered.
+    const cached = sanitizeHistoryEntry({
+      id: "hit",
+      url: "https://old.example/",
+      verdict: "safe",
+      signals: {},
+      metadata: {
+        scanId: "hit",
+        completedAt: "2025-01-01T00:10:00.000Z",
+        checkedAt: "2025-01-01T00:00:00.000Z",
+        cacheHit: true,
+      },
+    });
+    expect(buildSharedSnapshot(cached!).capturedAt).toBe(
+      "2025-01-01T00:00:00.000Z",
+    );
+  });
 });
