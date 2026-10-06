@@ -1,5 +1,6 @@
 import { isIP } from "node:net";
 
+import { getRegistrableDomain } from "@/lib/domain/registrable-domain";
 import type { WhoisData } from "@/lib/domain/types";
 import { fetchWithTimeout, SCRUTINIX_USER_AGENT } from "@/lib/server/http";
 import { getErrorMessage, SignalSkipError } from "@/lib/server/signal-error";
@@ -31,7 +32,11 @@ export async function runWhoisSignal(
     );
   }
 
-  const rdapUrl = `https://rdap.org/domain/${encodeURIComponent(hostname)}`;
+  // Registries answer only for the registered domain: www.wikipedia.org is a
+  // 400 and www.github.com a 404. Private-suffix tenants (safe.github.io)
+  // stay distinct so they never inherit the platform's registration age.
+  const domain = getRegistrableDomain(hostname);
+  const rdapUrl = `https://rdap.org/domain/${encodeURIComponent(domain)}`;
   const response = await fetchWithTimeout(
     rdapUrl,
     {

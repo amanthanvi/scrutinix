@@ -69,6 +69,22 @@ describe("runWhoisSignal", () => {
     expect(headers.get("user-agent")).toMatch(/^scrutinix\//);
   });
 
+  it("looks up the registered domain, keeping private-suffix tenants distinct", async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(new Response(null, { status: 404 }));
+
+    await runWhoisSignal("https://www.wikipedia.org/wiki/Main_Page");
+    await runWhoisSignal("https://login.example.co.uk/");
+    await runWhoisSignal("https://safe.github.io/");
+
+    expect(fetchMock.mock.calls.map(([input]) => String(input))).toEqual([
+      "https://rdap.org/domain/wikipedia.org",
+      "https://rdap.org/domain/example.co.uk",
+      "https://rdap.org/domain/safe.github.io",
+    ]);
+  });
+
   it("propagates network failures as signal errors instead of fake success", async () => {
     vi.spyOn(globalThis, "fetch").mockRejectedValue(
       new Error("Timed out after 8000ms"),
