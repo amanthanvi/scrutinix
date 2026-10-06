@@ -4,6 +4,7 @@ import { expect, test } from "@playwright/test";
 import {
   encodeSharedPayload,
   gotoApp,
+  settleAnimations,
   sharedPath,
   signSharedPayload,
   submitSingleScan,
@@ -32,11 +33,7 @@ test("result view accessibility @smoke", async ({ page }) => {
   await page.getByRole("switch", { name: /^summary full/i }).click();
   await expect(page.getByLabel(/DNS Profile signal:/i)).toBeVisible();
   // Let the 200ms row entrance finish so axe measures settled colors.
-  await page.evaluate(() =>
-    Promise.all(
-      document.getAnimations().map((animation) => animation.finished),
-    ),
-  );
+  await settleAnimations(page);
 
   const devToolsButton = page.getByRole("button", {
     name: /open next\.js dev tools/i,
@@ -88,11 +85,7 @@ for (const colorScheme of ["light", "dark"] as const) {
     await submitSingleScan(page, "https://paypal.com.secure-login.xyz/verify");
     await expect(page.getByLabel(/^scan result: safe$/i)).toBeVisible();
     await page.getByRole("switch", { name: /^summary full/i }).click();
-    await page.evaluate(() =>
-      Promise.all(
-        document.getAnimations().map((animation) => animation.finished),
-      ),
-    );
+    await settleAnimations(page);
     await page
       .getByRole("button", { name: /open next\.js dev tools/i })
       .evaluateAll((elements) =>
@@ -123,11 +116,7 @@ for (const colorScheme of ["light", "dark"] as const) {
         waitUntil: "domcontentloaded",
       });
       await expect(page.getByLabel(label)).toBeVisible();
-      await page.evaluate(() =>
-        Promise.all(
-          document.getAnimations().map((animation) => animation.finished),
-        ),
-      );
+      await settleAnimations(page);
       await page
         .getByRole("button", { name: /open next\.js dev tools/i })
         .evaluateAll((elements) =>
