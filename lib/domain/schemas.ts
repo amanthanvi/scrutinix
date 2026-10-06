@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod";
 
 /**
  * Single source of truth for every data shape that crosses a trust boundary:
