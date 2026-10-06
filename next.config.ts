@@ -38,10 +38,13 @@ const nextConfig: NextConfig = {
     "/api/analyze/**": [
       "./lib/server/ml/model/**",
       // transformers loads the runtime via createRequire(), which file tracing
-      // cannot follow. Ship it by hand: JS + the Vercel (linux-x64) binary only.
+      // cannot follow. Ship it by hand: JS + the Vercel (linux-x64) CPU
+      // binaries only. Name them exactly: on linux-x64 the postinstall also
+      // drops ~250MB of CUDA providers into that directory.
       "./node_modules/onnxruntime-node/package.json",
       "./node_modules/onnxruntime-node/dist/**",
-      "./node_modules/onnxruntime-node/bin/napi-v6/linux/x64/**",
+      "./node_modules/onnxruntime-node/bin/napi-v6/linux/x64/onnxruntime_binding.node",
+      "./node_modules/onnxruntime-node/bin/napi-v6/linux/x64/libonnxruntime.so.1",
       "./node_modules/onnxruntime-common/package.json",
       "./node_modules/onnxruntime-common/dist/cjs/**",
     ],
