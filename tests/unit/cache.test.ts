@@ -100,22 +100,31 @@ describe("ResultCache", () => {
       vi.unstubAllEnvs();
       vi.stubEnv("VERCEL_ENV", "");
       vi.stubEnv("VERCEL_GIT_COMMIT_SHA", "");
+      vi.stubEnv("VERCEL_DEPLOYMENT_ID", "");
       for (const [name, value] of Object.entries(env)) {
         vi.stubEnv(name, value);
       }
       const seen: string[] = [];
       const remote: RemoteCacheStore = {
-        get: vi.fn(async () => null),
+        get: vi.fn(async (key: string) => {
+          seen.push(key);
+          return null;
+        }),
         set: vi.fn(async (key: string) => {
           seen.push(key);
           return "OK";
         }),
       };
-      await new ResultCache(2, () => remote).set(
+      const cache = new ResultCache(2, () => remote);
+      await cache.set(
         "https://example.com/",
         buildResult("https://example.com/"),
         60_000,
       );
+      await new ResultCache(2, () => remote).get("https://example.com/");
+      if (seen.length === 0) {
+        return null;
+      }
       return (seen[0] ?? "").split(":").slice(0, 3).join(":");
     };
 
@@ -128,8 +137,16 @@ describe("ResultCache", () => {
         await keyFor({ VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_SHA: sha }),
       ).toBe("sx:result:preview-0123456789ab");
       expect(
+        await keyFor({
+          VERCEL_ENV: "preview",
+          VERCEL_GIT_COMMIT_SHA: "x:y",
+          VERCEL_DEPLOYMENT_ID: "dpl_AbC123",
+        }),
+      ).toBe("sx:result:preview-dpl_abc123");
+      // No per-deployment identity: skip the shared cache, never share one.
+      expect(
         await keyFor({ VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_SHA: "x:y" }),
-      ).toBe("sx:result:preview");
+      ).toBeNull();
       expect(await keyFor({ VERCEL_ENV: "weird:value" })).toBe(
         "sx:result:local",
       );
