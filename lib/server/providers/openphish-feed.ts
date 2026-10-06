@@ -26,7 +26,7 @@ export async function checkOpenPhishFeed(
     return {
       feed: "openphish",
       matchedUrl: normalized,
-      detail: "listed in the OpenPhish community feed",
+      detail: "lists this exact link as phishing",
       confidence: "high",
       matchType: "url",
     };
@@ -39,8 +39,7 @@ export async function checkOpenPhishFeed(
     return {
       feed: "openphish",
       matchedUrl: hostname,
-      detail:
-        "hostname appears in the OpenPhish community feed (different path)",
+      detail: "lists a different link on this host as phishing",
       confidence: "medium",
       matchType: "host",
     };

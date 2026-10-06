@@ -1,6 +1,21 @@
+import { capitalize, countOf, formatAge, formatList } from "@/lib/domain/copy";
+import {
+  describeFeedMatch,
+  describeSafeBrowsingThreats,
+  feedDisplayName,
+  isElsewhereOnHost,
+} from "@/lib/domain/feed-copy";
 import { getRegistrableDomain } from "@/lib/domain/registrable-domain";
+import {
+  feedMatchWeight,
+  VT_CONVICTION_ENGINES,
+  VT_STALE_ANALYSIS_DAYS,
+  vtAnalysisAgeDays,
+} from "@/lib/domain/reputation";
+import { getSignalSeverity } from "@/lib/domain/signal-severity";
 import type {
   AnalysisResult,
+  SignalName,
   SignalResults,
   ThreatInfo,
   Verdict,
@@ -8,15 +23,63 @@ import type {
 import { signalLabels, signalNames } from "@/lib/domain/types";
 import { threatScoreToVerdict } from "@/lib/domain/score-bands";
 
+export { hasConfirmedReputationHit } from "@/lib/domain/reputation";
+
 interface Contribution {
+  /** The check this evidence came from; drives the Summary row selection. */
+  signal: SignalName;
   score: number;
   category: string;
   reason: string;
   quality: "high" | "medium" | "low";
+  /**
+   * How the one-line summary names this evidence. "source" subjects are
+   * reputation sources that flagged the link ("7 VirusTotal engines");
+   * "sign" subjects are warning signs found in the link itself ("a newly
+   * registered domain"). Contributions sharing a group collapse to the
+   * highest-scoring subject. Negative (exculpatory) evidence has none.
+   */
+  subject?: { text: string; kind: "source" | "sign"; group: string };
 }
 
-/** Days after which a stored VirusTotal analysis is considered stale. */
-const VT_STALE_ANALYSIS_DAYS = 30;
+/** What a scorer returns; `collectContributions` tags it with its signal. */
+type ScoredItem = Omit<Contribution, "signal">;
+
+/** One scorer per signal, so every contribution knows its source check. */
+const SCORERS: ReadonlyArray<
+  readonly [SignalName, (signals: SignalResults) => ScoredItem[]]
+> = [
+  ["virusTotal", scoreVirusTotal],
+  ["googleSafeBrowsing", scoreGoogleSafeBrowsing],
+  ["threatFeeds", scoreThreatFeeds],
+  ["mlEnsemble", scoreMlEnsemble],
+  ["ssl", scoreSsl],
+  ["dns", scoreDns],
+  ["redirectChain", scoreRedirects],
+  ["whois", scoreWhois],
+];
+
+function collectContributions(signals: SignalResults): Contribution[] {
+  return SCORERS.flatMap(([signal, score]) =>
+    score(signals).map((item) => ({ ...item, signal })),
+  );
+}
+
+/**
+ * The checks that added score to the verdict. The Summary view shows
+ * exactly these (plus failures), so it can never say "All 8 checks found
+ * nothing." under a verdict those checks raised. Exculpatory (negative)
+ * evidence is not a driver.
+ */
+export function getScoredSignals(
+  signals: SignalResults,
+): ReadonlySet<SignalName> {
+  return new Set(
+    collectContributions(signals)
+      .filter((item) => item.score > 0)
+      .map((item) => item.signal),
+  );
+}
 
 export function buildThreatAssessment(
   signals: SignalResults,
@@ -40,16 +103,7 @@ export function buildThreatAssessment(
     };
   }
 
-  const contributions = [
-    ...scoreVirusTotal(signals),
-    ...scoreGoogleSafeBrowsing(signals),
-    ...scoreThreatFeeds(signals),
-    ...scoreMlEnsemble(signals),
-    ...scoreSsl(signals),
-    ...scoreDns(signals),
-    ...scoreRedirects(signals),
-    ...scoreWhois(signals),
-  ];
+  const contributions = collectContributions(signals);
 
   applyExculpatoryEvidence(signals, contributions);
 
@@ -59,8 +113,8 @@ export function buildThreatAssessment(
     100,
   );
   const bandedVerdict = threatScoreToVerdict(score);
-  // A dead host must not read as "Safe": nothing was inspected, so nothing
-  // was cleared. Positive-scored verdicts are never downgraded - threat
+  // A dead host must not read as "Safe": the site itself could not be
+  // inspected, so it was not cleared. Positive-scored verdicts are never downgraded - threat
   // feeds can rightfully convict a currently-unreachable domain.
   const verdict: Verdict =
     bandedVerdict === "safe" && isUnreachable(signals)
@@ -80,28 +134,32 @@ export function buildThreatAssessment(
     limitations,
   });
 
+  const confidenceLabel = scoreToConfidenceLabel(confidence);
+  const hasPositiveEvidence = contributions.some((item) => item.score > 0);
   const threatInfo: ThreatInfo = {
     verdict,
     confidence: Number(confidence.toFixed(2)),
-    confidenceLabel: scoreToConfidenceLabel(confidence),
-    hasPositiveEvidence: contributions.some((item) => item.score > 0),
-    confidenceReasons: buildConfidenceReasons(
-      signals,
-      verdict,
-      successfulSignals,
-      dataRichSignals,
-      skippedSignals,
-      failedSignals,
-      contributions,
-      limitations,
+    confidenceLabel,
+    hasPositiveEvidence,
+    scoredSignals: signalNames.filter((name) =>
+      contributions.some((item) => item.signal === name && item.score > 0),
     ),
+    confidenceReasons: buildConfidenceReasons(signals, verdict, limitations),
     score,
-    summary: buildSummary(verdict, categories, reasons, limitations.length > 0),
+    summary: buildSummary(
+      verdict,
+      contributions,
+      reasons,
+      limitations.length > 0,
+    ),
     categories,
-    reasons: reasons.length
-      ? reasons
-      : ["No direct malicious indicators were found in the completed signals."],
-    recommendations: buildRecommendations(verdict, limitations.length > 0),
+    reasons: reasons.length ? reasons : ["No check flagged this link."],
+    recommendations: buildRecommendations(verdict, {
+      limitedCoverage: limitations.length > 0,
+      // Same rule as the "Probably safe" imperative, so the first "What
+      // to do" item never repeats it.
+      provisional: confidenceLabel !== "high" || hasPositiveEvidence,
+    }),
     limitations,
   };
 
@@ -160,6 +218,7 @@ function applyExculpatoryEvidence(
     vt.data.suspicious === 0
   ) {
     contributions.push({
+      signal: "virusTotal",
       score: -10,
       category: "Reputation",
       reason: `${vt.data.harmless} VirusTotal engines independently rate this URL harmless.`,
@@ -185,6 +244,7 @@ function applyExculpatoryEvidence(
     !whois.data.sharedPlatform
   ) {
     contributions.push({
+      signal: "whois",
       score: -8,
       category: "Domain Age",
       reason: `The domain has ${Math.floor(whois.data.ageDays / 365)} years of registration history, which weighs against impersonation.`,
@@ -193,45 +253,35 @@ function applyExculpatoryEvidence(
   }
 }
 
-/** Age of the VirusTotal analysis backing the verdict, in whole days. */
-function vtAnalysisAgeDays(signals: SignalResults): number | null {
-  const vt = signals.virusTotal;
-  if (vt.status !== "success" || !vt.data?.lastAnalysisDate) {
-    return null;
-  }
-
-  const analyzedAt = new Date(vt.data.lastAnalysisDate).getTime();
-  if (Number.isNaN(analyzedAt) || analyzedAt > Date.now()) {
-    return null;
-  }
-
-  return Math.floor((Date.now() - analyzedAt) / (1000 * 60 * 60 * 24));
-}
-
 /** Sub-conviction ladder: one detection and two detections must differ. */
 const VT_MALICIOUS_LADDER = [12, 22, 32, 42] as const;
 
-function scoreVirusTotal(signals: SignalResults): Contribution[] {
+function scoreVirusTotal(signals: SignalResults): ScoredItem[] {
   const signal = signals.virusTotal;
   if (signal.status !== "success" || !signal.data) {
     return [];
   }
 
   const { malicious, suspicious, domain } = signal.data;
-  const contributions: Contribution[] = [];
+  const contributions: ScoredItem[] = [];
 
   if (malicious > 0) {
     // >= 5 corroborating engines convict on their own (55+); below that the
     // ladder rises steadily instead of the old flat floor of 18.
     const score =
-      malicious >= 5
-        ? Math.min(55 + (malicious - 5) * 5, 85)
+      malicious >= VT_CONVICTION_ENGINES
+        ? Math.min(55 + (malicious - VT_CONVICTION_ENGINES) * 5, 85)
         : (VT_MALICIOUS_LADDER[malicious - 1] ?? 12);
     contributions.push({
       score,
       category: "Reputation",
-      reason: `${malicious} VirusTotal engines marked the URL as malicious.`,
+      reason: `${countOf(malicious, "VirusTotal engine")} marked this link as malicious.`,
       quality: "high",
+      subject: {
+        text: countOf(malicious, "VirusTotal engine"),
+        kind: "source",
+        group: "virusTotal",
+      },
     });
   }
 
@@ -239,8 +289,13 @@ function scoreVirusTotal(signals: SignalResults): Contribution[] {
     contributions.push({
       score: Math.min(suspicious * 4, 16),
       category: "Reputation",
-      reason: `${suspicious} VirusTotal engines marked the URL as suspicious.`,
+      reason: `${countOf(suspicious, "VirusTotal engine")} marked this link as suspicious.`,
       quality: "high",
+      subject: {
+        text: countOf(suspicious, "VirusTotal engine"),
+        kind: "source",
+        group: "virusTotal",
+      },
     });
   }
 
@@ -248,15 +303,20 @@ function scoreVirusTotal(signals: SignalResults): Contribution[] {
     contributions.push({
       score: 15,
       category: "Reputation",
-      reason: `VirusTotal flags this domain beyond this URL (${domain.malicious} engines mark the domain malicious).`,
+      reason: `VirusTotal flags this domain beyond this URL (${countOf(domain.malicious, "engine")} mark the domain malicious).`,
       quality: "medium",
+      subject: {
+        text: "VirusTotal's domain reputation",
+        kind: "source",
+        group: "virusTotal",
+      },
     });
   }
 
   return contributions;
 }
 
-function scoreGoogleSafeBrowsing(signals: SignalResults): Contribution[] {
+function scoreGoogleSafeBrowsing(signals: SignalResults): ScoredItem[] {
   const signal = signals.googleSafeBrowsing;
   if (
     signal.status !== "success" ||
@@ -274,13 +334,18 @@ function scoreGoogleSafeBrowsing(signals: SignalResults): Contribution[] {
     {
       score: Math.min(62 + (threatTypes.size - 1) * 6, 74),
       category: "Google Safe Browsing",
-      reason: `Google Safe Browsing reported ${matches.length} threat match${matches.length === 1 ? "" : "es"} (${[...threatTypes].join(", ")}).`,
+      reason: `Google Safe Browsing lists this link for ${describeSafeBrowsingThreats(matches)}.`,
       quality: "high",
+      subject: {
+        text: "Google Safe Browsing",
+        kind: "source",
+        group: "googleSafeBrowsing",
+      },
     },
   ];
 }
 
-function scoreThreatFeeds(signals: SignalResults): Contribution[] {
+function scoreThreatFeeds(signals: SignalResults): ScoredItem[] {
   const signal = signals.threatFeeds;
   if (
     signal.status !== "success" ||
@@ -295,57 +360,32 @@ function scoreThreatFeeds(signals: SignalResults): Contribution[] {
     return {
       score,
       category: "Threat Feed",
-      reason: `${match.feed} listed the URL as ${match.detail}.`,
+      reason: describeFeedMatch(match),
       quality,
+      // A listing of a different link on this host is a warning sign, not
+      // the feed vouching that this link is bad.
+      subject: isElsewhereOnHost(match)
+        ? {
+            text: `another link on this site listed by ${feedDisplayName(match.feed)}`,
+            kind: "sign",
+            group: "feed-host",
+          }
+        : {
+            text: feedDisplayName(match.feed),
+            kind: "source",
+            group: `feed:${match.feed}`,
+          },
     };
   });
 }
 
-type FeedMatch = NonNullable<
-  SignalResults["threatFeeds"]["data"]
->["matches"][number];
-
-function feedMatchWeight(match: FeedMatch): {
-  score: number;
-  quality: Contribution["quality"];
-} {
-  switch (match.feed) {
-    case "urlhaus":
-    case "openphish":
-      // An exact-URL listing convicts; a host-level listing corroborates.
-      return match.matchType === "host"
-        ? { score: 25, quality: "medium" }
-        : { score: 55, quality: "high" };
-    case "threatfox":
-      // A listed URL or host IOC convicts at high confidence; a different
-      // URL listed on a shared host only corroborates, like a URLhaus host.
-      if (match.listedElsewhereOnHost) {
-        return { score: 25, quality: "medium" };
-      }
-      return match.confidence === "high"
-        ? { score: 55, quality: "high" }
-        : { score: 40, quality: "medium" };
-    case "spamhaus-dbl":
-      if (match.confidence === "high") {
-        return { score: 45, quality: "high" };
-      }
-      return match.detail.includes("abused")
-        ? { score: 15, quality: "medium" }
-        : { score: 25, quality: "medium" };
-    case "surbl":
-      return match.confidence === "high"
-        ? { score: 35, quality: "high" }
-        : { score: 20, quality: "medium" };
-  }
-}
-
-function scoreMlEnsemble(signals: SignalResults): Contribution[] {
+function scoreMlEnsemble(signals: SignalResults): ScoredItem[] {
   const signal = signals.mlEnsemble;
   if (signal.status !== "success" || !signal.data) {
     return [];
   }
 
-  const contributions: Contribution[] = [];
+  const contributions: ScoredItem[] = [];
   const consensusReason = (signal.data.reasons ?? []).find(Boolean);
 
   if (signal.data.consensusLabel === "malicious") {
@@ -354,30 +394,31 @@ function scoreMlEnsemble(signals: SignalResults): Contribution[] {
       category: "Behavioral Model",
       reason:
         consensusReason ??
-        "The ML ensemble flagged the URL as malicious with strong model agreement.",
+        "The link pattern model flagged this link as malicious.",
       quality: "medium",
+      subject: { text: "the link pattern model", kind: "source", group: "ml" },
     });
   } else if (signal.data.consensusLabel === "risky") {
     contributions.push({
       score: Math.round(signal.data.consensusScore * 16),
       category: "Behavioral Model",
       reason:
-        consensusReason ??
-        "The ML ensemble raised a cautious risk signal for the URL.",
+        consensusReason ?? "The link pattern model found this link risky.",
       quality: "medium",
+      subject: { text: "the link pattern model", kind: "source", group: "ml" },
     });
   }
 
   return contributions;
 }
 
-function scoreSsl(signals: SignalResults): Contribution[] {
+function scoreSsl(signals: SignalResults): ScoredItem[] {
   const signal = signals.ssl;
   if (signal.status !== "success" || !signal.data) {
     return [];
   }
 
-  const contributions: Contribution[] = [];
+  const contributions: ScoredItem[] = [];
 
   if (signal.data.validationState === "invalid") {
     contributions.push({
@@ -385,8 +426,9 @@ function scoreSsl(signals: SignalResults): Contribution[] {
       category: "TLS",
       reason:
         signal.data.observations?.[0] ??
-        "The TLS certificate could not be validated cleanly.",
+        "The site's security certificate isn't trusted.",
       quality: "low",
+      subject: { text: "an invalid certificate", kind: "sign", group: "tls" },
     });
   }
 
@@ -394,9 +436,9 @@ function scoreSsl(signals: SignalResults): Contribution[] {
     contributions.push({
       score: 26,
       category: "TLS",
-      reason:
-        "The endpoint appears to use an untrusted or self-signed certificate.",
+      reason: "The site uses an untrusted or self-signed security certificate.",
       quality: "low",
+      subject: { text: "an untrusted certificate", kind: "sign", group: "tls" },
     });
   }
 
@@ -417,8 +459,13 @@ function scoreSsl(signals: SignalResults): Contribution[] {
       contributions.push({
         score: 12,
         category: "TLS",
-        reason: `A TLS certificate issued ${certAgeDays} day${certAgeDays === 1 ? "" : "s"} ago on a domain registered ${domainAgeDays} day${domainAgeDays === 1 ? "" : "s"} ago matches a common phishing setup pattern.`,
+        reason: `A security certificate issued ${formatAge(certAgeDays)} ago on a domain registered ${formatAge(domainAgeDays)} ago matches a common phishing setup.`,
         quality: "medium",
+        subject: {
+          text: "a brand-new certificate on a brand-new domain",
+          kind: "sign",
+          group: "tls-fresh",
+        },
       });
     }
   }
@@ -426,7 +473,7 @@ function scoreSsl(signals: SignalResults): Contribution[] {
   return contributions;
 }
 
-function scoreDns(signals: SignalResults): Contribution[] {
+function scoreDns(signals: SignalResults): ScoredItem[] {
   const signal = signals.dns;
   if (signal.status !== "success" || !signal.data) {
     return [];
@@ -437,24 +484,36 @@ function scoreDns(signals: SignalResults): Contribution[] {
     category: "DNS",
     reason: anomaly,
     quality: "low" as const,
+    subject: anomaly.includes("punycode")
+      ? {
+          text: "a look-alike domain name",
+          kind: "sign" as const,
+          group: "dns-punycode",
+        }
+      : { text: "unusual DNS records", kind: "sign" as const, group: "dns" },
   }));
 }
 
-function scoreRedirects(signals: SignalResults): Contribution[] {
+function scoreRedirects(signals: SignalResults): ScoredItem[] {
   const signal = signals.redirectChain;
   if (signal.status !== "success" || !signal.data) {
     return [];
   }
 
   const data = signal.data;
-  const contributions: Contribution[] = [];
+  const contributions: ScoredItem[] = [];
 
   if (data.totalHops >= 3) {
     contributions.push({
       score: 8,
       category: "Redirects",
-      reason: `The URL redirected through ${data.totalHops} hops before settling.`,
+      reason: `The URL redirected through ${countOf(data.totalHops, "hop")} before settling.`,
       quality: "low",
+      subject: {
+        text: "a long redirect chain",
+        kind: "sign",
+        group: "redirect-hops",
+      },
     });
   }
 
@@ -467,6 +526,11 @@ function scoreRedirects(signals: SignalResults): Contribution[] {
       category: "Redirects",
       reason: "The redirect chain downgrades or stays on HTTP.",
       quality: "medium",
+      subject: {
+        text: "a redirect over unencrypted HTTP",
+        kind: "sign",
+        group: "redirect-http",
+      },
     });
   }
 
@@ -481,6 +545,11 @@ function scoreRedirects(signals: SignalResults): Contribution[] {
         category: "Redirects",
         reason: `The redirect chain crosses domains, from ${fromDomain} to ${toDomain}.`,
         quality: "medium",
+        subject: {
+          text: "a redirect to a different site",
+          kind: "sign",
+          group: "redirect-cross",
+        },
       });
     }
   }
@@ -494,6 +563,11 @@ function scoreRedirects(signals: SignalResults): Contribution[] {
         category: "Page Content",
         reason: `The final page asks for credentials but submits its form to a different domain (${crossOriginPasswordHost}).`,
         quality: "medium",
+        subject: {
+          text: "a password form that sends to another site",
+          kind: "sign",
+          group: "page-password",
+        },
       });
     }
 
@@ -503,6 +577,11 @@ function scoreRedirects(signals: SignalResults): Contribution[] {
         category: "Page Content",
         reason: `The final page contains obfuscated script (${content.obfuscationHints.slice(0, 2).join(", ")}).`,
         quality: "low",
+        subject: {
+          text: "deliberately hidden page code",
+          kind: "sign",
+          group: "page-obfuscation",
+        },
       });
     }
 
@@ -512,9 +591,14 @@ function scoreRedirects(signals: SignalResults): Contribution[] {
         category: "Page Content",
         reason:
           content.hiddenIframeCount >= 1
-            ? `The final page embeds ${content.hiddenIframeCount} hidden iframe${content.hiddenIframeCount === 1 ? "" : "s"}.`
-            : `The final page embeds ${content.iframeCount} iframes.`,
+            ? `The final page embeds ${countOf(content.hiddenIframeCount, "hidden iframe")}.`
+            : `The final page embeds ${countOf(content.iframeCount, "iframe")}.`,
         quality: "low",
+        subject: {
+          text: "hidden embedded frames",
+          kind: "sign",
+          group: "page-iframes",
+        },
       });
     }
 
@@ -527,6 +611,11 @@ function scoreRedirects(signals: SignalResults): Contribution[] {
           category: "Page Content",
           reason: `The final page meta-refreshes to another domain (${refreshDomain}).`,
           quality: "low",
+          subject: {
+            text: "an automatic jump to another site",
+            kind: "sign",
+            group: "page-refresh",
+          },
         });
       }
     }
@@ -546,27 +635,37 @@ function registrableDomainOf(url: string | undefined): string | null {
   }
 }
 
-function scoreWhois(signals: SignalResults): Contribution[] {
+function scoreWhois(signals: SignalResults): ScoredItem[] {
   const signal = signals.whois;
   if (signal.status !== "success" || !signal.data) {
     return [];
   }
 
-  const contributions: Contribution[] = [];
+  const contributions: ScoredItem[] = [];
 
   if (signal.data.ageDays !== null && signal.data.ageDays < 30) {
     contributions.push({
       score: 15,
       category: "Domain Age",
-      reason: `The domain is only ${signal.data.ageDays} day${signal.data.ageDays === 1 ? "" : "s"} old.`,
+      reason: `The domain is only ${formatAge(signal.data.ageDays)} old.`,
       quality: "medium",
+      subject: {
+        text: "a domain less than a month old",
+        kind: "sign",
+        group: "domain-age",
+      },
     });
   } else if (signal.data.ageDays !== null && signal.data.ageDays < 180) {
     contributions.push({
       score: 8,
       category: "Domain Age",
-      reason: `The domain is relatively new at ${signal.data.ageDays} days old.`,
+      reason: `The domain is fairly new: registered ${formatAge(signal.data.ageDays)} ago.`,
       quality: "low",
+      subject: {
+        text: "a recently registered domain",
+        kind: "sign",
+        group: "domain-age",
+      },
     });
   }
 
@@ -647,7 +746,7 @@ function buildLimitations(signals: SignalResults) {
   const vtAgeDays = vtAnalysisAgeDays(signals);
   if (vtAgeDays !== null && vtAgeDays > VT_STALE_ANALYSIS_DAYS) {
     limitations.push(
-      `${formatSignalName("virusTotal")}: The verdict draws on a VirusTotal analysis from ${vtAgeDays} days ago.`,
+      `${formatSignalName("virusTotal")}: The verdict draws on a VirusTotal analysis from ${countOf(vtAgeDays, "day")} ago.`,
     );
   }
 
@@ -744,121 +843,212 @@ function calculateConfidence({
   return clamp(confidence, 0.15, effectiveVerdict === "safe" ? 0.97 : 0.99);
 }
 
-function buildRecommendations(verdict: Verdict, limitedCoverage: boolean) {
+function buildRecommendations(
+  verdict: Verdict,
+  {
+    limitedCoverage,
+    provisional,
+  }: { limitedCoverage: boolean; provisional: boolean },
+) {
+  // Actions only: the verdict line already says what the result means.
   switch (verdict) {
     case "critical":
     case "malicious":
       return [
-        "Do not open the link outside an isolated environment.",
-        "Do not enter credentials, payment details, or MFA codes.",
-        "If you already visited it, clear browser state and run a device malware scan.",
+        "Don't enter passwords, payment details, or one-time codes on this site.",
+        "Delete the message the link came in, or report it as phishing.",
+        "If you already opened it, change any password you typed there and run a malware scan.",
       ];
     case "suspicious":
       return [
-        "Verify the sender and business context before opening the link.",
-        "Open only in a disposable browser profile or sandbox if you must inspect it.",
-        "Avoid submitting credentials or downloading files until trust is established.",
+        "Confirm with the sender another way, such as a call or a message you start yourself.",
+        "Don't download files from this site.",
       ];
     case "safe":
-      return limitedCoverage
-        ? [
-            "No strong malicious indicators were found in the completed signals.",
-            "Treat this result as provisional until the skipped or unavailable checks are understood.",
-          ]
+      // A provisional Safe already says "still check who sent it" in its
+      // imperative; don't repeat it as the first thing to do.
+      if (limitedCoverage) {
+        return [
+          "Re-scan later — some checks were limited this time.",
+          "Be extra careful with shortened or urgent-sounding links.",
+        ];
+      }
+      return provisional
+        ? ["Be extra careful with shortened or urgent-sounding links."]
         : [
-            "No high-confidence malicious indicators were found in this scan.",
-            "Continue normal caution for unfamiliar links, especially shortened or time-sensitive ones.",
+            "Still check who sent the link before you sign in or pay.",
+            "Be extra careful with shortened or urgent-sounding links.",
           ];
     case "unknown":
       return [
-        "The host could not be reached, so most signals had nothing to inspect.",
-        "Treat the link with caution; re-scan later or verify the address before visiting.",
+        "Don't open it until the site responds and a re-scan finds nothing.",
+        "Check the address for typos, or ask the sender to confirm it.",
       ];
     default:
-      return [
-        "The scan could not gather enough data to determine a safe verdict.",
-      ];
+      return ["Check your connection, then run the scan again."];
   }
 }
 
+/** Most evidence named in the one-line summary. */
+const SUMMARY_SUBJECT_LIMIT = 3;
+
+/**
+ * One plain sentence naming what drove the verdict, e.g. "7 VirusTotal
+ * engines and URLhaus flagged this link." The reasons list carries the
+ * detail; this line must not repeat the verdict word or the score.
+ */
 function buildSummary(
   verdict: Verdict,
-  categories: string[],
+  contributions: Contribution[],
   reasons: string[],
   limitedCoverage: boolean,
 ) {
+  const hasPositiveEvidence = contributions.some((item) => item.score > 0);
+
   if (verdict === "unknown") {
-    return "The host was unreachable during this scan; the absence of findings is not evidence of safety.";
+    return "The site didn't respond, so we couldn't look at the page itself.";
   }
 
   if (verdict === "safe") {
+    if (hasPositiveEvidence) {
+      return limitedCoverage
+        ? "Only minor warning signs turned up, and some checks were limited."
+        : "Only minor warning signs turned up.";
+    }
+
     return limitedCoverage
-      ? "No strong malicious indicators were found, but some signals were unavailable or only partially verified."
-      : "No strong malicious indicators were found across the available signals.";
+      ? "No check flagged this link, but some checks were limited."
+      : "No check flagged this link.";
   }
 
   if (verdict === "error") {
-    return "The scan failed before enough signals completed.";
+    return "The scan failed before enough checks finished.";
   }
 
-  if (categories.length > 0) {
-    return `${capitalize(verdict)} risk based on ${categories.slice(0, 2).join(" and ")} signals.`;
+  const subjects = summarySubjects(contributions);
+  const sources = subjects.filter((subject) => subject.kind === "source");
+  if (sources.length > 0) {
+    return `${capitalize(formatList(sources.map((subject) => subject.text)))} flagged this link.`;
   }
 
-  return reasons[0] ?? "The scan found suspicious behavior.";
+  const signs = subjects.filter((subject) => subject.kind === "sign");
+  if (signs.length > 0) {
+    return `${capitalize(formatList(signs.map((subject) => subject.text)))} ${
+      signs.length === 1 ? "makes" : "make"
+    } this link look risky.`;
+  }
+
+  return reasons[0] ?? "Several checks found warning signs.";
 }
 
+function summarySubjects(contributions: Contribution[]) {
+  const byGroup = new Map<
+    string,
+    { text: string; kind: "source" | "sign"; score: number }
+  >();
+
+  for (const item of contributions) {
+    if (item.score <= 0 || !item.subject) {
+      continue;
+    }
+
+    const existing = byGroup.get(item.subject.group);
+    if (!existing || item.score > existing.score) {
+      byGroup.set(item.subject.group, {
+        text: item.subject.text,
+        kind: item.subject.kind,
+        score: item.score,
+      });
+    }
+  }
+
+  const ranked = [...byGroup.values()].sort((a, b) => b.score - a.score);
+  const sources = ranked.filter((subject) => subject.kind === "source");
+  const signs = ranked.filter((subject) => subject.kind === "sign");
+  return [
+    ...sources.slice(0, SUMMARY_SUBJECT_LIMIT),
+    ...signs.slice(0, SUMMARY_SUBJECT_LIMIT),
+  ];
+}
+
+/**
+ * Why confidence sits where it does. Only shortfalls and evidence earn a
+ * line - a fully finished scan says nothing about coverage, because the
+ * check count already shows under Details.
+ */
 function buildConfidenceReasons(
   signals: SignalResults,
   verdict: Verdict,
-  successfulSignals: number,
-  dataRichSignals: number,
-  skippedSignals: number,
-  failedSignals: number,
-  contributions: Contribution[],
   limitations: string[],
 ) {
-  const completedSignals = successfulSignals + skippedSignals;
-  const limitedSignals = Math.max(0, successfulSignals - dataRichSignals);
-  const reasons = [
-    `${completedSignals}/8 signals completed, with ${dataRichSignals} producing data-rich results.`,
-  ];
-
-  const cleanHighConfidenceSources = countCleanHighConfidenceSources(signals);
+  const reasons: string[] = [];
+  const cleanSources = getCleanHighConfidenceSourceLabels(signals);
   const positiveHighConfidenceSources =
     countPositiveHighConfidenceSources(signals);
-  const unavailableHighConfidenceSources =
-    getUnavailableHighConfidenceSources(signals);
 
   if (verdict === "unknown") {
-    reasons.push(
-      "The host was unreachable, so the active probes had nothing to inspect.",
-    );
-  } else if (verdict === "safe") {
-    if (cleanHighConfidenceSources > 0) {
+    // The summary already says the site didn't respond; say only what the
+    // reputation sources can and can't vouch for.
+    if (cleanSources.length > 0) {
       reasons.push(
-        `${cleanHighConfidenceSources} high-confidence reputation sources returned clean results.`,
-      );
-    } else {
-      reasons.push(
-        "The clean verdict relies more on local observations than on external reputation sources.",
+        `${formatList(cleanSources)} found nothing, but ${
+          cleanSources.length === 1 ? "it can't" : "they can't"
+        } vouch for the page itself.`,
       );
     }
-  } else if (positiveHighConfidenceSources > 0) {
+  } else if (verdict === "safe") {
     reasons.push(
-      `${positiveHighConfidenceSources} high-confidence sources independently supported the risk verdict.`,
+      cleanSources.length > 0
+        ? `${countOf(cleanSources.length, "major reputation source")} found nothing.`
+        : "This result leans on checks of the link itself more than on reputation sources.",
     );
+  } else {
+    if (positiveHighConfidenceSources > 0) {
+      reasons.push(
+        `${countOf(positiveHighConfidenceSources, "major reputation source")} independently flagged this link.`,
+      );
+    }
+    if (cleanSources.length > 0) {
+      // "other" only has a referent when the previous line named sources.
+      reasons.push(
+        `${countOf(
+          cleanSources.length,
+          positiveHighConfidenceSources > 0
+            ? "other major reputation source"
+            : "major reputation source",
+        )} found nothing, which lowers certainty.`,
+      );
+    }
   }
 
-  if (verdict !== "safe" && cleanHighConfidenceSources > 0) {
+  const shortfalls = getCoverageShortfalls(signals);
+  if (shortfalls.failed.length > 0) {
     reasons.push(
-      `${cleanHighConfidenceSources} other high-confidence sources stayed clean, which tempered certainty.`,
+      `${formatList(shortfalls.failed)} didn't finish, which ${
+        shortfalls.reputationFailed ? "capped" : "lowers"
+      } confidence.`,
     );
   }
-
-  if (unavailableHighConfidenceSources.length > 0) {
+  if (shortfalls.partial.length > 0) {
     reasons.push(
-      `${formatSourceList(unavailableHighConfidenceSources)} did not complete, which capped confidence.`,
+      `${formatList(shortfalls.partial)} only partly finished, which capped confidence.`,
+    );
+  }
+  // An Unknown summary already explains why the live checks came back
+  // empty; naming them again adds nothing.
+  if (verdict !== "unknown" && shortfalls.limited.length > 0) {
+    reasons.push(
+      `${formatList(shortfalls.limited)} returned only partial results.`,
+    );
+  }
+  if (
+    shortfalls.failed.length === 0 &&
+    shortfalls.partial.length === 0 &&
+    shortfalls.limited.length === 0 &&
+    limitations.length > 0
+  ) {
+    reasons.push(
+      "Some checks finished with caveats that slightly lower confidence.",
     );
   }
 
@@ -866,38 +1056,63 @@ function buildConfidenceReasons(
     const { transformerModel, lexicalModel } = signals.mlEnsemble.data;
     if (transformerModel && transformerModel.label !== lexicalModel.label) {
       reasons.push(
-        "The ML models disagreed, so the ensemble confidence was reduced.",
+        "The link pattern model and its rule-based check disagreed, so that signal counts for less.",
       );
     } else if (transformerModel) {
-      reasons.push(
-        "The transformer and lexical models agreed on the ensemble direction.",
-      );
+      reasons.push("The link pattern model and its rule-based check agreed.");
     }
-  }
-
-  if (failedSignals > 0) {
-    reasons.push(
-      `${failedSignals} signal${failedSignals === 1 ? "" : "s"} failed and reduced certainty.`,
-    );
-  }
-
-  if (limitedSignals > 0) {
-    reasons.push(
-      `${limitedSignals} completed signal${limitedSignals === 1 ? "" : "s"} returned only partial coverage.`,
-    );
-  }
-
-  if (limitations.length > 0 && failedSignals === 0) {
-    reasons.push(
-      "Some signals completed with caveats that slightly reduced confidence.",
-    );
   }
 
   return reasons.slice(0, 4);
 }
 
-function countCleanHighConfidenceSources(signals: SignalResults) {
-  let count = 0;
+const REPUTATION_SIGNALS: ReadonlySet<SignalName> = new Set([
+  "virusTotal",
+  "googleSafeBrowsing",
+  "threatFeeds",
+]);
+
+/**
+ * The checks that limited coverage, by label: `failed` didn't finish,
+ * `partial` finished with warnings (worded like the coverage caveat), and
+ * `limited` finished without a full answer (the same "neutral" rule the
+ * signal rows and the Summary count use).
+ */
+function getCoverageShortfalls(signals: SignalResults) {
+  const failed: string[] = [];
+  const partial: string[] = [];
+  const limited: string[] = [];
+  let reputationFailed = false;
+
+  for (const name of signalNames) {
+    const signal = signals[name];
+    if (signal.status === "error" || signal.status === "pending") {
+      failed.push(signalLabels[name]);
+      reputationFailed ||= REPUTATION_SIGNALS.has(name);
+      continue;
+    }
+    if (signal.status !== "success" || !signal.data) {
+      continue;
+    }
+    const warnings = (signal.data as { warnings?: unknown }).warnings;
+    if (
+      REPUTATION_SIGNALS.has(name) &&
+      Array.isArray(warnings) &&
+      warnings.length > 0
+    ) {
+      partial.push(signalLabels[name]);
+    } else if (
+      getSignalSeverity(signal.status, signal.data, name) === "neutral"
+    ) {
+      limited.push(signalLabels[name]);
+    }
+  }
+
+  return { failed, partial, limited, reputationFailed };
+}
+
+function getCleanHighConfidenceSourceLabels(signals: SignalResults) {
+  const labels: string[] = [];
 
   if (
     signals.virusTotal.status === "success" &&
@@ -905,7 +1120,7 @@ function countCleanHighConfidenceSources(signals: SignalResults) {
     signals.virusTotal.data.malicious === 0 &&
     signals.virusTotal.data.suspicious === 0
   ) {
-    count += 1;
+    labels.push(signalLabels.virusTotal);
   }
 
   if (
@@ -913,7 +1128,7 @@ function countCleanHighConfidenceSources(signals: SignalResults) {
     signals.googleSafeBrowsing.data &&
     (signals.googleSafeBrowsing.data.matches?.length ?? 0) === 0
   ) {
-    count += 1;
+    labels.push(signalLabels.googleSafeBrowsing);
   }
 
   if (
@@ -924,10 +1139,14 @@ function countCleanHighConfidenceSources(signals: SignalResults) {
     // Set-aside platform listings are neither evidence nor a clean bill.
     !signals.threatFeeds.data.sharedPlatformListingsIgnored
   ) {
-    count += 1;
+    labels.push(signalLabels.threatFeeds);
   }
 
-  return count;
+  return labels;
+}
+
+function countCleanHighConfidenceSources(signals: SignalResults) {
+  return getCleanHighConfidenceSourceLabels(signals).length;
 }
 
 function countPositiveHighConfidenceSources(signals: SignalResults) {
@@ -1057,22 +1276,6 @@ function formatSignalName(signalName: (typeof signalNames)[number]) {
   return signalLabels[signalName] ?? signalName;
 }
 
-function capitalize(value: string) {
-  return value.charAt(0).toUpperCase() + value.slice(1);
-}
-
 function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
-}
-
-function formatSourceList(values: string[]) {
-  if (values.length <= 1) {
-    return values[0] ?? "A primary source";
-  }
-
-  if (values.length === 2) {
-    return `${values[0]} and ${values[1]}`;
-  }
-
-  return `${values.slice(0, -1).join(", ")}, and ${values.at(-1)}`;
 }
