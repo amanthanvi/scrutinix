@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { resetEnvForTests } from "@/lib/config/env";
 import { encodeSharedSnapshot } from "@/lib/domain/signal-signature";
@@ -66,9 +66,16 @@ function expectDefaultCard(response: Response) {
 }
 
 beforeEach(() => {
+  // The route reads the request time from the clock; only Date is faked.
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date("2026-10-06T12:00:00.000Z"));
   rendered.length = 0;
   vi.stubEnv("SHARE_SIGNING_SECRET", SECRET);
   resetEnvForTests();
+});
+
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 describe("GET /og/result", () => {
@@ -130,6 +137,25 @@ describe("GET /og/result", () => {
         }),
       ),
     );
+  });
+
+  it("sends a signed result older than three days to the default card", async () => {
+    const sig = signSharePayload(payload)!;
+    // 72 hours after the check, the card is still drawn.
+    vi.setSystemTime(new Date("2026-10-09T09:00:00.000Z"));
+    expect((await GET(imageRequest({ shared: payload, sig }))).status).toBe(
+      200,
+    );
+    rendered.length = 0;
+    // A millisecond later, the genuine signature no longer vouches for it.
+    vi.setSystemTime(new Date("2026-10-09T09:00:00.001Z"));
+    expectDefaultCard(await GET(imageRequest({ shared: payload, sig })));
+  });
+
+  it("sends a check time in the future to the default card", async () => {
+    const sig = signSharePayload(payload)!;
+    vi.setSystemTime(new Date("2026-10-06T08:54:59.999Z"));
+    expectDefaultCard(await GET(imageRequest({ shared: payload, sig })));
   });
 
   it("sends everything to the default card when signing is off", async () => {

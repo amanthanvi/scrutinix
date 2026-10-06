@@ -5,6 +5,7 @@ import {
   VERDICT_HEADING_ID,
   VerdictBand,
   VerdictDetails,
+  formatSnapshotTime,
 } from "@/components/scrutinix/verdict-panel";
 import { createErrorAnalysisResult } from "@/lib/domain/analysis-result";
 import {
@@ -300,6 +301,56 @@ describe("VerdictBand", () => {
       screen.getByText("Probably safe — still check who sent it."),
     ).toBeTruthy();
     expect(screen.queryByRole("meter")).toBeNull();
+  });
+
+  it("dates a shared snapshot with its year, in UTC", () => {
+    // A check from another year must not read as this year's.
+    expect(formatSnapshotTime("2025-12-31T23:30:00.000Z")).toBe(
+      "Dec 31, 2025, 11:30 PM UTC",
+    );
+    render(
+      <VerdictBand
+        result={null}
+        isStreaming={false}
+        sharedSnapshot={{
+          verdict: "malicious",
+          url: "https://malicious.scrutinix.test/",
+          summary: "",
+          capturedAt: "2026-10-06T09:00:00.000Z",
+        }}
+      />,
+    );
+    expect(screen.getByText("Oct 6, 2026, 09:00 AM UTC").tagName).toBe("TIME");
+  });
+
+  it("says an expired shared result is too old, not unverified", () => {
+    const { rerender } = render(
+      <VerdictBand
+        result={null}
+        isStreaming={false}
+        sharedSnapshot={null}
+        unverifiedShare
+        expiredShare
+      />,
+    );
+    expect(screen.getByLabelText("Shared result, expired")).toBeTruthy();
+    expect(
+      screen.getByText(
+        "This shared result is more than 3 days old, so we're not showing it.",
+      ),
+    ).toBeTruthy();
+    expect(screen.queryByText(/can't confirm/)).toBeNull();
+
+    rerender(
+      <VerdictBand
+        result={null}
+        isStreaming={false}
+        sharedSnapshot={null}
+        unverifiedShare
+      />,
+    );
+    expect(screen.getByLabelText("Shared link, not verified")).toBeTruthy();
+    expect(screen.queryByText(/more than 3 days old/)).toBeNull();
   });
 
   it("drops the because line when Summary already shows the driver row", () => {

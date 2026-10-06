@@ -356,11 +356,14 @@ test("history clear can be undone @smoke", async ({ page }) => {
   await expect(historyRegion.getByText(/example\.com/i).first()).toBeVisible();
 });
 
+/** A check time inside the 3-day window a signed share is shown for. */
+const recentCheck = () => new Date(Date.now() - 60 * 60 * 1000).toISOString();
+
 const maliciousSnapshot = {
   verdict: "malicious",
   url: "https://paypal.com.secure-login.xyz/verify",
   summary: "Google Safe Browsing flagged this link.",
-  capturedAt: "2026-10-06T09:00:00.000Z",
+  capturedAt: recentCheck(),
   signature: [
     "clear",
     "suspicious",
@@ -539,6 +542,46 @@ test("a tampered shared link opens the neutral view @smoke", async ({
   await expect(page.getByLabel(/^scan result: /i)).toBeVisible();
 });
 
+test("a signed result older than three days opens the neutral view @smoke", async ({
+  page,
+  request,
+}) => {
+  // A genuine signature over a Safe captured while the link was benign,
+  // opened 72 hours and a minute later.
+  const payload = encodeSharedPayload({
+    verdict: "safe",
+    url: "https://example.com/",
+    summary: "No check flagged this link.",
+    capturedAt: new Date(Date.now() - (72 * 60 + 1) * 60 * 1000).toISOString(),
+    signature: Array(8).fill("clear"),
+  });
+  const sig = signSharedPayload(payload);
+
+  await page.goto(sharedPath(payload, sig));
+  const band = page.getByLabel("Shared result, expired");
+  await expect(band).toBeVisible();
+  await expect(
+    band.getByText(
+      "This shared result is more than 3 days old, so we're not showing it.",
+    ),
+  ).toBeVisible();
+  await expect(
+    band.getByRole("button", { name: "Scan this link" }),
+  ).toBeVisible();
+  await expect(page.getByLabel(/^scan result/i)).toHaveCount(0);
+  await expect(page.getByText("No check flagged this link.")).toHaveCount(0);
+  await expect(page.getByRole("list", { name: "Checks" })).toHaveCount(0);
+  await expect(page).toHaveTitle("Scrutinix — Check a link before you click");
+  expect(await ogImagePath(page)).not.toContain("/og/result");
+
+  const image = await request.get(
+    `/og/result?${new URLSearchParams({ shared: payload, sig }).toString()}`,
+    { maxRedirects: 0 },
+  );
+  expect(image.status()).toBe(302);
+  expect(image.headers().location).toContain("/opengraph-image");
+});
+
 test("a link shared before signing opens the neutral view @smoke", async ({
   page,
 }) => {
@@ -564,7 +607,7 @@ test("a signed snapshot without a strip still opens @smoke", async ({
     verdict: "safe",
     url: "https://example.com/",
     summary: "No check flagged this link.",
-    capturedAt: "2026-03-01T00:00:00.000Z",
+    capturedAt: recentCheck(),
   });
 
   await page.goto(sharedPath(payload, signSharedPayload(payload)));

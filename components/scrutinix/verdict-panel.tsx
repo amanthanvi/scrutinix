@@ -5,6 +5,7 @@ import type { CSSProperties, ReactNode } from "react";
 
 import { SIGNAL_COUNT } from "@/components/shared/scrutinix-types";
 import { capitalize } from "@/lib/domain/copy";
+import { SHARE_MAX_AGE_WORDS } from "@/lib/domain/signal-signature";
 import type {
   AnalysisResult,
   SharedSnapshot,
@@ -34,6 +35,13 @@ function bandStyle(verdict: Verdict | "pending"): CSSProperties {
   };
 }
 
+/** The neutral band's line for a link Scrutinix did not sign. */
+const UNVERIFIED_SHARE_LINE =
+  "We can't confirm the result in this link came from Scrutinix. It may be old or edited, so we're not showing it.";
+
+/** The neutral band's line for a signed result past `SHARE_MAX_AGE`. */
+const EXPIRED_SHARE_LINE = `This shared result is more than ${SHARE_MAX_AGE_WORDS} old, so we're not showing it.`;
+
 /**
  * A shared snapshot's time, fixed to UTC: shared views render on the
  * server, so a viewer-local time would differ from the server's and break
@@ -45,6 +53,7 @@ export function formatSnapshotTime(value: string): string {
   return date.toLocaleString("en-US", {
     timeZone: "UTC",
     timeZoneName: "short",
+    year: "numeric",
     month: "short",
     day: "numeric",
     hour: "2-digit",
@@ -144,6 +153,11 @@ interface VerdictBandProps {
    * signature: show the neutral "check it yourself" band, nothing from it.
    */
   unverifiedShare?: boolean;
+  /**
+   * With `unverifiedShare`: the signature was Scrutinix's, but the check
+   * is older than `SHARE_MAX_AGE`, so the band says that instead.
+   */
+  expiredShare?: boolean;
   completedSignals?: number;
   /** Look-alike domain from the link anatomy; hedges Safe and Unknown. */
   impersonates?: string | null;
@@ -165,6 +179,7 @@ export function VerdictBand({
   isStreaming,
   sharedSnapshot,
   unverifiedShare = false,
+  expiredShare = false,
   completedSignals = 0,
   impersonates = null,
   driverRows = 0,
@@ -251,15 +266,18 @@ export function VerdictBand({
   }
 
   if (!result && unverifiedShare) {
-    // Someone's claim, not ours: no verdict word, tint, score, summary, or
-    // strip from the payload. The link's anatomy below is Scrutinix's own.
+    // Someone's claim, or our own that has expired: no verdict word, tint,
+    // score, summary, or strip from the payload. The link's anatomy below
+    // is Scrutinix's own.
     return (
       <Band
-        label="Shared link, not verified"
+        label={
+          expiredShare ? "Shared result, expired" : "Shared link, not verified"
+        }
         tone="pending"
         heading={<span>Check this shared link yourself</span>}
         headingClassName="text-headline sm:text-headline text-[var(--sx-text)]"
-        imperative="We can't confirm the result in this link came from Scrutinix. It may be old or edited, so we're not showing it."
+        imperative={expiredShare ? EXPIRED_SHARE_LINE : UNVERIFIED_SHARE_LINE}
       >
         {onRunSharedScan ? (
           <div className="mt-5">

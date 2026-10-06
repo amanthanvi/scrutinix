@@ -16,8 +16,10 @@ import { useBatchStream } from "@/hooks/use-batch-stream";
 import { warmLinkParser } from "@/hooks/use-link-anatomy";
 import { useScanStream } from "@/hooks/use-scan-stream";
 import {
+  SHARE_MAX_AGE_WORDS,
   buildSharedSnapshot,
   encodeSharedSnapshot,
+  sharedSnapshotAge,
   type SharedView,
 } from "@/lib/domain/signal-signature";
 import {
@@ -47,6 +49,13 @@ export type ViewMode = "summary" | "full";
 export const UNVERIFIED_SHARE_TITLE = "Link copied, but it isn't verified";
 const UNVERIFIED_SHARE_NOTE =
   "Whoever opens it is asked to check the link themselves; it won't show this result.";
+
+/** The toast for a signed result already past `SHARE_MAX_AGE`. */
+export const EXPIRED_SHARE_TITLE = "Link copied, but this result has expired";
+const EXPIRED_SHARE_NOTE = `Shared results show for ${SHARE_MAX_AGE_WORDS} after the check, so whoever opens it is asked to check the link themselves.`;
+
+/** The one line a sender needs about a verified link. */
+export const VERIFIED_SHARE_NOTE = `It shows this result for ${SHARE_MAX_AGE_WORDS} after the check.`;
 
 function useCreateAnalyzerRuntime(shared: SharedView | null) {
   const [activeTab, setActiveTab] = useState<Tab>("single");
@@ -187,33 +196,61 @@ function useCreateAnalyzerRuntime(shared: SharedView | null) {
         result.share?.payload ??
           encodeSharedSnapshot(buildSharedSnapshot(result)),
       );
-      const verified = Boolean(result.share?.sig);
+      const signed = Boolean(result.share?.sig);
       if (result.share?.sig) {
         targetUrl.searchParams.set("sig", result.share.sig);
       }
+      // A signed result shows for SHARE_MAX_AGE after its check; sharing an
+      // older one (from history) opens the neutral view, so say so.
+      const expired =
+        signed &&
+        sharedSnapshotAge(
+          buildSharedSnapshot(result).capturedAt,
+          Date.now(),
+        ) === "expired";
 
       const link = targetUrl.toString();
-      // Only a result saved before the server issued shares can gain a
-      // signature by scanning again; a current result without one means
-      // signing is off, and a rescan would not change that.
-      const scanAgain = result.share
-        ? undefined
-        : {
-            label: "Scan again",
-            onClick: () => void rescanUrl(result.url),
-          };
-      const tellUnverified = () =>
-        toast(UNVERIFIED_SHARE_TITLE, {
-          description: UNVERIFIED_SHARE_NOTE,
+      // Only a result saved before the server issued shares, or one past its
+      // window, gains a current signature by scanning again; a current
+      // result without one means signing is off, and a rescan would not
+      // change that.
+      const scanAgain =
+        result.share && !expired
+          ? undefined
+          : {
+              label: "Scan again",
+              onClick: () => void rescanUrl(result.url),
+            };
+      const notice =
+        signed && !expired
+          ? null
+          : expired
+            ? {
+                title: EXPIRED_SHARE_TITLE,
+                lead: "This result has expired.",
+                note: EXPIRED_SHARE_NOTE,
+              }
+            : {
+                title: UNVERIFIED_SHARE_TITLE,
+                lead: "It isn't verified.",
+                note: UNVERIFIED_SHARE_NOTE,
+              };
+      const tellNotice = () => {
+        if (!notice) return;
+        toast(notice.title, {
+          description: notice.note,
           ...(scanAgain ? { action: scanAgain } : {}),
         });
+      };
 
       try {
         await navigator.clipboard.writeText(link);
-        if (verified) {
-          toast.success("Link copied to clipboard");
+        if (notice) {
+          tellNotice();
         } else {
-          tellUnverified();
+          toast.success("Link copied to clipboard", {
+            description: VERIFIED_SHARE_NOTE,
+          });
         }
       } catch {
         // Never drop the link: hand it to the system share sheet, or keep
@@ -221,7 +258,7 @@ function useCreateAnalyzerRuntime(shared: SharedView | null) {
         if (typeof navigator.share === "function") {
           try {
             await navigator.share({ url: link });
-            if (!verified) tellUnverified();
+            tellNotice();
             return;
           } catch (error) {
             if (error instanceof DOMException && error.name === "AbortError") {
@@ -236,11 +273,11 @@ function useCreateAnalyzerRuntime(shared: SharedView | null) {
             closeButton: true,
             description: (
               <>
-                {verified ? null : (
+                {notice ? (
                   <span className="block">
-                    It isn&apos;t verified. {UNVERIFIED_SHARE_NOTE}
+                    {notice.lead} {notice.note}
                   </span>
-                )}
+                ) : null}
                 <ShareLinkField link={link} />
               </>
             ),

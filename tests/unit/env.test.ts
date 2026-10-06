@@ -1,10 +1,15 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   getEnv,
   isProviderConfigured,
   resetEnvForTests,
 } from "@/lib/config/env";
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+  resetEnvForTests();
+});
 
 describe("env parsing", () => {
   it("applies defaults for optional values", () => {
@@ -49,20 +54,52 @@ describe("env parsing", () => {
     resetEnvForTests();
   });
 
-  it("ignores the published e2e key outside an e2e run", () => {
+  it("never signs with the published e2e key outside fixture mode", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const published = "e2e-only-share-signing-key-not-a-real-secret-0001";
     vi.stubEnv("SHARE_SIGNING_SECRET", published);
-    vi.stubEnv("SCRUTINIX_E2E", "");
+    vi.stubEnv("SCRUTINIX_TEST_FIXTURES", "");
     resetEnvForTests();
     expect(getEnv().SHARE_SIGNING_SECRET).toBeUndefined();
     expect(warn).toHaveBeenCalledTimes(1);
     expect(String(warn.mock.calls[0]?.[0])).toContain("published e2e test key");
     expect(String(warn.mock.calls[0]?.[0])).not.toContain(published);
 
+    // The flag that used to unlock it outside fixture mode is gone.
     vi.stubEnv("SCRUTINIX_E2E", "1");
     resetEnvForTests();
+    expect(getEnv().SHARE_SIGNING_SECRET).toBeUndefined();
+    warn.mockRestore();
+  });
+
+  it("signs only with the published e2e key in fixture mode", () => {
+    // Fixtures score any unknown host Safe: a real key there would sign a
+    // "Safe" for whatever link anyone asks about.
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const published = "e2e-only-share-signing-key-not-a-real-secret-0001";
+    const real = "a-real-production-share-key-0123456789abcdef";
+    const previous = "a-real-previous-share-key-0123456789abcdef";
+    vi.stubEnv("SCRUTINIX_TEST_FIXTURES", "1");
+    vi.stubEnv("SHARE_SIGNING_SECRET", real);
+    vi.stubEnv("SHARE_SIGNING_SECRET_PREVIOUS", previous);
+    resetEnvForTests();
+    expect(getEnv().SHARE_SIGNING_SECRET).toBeUndefined();
+    expect(getEnv().SHARE_SIGNING_SECRET_PREVIOUS).toBeUndefined();
+    // One warning for both keys, naming them but never their values.
+    expect(warn).toHaveBeenCalledTimes(1);
+    const logged = String(warn.mock.calls[0]?.[0]);
+    expect(logged).toContain("SHARE_SIGNING_SECRET");
+    expect(logged).toContain("SHARE_SIGNING_SECRET_PREVIOUS");
+    expect(logged).toContain("test fixtures are on");
+    expect(logged).not.toContain(real);
+    expect(logged).not.toContain(previous);
+
+    warn.mockClear();
+    vi.stubEnv("SHARE_SIGNING_SECRET", published);
+    vi.stubEnv("SHARE_SIGNING_SECRET_PREVIOUS", "");
+    resetEnvForTests();
     expect(getEnv().SHARE_SIGNING_SECRET).toBe(published);
+    expect(warn).not.toHaveBeenCalled();
     warn.mockRestore();
   });
 

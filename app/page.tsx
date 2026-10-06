@@ -25,7 +25,8 @@ function paramOf(
 /**
  * A shared result link Scrutinix signed previews as that result: its
  * title, instruction, and a per-result image (verdict, registered domain,
- * eight cells). Anything unsigned keeps the site defaults.
+ * eight cells) for `SHARE_MAX_AGE` after the check. Anything unsigned or
+ * older keeps the site defaults.
  */
 export async function generateMetadata({
   searchParams,
@@ -34,7 +35,11 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const params = await searchParams;
   return (
-    getSharedMetadata(paramOf(params, "shared"), paramOf(params, "sig")) ?? {}
+    getSharedMetadata(
+      paramOf(params, "shared"),
+      paramOf(params, "sig"),
+      Date.now(),
+    ) ?? {}
   );
 }
 
@@ -51,6 +56,11 @@ export default async function HomePage({
   const shared = resolveSharedView(
     paramOf(params, "shared"),
     paramOf(params, "sig"),
+    // A server component renders once per request and never re-renders on
+    // the client: this is the request's clock, which the share's age is
+    // judged against.
+    // eslint-disable-next-line react-hooks/purity -- request time, see above
+    Date.now(),
   );
 
   return (

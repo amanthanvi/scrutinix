@@ -1,4 +1,5 @@
 import { spawn, spawnSync } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import { createRequire } from "node:module";
 
 const HOST = "127.0.0.1";
@@ -15,19 +16,24 @@ const playwrightCli = require.resolve("@playwright/test/cli");
 // The e2e suite runs offline against deterministic fixtures by default
 // (lib/server/test-fixtures.ts). Export SCRUTINIX_TEST_FIXTURES=0 to run
 // the specs against the real providers instead.
+const fixtures = (process.env.SCRUTINIX_TEST_FIXTURES ?? "1") === "1";
 const childEnv = {
   ...process.env,
   E2E_PORT: PORT,
-  SCRUTINIX_TEST_FIXTURES: process.env.SCRUTINIX_TEST_FIXTURES ?? "1",
-  // A fixed, test-only share-signing key, shared by the server and the specs
-  // (tests/e2e/helpers.ts signs shared links with it). Never a real secret,
-  // and never reuse it: lib/config/env.ts ignores it unless SCRUTINIX_E2E=1.
-  SCRUTINIX_E2E: "1",
-  SHARE_SIGNING_SECRET: "e2e-only-share-signing-key-not-a-real-secret-0001",
+  SCRUTINIX_TEST_FIXTURES: fixtures ? "1" : "0",
+  // The share-signing key, shared by the server and the specs
+  // (tests/e2e/helpers.ts signs shared links with it). Fixture mode signs
+  // only with this published, test-only key (lib/config/env.ts refuses any
+  // other there, and refuses this one everywhere else), so a real key can
+  // never sign fixture verdicts. Against real providers, a throwaway key
+  // for this run. Never a real secret, and never reuse either.
+  SHARE_SIGNING_SECRET: fixtures
+    ? "e2e-only-share-signing-key-not-a-real-secret-0001"
+    : randomBytes(32).toString("base64url"),
   SHARE_SIGNING_SECRET_PREVIOUS: "",
 };
 
-if (childEnv.SCRUTINIX_TEST_FIXTURES === "1") {
+if (fixtures) {
   childEnv.UPSTASH_REDIS_REST_URL = "";
   childEnv.UPSTASH_REDIS_REST_TOKEN = "";
   childEnv.KV_REST_API_URL = "";

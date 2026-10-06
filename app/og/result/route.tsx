@@ -12,18 +12,18 @@ import {
  * Per-result share image for `/?shared=` links. The payload is the
  * snapshot the server built and signed when it streamed the result; it is
  * verified against `sig`, validated against the shared-snapshot schema,
- * rendered, and never stored. A missing, oversize, unsigned, tampered, or
- * invalid payload, or one whose link is not an http(s) URL, redirects to
- * the static default card: this route never draws a verdict (or any
- * payload text) Scrutinix did not sign. `proxy.ts` meters it on its own
- * rate-limit tier.
+ * rendered, and never stored. A missing, oversize, unsigned, tampered,
+ * expired (`SHARE_MAX_AGE`), or invalid payload, or one whose link is not
+ * an http(s) URL, redirects to the static default card: this route never
+ * draws a verdict (or any payload text) Scrutinix did not sign within the
+ * last three days. `proxy.ts` meters it on its own rate-limit tier.
  */
 export async function GET(request: Request) {
   const params = new URL(request.url).searchParams;
   const payload = normalizeSharedPayload(params.get("shared"));
   const card =
     payload && payload.length <= SHARE_IMAGE_MAX_PAYLOAD
-      ? describeSharedSnapshot(payload, params.get("sig"))
+      ? describeSharedSnapshot(payload, params.get("sig"), Date.now())
       : null;
 
   if (!card) {

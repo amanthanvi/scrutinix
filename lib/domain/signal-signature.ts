@@ -142,6 +142,41 @@ export interface SharedView {
   url: string;
   /** Its anatomy, computed on the server with the Public Suffix List. */
   anatomy: LinkAnatomy;
-  /** The verified snapshot, or null when the link is unverified. */
+  /** The verified snapshot, or null when the link is unverified or expired. */
   snapshot: SharedSnapshot | null;
+  /**
+   * The signature is Scrutinix's, but the check is older than
+   * `SHARE_MAX_AGE`: shown like an unverified link, with the reason.
+   */
+  expired: boolean;
+}
+
+/**
+ * How long a signed share states its result: 72 hours after the check,
+ * in milliseconds. Past it, the page, its metadata, and the share image
+ * treat the link exactly like an unverified one, so a verdict signed while
+ * a link was benign (or cloaked) cannot keep vouching for it after it turns.
+ */
+export const SHARE_MAX_AGE = 72 * 60 * 60 * 1000;
+
+/** `SHARE_MAX_AGE` in plain words ("3 days"), for user-facing copy. */
+export const SHARE_MAX_AGE_WORDS = `${SHARE_MAX_AGE / 86_400_000} days`;
+
+/** Clock skew tolerated for a check time slightly in the future. */
+const SHARE_FUTURE_SKEW = 5 * 60 * 1000;
+
+/**
+ * Whether a signed snapshot's check time is within `SHARE_MAX_AGE` of
+ * `now` (epoch ms). "expired" is older than that; "invalid" is an
+ * unparseable time or one more than five minutes in the future. Only
+ * "fresh" may be shown.
+ */
+export function sharedSnapshotAge(
+  capturedAt: string,
+  now: number,
+): "fresh" | "expired" | "invalid" {
+  const at = Date.parse(capturedAt);
+  if (!Number.isFinite(at) || !Number.isFinite(now)) return "invalid";
+  if (at - now > SHARE_FUTURE_SKEW) return "invalid";
+  return now - at > SHARE_MAX_AGE ? "expired" : "fresh";
 }

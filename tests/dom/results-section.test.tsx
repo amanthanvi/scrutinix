@@ -143,23 +143,31 @@ function withTestSecret<T>(run: () => T): T {
   }
 }
 
+/** The request time shared links are judged against (3h after capture). */
+const SHARE_NOW = Date.parse("2026-10-06T12:00:00.000Z");
+
 function sharedViewFor(
   payload: string,
-  { signed = true }: { signed?: boolean } = {},
+  { signed = true, now = SHARE_NOW }: { signed?: boolean; now?: number } = {},
 ): SharedView | null {
   return withTestSecret(() =>
-    resolveSharedView(payload, signed ? signSharePayload(payload) : null),
+    resolveSharedView(payload, signed ? signSharePayload(payload) : null, now),
   );
 }
 
 function renderApp(
   extra?: React.ReactNode,
-  shared?: { payload: string; signed?: boolean },
+  shared?: { payload: string; signed?: boolean; now?: number },
 ) {
   return render(
     <AnalyzerRuntimeProvider
       shared={
-        shared ? sharedViewFor(shared.payload, { signed: shared.signed }) : null
+        shared
+          ? sharedViewFor(shared.payload, {
+              signed: shared.signed,
+              now: shared.now,
+            })
+          : null
       }
     >
       <ScanForm />
@@ -652,7 +660,7 @@ describe("shared links and their signature", () => {
       ),
     ).toBeTruthy();
     expect(band.textContent).toMatch(
-      /Verified Scrutinix result · checked Oct 6, 09:00 AM UTC\. It may be out of date\./,
+      /Verified Scrutinix result · checked Oct 6, 2026, 09:00 AM UTC\. It may be out of date\./,
     );
     expect(
       within(screen.getByRole("list", { name: "Checks" })).getAllByRole(
@@ -710,7 +718,11 @@ describe("shared links and their signature", () => {
   it("treats a payload edited after signing as unverified", () => {
     // A real signature, carried over to a different payload.
     const view = withTestSecret(() =>
-      resolveSharedView(forgedSafe, signSharePayload(maliciousShare)),
+      resolveSharedView(
+        forgedSafe,
+        signSharePayload(maliciousShare),
+        SHARE_NOW,
+      ),
     );
     expect(view?.snapshot).toBeNull();
 
@@ -721,6 +733,42 @@ describe("shared links and their signature", () => {
     );
     expect(screen.getByLabelText("Shared link, not verified")).toBeTruthy();
     expect(screen.queryByLabelText(/^scan result/i)).toBeNull();
+  });
+
+  it("shows nothing from a signed result older than three days, and says why", () => {
+    // The attack: a genuine signed verdict, captured while the link was
+    // benign, reshared after it turned. 72 hours and a minute later.
+    renderApp(undefined, {
+      payload: forgedSafe,
+      now: Date.parse("2026-10-09T09:01:00.000Z"),
+    });
+
+    const band = screen.getByLabelText("Shared result, expired");
+    expect(within(band).getByRole("heading").textContent).toBe(
+      "Check this shared link yourself",
+    );
+    expect(
+      within(band).getByText(
+        "This shared result is more than 3 days old, so we're not showing it.",
+      ),
+    ).toBeTruthy();
+    expect(
+      within(band).getByRole("button", { name: "Scan this link" }),
+    ).toBeTruthy();
+    expect(band.getAttribute("style")).toContain("var(--sx-pending-surface)");
+    expect(band.textContent).not.toMatch(/safe|malicious|verified scrutinix/i);
+    expect(screen.queryByLabelText(/^scan result/i)).toBeNull();
+    expect(screen.queryByText(/checked this link and it is safe/)).toBeNull();
+    expect(screen.queryByRole("list", { name: "Checks" })).toBeNull();
+    expect(screen.queryByText("Shared link, not verified")).toBeNull();
+  });
+
+  it("still shows a signed result just inside three days", () => {
+    renderApp(undefined, {
+      payload: maliciousShare,
+      now: Date.parse("2026-10-09T09:00:00.000Z"),
+    });
+    expect(screen.getByLabelText(/^scan result: malicious$/i)).toBeTruthy();
   });
 });
 
