@@ -316,6 +316,11 @@ function feedMatchWeight(match: FeedMatch): {
         ? { score: 25, quality: "medium" }
         : { score: 55, quality: "high" };
     case "threatfox":
+      // A listed URL or host IOC convicts at high confidence; a different
+      // URL listed on a shared host only corroborates, like a URLhaus host.
+      if (match.listedElsewhereOnHost) {
+        return { score: 25, quality: "medium" };
+      }
       return match.confidence === "high"
         ? { score: 55, quality: "high" }
         : { score: 40, quality: "medium" };
