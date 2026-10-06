@@ -294,6 +294,7 @@ export function ResultsSection() {
             isStreaming={scan.state.isStreaming}
             sharedSnapshot={sharedSnapshot}
             unverifiedShare={shared !== null && sharedSnapshot === null}
+            expiredShare={shared?.expired ?? false}
             completedSignals={done}
             impersonates={impersonates}
             driverRows={summarySelection.drivers.length}

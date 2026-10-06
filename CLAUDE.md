@@ -183,7 +183,14 @@ tests/
   (`shareHeadline`). The signed check time is `metadata.checkedAt`, which a
   cache hit keeps from the original scan. Spaces in `?shared=` are restored
   to "+" before verifying (`normalizeSharedPayload`). Share with no `sig`
-  copies the link with a distinct "isn't verified" toast.
+  copies the link with a distinct "isn't verified" toast. A signed result
+  expires: past `SHARE_MAX_AGE` (72h, `lib/domain/signal-signature.ts`)
+  after `capturedAt`, or more than 5 minutes in the future, it is treated
+  exactly like an unverified link (neutral band saying it is more than 3
+  days old, default metadata, `/og/result` redirect). `resolveSharedView`,
+  `describeSharedSnapshot`, and `getSharedMetadata` take `now` explicitly;
+  tests pass fixed times. The share toast tells the sender the 3-day
+  window, and sharing an expired history entry says so with "Scan again".
   `share-signing.ts` and `env.ts` import `server-only` (vitest aliases it).
 - **UI danger is not a verdict**: form/stream errors and destructive
   confirms use `--sx-danger-fg` / `--sx-danger-border`, never
@@ -195,7 +202,9 @@ tests/
 - **Static accent**: blue `--sx-accent`; verdict colors appear only where a
   verdict is stated.
 - **E2E fixtures**: `SCRUTINIX_TEST_FIXTURES=1` provides deterministic offline
-  scenarios under `npm run test:e2e`.
+  scenarios under `npm run test:e2e`. Fixtures score unknown hosts Safe, so
+  fixture mode signs shares only with the published e2e key, and that key
+  signs nothing outside fixture mode (`shareSecretProblem` in `env.ts`).
 - **CSS layering**: `app/globals.css` owns semantic tokens;
   `app/scrutinix.css` owns prefixed motion/effect utilities. Motion is CSS-only,
   under 300ms, and respects `prefers-reduced-motion`.
@@ -231,6 +240,7 @@ Preview and Development leave them unset (shared links open neutral) or
 use a separate key that is never valid in production: any deployment
 holding the production key, including an unreviewed preview branch, can
 mint links production accepts as "Verified Scrutinix result". Never reuse
-the committed e2e key (`scripts/run-e2e.mjs`; `env.ts` ignores it outside
-`SCRUTINIX_E2E=1`). Rotate the production key if it was ever set for
-Preview/Development or pulled with `vercel env pull`.
+the committed e2e key (`scripts/run-e2e.mjs`; `env.ts` ignores it unless
+`SCRUTINIX_TEST_FIXTURES=1`, and ignores every other key when fixtures are
+on). Rotate the production key if it was ever set for Preview/Development
+or pulled with `vercel env pull`.

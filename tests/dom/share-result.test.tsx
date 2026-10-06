@@ -3,7 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   AnalyzerRuntimeProvider,
+  EXPIRED_SHARE_TITLE,
   UNVERIFIED_SHARE_TITLE,
+  VERIFIED_SHARE_NOTE,
   useAnalyzerRuntime,
 } from "@/components/scrutinix/analyzer-runtime";
 import { encodeSharedSnapshot } from "@/lib/domain/signal-signature";
@@ -67,6 +69,9 @@ async function share(result: AnalysisResult): Promise<URL> {
 }
 
 beforeEach(() => {
+  // Only the clock is faked: an hour after the result's check.
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date("2026-10-06T01:00:00.000Z"));
   toastMock.mockClear();
   toastMock.success.mockClear();
   toastMock.error.mockClear();
@@ -75,16 +80,39 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllGlobals();
 });
 
 describe("shareResult", () => {
-  it("copies a signed link with the plain success toast", async () => {
+  it("copies a signed link and states its 3-day window", async () => {
     const link = await share({ ...base, share: { payload, sig: SIG } });
     expect(link.searchParams.get("shared")).toBe(payload);
     expect(link.searchParams.get("sig")).toBe(SIG);
-    expect(toastMock.success).toHaveBeenCalledWith("Link copied to clipboard");
+    expect(toastMock.success).toHaveBeenCalledWith("Link copied to clipboard", {
+      description: VERIFIED_SHARE_NOTE,
+    });
+    // The sender learns the window in one plain line.
+    expect(VERIFIED_SHARE_NOTE).toBe(
+      "It shows this result for 3 days after the check.",
+    );
     expect(toastMock).not.toHaveBeenCalled();
+  });
+
+  it("tells the sender a signed result older than three days has expired", async () => {
+    vi.setSystemTime(new Date("2026-10-09T00:00:02.000Z"));
+    const link = await share({ ...base, share: { payload, sig: SIG } });
+    // The link is still the signed one; it just opens the neutral view.
+    expect(link.searchParams.get("sig")).toBe(SIG);
+    expect(toastMock.success).not.toHaveBeenCalled();
+    expect(toastMock).toHaveBeenCalledWith(
+      EXPIRED_SHARE_TITLE,
+      expect.objectContaining({
+        description: expect.stringContaining("3 days after the check"),
+        // A new scan is signed with a current check time.
+        action: expect.objectContaining({ label: "Scan again" }),
+      }),
+    );
   });
 
   it("tells the sender a pre-signing result's link isn't verified", async () => {

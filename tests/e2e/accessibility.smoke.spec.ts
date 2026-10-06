@@ -111,7 +111,8 @@ for (const colorScheme of ["light", "dark"] as const) {
       verdict: "malicious",
       url: "https://paypal.com.secure-login.xyz/verify",
       summary: "Google Safe Browsing flagged this link.",
-      capturedAt: "2026-10-06T09:00:00.000Z",
+      // Inside the 3-day window a signed share is shown for.
+      capturedAt: new Date().toISOString(),
       signature: Array(8).fill("malicious"),
     });
     for (const [label, sig] of [

@@ -21,36 +21,47 @@ export const MIN_SHARE_SECRET_LENGTH = 32;
 
 /**
  * The e2e suite's share-signing key, committed in `scripts/run-e2e.mjs`.
- * Anyone can read it, so it signs nothing outside a run that script
- * started (`SCRUTINIX_E2E=1`): a deploy that copied it by mistake gets
- * unsigned shares, not forgeable "Verified" links.
+ * Anyone can read it, so it signs only in test-fixture mode, and is the
+ * only key that does: see `shareSecretProblem`.
  */
 const PUBLISHED_TEST_SHARE_SECRETS: ReadonlySet<string> = new Set([
   "e2e-only-share-signing-key-not-a-real-secret-0001",
 ]);
 
-/** Why a configured share secret is ignored, or null when it is usable. */
+/**
+ * Why a configured share secret is ignored, or null when it is usable.
+ *
+ * Test-fixture mode and real signing are mutually exclusive. Fixtures
+ * (`SCRUTINIX_TEST_FIXTURES=1`) score any unknown host Safe, so a real key
+ * there would sign a "Safe" for any link anyone asks about: only the
+ * published e2e key is accepted. Outside fixture mode that key is public,
+ * so it is always refused: a deploy that copied it gets unsigned shares,
+ * not forgeable "Verified" links.
+ */
 function shareSecretProblem(value: unknown): string | null {
   const raw = emptyAsUndefined(value);
   if (typeof raw !== "string") return null;
   const trimmed = raw.trim();
+  const published = PUBLISHED_TEST_SHARE_SECRETS.has(trimmed);
+  if (process.env.SCRUTINIX_TEST_FIXTURES === "1") {
+    return published
+      ? null
+      : "test fixtures are on, which accept only the published e2e test key";
+  }
+  if (published) {
+    return "the published e2e test key";
+  }
   if (trimmed.length < MIN_SHARE_SECRET_LENGTH) {
     return `shorter than ${MIN_SHARE_SECRET_LENGTH} characters`;
-  }
-  if (
-    PUBLISHED_TEST_SHARE_SECRETS.has(trimmed) &&
-    process.env.SCRUTINIX_E2E !== "1"
-  ) {
-    return "the published e2e test key";
   }
   return null;
 }
 
 /**
- * A share-signing secret: trimmed, and unset when empty, shorter than
- * `MIN_SHARE_SECRET_LENGTH`, or the published e2e key outside an e2e run
- * (a weak or public key would let anyone forge "Verified Scrutinix
- * result" links, so it is ignored rather than used).
+ * A share-signing secret: trimmed, and unset when empty or refused by
+ * `shareSecretProblem` (a weak or public key would let anyone forge
+ * "Verified Scrutinix result" links, and a real key in fixture mode would
+ * sign fixture verdicts, so either is ignored rather than used).
  */
 const optionalSecret = z
   .preprocess(emptyAsUndefined, z.string().optional())

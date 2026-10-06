@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { resetEnvForTests } from "@/lib/config/env";
 import {
+  SHARE_MAX_AGE,
+  SHARE_MAX_AGE_WORDS,
   decodeSharedSnapshot,
   encodeSharedSnapshot,
 } from "@/lib/domain/signal-signature";
@@ -15,6 +17,8 @@ import {
 import { signSharePayload } from "@/lib/server/share-signing";
 
 const SECRET = "unit-test-share-secret-0123456789abcdef";
+/** The request time every share is judged against: 3h after capture. */
+const NOW = Date.parse("2026-10-06T12:00:00.000Z");
 
 beforeEach(() => {
   vi.stubEnv("SHARE_SIGNING_SECRET", SECRET);
@@ -52,7 +56,7 @@ describe("getSharedMetadata", () => {
       signature: [...snapshot.signature],
     });
     const [, sig] = signed(payload);
-    const metadata = getSharedMetadata(payload, sig);
+    const metadata = getSharedMetadata(payload, sig, NOW);
     const expected = `${SHARE_IMAGE_PATH}?shared=${encodeURIComponent(payload)}&sig=${sig}`;
 
     // A signed Safe look-alike never leads with "Safe": many chat clients
@@ -85,10 +89,10 @@ describe("getSharedMetadata", () => {
   });
 
   it("falls back to the defaults for a missing or invalid payload", () => {
-    expect(getSharedMetadata(null, null)).toBeNull();
-    expect(getSharedMetadata(...signed("not-base64!"))).toBeNull();
+    expect(getSharedMetadata(null, null, NOW)).toBeNull();
+    expect(getSharedMetadata(...signed("not-base64!"), NOW)).toBeNull();
     expect(
-      getSharedMetadata(...signed(btoa(JSON.stringify({ verdict: "x" })))),
+      getSharedMetadata(...signed(btoa(JSON.stringify({ verdict: "x" }))), NOW),
     ).toBeNull();
   });
 
@@ -101,12 +105,12 @@ describe("getSharedMetadata", () => {
     });
 
     it("without a signature (links shared before signing)", () => {
-      expect(getSharedMetadata(forged, null)).toBeNull();
-      expect(describeSharedSnapshot(forged, null)).toBeNull();
+      expect(getSharedMetadata(forged, null, NOW)).toBeNull();
+      expect(describeSharedSnapshot(forged, null, NOW)).toBeNull();
     });
 
     it("with a malformed signature", () => {
-      expect(getSharedMetadata(forged, "not-a-signature")).toBeNull();
+      expect(getSharedMetadata(forged, "not-a-signature", NOW)).toBeNull();
     });
 
     it("when the payload was edited after signing", () => {
@@ -116,19 +120,19 @@ describe("getSharedMetadata", () => {
         signature: [...snapshot.signature],
       });
       const [, sig] = signed(original);
-      expect(getSharedMetadata(original, sig)).not.toBeNull();
-      expect(getSharedMetadata(forged, sig)).toBeNull();
+      expect(getSharedMetadata(original, sig, NOW)).not.toBeNull();
+      expect(getSharedMetadata(forged, sig, NOW)).toBeNull();
       // One character changed in the encoded payload.
       const edited = `${original.slice(0, 10)}${original[10] === "A" ? "B" : "A"}${original.slice(11)}`;
-      expect(getSharedMetadata(edited, sig)).toBeNull();
+      expect(getSharedMetadata(edited, sig, NOW)).toBeNull();
     });
 
     it("when signing is not configured", () => {
       const [payload, sig] = signed(forged);
       vi.stubEnv("SHARE_SIGNING_SECRET", "");
       resetEnvForTests();
-      expect(getSharedMetadata(payload, sig)).toBeNull();
-      expect(describeSharedSnapshot(payload, sig)).toBeNull();
+      expect(getSharedMetadata(payload, sig, NOW)).toBeNull();
+      expect(describeSharedSnapshot(payload, sig, NOW)).toBeNull();
     });
   });
 
@@ -141,6 +145,7 @@ describe("getSharedMetadata", () => {
     };
     const card = describeSharedSnapshot(
       ...signed(btoa(encodeURIComponent(JSON.stringify(old)))),
+      NOW,
     );
     expect(card).toMatchObject({
       domain: "secure-login.xyz",
@@ -157,6 +162,7 @@ describe("getSharedMetadata", () => {
           signature: [...snapshot.signature],
         }),
       ),
+      NOW,
     );
     expect(card?.anatomy).toMatchObject({
       scheme: "https",
@@ -174,7 +180,7 @@ describe("getSharedMetadata", () => {
       signature: [...snapshot.signature],
     });
     expect(payload.length).toBeGreaterThan(SHARE_IMAGE_MAX_PAYLOAD);
-    const metadata = getSharedMetadata(...signed(payload));
+    const metadata = getSharedMetadata(...signed(payload), NOW);
     expect(metadata?.title).toBe("Safe: example.com — Scrutinix");
     expect(metadata?.openGraph?.images).toBeUndefined();
     expect(metadata?.twitter?.images).toBeUndefined();
@@ -199,10 +205,10 @@ describe("a '+' that query decoding turned into a space", () => {
     const [payload, sig] = signed(withPlus);
     const spaced = payload.replace(/\+/g, " ");
     expect(spaced).not.toBe(payload);
-    expect(resolveSharedView(spaced, sig)?.snapshot).toEqual(
+    expect(resolveSharedView(spaced, sig, NOW)?.snapshot).toEqual(
       decodeSharedSnapshot(payload),
     );
-    const metadata = getSharedMetadata(spaced, sig);
+    const metadata = getSharedMetadata(spaced, sig, NOW);
     expect(metadata?.title).toMatch(/secure-login\.xyz — Scrutinix$/);
     // The image link carries the canonical payload, "+" restored.
     expect(metadata?.openGraph?.images).toEqual([
@@ -216,8 +222,8 @@ describe("a '+' that query decoding turned into a space", () => {
     const [payload, sig] = signed(withPlus);
     const at = payload.indexOf("+");
     const edited = `${payload.slice(0, at)}/${payload.slice(at + 1)}`;
-    expect(resolveSharedView(edited, sig)?.snapshot ?? null).toBeNull();
-    expect(getSharedMetadata(edited, sig)).toBeNull();
+    expect(resolveSharedView(edited, sig, NOW)?.snapshot ?? null).toBeNull();
+    expect(getSharedMetadata(edited, sig, NOW)).toBeNull();
   });
 });
 
@@ -228,13 +234,13 @@ describe("resolveSharedView", () => {
   });
 
   it("hands a verified snapshot to the page", () => {
-    const view = resolveSharedView(...signed(payload));
+    const view = resolveSharedView(...signed(payload), NOW);
     expect(view?.snapshot).toEqual(decodeSharedSnapshot(payload));
     expect(view?.url).toBe(snapshot.url);
   });
 
   it("hands an unverified link only its URL and Scrutinix's anatomy", () => {
-    const view = resolveSharedView(payload, null);
+    const view = resolveSharedView(payload, null, NOW);
     expect(view).toEqual({
       url: snapshot.url,
       anatomy: expect.objectContaining({
@@ -242,12 +248,13 @@ describe("resolveSharedView", () => {
         impersonates: "paypal.com",
       }),
       snapshot: null,
+      expired: false,
     });
     expect(JSON.stringify(view)).not.toContain(snapshot.summary);
   });
 
   it("shows nothing for a payload that does not decode or is not http(s)", () => {
-    expect(resolveSharedView("%%%", null)).toBeNull();
+    expect(resolveSharedView("%%%", null, NOW)).toBeNull();
     expect(
       resolveSharedView(
         ...signed(
@@ -257,7 +264,88 @@ describe("resolveSharedView", () => {
             signature: [...snapshot.signature],
           }),
         ),
+        NOW,
       ),
     ).toBeNull();
+  });
+});
+
+describe("signed snapshots expire after SHARE_MAX_AGE", () => {
+  // The attack: scan your own link while it is benign (or cloaked), keep
+  // the genuine signed Safe, then turn the link into phishing. Without an
+  // expiry the preview would say "Safe" forever.
+  const capturedAt = Date.parse(snapshot.capturedAt);
+  const payload = encodeSharedSnapshot({
+    ...snapshot,
+    url: "https://example.com/",
+    signature: [...snapshot.signature],
+  });
+
+  it("is 72 hours, stated as 3 days", () => {
+    expect(SHARE_MAX_AGE).toBe(72 * 60 * 60 * 1000);
+    expect(SHARE_MAX_AGE_WORDS).toBe("3 days");
+  });
+
+  it("still states the result at exactly 72 hours", () => {
+    const at = capturedAt + SHARE_MAX_AGE;
+    const view = resolveSharedView(...signed(payload), at);
+    expect(view?.snapshot).toEqual(decodeSharedSnapshot(payload));
+    expect(view?.expired).toBe(false);
+    expect(getSharedMetadata(...signed(payload), at)?.title).toBe(
+      "Safe: example.com — Scrutinix",
+    );
+  });
+
+  it("treats an older signed result exactly like an unverified one", () => {
+    const at = capturedAt + SHARE_MAX_AGE + 1;
+    const view = resolveSharedView(...signed(payload), at);
+    expect(view).toEqual({
+      url: "https://example.com/",
+      anatomy: expect.objectContaining({ registeredDomain: "example.com" }),
+      snapshot: null,
+      expired: true,
+    });
+    expect(JSON.stringify(view)).not.toContain(snapshot.summary);
+    expect(describeSharedSnapshot(...signed(payload), at)).toBeNull();
+    expect(getSharedMetadata(...signed(payload), at)).toBeNull();
+    // A year on, the same.
+    expect(
+      getSharedMetadata(...signed(payload), capturedAt + 365 * 86_400_000),
+    ).toBeNull();
+  });
+
+  it("tolerates five minutes of clock skew, and no more", () => {
+    const skew = 5 * 60 * 1000;
+    expect(
+      resolveSharedView(...signed(payload), capturedAt - skew)?.snapshot,
+    ).not.toBeNull();
+    const early = resolveSharedView(...signed(payload), capturedAt - skew - 1);
+    // A check time in the future is not "too old": it is just not shown.
+    expect(early).toMatchObject({ snapshot: null, expired: false });
+    expect(getSharedMetadata(...signed(payload), capturedAt - skew - 1)).toBe(
+      null,
+    );
+  });
+
+  it("shows nothing for a signed check time that does not parse", () => {
+    const undated = encodeSharedSnapshot({
+      ...snapshot,
+      capturedAt: "not a time",
+      signature: [...snapshot.signature],
+    });
+    expect(resolveSharedView(...signed(undated), NOW)).toMatchObject({
+      snapshot: null,
+      expired: false,
+    });
+    expect(getSharedMetadata(...signed(undated), NOW)).toBeNull();
+  });
+
+  it("never calls an unsigned link expired", () => {
+    const view = resolveSharedView(
+      payload,
+      null,
+      capturedAt + SHARE_MAX_AGE * 2,
+    );
+    expect(view).toMatchObject({ snapshot: null, expired: false });
   });
 });
