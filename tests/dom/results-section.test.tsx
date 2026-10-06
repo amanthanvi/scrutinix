@@ -21,6 +21,7 @@ import {
   type AnalysisResult,
   type SignalResults,
 } from "@/lib/domain/types";
+import { cleanSignals } from "@/tests/fixtures/lure-signals";
 import { fixtureSignals } from "@/tests/fixtures/scenario-signals";
 
 vi.mock("sonner", () => ({
@@ -187,12 +188,12 @@ describe("ResultsSection", () => {
     fireEvent.click(quiet);
     expect(viewSwitch.getAttribute("aria-checked")).toBe("true");
     expect(screen.getByLabelText(/^Google Safe Browsing signal:/)).toBeTruthy();
-    // The button that revealed the rows is gone; focus lands on the list,
-    // not <body>, so the next Tab continues through the revealed rows.
+    // The button that revealed the rows is gone. None of the newly
+    // revealed rows can expand here, so focus lands on the list - not
+    // <body>, and not the VirusTotal row Summary already showed.
     const signalsList = screen.getByRole("list", { name: "Signals" });
     await waitFor(() => {
-      expect(document.activeElement).not.toBe(document.body);
-      expect(signalsList.contains(document.activeElement)).toBe(true);
+      expect(document.activeElement).toBe(signalsList);
     });
 
     // Result actions follow the evidence and say what they export.
@@ -213,6 +214,38 @@ describe("ResultsSection", () => {
     expect(analyze.getAttribute("data-variant")).toBe("primary");
   });
 
+  it("focuses the first newly revealed check after Show all checks", async () => {
+    const signals = buildSignals(7);
+    // Expandable rows: VirusTotal (a driver) and DNS (newly revealed).
+    if (signals.virusTotal.data) {
+      signals.virusTotal.data.lastAnalysisDate = new Date().toISOString();
+    }
+    signals.dns = cleanSignals().dns;
+    renderApp(
+      <OpenStored
+        result={resultFrom("revealed", signals, "https://evil.example/")}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "open stored" }));
+
+    // Summary already shows VirusTotal, the first expandable row in Full.
+    const virusTotal = await screen.findByLabelText(/^VirusTotal signal:/);
+    expect(virusTotal.tagName).toBe("SUMMARY");
+    expect(screen.queryByLabelText(/^DNS Profile signal:/)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /Show all checks/ }));
+
+    await waitFor(() => {
+      const row = (
+        document.activeElement as HTMLElement | null
+      )?.closest<HTMLElement>("li[data-signal]");
+      expect(row?.dataset.signal).toBe("dns");
+      expect(document.activeElement?.tagName).toBe("SUMMARY");
+      expect(document.activeElement?.getAttribute("aria-label")).toMatch(
+        /^DNS Profile signal:/,
+      );
+    });
+  });
+
   it("moves focus to the verdict when a stored result opens", async () => {
     const stored = buildResult("stored-1", 0);
     renderApp(<OpenStored result={stored} />);
@@ -227,6 +260,69 @@ describe("ResultsSection", () => {
         document.querySelector("[aria-live='polite']")?.textContent,
       ).toMatch(/^Result for evil\.example: Safe/);
     });
+  });
+
+  it("announces an opened saved verdict even while a scan is streaming", async () => {
+    const stream: {
+      controller?: ReadableStreamDefaultController<Uint8Array>;
+    } = {};
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        stream.controller = controller;
+        controller.enqueue(
+          new TextEncoder().encode(
+            `${JSON.stringify({
+              type: "scan_started",
+              scanId: "live",
+              url: "https://live.example/",
+              cached: false,
+              startedAt: "2026-10-06T00:00:00.000Z",
+            })}\n`,
+          ),
+        );
+      },
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(body, {
+            status: 200,
+            headers: { "content-type": "application/x-ndjson" },
+          }),
+      ),
+    );
+    const { unmount } = renderApp(
+      <OpenStored result={buildResult("stored-1", 0)} />,
+    );
+    const region = document.querySelector("[aria-live='polite']")!;
+
+    try {
+      fireEvent.change(
+        screen.getByRole("textbox", { name: "URL to analyze" }),
+        { target: { value: "live.example" } },
+      );
+      await act(async () => {
+        fireEvent.click(screen.getByRole("button", { name: "Analyze URL" }));
+      });
+      await waitFor(() => {
+        expect(region.textContent).toBe("0 of 8 checks finished.");
+      });
+
+      fireEvent.click(screen.getByRole("button", { name: "open stored" }));
+
+      await waitFor(() => {
+        expect(region.textContent).toMatch(/^Result for evil\.example: Safe/);
+      });
+      expect(region.textContent).not.toMatch(/checks finished/);
+    } finally {
+      unmount();
+      try {
+        stream.controller?.close();
+      } catch {
+        // Already cancelled by the unmount.
+      }
+    }
   });
 
   it("re-announces every opened result, even one that reads the same", async () => {

@@ -10,130 +10,21 @@ import {
   signalNames,
   type SignalResults,
 } from "@/lib/domain/types";
-import { buildThreatAssessment, getScoredSignals } from "@/lib/domain/verdict";
+import { sanitizeHistoryEntry } from "@/lib/domain/runtime-safety";
+import {
+  buildThreatAssessment,
+  getScoredSignals,
+  withScoredSignals,
+} from "@/lib/domain/verdict";
 import {
   fixtureHosts,
   fixtureSignals,
 } from "@/tests/fixtures/scenario-signals";
-
-/** All eight checks finished and found nothing. */
-function cleanSignals(): SignalResults {
-  const signals = createPendingSignalResults();
-  signals.virusTotal = {
-    status: "success",
-    error: null,
-    durationMs: 20,
-    data: {
-      malicious: 0,
-      suspicious: 0,
-      harmless: 70,
-      undetected: 10,
-      timeout: 0,
-      results: [],
-      permalink: "https://www.virustotal.com/gui/url/x",
-    },
-  };
-  signals.mlEnsemble = {
-    status: "success",
-    error: null,
-    durationMs: 10,
-    data: {
-      transformerModel: null,
-      lexicalModel: {
-        label: "benign",
-        score: 0.05,
-        reasons: [],
-        model: "lexical-heuristic",
-      },
-      consensusLabel: "benign",
-      consensusScore: 0.05,
-      reasons: [],
-      warnings: [],
-    },
-  };
-  signals.googleSafeBrowsing = {
-    status: "success",
-    error: null,
-    durationMs: 8,
-    data: { checkedAt: "", matches: [] },
-  };
-  signals.threatFeeds = {
-    status: "success",
-    error: null,
-    durationMs: 8,
-    data: { checkedAt: "", matches: [], observations: [], warnings: [] },
-  };
-  signals.ssl = {
-    status: "success",
-    error: null,
-    durationMs: 8,
-    data: {
-      protocol: "TLSv1.3",
-      available: true,
-      validationState: "trusted",
-      authorized: true,
-      authorizationError: null,
-      issuer: "CA",
-      subject: "example.com",
-      validFrom: null,
-      validTo: null,
-      daysRemaining: null,
-      selfSigned: false,
-      fingerprint256: null,
-      observations: [],
-    },
-  };
-  signals.whois = {
-    status: "success",
-    error: null,
-    durationMs: 8,
-    data: {
-      subjectType: "domain",
-      available: true,
-      registrar: null,
-      registeredAt: null,
-      updatedAt: null,
-      expiresAt: null,
-      ageDays: 4_000,
-      country: null,
-      handle: null,
-      rdapUrl: "https://rdap.example/domain/example.com",
-      observations: [],
-    },
-  };
-  signals.dns = {
-    status: "success",
-    error: null,
-    durationMs: 8,
-    data: {
-      subjectType: "hostname",
-      addresses: ["93.184.216.34"],
-      cnames: [],
-      mx: [],
-      txt: [],
-      nameservers: [],
-      reverseHostnames: [],
-      anomalies: [],
-      observations: [],
-    },
-  };
-  signals.redirectChain = {
-    status: "success",
-    error: null,
-    durationMs: 8,
-    data: {
-      finalUrl: "https://example.com/",
-      totalHops: 0,
-      httpsUpgraded: false,
-      reachable: true,
-      terminalStatus: 200,
-      terminalError: null,
-      hops: [],
-      observations: [],
-    },
-  };
-  return signals;
-}
+import {
+  cleanSignals,
+  withDomainAge,
+  withLureRedirect,
+} from "@/tests/fixtures/lure-signals";
 
 describe("selectSummarySignals", () => {
   it("shows no rows and one plain line for a clean, complete scan", () => {
@@ -213,56 +104,6 @@ describe("selectSummarySignals", () => {
     );
   });
 });
-
-/** A lure: two hops, the last one to plain HTTP on another site. */
-function withLureRedirect(
-  signals: SignalResults,
-  options: { passwordForm?: boolean; hiddenIframe?: boolean } = {},
-) {
-  signals.redirectChain = {
-    status: "success",
-    error: null,
-    durationMs: 8,
-    data: {
-      finalUrl: "http://lure.example/landing",
-      totalHops: 2,
-      httpsUpgraded: false,
-      reachable: true,
-      terminalStatus: 200,
-      terminalError: null,
-      hops: [
-        {
-          url: "https://short.example/a",
-          status: 301,
-          location: "https://short.example/b",
-        },
-        {
-          url: "https://short.example/b",
-          status: 302,
-          location: "http://lure.example/landing",
-        },
-        { url: "http://lure.example/landing", status: 200 },
-      ],
-      observations: [],
-      content: {
-        title: "Sign in",
-        crossOriginFormHosts: options.passwordForm ? ["collect.example"] : [],
-        crossOriginPasswordFormHosts: options.passwordForm
-          ? ["collect.example"]
-          : [],
-        passwordInputCount: options.passwordForm ? 1 : 0,
-        iframeCount: options.hiddenIframe ? 1 : 0,
-        hiddenIframeCount: options.hiddenIframe ? 1 : 0,
-        obfuscationHints: [],
-        metaRefreshTarget: null,
-      },
-    },
-  };
-}
-
-function withDomainAge(signals: SignalResults, ageDays: number) {
-  if (signals.whois.data) signals.whois.data.ageDays = ageDays;
-}
 
 /** The selection the live view computes for a finished scan. */
 function finishedSelection(signals: SignalResults) {
@@ -376,5 +217,74 @@ describe("Summary drivers follow the verdict engine", () => {
     expect(threatInfo?.scoredSignals).toEqual(
       signalNames.filter((name) => scored.has(name)),
     );
+  });
+});
+
+/** A result as history stored it before `scoredSignals` existed. */
+function legacyHistoryEntry(signals: SignalResults) {
+  const { verdict, threatInfo } = buildThreatAssessment(signals);
+  const legacyThreatInfo: Record<string, unknown> = { ...threatInfo };
+  delete legacyThreatInfo.scoredSignals;
+  const entry = sanitizeHistoryEntry({
+    id: "legacy",
+    url: "https://short.example/a",
+    verdict,
+    signals,
+    threatInfo: legacyThreatInfo,
+    metadata: {
+      scanId: "legacy",
+      startedAt: "2026-09-01T00:00:00.000Z",
+      completedAt: "2026-09-01T00:00:01.000Z",
+      cacheHit: false,
+      partialFailure: false,
+      signalCount: 8,
+      durationMs: 1_000,
+    },
+    savedAt: "2026-09-01T00:00:01.000Z",
+  });
+  if (!entry) throw new Error("legacy entry failed to sanitize");
+  return entry;
+}
+
+describe("withScoredSignals (history saved before scoredSignals)", () => {
+  it("re-derives the drivers so Summary shows the evidence", () => {
+    const signals = cleanSignals();
+    withLureRedirect(signals, { hiddenIframe: true });
+    withDomainAge(signals, 100);
+    const legacy = legacyHistoryEntry(signals);
+    expect(legacy.threatInfo?.scoredSignals).toBeUndefined();
+
+    const entry = withScoredSignals(legacy);
+
+    // Signal order, exactly as a fresh scan stores it.
+    expect(entry.threatInfo?.scoredSignals).toEqual(
+      buildThreatAssessment(signals).threatInfo?.scoredSignals,
+    );
+    expect(entry.threatInfo?.scoredSignals).toEqual(["whois", "redirectChain"]);
+    // Stored verdict, score, and copy stay exactly as saved.
+    expect(entry.verdict).toBe(legacy.verdict);
+    expect(entry.threatInfo?.score).toBe(legacy.threatInfo?.score);
+    expect(entry.threatInfo?.summary).toBe(legacy.threatInfo?.summary);
+    const selection = selectSummarySignals(
+      entry.signals,
+      entry.threatInfo?.scoredSignals,
+    );
+    expect(selection.drivers).toEqual(["redirectChain", "whois"]);
+    expect(describeQuietChecks(selection)).toBe(
+      "6 other checks found nothing.",
+    );
+  });
+
+  it("keeps an explicit empty list and results without threat info", () => {
+    const safe = cleanSignals();
+    const { verdict, threatInfo } = buildThreatAssessment(safe);
+    expect(threatInfo?.scoredSignals).toEqual([]);
+    const stored = { ...legacyHistoryEntry(safe), verdict, threatInfo };
+    // Even if the engine would now score something, a stored [] stands.
+    withDomainAge(stored.signals, 100);
+    expect(withScoredSignals(stored)).toBe(stored);
+
+    const failed = { ...stored, threatInfo: null };
+    expect(withScoredSignals(failed)).toBe(failed);
   });
 });

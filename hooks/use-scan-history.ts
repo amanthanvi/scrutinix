@@ -212,12 +212,40 @@ async function loadHistory() {
   const values = await db.getAllFromIndex(STORE_NAME, "by-saved-at");
   return latestPerUrl(
     sortEntries(
-      values.flatMap((value) => {
-        const entry = sanitizeHistoryEntry(value);
-        return entry ? [entry] : [];
-      }),
+      await withDerivedDrivers(
+        values.flatMap((value) => {
+          const entry = sanitizeHistoryEntry(value);
+          return entry ? [entry] : [];
+        }),
+      ),
     ),
   );
+}
+
+/**
+ * Entries saved before `threatInfo.scoredSignals` existed have no driver
+ * list, so Summary would pick rows by severity alone and could hide the
+ * checks behind a Suspicious verdict. Derive the list with the verdict
+ * engine, loaded only when such an entry exists so the scorer and the
+ * public-suffix list stay out of the main bundle.
+ */
+async function withDerivedDrivers(
+  entries: HistoryEntry[],
+): Promise<HistoryEntry[]> {
+  const needsDrivers = entries.some(
+    (entry) => entry.threatInfo && entry.threatInfo.scoredSignals === undefined,
+  );
+  if (!needsDrivers) {
+    return entries;
+  }
+
+  try {
+    const { withScoredSignals } = await import("@/lib/domain/verdict");
+    return entries.map((entry) => withScoredSignals(entry));
+  } catch (error) {
+    console.warn("[Scrutinix] Could not derive verdict drivers.", error);
+    return entries;
+  }
 }
 
 function sortEntries(entries: HistoryEntry[]) {

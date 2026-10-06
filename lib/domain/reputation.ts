@@ -16,19 +16,26 @@ export const VT_CONVICTION_ENGINES = 5;
 
 type FeedMatch = ThreatFeedsData["matches"][number];
 
-/** Age of the VirusTotal analysis backing the verdict, in whole days. */
-export function vtAnalysisAgeDays(signals: SignalResults): number | null {
+/**
+ * Age of the VirusTotal analysis backing the verdict, in whole days, as of
+ * `asOf` (default now). Pass the scan's completion time when describing a
+ * stored result, so its age matches what the verdict was built on.
+ */
+export function vtAnalysisAgeDays(
+  signals: SignalResults,
+  asOf: number = Date.now(),
+): number | null {
   const vt = signals.virusTotal;
   if (vt.status !== "success" || !vt.data?.lastAnalysisDate) {
     return null;
   }
 
   const analyzedAt = new Date(vt.data.lastAnalysisDate).getTime();
-  if (Number.isNaN(analyzedAt) || analyzedAt > Date.now()) {
+  if (Number.isNaN(analyzedAt) || Number.isNaN(asOf) || analyzedAt > asOf) {
     return null;
   }
 
-  return Math.floor((Date.now() - analyzedAt) / (1000 * 60 * 60 * 24));
+  return Math.floor((asOf - analyzedAt) / (1000 * 60 * 60 * 24));
 }
 
 export function feedMatchWeight(match: FeedMatch): {

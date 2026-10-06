@@ -74,6 +74,7 @@ export function SignalRow<N extends SignalName>({
   if (entries.length === 0) {
     return (
       <li
+        data-signal={name}
         aria-label={ariaLabel}
         className="sx-enter flex items-start gap-3 py-3"
         style={enterDelay}
@@ -85,7 +86,7 @@ export function SignalRow<N extends SignalName>({
   }
 
   return (
-    <li className="sx-enter" style={enterDelay}>
+    <li data-signal={name} className="sx-enter" style={enterDelay}>
       <details className="sx-disclosure">
         <summary
           aria-label={ariaLabel}

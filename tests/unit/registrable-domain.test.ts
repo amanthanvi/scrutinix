@@ -57,6 +57,10 @@ describe("getRegistrableDomain", () => {
 
   it("passes through IPs, single labels, and trailing dots", () => {
     expect(getRegistrableDomain("192.0.2.10")).toBe("192.0.2.10");
+    expect(getRegistrableDomain("999.1.2.3")).toBe("999.1.2.3");
+    expect(getRegistrableDomain("2001:db8::1")).toBe("2001:db8::1");
+    expect(getRegistrableDomain("[2001:db8::1]")).toBe("[2001:db8::1]");
+    expect(getRegistrableDomain("::ffff:192.0.2.10")).toBe("::ffff:192.0.2.10");
     expect(getRegistrableDomain("localhost")).toBe("localhost");
     expect(getRegistrableDomain("Example.COM.")).toBe("example.com");
   });

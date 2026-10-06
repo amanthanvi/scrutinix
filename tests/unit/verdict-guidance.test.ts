@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   createPendingSignalResults,
@@ -225,6 +225,49 @@ describe("getCoverageCaveat", () => {
     expect(getCoverageCaveat(buildResult("suspicious", { signals }))).toMatch(
       /Domain Registration and DNS Profile don't apply to this link\.$/,
     );
+  });
+
+  it("names a stale VirusTotal analysis, aged at scan time", () => {
+    const completedAt = Date.parse("2026-10-06T00:00:01.000Z");
+    const daysBefore = (days: number) =>
+      new Date(completedAt - days * 24 * 60 * 60 * 1000).toISOString();
+    const withAnalysisDate = (lastAnalysisDate: string) => {
+      const signals = completeSignals();
+      signals.virusTotal = {
+        status: "success",
+        data: {
+          malicious: 0,
+          suspicious: 0,
+          harmless: 40,
+          undetected: 20,
+          timeout: 0,
+          results: [],
+          permalink: "https://www.virustotal.com/gui/url/x",
+          lastAnalysisDate,
+        },
+        error: null,
+        durationMs: 20,
+      };
+      return signals;
+    };
+
+    expect(
+      getCoverageCaveat(
+        buildResult("safe", { signals: withAnalysisDate(daysBefore(90)) }),
+      ),
+    ).toBe("VirusTotal's analysis is 90 days old.");
+    // Fresh at scan time stays fresh, however long ago the scan was: a
+    // reopened history entry must not gain a caveat its verdict never had.
+    vi.useFakeTimers({ now: Date.parse("2027-03-01T00:00:00.000Z") });
+    try {
+      expect(
+        getCoverageCaveat(
+          buildResult("safe", { signals: withAnalysisDate(daysBefore(10)) }),
+        ),
+      ).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("stays silent for Error, whose verdict line already says it failed", () => {
