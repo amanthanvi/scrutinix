@@ -95,15 +95,23 @@ export function ResultsSection() {
   }, [verdictFocusRequest]);
 
   // Revealing the quiet checks removes the button that did it; move focus
-  // to the first revealed row instead of letting it fall to <body>.
+  // to the first newly revealed check that can expand, so keyboard users
+  // land on new evidence rather than a row Summary already showed. If none
+  // of the revealed rows expands, focus the list instead of <body>.
   const signalListRef = useRef<HTMLUListElement>(null);
-  const focusFirstSignalRef = useRef(false);
+  const revealedFromRef = useRef<ReadonlySet<SignalName> | null>(null);
   useEffect(() => {
-    if (!focusFirstSignalRef.current || viewMode !== "full") return;
-    focusFirstSignalRef.current = false;
+    const shownBefore = revealedFromRef.current;
+    if (!shownBefore || viewMode !== "full") return;
+    revealedFromRef.current = null;
     const list = signalListRef.current;
-    const first = list?.querySelector<HTMLElement>("summary, [tabindex]");
-    (first ?? list)?.focus();
+    const target = Array.from(
+      list?.querySelectorAll<HTMLElement>("li[data-signal]") ?? [],
+    )
+      .filter((row) => !shownBefore.has(row.dataset.signal as SignalName))
+      .map((row) => row.querySelector<HTMLElement>("summary"))
+      .find(Boolean);
+    (target ?? list)?.focus();
   }, [viewMode]);
 
   const hasSignalActivity =
@@ -209,7 +217,7 @@ export function ResultsSection() {
             <button
               type="button"
               onClick={() => {
-                focusFirstSignalRef.current = true;
+                revealedFromRef.current = new Set(summarySelection.drivers);
                 setViewMode("full");
               }}
               className="self-start py-1 text-left text-[0.8125rem] text-[var(--sx-text-muted)] hover:text-[var(--sx-text)]"
@@ -262,7 +270,7 @@ export function ResultsSection() {
   );
 }
 
-/** Polite live-region text: progress while streaming, the verdict after. */
+/** Polite live-region text: progress while streaming, the shown verdict after. */
 function getLiveStatus({
   activeTab,
   active,
@@ -289,7 +297,9 @@ function getLiveStatus({
       : "";
   }
 
-  if (scanStreaming) {
+  // A displayed result outranks progress, matching the verdict panel: an
+  // opened saved result is announced even while a scan streams behind it.
+  if (scanStreaming && !active) {
     return `${done} of ${SIGNAL_COUNT} checks finished.`;
   }
 

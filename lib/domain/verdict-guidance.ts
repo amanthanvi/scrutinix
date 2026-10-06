@@ -1,11 +1,15 @@
-import { capitalize, formatList } from "@/lib/domain/copy";
+import { capitalize, countOf, formatList } from "@/lib/domain/copy";
 import {
   signalLabels,
   signalNames,
   type AnalysisResult,
   type Verdict,
 } from "@/lib/domain/types";
-import { hasConfirmedReputationHit } from "@/lib/domain/reputation";
+import {
+  hasConfirmedReputationHit,
+  VT_STALE_ANALYSIS_DAYS,
+  vtAnalysisAgeDays,
+} from "@/lib/domain/reputation";
 
 /**
  * Pure presentation logic for a finished verdict: the one-line instruction,
@@ -153,9 +157,13 @@ export function shouldShowVerdictSummary(
  * One sentence naming the checks that limited coverage, e.g. "VirusTotal
  * didn't finish; Threat Feeds only partly finished." Null when every check
  * ran in full - or when the verdict line already says the scan failed.
+ * A stale VirusTotal analysis is aged at the scan's completion time, so a
+ * reopened result says what its verdict was built on.
  */
 export function getCoverageCaveat(
-  result: Pick<AnalysisResult, "verdict" | "signals">,
+  result: Pick<AnalysisResult, "verdict" | "signals"> & {
+    metadata?: Pick<AnalysisResult["metadata"], "completedAt"> | null;
+  },
 ): string | null {
   if (result.verdict === "error") {
     return null;
@@ -182,6 +190,16 @@ export function getCoverageCaveat(
   }
   if (partial.length > 0) {
     parts.push(`${formatList(partial)} only partly finished`);
+  }
+  // Only a successful check has an analysis date, so this never repeats
+  // "VirusTotal didn't finish".
+  const completedAt = Date.parse(result.metadata?.completedAt ?? "");
+  const vtAgeDays = vtAnalysisAgeDays(
+    result.signals,
+    Number.isNaN(completedAt) ? Date.now() : completedAt,
+  );
+  if (vtAgeDays !== null && vtAgeDays > VT_STALE_ANALYSIS_DAYS) {
+    parts.push(`VirusTotal's analysis is ${countOf(vtAgeDays, "day")} old`);
   }
   if (notApplicable.length > 0) {
     parts.push(

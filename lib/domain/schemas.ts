@@ -384,8 +384,9 @@ export const threatInfoSchema = z.object({
   hasPositiveEvidence: tolerantBoolean(false),
   /**
    * Checks that added score to the verdict, in signal order. Absent on
-   * results stored before it existed; the client then falls back to the
-   * per-signal severity.
+   * results stored before it existed: history loading re-derives it with
+   * the verdict engine (`withScoredSignals`), and cached results re-derive
+   * their whole assessment on read.
    */
   scoredSignals: z.array(z.enum(signalNames)).optional().catch(undefined),
   score: finiteNumber(0).transform(clampScore),

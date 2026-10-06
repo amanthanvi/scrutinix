@@ -81,6 +81,30 @@ export function getScoredSignals(
   );
 }
 
+/**
+ * Fills `threatInfo.scoredSignals` on a result saved before the field
+ * existed, so Summary shows the checks that drove its verdict instead of
+ * guessing from row severity. Only the missing list is derived: the stored
+ * verdict, score, and copy stay as saved, and an explicit list (even an
+ * empty one) is kept.
+ */
+export function withScoredSignals<
+  T extends Pick<AnalysisResult, "signals" | "threatInfo">,
+>(result: T): T {
+  if (!result.threatInfo || result.threatInfo.scoredSignals !== undefined) {
+    return result;
+  }
+
+  const scored = getScoredSignals(result.signals);
+  return {
+    ...result,
+    threatInfo: {
+      ...result.threatInfo,
+      scoredSignals: signalNames.filter((name) => scored.has(name)),
+    },
+  };
+}
+
 export function buildThreatAssessment(
   signals: SignalResults,
 ): Pick<AnalysisResult, "verdict" | "threatInfo"> {
@@ -305,10 +329,13 @@ function scoreVirusTotal(signals: SignalResults): ScoredItem[] {
       category: "Reputation",
       reason: `VirusTotal flags this domain beyond this URL (${countOf(domain.malicious, "engine")} mark the domain malicious).`,
       quality: "medium",
+      // A finding about the domain, not this link: a warning sign (like a
+      // feed listing elsewhere on the host), in its own group so it never
+      // hides a URL-level VirusTotal detection.
       subject: {
-        text: "VirusTotal's domain reputation",
-        kind: "source",
-        group: "virusTotal",
+        text: "a VirusTotal warning about this link's domain",
+        kind: "sign",
+        group: "virusTotal-domain",
       },
     });
   }

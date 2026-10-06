@@ -1185,6 +1185,23 @@ describe("buildThreatAssessment", () => {
     expect(result.threatInfo?.confidence).toBeLessThanOrEqual(0.85);
   });
 
+  it("names a stale VirusTotal analysis whenever the summary says checks were limited", async () => {
+    const signals = await fixtureSignals("example.com");
+    const vt = signals.virusTotal.data;
+    if (signals.virusTotal.status !== "success" || !vt) {
+      throw new Error("fixture lost its VirusTotal data");
+    }
+    vt.lastAnalysisDate = new Date(
+      Date.now() - 90 * 24 * 60 * 60 * 1000,
+    ).toISOString();
+
+    const { verdict, threatInfo } = buildThreatAssessment(signals);
+    expect(threatInfo?.summary).toMatch(/some checks were limited/);
+    const caveat = getCoverageCaveat({ verdict, signals });
+    expect(caveat).not.toBeNull();
+    expect(caveat).toMatch(/VirusTotal/);
+  });
+
   it("does not subtract clean-score points from stale VirusTotal harmless counts", () => {
     const signals = createPendingSignalResults();
     withVirusTotal(signals, {
@@ -1338,6 +1355,100 @@ describe("verdict copy", () => {
     expect(info?.summary).toBe(
       "An untrusted certificate makes this link look risky.",
     );
+  });
+
+  describe("a VirusTotal domain flag is about the domain, not this link", () => {
+    const flaggedDomain = {
+      malicious: 5,
+      suspicious: 0,
+      harmless: 0,
+      reputation: -20,
+      categories: [],
+    };
+
+    it("never says VirusTotal flagged the link", () => {
+      const signals = createPendingSignalResults();
+      withVirusTotal(signals, { domain: flaggedDomain });
+      signals.mlEnsemble = {
+        status: "success",
+        error: null,
+        durationMs: 12,
+        data: {
+          transformerModel: null,
+          lexicalModel: {
+            label: "risky",
+            score: 0.9,
+            reasons: [],
+            model: "lexical-heuristic",
+          },
+          consensusLabel: "risky",
+          consensusScore: 0.9,
+          reasons: [],
+          warnings: [],
+        },
+      };
+
+      const { verdict, threatInfo } = buildThreatAssessment(signals);
+
+      // Scoring is unchanged: 15 (domain) + 14 (model).
+      expect(verdict).toBe("suspicious");
+      expect(threatInfo?.score).toBe(29);
+      expect(threatInfo?.summary).toBe(
+        "The link pattern model flagged this link.",
+      );
+      expect(threatInfo?.summary).not.toMatch(/VirusTotal.*flagged this link/);
+      expect(threatInfo?.reasons).toContain(
+        "VirusTotal flags this domain beyond this URL (5 engines mark the domain malicious).",
+      );
+    });
+
+    it("does not hide a URL-level VirusTotal detection", () => {
+      const signals = createPendingSignalResults();
+      withVirusTotal(signals, { malicious: 1, domain: flaggedDomain });
+
+      const { verdict, threatInfo } = buildThreatAssessment(signals);
+
+      // 12 (one engine) + 15 (domain), as before.
+      expect(verdict).toBe("suspicious");
+      expect(threatInfo?.score).toBe(27);
+      expect(threatInfo?.summary).toBe(
+        "1 VirusTotal engine flagged this link.",
+      );
+    });
+
+    it("reads as a warning sign beside other signs", () => {
+      const signals = createPendingSignalResults();
+      withVirusTotal(signals, { domain: flaggedDomain });
+      signals.ssl = {
+        status: "success",
+        error: null,
+        durationMs: 9,
+        data: {
+          protocol: "TLSv1.2",
+          available: true,
+          validationState: "untrusted",
+          authorized: false,
+          authorizationError: "SELF_SIGNED_CERT_IN_CHAIN",
+          issuer: null,
+          subject: null,
+          validFrom: null,
+          validTo: null,
+          daysRemaining: null,
+          selfSigned: true,
+          fingerprint256: null,
+          observations: [],
+        },
+      };
+
+      const { verdict, threatInfo } = buildThreatAssessment(signals);
+
+      expect(verdict).toBe("suspicious");
+      expect(threatInfo?.score).toBe(41);
+      expect(threatInfo?.summary).toBe(
+        "An untrusted certificate and a VirusTotal warning about this link's domain make this link look risky.",
+      );
+      expect(threatInfo?.summary).not.toMatch(/flagged this link/);
+    });
   });
 
   it("does not repeat the safe summary in the recommendations", () => {
