@@ -10,6 +10,7 @@ vi.mock("node:dns/promises", () => ({
   },
 }));
 
+import { resetEnvForTests } from "@/lib/config/env";
 import {
   queryDnsbls,
   resetDnsblStateForTests,
@@ -49,6 +50,8 @@ function routeLookups(
 beforeEach(() => {
   resolve4Mock.mockReset();
   resetDnsblStateForTests();
+  vi.unstubAllEnvs();
+  resetEnvForTests();
 });
 
 describe("queryDnsbls", () => {
@@ -151,6 +154,84 @@ describe("queryDnsbls", () => {
       .slice(callsAfterFirst)
       .filter(([name]) => String(name).endsWith("dbl.spamhaus.org"));
     expect(spamhausCalls).toHaveLength(0);
+  });
+
+  describe("with a Spamhaus DQS key", () => {
+    const KEY = "abcdefghijklmnopqrstuvwxyz";
+    const DQS = `${KEY}.dbl.dq.spamhaus.net`;
+
+    function useKey(key = KEY) {
+      vi.stubEnv("SPAMHAUS_DQS_KEY", key);
+      resetEnvForTests();
+    }
+
+    function routeDqs(dblAnswers: Record<string, string[]>) {
+      resolve4Mock.mockImplementation((name: string) => {
+        if (name === "test.surbl.org.multi.surbl.org") {
+          return Promise.resolve(["127.0.0.126"]);
+        }
+        const answer = dblAnswers[name];
+        return answer ? Promise.resolve(answer) : nxdomain();
+      });
+    }
+
+    it("queries the DQS zone instead of the public mirror", async () => {
+      useKey();
+      routeDqs({
+        [`dbltest.com.${DQS}`]: ["127.0.1.2"],
+        [`phish.example.${DQS}`]: ["127.0.1.4"],
+      });
+
+      const outcome = await queryDnsbls("phish.example");
+
+      expect(outcome.warnings).toEqual([]);
+      expect(outcome.matches).toContainEqual(
+        expect.objectContaining({ feed: "spamhaus-dbl", confidence: "high" }),
+      );
+      const names = resolve4Mock.mock.calls.map(([name]) => String(name));
+      expect(names.some((name) => name.endsWith("dbl.spamhaus.org"))).toBe(
+        false,
+      );
+    });
+
+    it("reports a disabled key as unavailable without echoing the key", async () => {
+      useKey();
+      routeDqs({ [`dbltest.com.${DQS}`]: ["127.255.255.250"] });
+
+      const outcome = await queryDnsbls("any.example");
+
+      expect(outcome.matches).toEqual([]);
+      expect(outcome.warnings).toContain(
+        "spamhaus-dbl lookups are unavailable: the Spamhaus DQS key is disabled.",
+      );
+      expect(JSON.stringify(outcome)).not.toContain(KEY);
+    });
+
+    it("never reads an error-range answer as a listing", async () => {
+      useKey();
+      routeDqs({
+        [`dbltest.com.${DQS}`]: ["127.0.1.2"],
+        [`any.example.${DQS}`]: ["127.255.255.251"],
+      });
+
+      const outcome = await queryDnsbls("any.example");
+
+      expect(outcome.matches).toEqual([]);
+      expect(outcome.warnings).toContainEqual(
+        expect.stringContaining("DQS key was rejected"),
+      );
+    });
+
+    it("ignores a key that is not a single alphanumeric label", async () => {
+      useKey("abc.evil.example");
+      routeLookups({});
+
+      await queryDnsbls("any.example");
+
+      const names = resolve4Mock.mock.calls.map(([name]) => String(name));
+      expect(names).toContain("dbltest.com.dbl.spamhaus.org");
+      expect(names.some((name) => name.includes("evil"))).toBe(false);
+    });
   });
 
   it("skips IP literals outright", async () => {

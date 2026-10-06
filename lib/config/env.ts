@@ -22,6 +22,8 @@ const envSchema = z.object({
   VIRUSTOTAL_API_KEY: optionalString,
   GOOGLE_SAFE_BROWSING_API_KEY: optionalString,
   URLHAUS_AUTH_KEY: optionalString,
+  /** Spamhaus Data Query Service key; public DBL mirrors block cloud resolvers. */
+  SPAMHAUS_DQS_KEY: optionalString,
   UPSTASH_REDIS_REST_URL: optionalUrl,
   UPSTASH_REDIS_REST_TOKEN: optionalString,
   OPENPHISH_FEED_URL: z.preprocess(

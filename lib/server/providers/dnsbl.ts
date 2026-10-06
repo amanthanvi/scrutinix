@@ -1,6 +1,8 @@
 import { Resolver } from "node:dns/promises";
 
+import { getEnv } from "@/lib/config/env";
 import type { ThreatFeedsData } from "@/lib/domain/types";
+import { logWarn } from "@/lib/server/logger";
 
 type FeedMatch = ThreatFeedsData["matches"][number];
 
@@ -21,19 +23,46 @@ interface DnsblZone {
 }
 
 /**
- * Spamhaus returns these when queried through a blocked/over-limit public
- * resolver. They mean "no answer available", never "listed".
+ * Spamhaus reports errors in 127.255.255.0/24 (blocked or over-limit
+ * resolver, zone typo, disabled DQS key). They mean "no answer available",
+ * never "listed".
  */
-const SPAMHAUS_ERROR_CODES = new Set([
-  "127.255.255.252",
-  "127.255.255.254",
-  "127.255.255.255",
-]);
+const SPAMHAUS_ERROR_RANGE = /^127\.255\.255\.\d{1,3}$/;
 
-const ZONES: DnsblZone[] = [
+/** DQS key errors get a specific reason; the key itself is never echoed. */
+const DQS_KEY_ERRORS: Record<string, string> = {
+  "127.255.255.250": "the Spamhaus DQS key is disabled",
+  "127.255.255.251": "the Spamhaus DQS key was rejected for this use",
+};
+
+/** DQS keys are a single alphanumeric DNS label; anything else could rewrite the query name. */
+const DQS_KEY_PATTERN = /^[a-z0-9]{8,64}$/i;
+
+/**
+ * With a DQS key, DBL is queried as <domain>.<key>.dbl.dq.spamhaus.net, which
+ * Spamhaus answers from any resolver. The public dbl.spamhaus.org mirror
+ * refuses most cloud resolvers, Vercel's included.
+ */
+function spamhausZone(): string {
+  const key = getEnv().SPAMHAUS_DQS_KEY;
+  if (key && DQS_KEY_PATTERN.test(key)) {
+    return `${key}.dbl.dq.spamhaus.net`;
+  }
+  if (key) {
+    logWarn("dnsbl.dqs_key_malformed", {
+      message:
+        "SPAMHAUS_DQS_KEY is not a single alphanumeric label; using the public DBL mirror.",
+    });
+  }
+  return "dbl.spamhaus.org";
+}
+
+const ZONE_DEFINITIONS: Array<
+  Omit<DnsblZone, "zone"> & { zone: () => string }
+> = [
   {
     feed: "spamhaus-dbl",
-    zone: "dbl.spamhaus.org",
+    zone: spamhausZone,
     testRecord: "dbltest.com",
     describe: (codes) => {
       const known: Array<[string, string, "medium" | "high"]> = [
@@ -59,7 +88,7 @@ const ZONES: DnsblZone[] = [
   },
   {
     feed: "surbl",
-    zone: "multi.surbl.org",
+    zone: () => "multi.surbl.org",
     testRecord: "test.surbl.org",
     describe: (codes) => {
       const bits = codes
@@ -91,6 +120,8 @@ const HEALTH_RECHECK_MS = 1000 * 60 * 60 * 6;
 interface ZoneHealth {
   checkedAt: number;
   healthy: boolean;
+  /** Set when the self-test failed for a reason worth naming (a DQS key error). */
+  reason?: string;
 }
 
 declare global {
@@ -108,7 +139,7 @@ function createResolver(): Resolver {
 type LookupResult =
   | { status: "listed"; codes: string[] }
   | { status: "clean" }
-  | { status: "unavailable"; reason: string };
+  | { status: "unavailable"; reason: string; keyError?: boolean };
 
 async function lookupZone(
   resolver: Resolver,
@@ -117,7 +148,11 @@ async function lookupZone(
 ): Promise<LookupResult> {
   try {
     const codes = await resolver.resolve4(`${name}.${zone}`);
-    if (codes.some((code) => SPAMHAUS_ERROR_CODES.has(code))) {
+    const keyError = codes.map((code) => DQS_KEY_ERRORS[code]).find(Boolean);
+    if (keyError) {
+      return { status: "unavailable", reason: keyError, keyError: true };
+    }
+    if (codes.some((code) => SPAMHAUS_ERROR_RANGE.test(code))) {
       return {
         status: "unavailable",
         reason: "the list rejects queries from this runtime's DNS resolver",
@@ -154,20 +189,26 @@ async function lookupZone(
  * Spamhaus/SURBL; without this gate every scan would read "clean" when the
  * list was actually unreachable.
  */
-async function isZoneHealthy(
+async function checkZoneHealth(
   resolver: Resolver,
   zone: DnsblZone,
-): Promise<boolean> {
+): Promise<ZoneHealth> {
   const health = (globalThis.__dnsblZoneHealth ??= new Map());
   const cached = health.get(zone.zone);
   if (cached && Date.now() - cached.checkedAt < HEALTH_RECHECK_MS) {
-    return cached.healthy;
+    return cached;
   }
 
   const result = await lookupZone(resolver, zone.testRecord, zone.zone);
-  const healthy = result.status === "listed";
-  health.set(zone.zone, { checkedAt: Date.now(), healthy });
-  return healthy;
+  const next: ZoneHealth = {
+    checkedAt: Date.now(),
+    healthy: result.status === "listed",
+    ...(result.status === "unavailable" && result.keyError
+      ? { reason: result.reason }
+      : {}),
+  };
+  health.set(zone.zone, next);
+  return next;
 }
 
 /** Hostname-level DNSBL lookups (Spamhaus DBL + SURBL) over plain DNS. */
@@ -181,12 +222,19 @@ export async function queryDnsbls(
   }
 
   const resolver = createResolver();
+  const zones: DnsblZone[] = ZONE_DEFINITIONS.map((definition) => ({
+    ...definition,
+    zone: definition.zone(),
+  }));
 
   await Promise.all(
-    ZONES.map(async (zone) => {
-      if (!(await isZoneHealthy(resolver, zone))) {
+    zones.map(async (zone) => {
+      const health = await checkZoneHealth(resolver, zone);
+      if (!health.healthy) {
         outcome.warnings.push(
-          `${zone.feed} lookups are unavailable from this runtime's DNS resolver.`,
+          health.reason
+            ? `${zone.feed} lookups are unavailable: ${health.reason}.`
+            : `${zone.feed} lookups are unavailable from this runtime's DNS resolver.`,
         );
         return;
       }
