@@ -427,6 +427,109 @@ describe("ResultsSection", () => {
     }
   });
 
+  it("brings a finished scan's verdict into view, but never pulls the page off an opened result", async () => {
+    // jsdom measures everything at 0; place the band below the fold.
+    vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({
+      top: 2_000,
+      bottom: 2_100,
+      left: 0,
+      right: 0,
+      width: 0,
+      height: 100,
+      x: 0,
+      y: 2_000,
+      toJSON: () => ({}),
+    });
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
+
+    const streamScan = (result: AnalysisResult) => {
+      const stream: {
+        controller?: ReadableStreamDefaultController<Uint8Array>;
+      } = {};
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) {
+          stream.controller = controller;
+          controller.enqueue(
+            new TextEncoder().encode(
+              `${JSON.stringify({
+                type: "scan_started",
+                scanId: result.id,
+                url: result.url,
+                cached: false,
+                startedAt: "2026-10-06T00:00:00.000Z",
+              })}\n`,
+            ),
+          );
+        },
+      });
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(
+          async () =>
+            new Response(body, {
+              status: 200,
+              headers: { "content-type": "application/x-ndjson" },
+            }),
+        ),
+      );
+      return () => {
+        stream.controller?.enqueue(
+          new TextEncoder().encode(
+            `${JSON.stringify({ type: "scan_complete", result })}\n`,
+          ),
+        );
+        stream.controller?.close();
+      };
+    };
+
+    const startScan = async (value: string) => {
+      fireEvent.change(
+        screen.getByRole("textbox", { name: "URL to analyze" }),
+        { target: { value } },
+      );
+      await act(async () => {
+        fireEvent.click(screen.getByRole("button", { name: "Analyze URL" }));
+      });
+    };
+
+    const { unmount } = renderApp(
+      <OpenStored result={buildResult("stored-1", 0)} />,
+    );
+    try {
+      // A scan the person is watching lands below the fold: scroll to it.
+      const finishFirst = streamScan(
+        buildResult("live-1", 9, "https://live.example/"),
+      );
+      await startScan("live.example");
+      await act(async () => finishFirst());
+      await waitFor(() => {
+        expect(screen.getByLabelText(/^scan result: malicious$/i)).toBeTruthy();
+      });
+      expect(scrollIntoView).toHaveBeenCalled();
+
+      // The person opens a saved result while the next scan runs: when that
+      // scan finishes in the background, the page stays where they are.
+      scrollIntoView.mockClear();
+      const finishSecond = streamScan(
+        buildResult("live-2", 9, "https://other.example/"),
+      );
+      await startScan("other.example");
+      fireEvent.click(screen.getByRole("button", { name: "open stored" }));
+      await act(async () => finishSecond());
+      await waitFor(() => {
+        expect(screen.getByLabelText(/^scan result: safe$/i)).toBeTruthy();
+      });
+      // The opened result stays on screen; the finished scan went to history.
+      expect(screen.queryByLabelText(/^scan result: malicious$/i)).toBeNull();
+      expect(scrollIntoView).not.toHaveBeenCalled();
+    } finally {
+      unmount();
+      vi.restoreAllMocks();
+      delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
+    }
+  });
+
   it("re-announces every opened result, even one that reads the same", async () => {
     const first = buildResult("stored-a", 0, "https://one.example/");
     const second = buildResult("stored-b", 0, "https://two.example/");

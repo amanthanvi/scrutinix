@@ -190,11 +190,14 @@ export function ResultsSection() {
     const heading = document.getElementById(VERDICT_HEADING_ID);
     if (scan.state.result && heading) {
       if (parked || lost) heading.focus({ preventScroll: true });
-      bringVerdictIntoView(heading);
+      // Only when the band shows this scan: if the person opened a history
+      // or batch result while it ran, a background finish must not pull the
+      // page away from what they are reading.
+      if (active === scan.state.result) bringVerdictIntoView(heading);
       return;
     }
     if (lost) document.getElementById("sx-url-input")?.focus();
-  }, [scan.state.isStreaming, scan.state.result]);
+  }, [active, scan.state.isStreaming, scan.state.result]);
 
   // Revealing the quiet checks removes the button that did it; move focus
   // to the first newly revealed check that can expand, so keyboard users

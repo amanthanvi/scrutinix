@@ -6,6 +6,7 @@ import {
   useCallback,
   useContext,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -88,8 +89,16 @@ function useCreateAnalyzerRuntime(shared: SharedView | null) {
     setHistoryQueue([]);
   }, []);
 
+  // Set when the person opens a saved result while a scan runs: that scan
+  // still lands in history, but it must not replace what they chose to read.
+  const keepOpenedResultRef = useRef(false);
+
   const scan = useScanStream((result) => {
-    startTransition(() => setSelectedResult(result));
+    if (keepOpenedResultRef.current) {
+      keepOpenedResultRef.current = false;
+    } else {
+      startTransition(() => setSelectedResult(result));
+    }
     pushHistoryEvent(result);
   });
 
@@ -128,6 +137,7 @@ function useCreateAnalyzerRuntime(shared: SharedView | null) {
 
   const startSingleScan = useCallback(async () => {
     setFormError(null);
+    keepOpenedResultRef.current = false;
     setSelectedResult(null);
     setInputEditedSinceResult(false);
     const value = normalizeUrlInput(singleUrl);
@@ -171,6 +181,7 @@ function useCreateAnalyzerRuntime(shared: SharedView | null) {
   const rescanUrl = useCallback(
     async (url: string) => {
       setFormError(null);
+      keepOpenedResultRef.current = false;
       setSelectedResult(null);
       setSingleUrl(url);
       setInputEditedSinceResult(false);
@@ -290,6 +301,7 @@ function useCreateAnalyzerRuntime(shared: SharedView | null) {
 
   /** Show a stored result (history entry or batch row) as the active one. */
   const openStoredResult = useCallback((result: AnalysisResult) => {
+    keepOpenedResultRef.current = true;
     setSelectedResult(result);
     setSingleUrl(result.url);
     setInputEditedSinceResult(false);

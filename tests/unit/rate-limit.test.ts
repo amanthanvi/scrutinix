@@ -54,6 +54,15 @@ describe("describeRateLimitWait", () => {
       "Too many scans from this connection today. Try again in about 5 hours.",
     );
   });
+
+  it("names share-image requests on the image tier, not scans", () => {
+    expect(describeRateLimitWait(42, false, "image")).toBe(
+      "Too many share-image requests from this connection. Try again in about a minute.",
+    );
+    expect(describeRateLimitWait(3_000, true, "image")).toBe(
+      "Too many share-image requests from this connection today. Try again in about an hour.",
+    );
+  });
 });
 
 describe("getClientRateLimitId", () => {
@@ -343,6 +352,9 @@ describe("applyRateLimit", () => {
     }
     const overImages = await applyRateLimit("198.51.100.10", 1, "image");
     expect(overImages.success).toBe(false);
+    // The caller made no scans, so the message must not blame scans.
+    if (overImages.success) throw new Error("expected the image tier to deny");
+    expect(overImages.error.message).toMatch(/too many share-image requests/i);
     const scan = await applyRateLimit("198.51.100.10");
     expect(scan.success).toBe(true);
   });
