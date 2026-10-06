@@ -9,20 +9,22 @@ const THREATFOX_API = "https://threatfox-api.abuse.ch/api/v1/";
 const TIMEOUT_MS = 5_000;
 
 /**
- * abuse.ch ThreatFox IOC lookup by hostname. Reuses the URLhaus Auth-Key
- * (both services share the abuse.ch account key); without a key the lookup
- * is skipped with a coverage warning rather than failing the signal.
+ * abuse.ch ThreatFox IOC lookup, searched by hostname. Reuses the URLhaus
+ * Auth-Key (both services share the abuse.ch account key); without a key the
+ * lookup is skipped with a coverage warning rather than failing the signal.
  *
  * A domain or IP IOC names the host itself. A URL IOC names one resource:
  * on path-tenanted platforms (github.com, docs.google.com) one listed
- * release download must not convict every other repo or document, so it
- * only matches the exact scanned URL - unless it names the host root.
+ * release download must not convict every other repo or document. So, like
+ * URLhaus, an exact URL listing convicts and a listing elsewhere on the host
+ * only corroborates.
  */
 export async function checkThreatFox(
   url: string,
   signal?: AbortSignal,
 ): Promise<{ match: FeedMatch | null; warning: string | null }> {
-  const hostname = new URL(url).hostname;
+  const scanned = new URL(url);
+  const hostname = normalizeHostname(scanned.hostname);
   const env = getEnv();
   if (!env.URLHAUS_AUTH_KEY) {
     return {
@@ -59,11 +61,10 @@ export async function checkThreatFox(
     return { match: null, warning: null };
   }
 
-  const normalizedHostname = hostname.toLowerCase().replace(/\.$/, "");
-  const scannedUrl = simplifyUrlForMatching(url);
-  const scannedKey = resourceKey(scannedUrl);
-  let entry: Record<string, unknown> | undefined;
-  let matchType: FeedMatch["matchType"] = "host";
+  const scannedKey = resourceKey(scanned);
+  let exact: Record<string, unknown> | undefined;
+  let hostIoc: Record<string, unknown> | undefined;
+  let elsewhereOnHost: Record<string, unknown> | undefined;
 
   for (const item of payload.data) {
     if (!item || typeof item !== "object") {
@@ -72,25 +73,50 @@ export async function checkThreatFox(
 
     const record = item as Record<string, unknown>;
     const ioc = typeof record.ioc === "string" ? parseIoc(record.ioc) : null;
-    if (!ioc || ioc.hostname !== normalizedHostname) {
+    if (!ioc || ioc.hostname !== hostname) {
       continue;
     }
 
-    if (ioc.url !== null && resourceKey(ioc.url) === scannedKey) {
-      entry = record;
-      matchType = "url";
-      break;
-    }
-
-    if (ioc.url === null) {
-      entry ??= record;
+    if (ioc.resourceKey === null) {
+      hostIoc = moreConfident(hostIoc, record);
+    } else if (ioc.resourceKey === scannedKey) {
+      exact = moreConfident(exact, record);
+    } else {
+      elsewhereOnHost = moreConfident(elsewhereOnHost, record);
     }
   }
 
-  if (!entry) {
-    return { match: null, warning: null };
+  if (exact) {
+    return {
+      match: toMatch(exact, "url", simplifyUrlForMatching(url)),
+      warning: null,
+    };
   }
 
+  if (hostIoc) {
+    return { match: toMatch(hostIoc, "host", hostname), warning: null };
+  }
+
+  if (elsewhereOnHost) {
+    const match = toMatch(elsewhereOnHost, "host", hostname);
+    return {
+      match: {
+        ...match,
+        detail: `host has another URL listed as a ${match.detail}`,
+        confidence: "medium",
+      },
+      warning: null,
+    };
+  }
+
+  return { match: null, warning: null };
+}
+
+function toMatch(
+  entry: Record<string, unknown>,
+  matchType: NonNullable<FeedMatch["matchType"]>,
+  matchedUrl: string,
+): FeedMatch {
   const threatType =
     typeof entry.threat_type === "string" ? entry.threat_type : "IOC";
   const malware =
@@ -98,39 +124,59 @@ export async function checkThreatFox(
     entry.malware_printable !== "Unknown malware"
       ? entry.malware_printable
       : null;
-  const confidenceLevel =
-    typeof entry.confidence_level === "number" ? entry.confidence_level : 0;
 
   return {
-    match: {
-      feed: "threatfox",
-      matchedUrl: matchType === "url" ? scannedUrl : normalizedHostname,
-      detail: malware
-        ? `${threatType} indicator for ${malware} in ThreatFox`
-        : `${threatType} indicator in ThreatFox`,
-      confidence: confidenceLevel >= 75 ? "high" : "medium",
-      matchType,
-    },
-    warning: null,
+    feed: "threatfox",
+    matchedUrl,
+    detail: malware
+      ? `${threatType} indicator for ${malware} in ThreatFox`
+      : `${threatType} indicator in ThreatFox`,
+    confidence: confidenceLevel(entry) >= 75 ? "high" : "medium",
+    matchType,
   };
 }
 
-/** Feeds often list http:// while users paste https://; compare without the scheme. */
-function resourceKey(url: string) {
-  return url.replace(/^https?:\/\//i, "");
+function confidenceLevel(entry: Record<string, unknown> | undefined) {
+  return typeof entry?.confidence_level === "number"
+    ? entry.confidence_level
+    : 0;
 }
 
-/** `url` is null when the IOC names only a host (domain, ip:port, or root URL). */
+function moreConfident(
+  current: Record<string, unknown> | undefined,
+  candidate: Record<string, unknown>,
+) {
+  return confidenceLevel(candidate) > confidenceLevel(current)
+    ? candidate
+    : (current ?? candidate);
+}
+
+function normalizeHostname(hostname: string) {
+  return hostname.toLowerCase().replace(/\.$/, "");
+}
+
+/**
+ * Host, port, path and query, without the scheme (feeds often list http://
+ * while users paste https://) or a trailing slash.
+ */
+function resourceKey(parsed: URL) {
+  const port = parsed.port ? `:${parsed.port}` : "";
+  const path = parsed.pathname.replace(/\/$/, "");
+  return `${normalizeHostname(parsed.hostname)}${port}${path}${parsed.search}`;
+}
+
+/** `resourceKey` is null when the IOC names only a host (domain, ip:port, or root URL). */
 function parseIoc(
   ioc: string,
-): { hostname: string; url: string | null } | null {
+): { hostname: string; resourceKey: string | null } | null {
   try {
     const isUrl = ioc.includes("://");
     const parsed = new URL(isUrl ? ioc : `http://${ioc}`);
-    const namesResource = isUrl && (parsed.pathname !== "/" || parsed.search);
+    const namesResource =
+      isUrl && (parsed.pathname !== "/" || parsed.search !== "");
     return {
-      hostname: parsed.hostname.toLowerCase().replace(/\.$/, ""),
-      url: namesResource ? simplifyUrlForMatching(ioc) : null,
+      hostname: normalizeHostname(parsed.hostname),
+      resourceKey: namesResource ? resourceKey(parsed) : null,
     };
   } catch {
     return null;

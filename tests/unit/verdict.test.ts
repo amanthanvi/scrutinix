@@ -785,6 +785,31 @@ describe("buildThreatAssessment", () => {
     expect(hostResult.threatInfo?.score).toBe(25);
   });
 
+  it("does not convict a shared host on listings of its other URLs", () => {
+    // Production regression: github.com/vercel/next.js scanned as critical.
+    const shared = createPendingSignalResults();
+    withThreatFeedMatches(shared, [
+      {
+        feed: "urlhaus",
+        matchedUrl: "github.com",
+        detail: "host has 8006 malware URL listings in URLhaus",
+        confidence: "medium",
+        matchType: "host",
+      },
+      {
+        feed: "threatfox",
+        matchedUrl: "github.com",
+        detail:
+          "host has another URL listed as a payload_delivery indicator in ThreatFox",
+        confidence: "medium",
+        matchType: "host",
+      },
+    ]);
+    const result = buildThreatAssessment(shared);
+    expect(result.verdict).toBe("suspicious");
+    expect(result.threatInfo?.score).toBe(50);
+  });
+
   it("counts exact feed evidence, but not hostname fallbacks, as high-confidence support", () => {
     const googleMatch = {
       status: "success" as const,

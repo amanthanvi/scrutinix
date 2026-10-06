@@ -20,7 +20,7 @@
   - Extend feed coverage with ThreatFox (reusing the URLhaus `Auth-Key`) and Spamhaus DBL / SURBL DNSBL lookups over plain DNS, treating sentinel/blocked-resolver responses as unavailable rather than clean.
 - Runtime decision:
   - Redirect tracing should not fail on invalid certificate chains that are already reported by the SSL signal; trace redirects through header-only Node HTTP(S) requests with relaxed certificate validation.
-  - Resolve registrable domains with the Public Suffix List and private suffixes enabled so reputation, DNSBL, and redirect comparisons preserve tenant boundaries on shared hosting platforms; keep ThreatFox IOC scoring bound to the exact scanned hostname so sibling tenants cannot contaminate one another.
+  - Resolve registrable domains with the Public Suffix List and private suffixes enabled so reputation, DNSBL, and redirect comparisons preserve tenant boundaries on shared hosting platforms; keep ThreatFox IOC scoring bound to the exact scanned hostname so sibling tenants cannot contaminate one another, and let a ThreatFox URL IOC convict only that exact URL - elsewhere on the host it corroborates at host-level weight, so path tenants on shared hosts (github.com) cannot contaminate one another either.
   - Treat Public Suffix List updates as security-sensitive data changes: every private rule changed by the adopted `tldts` release must have an explicit registrable-domain regression case.
 - Testing decision: harness-first is required; Vitest, MSW, Playwright, and Lighthouse land before large feature clusters.
 - Tooling decision:
