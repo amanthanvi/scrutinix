@@ -93,6 +93,9 @@ export async function runAnalysis(
         cacheHit: true,
         startedAt,
         completedAt,
+        // The evidence is as old as the scan that gathered it; completedAt
+        // and durationMs describe this request.
+        checkedAt: cached.metadata.checkedAt || cached.metadata.completedAt,
         durationMs:
           new Date(completedAt).getTime() - new Date(startedAt).getTime(),
       },
@@ -158,6 +161,7 @@ export async function runAnalysis(
       scanId,
       startedAt,
       completedAt,
+      checkedAt: completedAt,
       cacheHit: false,
       partialFailure,
       signalCount: signalNames.length,

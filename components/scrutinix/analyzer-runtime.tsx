@@ -6,16 +6,23 @@ import {
   useCallback,
   useContext,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
 import { toast } from "sonner";
 
-import type { SharedSnapshot } from "@/components/shared/scrutinix-types";
 import { selectSummarySignals } from "@/components/shared/signal-selection";
 import { useBatchStream } from "@/hooks/use-batch-stream";
+import { warmLinkParser } from "@/hooks/use-link-anatomy";
 import { useScanStream } from "@/hooks/use-scan-stream";
-import { sharedSnapshotSchema } from "@/lib/domain/schemas";
+import {
+  SHARE_MAX_AGE_WORDS,
+  buildSharedSnapshot,
+  encodeSharedSnapshot,
+  sharedSnapshotAge,
+  type SharedView,
+} from "@/lib/domain/signal-signature";
 import {
   signalNames,
   type AnalysisResult,
@@ -24,30 +31,34 @@ import {
 import { normalizeUrlInput } from "@/lib/domain/url";
 
 export type Tab = "single" | "batch";
+
+/** The share link, read-only and selected on focus, when copying failed. */
+function ShareLinkField({ link }: { link: string }) {
+  return (
+    <input
+      readOnly
+      value={link}
+      aria-label="Share link"
+      onFocus={(event) => event.currentTarget.select()}
+      className="text-caption mt-1 w-full rounded-md border border-[var(--sx-control)] bg-[var(--sx-surface)] px-2 py-1.5 font-mono text-[var(--sx-text)]"
+    />
+  );
+}
 export type ViewMode = "summary" | "full";
 
-function readSnapshot(): SharedSnapshot | null {
-  if (typeof window === "undefined") return null;
-  const payload = new URLSearchParams(window.location.search).get("shared");
-  if (!payload) return null;
+/** The toast for a share link without a Scrutinix signature. */
+export const UNVERIFIED_SHARE_TITLE = "Link copied, but it isn't verified";
+const UNVERIFIED_SHARE_NOTE =
+  "Whoever opens it is asked to check the link themselves; it won't show this result.";
 
-  const parseSnapshot = (value: unknown): SharedSnapshot | null => {
-    const parsed = sharedSnapshotSchema.safeParse(value);
-    return parsed.success ? parsed.data : null;
-  };
+/** The toast for a signed result already past `SHARE_MAX_AGE`. */
+export const EXPIRED_SHARE_TITLE = "Link copied, but this result has expired";
+const EXPIRED_SHARE_NOTE = `Shared results show for ${SHARE_MAX_AGE_WORDS} after the check, so whoever opens it is asked to check the link themselves.`;
 
-  try {
-    return parseSnapshot(JSON.parse(decodeURIComponent(atob(payload))));
-  } catch {
-    try {
-      return parseSnapshot(JSON.parse(atob(payload)));
-    } catch {
-      return null;
-    }
-  }
-}
+/** The one line a sender needs about a verified link. */
+export const VERIFIED_SHARE_NOTE = `It shows this result for ${SHARE_MAX_AGE_WORDS} after the check.`;
 
-function useCreateAnalyzerRuntime() {
+function useCreateAnalyzerRuntime(shared: SharedView | null) {
   const [activeTab, setActiveTab] = useState<Tab>("single");
   const [viewMode, setViewMode] = useState<ViewMode>("summary");
   const [singleUrl, setSingleUrl] = useState("");
@@ -62,9 +73,10 @@ function useCreateAnalyzerRuntime() {
   // Bumped when a stored result (history, batch "Open") replaces the view,
   // so the results section can move focus to the verdict heading.
   const [verdictFocusRequest, setVerdictFocusRequest] = useState(0);
-  const [sharedSnapshot] = useState<SharedSnapshot | null>(() =>
-    readSnapshot(),
-  );
+  // The page's `?shared=` link, verified and parsed on the server, so the
+  // server render and hydration agree. The snapshot is present only when
+  // Scrutinix signed it; the browser never decodes the payload itself.
+  const sharedSnapshot = shared?.snapshot ?? null;
   // React can batch several url_complete events into one render. Keep every
   // result so a fast batch cannot silently drop history entries.
   const [historyQueue, setHistoryQueue] = useState<AnalysisResult[]>([]);
@@ -77,8 +89,16 @@ function useCreateAnalyzerRuntime() {
     setHistoryQueue([]);
   }, []);
 
+  // Set when the person opens a saved result while a scan runs: that scan
+  // still lands in history, but it must not replace what they chose to read.
+  const keepOpenedResultRef = useRef(false);
+
   const scan = useScanStream((result) => {
-    startTransition(() => setSelectedResult(result));
+    if (keepOpenedResultRef.current) {
+      keepOpenedResultRef.current = false;
+    } else {
+      startTransition(() => setSelectedResult(result));
+    }
     pushHistoryEvent(result);
   });
 
@@ -117,6 +137,7 @@ function useCreateAnalyzerRuntime() {
 
   const startSingleScan = useCallback(async () => {
     setFormError(null);
+    keepOpenedResultRef.current = false;
     setSelectedResult(null);
     setInputEditedSinceResult(false);
     const value = normalizeUrlInput(singleUrl);
@@ -124,6 +145,7 @@ function useCreateAnalyzerRuntime() {
       setFormError(value.error);
       return;
     }
+    warmLinkParser();
     await scan.startScan(value.value.normalizedUrl);
   }, [scan, singleUrl]);
 
@@ -139,7 +161,9 @@ function useCreateAnalyzerRuntime() {
       return;
     }
     if (urls.length > 10) {
-      setFormError("Batch capped at 10 URLs.");
+      setFormError(
+        `That's ${urls.length} links. A batch checks up to 10 — remove some and try again.`,
+      );
       return;
     }
 
@@ -154,40 +178,130 @@ function useCreateAnalyzerRuntime() {
     await batch.startBatch(urls);
   }, [batch, batchInput]);
 
-  const shareResult = useCallback(async (result: AnalysisResult) => {
-    const capturedAt = result.metadata?.completedAt ?? new Date().toISOString();
-    const payload = JSON.stringify({
-      verdict: result.verdict,
-      url: result.url,
-      summary: result.threatInfo?.summary ?? "",
-      capturedAt,
-    });
-    const encodedPayload = btoa(encodeURIComponent(payload));
-    const targetUrl = new URL(window.location.href);
-    targetUrl.searchParams.set("shared", encodedPayload);
-
-    try {
-      await navigator.clipboard.writeText(targetUrl.toString());
-      toast.success("Link copied to clipboard");
-    } catch {
-      toast.error("Clipboard access was blocked");
-    }
-  }, []);
-
   const rescanUrl = useCallback(
     async (url: string) => {
       setFormError(null);
+      keepOpenedResultRef.current = false;
       setSelectedResult(null);
       setSingleUrl(url);
       setInputEditedSinceResult(false);
       setActiveTab("single");
+      warmLinkParser();
       await scan.startScan(url);
     },
     [scan],
   );
 
+  const shareResult = useCallback(
+    async (result: AnalysisResult) => {
+      // The snapshot (verdict, link, summary, and the eight-cell signature)
+      // travels in the link itself; the server keeps no share database. The
+      // server issued the payload and its signature with the result, and
+      // only a signed link opens as a Scrutinix result. Without one (saved
+      // before signing, or signing off) the link still carries the
+      // snapshot, opens as "check this shared link yourself", and the
+      // sender is told so.
+      const targetUrl = new URL(window.location.origin);
+      targetUrl.searchParams.set(
+        "shared",
+        result.share?.payload ??
+          encodeSharedSnapshot(buildSharedSnapshot(result)),
+      );
+      const signed = Boolean(result.share?.sig);
+      if (result.share?.sig) {
+        targetUrl.searchParams.set("sig", result.share.sig);
+      }
+      // A signed result shows for SHARE_MAX_AGE after its check; sharing an
+      // older one (from history) opens the neutral view, so say so.
+      const expired =
+        signed &&
+        sharedSnapshotAge(
+          buildSharedSnapshot(result).capturedAt,
+          Date.now(),
+        ) === "expired";
+
+      const link = targetUrl.toString();
+      // Only a result saved before the server issued shares, or one past its
+      // window, gains a current signature by scanning again; a current
+      // result without one means signing is off, and a rescan would not
+      // change that.
+      const scanAgain =
+        result.share && !expired
+          ? undefined
+          : {
+              label: "Scan again",
+              onClick: () => void rescanUrl(result.url),
+            };
+      const notice =
+        signed && !expired
+          ? null
+          : expired
+            ? {
+                title: EXPIRED_SHARE_TITLE,
+                lead: "This result has expired.",
+                note: EXPIRED_SHARE_NOTE,
+              }
+            : {
+                title: UNVERIFIED_SHARE_TITLE,
+                lead: "It isn't verified.",
+                note: UNVERIFIED_SHARE_NOTE,
+              };
+      const tellNotice = () => {
+        if (!notice) return;
+        toast(notice.title, {
+          description: notice.note,
+          ...(scanAgain ? { action: scanAgain } : {}),
+        });
+      };
+
+      try {
+        await navigator.clipboard.writeText(link);
+        if (notice) {
+          tellNotice();
+        } else {
+          toast.success("Link copied to clipboard", {
+            description: VERIFIED_SHARE_NOTE,
+          });
+        }
+      } catch {
+        // Never drop the link: hand it to the system share sheet, or keep
+        // it on screen to copy by hand.
+        if (typeof navigator.share === "function") {
+          try {
+            await navigator.share({ url: link });
+            tellNotice();
+            return;
+          } catch (error) {
+            if (error instanceof DOMException && error.name === "AbortError") {
+              return;
+            }
+          }
+        }
+        toast.error(
+          "Couldn't copy the link — select it below and copy it yourself.",
+          {
+            duration: Infinity,
+            closeButton: true,
+            description: (
+              <>
+                {notice ? (
+                  <span className="block">
+                    {notice.lead} {notice.note}
+                  </span>
+                ) : null}
+                <ShareLinkField link={link} />
+              </>
+            ),
+          },
+        );
+      }
+    },
+    [rescanUrl],
+  );
+
   /** Show a stored result (history entry or batch row) as the active one. */
   const openStoredResult = useCallback((result: AnalysisResult) => {
+    keepOpenedResultRef.current = true;
     setSelectedResult(result);
     setSingleUrl(result.url);
     setInputEditedSinceResult(false);
@@ -224,6 +338,7 @@ function useCreateAnalyzerRuntime() {
     setViewMode,
     updateSingleUrl,
     shareResult,
+    shared,
     sharedSnapshot,
     signals,
     singleUrl,
@@ -248,8 +363,19 @@ export function useAnalyzerRuntime() {
   return context;
 }
 
-export function AnalyzerRuntimeProvider({ children }: { children: ReactNode }) {
-  const value = useCreateAnalyzerRuntime();
+export function AnalyzerRuntimeProvider({
+  children,
+  shared = null,
+}: {
+  children: ReactNode;
+  /**
+   * The page's `?shared=` link, resolved on the server: the link and its
+   * anatomy (so a shared look-alike hedges before the browser parser
+   * loads), and the snapshot only when Scrutinix signed it.
+   */
+  shared?: SharedView | null;
+}) {
+  const value = useCreateAnalyzerRuntime(shared);
   return (
     <AnalyzerRuntimeContext.Provider value={value}>
       {children}

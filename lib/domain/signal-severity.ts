@@ -9,14 +9,23 @@ import type { SignalName, SignalPayloadMap } from "@/lib/domain/types";
  * Pass `scored` (from `getScoredSignals`) so a check that added score to
  * the verdict reads as a warning even when its own thresholds are quiet.
  */
-export type Severity =
-  | "clear"
-  | "neutral"
-  | "suspicious"
-  | "malicious"
-  | "error"
-  | "pending"
-  | "skipped";
+/**
+ * A domain younger than this is "fairly new": the verdict engine's
+ * young-domain tier and the link anatomy's domain-age fact share it.
+ */
+export const YOUNG_DOMAIN_DAYS = 180;
+
+export const severities = [
+  "clear",
+  "neutral",
+  "suspicious",
+  "malicious",
+  "error",
+  "pending",
+  "skipped",
+] as const;
+
+export type Severity = (typeof severities)[number];
 
 export function getSignalSeverity(
   status: string,

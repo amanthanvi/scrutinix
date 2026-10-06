@@ -16,7 +16,7 @@ import {
 
 function StreamError({ message }: { message: string }) {
   return (
-    <p className="mt-4 text-[0.8125rem] text-[var(--sx-malicious-fg)]">
+    <p role="alert" className="text-meta mt-4 text-[var(--sx-danger-fg)]">
       {message}
     </p>
   );
@@ -34,6 +34,7 @@ export function ScanForm() {
     setActiveTab,
     setBatchInput,
     setFormError,
+    shared,
     singleUrl,
     startBatchScan,
     startSingleScan,
@@ -48,11 +49,21 @@ export function ScanForm() {
           setActiveTab(value as Tab);
           setFormError(null);
         }}
-        className="gap-4"
+        className="gap-5"
       >
         <TabsList aria-label="Scan mode">
           <TabsTrigger value="single">Single</TabsTrigger>
-          <TabsTrigger value="batch">Batch</TabsTrigger>
+          {/* The hint says what Batch is without joining the tab's name. */}
+          <TabsTrigger value="batch" aria-describedby="sx-batch-tab-hint">
+            Batch
+            <span
+              id="sx-batch-tab-hint"
+              aria-hidden="true"
+              className="ml-1.5 font-normal text-[var(--sx-text-soft)]"
+            >
+              up to 10 links
+            </span>
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="single" className="mt-0">
@@ -64,7 +75,14 @@ export function ScanForm() {
             }}
             error={activeTab === "single" ? formError : null}
             streaming={scan.state.isStreaming}
-            showingResult={Boolean(active) && !inputEditedSinceResult}
+            // A shared link's band (verified or not) counts as a result on
+            // screen: its scan button ("Run a fresh scan", or "Scan this
+            // link" when unverified) is then the one primary action.
+            showingResult={
+              (Boolean(active) ||
+                (Boolean(shared) && !scan.state.isStreaming)) &&
+              !inputEditedSinceResult
+            }
             onSubmit={() => void startSingleScan()}
             onCancel={scan.cancelScan}
           />

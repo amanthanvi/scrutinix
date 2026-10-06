@@ -2,30 +2,46 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
 import { buildContentSecurityPolicy, createCspNonce } from "@/lib/server/csp";
-import { applyRateLimit, getClientRateLimitId } from "@/lib/server/rate-limit";
+import {
+  applyRateLimit,
+  getClientRateLimitId,
+  type RateLimitTier,
+} from "@/lib/server/rate-limit";
 import { getScanRequestCost } from "@/lib/server/scan-cost";
 
+/** Per-result share images render on every unique payload: metered too. */
+const SHARE_IMAGE_PATH = "/og/result";
+
 export async function proxy(request: NextRequest) {
-  if (request.nextUrl.pathname.startsWith("/api/analyze")) {
-    return enforceRateLimit(request);
+  const { pathname } = request.nextUrl;
+  if (pathname.startsWith("/api/analyze")) {
+    return enforceRateLimit(
+      request,
+      await getScanRequestCost(request, pathname),
+      "scan",
+    );
+  }
+  if (pathname === SHARE_IMAGE_PATH) {
+    return enforceRateLimit(request, 1, "image");
   }
 
   return applyCspNonce(request);
 }
 
-async function enforceRateLimit(request: NextRequest) {
+async function enforceRateLimit(
+  request: NextRequest,
+  cost: number,
+  tier: RateLimitTier,
+) {
   // Identity trusts platform/proxy headers; see getClientRateLimitId.
   const identifier = getClientRateLimitId(request.headers);
-  const limit = await applyRateLimit(
-    identifier,
-    await getScanRequestCost(request, request.nextUrl.pathname),
-  );
+  const limit = await applyRateLimit(identifier, cost, tier);
 
   if (!limit.success) {
-    const retryAfter = Math.max(
-      1,
-      Math.ceil((limit.reset - Date.now()) / 1000),
-    );
+    // The message was worded from the same value (see toLimitResult).
+    const retryAfter =
+      limit.retryAfterSeconds ??
+      Math.max(1, Math.ceil((limit.reset - Date.now()) / 1000));
 
     return NextResponse.json(
       { error: limit.error },
@@ -65,6 +81,7 @@ function applyCspNonce(request: NextRequest) {
 export const config = {
   matcher: [
     "/api/analyze/:path*",
+    "/og/result",
     /*
      * Document routes get a per-request CSP nonce. Skip API, Next internals,
      * and common static assets; also skip link prefetches.

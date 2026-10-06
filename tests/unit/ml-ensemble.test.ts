@@ -88,7 +88,7 @@ describe("runMlEnsembleProvider", () => {
     );
 
     expect(result.transformerModel).toBeNull();
-    expect(result.warnings[0]).toMatch(/Falling back to lexical heuristics/);
+    expect(result.warnings[0]).toMatch(/only the structure checks ran/);
     expect(result.warnings[0]).not.toMatch(/timed out/);
     expect(result.lexicalModel.label).toBe("malicious");
     expect(result.consensusLabel).toBe("malicious");

@@ -31,9 +31,13 @@
   - Restore dark/light theme support through the shared semantic token layer in `app/globals.css` while keeping `app/scrutinix.css` for the branded motion/effects layer.
   - When a theme toggle sits inside a server-rendered header, gate any `resolvedTheme`-dependent icon or label behind a mount-safe client snapshot to avoid hydration mismatches.
   - Keep the top header metrics truthful in idle state: the threat meter stays visually inert and the coverage badge reads as idle until a scan actually runs.
-  - The public site uses a scanner-first, single-column `44rem` flow on `/`: scan form, verdict, accessible Summary/Full signal rows, and in-flow history. Method/caveat detail lives on `/about` and `/privacy`.
+  - The public site uses a scanner-first, single-column `46rem` flow on `/`: a visible headline, the scan form, then the verdict band (verdict word, imperative, score only when scored), the link anatomy (registered domain emphasised, look-alike stated plainly), the eight-cell signal strip, accessible Summary/Full evidence rows, and in-flow history. Method/caveat detail lives on `/about` and `/privacy`.
+  - Visual lane (2026-10-06): the canonical minimal product tool on a cool crisp white ground (light) and a deep neutral-cool ground (dark). One blue accent; verdict hues only where a verdict is stated. The eight-cell strip is the one signature: progress, evidence index, history/batch glyph, brand mark, icons, and share images.
+  - Shared result links (`/?shared=…&sig=…`) carry an optional eight-severity signature and preview through a per-result image (`/og/result`), rendered from the link's own payload and never stored. The server builds the payload for every streamed result and signs it (HMAC-SHA256 over `"scrutinix-share-v1\n" + payload` with `SHARE_SIGNING_SECRET`, base64url); the page, its metadata, and the image state a verdict only for a payload that verifies. Unsigned, tampered, or unverifiable links (including links shared before signing, which change behaviour and now open neutral) keep the site's default title, description, and card, and open a neutral "Check this shared link yourself" view with Scrutinix's own link anatomy and "Scan this link". A signed Safe look-alike previews as "Look-alike of <brand>: <domain> — Scrutinix", never "Safe". A signed result is shown for 72 hours after its check (`SHARE_MAX_AGE`); older ones open the same neutral view, saying the shared result is more than 3 days old. The image route has its own rate-limit tier (30/min, 600/day per IP) and renders payloads up to 6,000 characters; larger, invalid, or unverified payloads redirect to the default card.
+  - Strip states are distinguished by shape as well as colour (flagged solid, caution hatched, found-nothing a thin dash, partial half, failed outline, didn't-apply dashed, running empty). Empty history draws nothing; the `Scan history` region stays as an empty landmark.
+  - Look-alike detection tests every contiguous run of two or more subdomain labels; a two-letter country-code run counts only for a listed brand, so regional and tenant hosts (`acme.us.auth0.com`) are not called impersonations. Presentation only: scores are unchanged.
   - Sans-serif typography is the default reading mode; mono is reserved for telemetry, timings, hashes, and other code-like labels.
-  - Favicons and manifest are served from checked-in `public/` assets with explicit metadata links instead of a generated icon route.
+  - Favicons and manifest are served from checked-in `public/` assets with explicit metadata links instead of a generated icon route; they are regenerated from `lib/brand-mark.ts` with `npm run icons`.
 - Verdict decision:
   - Clean verdict confidence must be capped when a primary reputation source such as VirusTotal, Google Safe Browsing, or threat feeds does not complete, even if the remaining signals stay clean.
 - Provider decision: an uncached VirusTotal report lookup uses the primary URL report endpoint only; optional domain enrichment is omitted so one scan does not consume two of the free tier's four requests per minute.
@@ -179,7 +183,7 @@ Both personas use the same tool. A **view mode toggle** (Summary / Full Report) 
 - **FR-20** MUST be responsive (mobile-friendly)
 - **FR-21** SHOULD include educational content about URL threats
 - **FR-22** SHOULD surface lightweight trust/privacy/methodology context on the public site
-- **FR-23** MAY include shareable result links (URL-encoded state, no server persistence)
+- **FR-23** MAY include shareable result links (URL-encoded state, no server persistence). A shared link MUST state a verdict only when it carries the server's signature of its payload
 
 ## 4) System Design
 
@@ -298,7 +302,7 @@ Implementation note: batch streams also emit `batch_started`, `url_started`, and
 
 - **Error model:** `{ error: { code: string, message: string, retryable: boolean } }`
 - **Idempotency:** Same normalized URL returns a cached result with a new scan ID only when a complete, non-partial result remains inside the 15-minute TTL
-- **Rate limits:** 10 tokens/min per IP, 50 tokens/day per IP. An admitted batch costs one token per URL; rejected requests cost one token (enforced in `proxy.ts` before analysis work starts)
+- **Rate limits:** 10 tokens/min per IP, 50 tokens/day per IP. An admitted batch costs one token per URL; rejected requests cost one token (enforced in `proxy.ts` before analysis work starts). The per-result share image route is metered separately (30/min, 600/day per IP) so link previews never spend scan quota
 
 ### 4.4 State, caching, concurrency
 
@@ -336,7 +340,8 @@ Implementation note: batch streams also emit `batch_started`, `url_started`, and
 
 - **Authn/authz:** None. Anonymous usage. No user accounts
 - **PII:** No PII collected or stored server-side. URLs attached to eligible complete results may be cached for up to 15 minutes, then discarded; partial/error/aborted scans are not cached. Client-side history is user-controlled
-- **Public disclosure:** `/privacy` explains local history, hashed server logging, and client-only share links; `/about` explains the scoring and signal model
+- **Public disclosure:** `/privacy` explains local history, hashed server logging, and signed, server-less share links; `/about` explains the scoring and signal model
+- **Shared links:** a `?shared=` payload is attacker-writable, so it is never rendered as Scrutinix's statement unless `sig` verifies (`lib/server/share-signing.ts`: HMAC-SHA256, domain-separated, `timingSafeEqual`, canonical 43-character base64url only, never throws, never logs the secret, payload, or URL). `SHARE_SIGNING_SECRET` must be at least 32 characters (shorter values are ignored with one warning that omits the value); `SHARE_SIGNING_SECRET_PREVIOUS` verifies, never signs, during rotation. With no secret configured, shares are unsigned and every shared link opens neutral. A signed result is a statement about one moment: the view and card show when the evidence was gathered (`metadata.checkedAt`, kept from the original scan on a cache hit, dated with its year in UTC), and still offer a fresh scan. It also expires: a genuine signature over a Safe captured while a link was benign (or cloaked) would otherwise keep previewing "Safe" after the link turns, so a verified snapshot whose `capturedAt` (inside the HMAC) is older than `SHARE_MAX_AGE` (72 hours) or more than 5 minutes in the future is treated exactly like an unverified one: neutral band ("This shared result is more than 3 days old, so we're not showing it."), default metadata, and `/og/result` redirecting to the default card. Test-fixture mode (`SCRUTINIX_TEST_FIXTURES=1`) scores unknown hosts Safe, so it and real signing are mutually exclusive: with fixtures on, only the published e2e key signs (any other key is ignored with one value-free warning), and with fixtures off the published e2e key is always ignored. The signing keys belong in the Vercel Production environment only; any deployment holding the key (an unreviewed preview branch included) can mint links production verifies, so Preview/Development leave them unset or use a separate key, and the committed e2e key is ignored outside fixture mode. Share images are cached `public, max-age=3600, s-maxage=3600` (never `immutable`) so forged images age out after a revocation. **Routine rotation:** set the new key as `SHARE_SIGNING_SECRET` and the old one as `SHARE_SIGNING_SECRET_PREVIOUS`, and keep the previous key for at least `SHARE_MAX_AGE` (72 hours), so no link still inside its window stops verifying while its sender was told it shows the result; then remove it. **Revocation runbook:** on a leaked `SHARE_SIGNING_SECRET`, unset it and `SHARE_SIGNING_SECRET_PREVIOUS` (or replace them), redeploy, and purge the `/og/result` CDN cache if the deploy does not. Chat platforms' own unfurl caches are outside our control and may keep showing already-fetched previews
 - **Abuse cases + mitigations:**
 
 | Abuse case                                       | Mitigation                                                            |
@@ -345,6 +350,7 @@ Implementation note: batch streams also emit `batch_started`, `url_started`, and
 | Scanning internal/private URLs                   | URL validation rejects private IP ranges (10.x, 192.168.x, localhost) |
 | Using tool to enumerate which URLs are malicious | Rate limiting + no bulk API access                                    |
 | XSS via crafted URL display                      | Sanitize all URL rendering, never inject raw HTML                     |
+| Forged share link ("Safe: paypal.com") in a chat | Verdicts render only for server-signed payloads; others open neutral  |
 
 - **Audit/logging policy:** Log scan requests (URL hash only, not full URL) + response status + timing. Never log full URLs server-side (could contain PII in query params)
 

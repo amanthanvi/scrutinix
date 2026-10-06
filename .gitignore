@@ -60,3 +60,13 @@ venv/
 
 # Written by the audit gate in CI for the scheduled review issue.
 audit-gate-report.md
+
+# Impeccable design-tool state: surfaces/ and design.json stay tracked;
+# review renders, builds, live sessions, mocks, and critiques stay local.
+.impeccable/review/
+.impeccable/build/
+.impeccable/live/
+.impeccable/mocks/
+.impeccable/critique/
+.impeccable/config.local.json
+.playwright-mcp/

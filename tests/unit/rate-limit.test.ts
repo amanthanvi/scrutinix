@@ -34,9 +34,36 @@ vi.mock("@upstash/ratelimit", () => {
 
 import {
   applyRateLimit,
+  describeRateLimitWait,
   getClientRateLimitId,
   getRedisRestConfig,
 } from "@/lib/server/rate-limit";
+
+describe("describeRateLimitWait", () => {
+  it("words the wait from the window that denied", () => {
+    expect(describeRateLimitWait(42, false)).toBe(
+      "Too many scans from this connection. Try again in about a minute.",
+    );
+    expect(describeRateLimitWait(600, false)).toBe(
+      "Too many scans from this connection. Try again in about 10 minutes.",
+    );
+    expect(describeRateLimitWait(3_000, true)).toBe(
+      "Too many scans from this connection today. Try again in about an hour.",
+    );
+    expect(describeRateLimitWait(5 * 3_600, true)).toBe(
+      "Too many scans from this connection today. Try again in about 5 hours.",
+    );
+  });
+
+  it("names share-image requests on the image tier, not scans", () => {
+    expect(describeRateLimitWait(42, false, "image")).toBe(
+      "Too many share-image requests from this connection. Try again in about a minute.",
+    );
+    expect(describeRateLimitWait(3_000, true, "image")).toBe(
+      "Too many share-image requests from this connection today. Try again in about an hour.",
+    );
+  });
+});
 
 describe("getClientRateLimitId", () => {
   it("prefers x-real-ip over forwarded-for", () => {
@@ -96,6 +123,42 @@ describe("applyRateLimit", () => {
     expect(blocked.success).toBe(false);
     if (!blocked.success) {
       expect(blocked.status).toBe(429);
+      // A minute-window deny says when, in plain words.
+      expect(blocked.error.message).toBe(
+        "Too many scans from this connection. Try again in about a minute.",
+      );
+      expect(blocked.retryAfterSeconds).toBeGreaterThan(0);
+      expect(blocked.retryAfterSeconds).toBeLessThanOrEqual(60);
+    }
+  });
+
+  it("waits for the day window when only the day budget is spent", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("UPSTASH_REDIS_REST_URL", "https://example.upstash.io");
+    vi.stubEnv("UPSTASH_REDIS_REST_TOKEN", "token");
+    const now = Date.now();
+    limitImpl
+      .mockResolvedValueOnce({
+        success: true,
+        remaining: 4,
+        reset: now + 30_000,
+      })
+      .mockResolvedValueOnce({
+        success: false,
+        remaining: 0,
+        reset: now + 5 * 3_600_000 - 60_000,
+      });
+
+    const result = await applyRateLimit("203.0.113.44");
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      // Not the minute window's 30 seconds: the day budget is what blocks.
+      expect(result.retryAfterSeconds).toBeGreaterThan(4 * 3600);
+      expect(result.reset).toBe(now + 5 * 3_600_000 - 60_000);
+      expect(result.error.message).toBe(
+        "Too many scans from this connection today. Try again in about 5 hours.",
+      );
     }
   });
 
@@ -272,6 +335,28 @@ describe("applyRateLimit", () => {
 
     const followUp = await applyRateLimit("198.51.100.1");
     expect(followUp.success).toBe(false);
+  });
+
+  it("meters share images on their own budget, never spending scan quota", async () => {
+    const scans = await applyRateLimit("198.51.100.9", 10);
+    expect(scans.remaining).toBe(0);
+
+    // The scan window is spent, but the image tier is independent.
+    const image = await applyRateLimit("198.51.100.9", 1, "image");
+    expect(image.success).toBe(true);
+    expect(image.remaining).toBe(29);
+
+    // Rendering images never debits the scan window either.
+    for (let i = 0; i < 30; i += 1) {
+      await applyRateLimit("198.51.100.10", 1, "image");
+    }
+    const overImages = await applyRateLimit("198.51.100.10", 1, "image");
+    expect(overImages.success).toBe(false);
+    // The caller made no scans, so the message must not blame scans.
+    if (overImages.success) throw new Error("expected the image tier to deny");
+    expect(overImages.error.message).toMatch(/too many share-image requests/i);
+    const scan = await applyRateLimit("198.51.100.10");
+    expect(scan.success).toBe(true);
   });
 
   it("rejects a single request whose cost exceeds the window", async () => {

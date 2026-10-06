@@ -17,6 +17,8 @@ type LimitResult =
       success: false;
       remaining: number;
       reset: number;
+      /** Seconds until the denying window resets: the Retry-After value. */
+      retryAfterSeconds: number;
       status: number;
       error: ReturnType<typeof createApiError>;
     };
@@ -34,14 +36,28 @@ type WindowRecord = {
 
 type DegradeReason = "missing_credentials" | "upstash_error";
 
+/**
+ * Independent budgets. "scan" meters `/api/analyze` (each scan fans out to
+ * eight providers). "image" meters the per-result share image route, which
+ * is CPU-bound but cheap next to a scan; social crawlers share IPs across
+ * many users' links, so it gets a wider window and never spends scan quota.
+ */
+export type RateLimitTier = "scan" | "image";
+
+const TIERS: Record<
+  RateLimitTier,
+  { minute: number; day: number; prefix: string }
+> = {
+  scan: { minute: 10, day: 50, prefix: "mud" },
+  image: { minute: 30, day: 600, prefix: "og" },
+};
+
 declare global {
   var __devRateLimitStore: Map<string, WindowRecord> | undefined;
   var __scrutinixRateLimiters:
-    { minute: Ratelimit; day: Ratelimit } | undefined;
+    | Partial<Record<RateLimitTier, { minute: Ratelimit; day: Ratelimit }>>
+    | undefined;
 }
-
-const MINUTE_LIMIT = 10;
-const DAY_LIMIT = 50;
 
 /** Fail fast when Redis is unreachable so callers can degrade instead of stalling ~4s. */
 const UPSTASH_REDIS_RETRY = {
@@ -89,53 +105,101 @@ function lastForwardedHop(value: string | null): string | undefined {
   return hops.at(-1);
 }
 
-function getUpstashLimiters(redisUrl: string, redisToken: string) {
-  if (!globalThis.__scrutinixRateLimiters) {
-    const redis = new Redis({
-      url: redisUrl,
-      token: redisToken,
-      retry: UPSTASH_REDIS_RETRY,
-    });
-    globalThis.__scrutinixRateLimiters = {
-      minute: new Ratelimit({
-        redis,
-        limiter: Ratelimit.slidingWindow(MINUTE_LIMIT, "1 m"),
-        prefix: "mud:minute",
-      }),
-      day: new Ratelimit({
-        redis,
-        limiter: Ratelimit.slidingWindow(DAY_LIMIT, "1 d"),
-        prefix: "mud:day",
-      }),
-    };
+function getUpstashLimiters(
+  redisUrl: string,
+  redisToken: string,
+  tier: RateLimitTier,
+) {
+  const limiters = (globalThis.__scrutinixRateLimiters ??= {});
+  const existing = limiters[tier];
+  if (existing) {
+    return existing;
   }
-  return globalThis.__scrutinixRateLimiters;
+
+  const { minute, day, prefix } = TIERS[tier];
+  const redis = new Redis({
+    url: redisUrl,
+    token: redisToken,
+    retry: UPSTASH_REDIS_RETRY,
+  });
+  const created = {
+    minute: new Ratelimit({
+      redis,
+      limiter: Ratelimit.slidingWindow(minute, "1 m"),
+      prefix: `${prefix}:minute`,
+    }),
+    day: new Ratelimit({
+      redis,
+      limiter: Ratelimit.slidingWindow(day, "1 d"),
+      prefix: `${prefix}:day`,
+    }),
+  };
+  limiters[tier] = created;
+  return created;
 }
 
-function toLimitResult(minute: WindowOutcome, day: WindowOutcome): LimitResult {
+/**
+ * What a person reads when they are limited, worded from the actual wait:
+ * "Try again in about a minute", "...in about 12 minutes", or, when the
+ * day's budget is spent, "...in about 5 hours".
+ */
+export function describeRateLimitWait(
+  seconds: number,
+  dayLimit: boolean,
+  tier: RateLimitTier = "scan",
+): string {
+  // Name what was actually limited: a share-image fetch is not a scan.
+  const what = tier === "image" ? "share-image requests" : "scans";
+  if (dayLimit || seconds >= 3600) {
+    const hours = Math.max(1, Math.ceil(seconds / 3600));
+    return `Too many ${what} from this connection today. Try again in about ${hours === 1 ? "an hour" : `${hours} hours`}.`;
+  }
+  if (seconds <= 90) {
+    return `Too many ${what} from this connection. Try again in about a minute.`;
+  }
+  return `Too many ${what} from this connection. Try again in about ${Math.ceil(seconds / 60)} minutes.`;
+}
+
+function toLimitResult(
+  minute: WindowOutcome,
+  day: WindowOutcome,
+  tier: RateLimitTier,
+): LimitResult {
   const remaining = Math.min(minute.remaining, day.remaining);
-  const reset = Math.min(minute.reset, day.reset);
 
   if (!minute.success || !day.success) {
+    // The wait is set by the windows that denied: a spent day budget is
+    // not lifted when the minute window resets.
+    const reset = Math.max(
+      ...[minute, day]
+        .filter((window) => !window.success)
+        .map((window) => window.reset),
+    );
+    const retryAfterSeconds = Math.max(
+      1,
+      Math.ceil((reset - Date.now()) / 1000),
+    );
     return {
       success: false,
       remaining,
       reset,
+      retryAfterSeconds,
       status: 429,
       error: createApiError(
         "rate_limited",
-        "Rate limit exceeded. Please retry after the cooldown window.",
+        describeRateLimitWait(retryAfterSeconds, !day.success, tier),
         true,
       ),
     };
   }
 
-  return { success: true, remaining, reset };
+  return { success: true, remaining, reset: Math.min(minute.reset, day.reset) };
 }
 
 function degradeToInMemory(
   identifier: string,
   cost: number,
+  tier: RateLimitTier,
   reason: DegradeReason,
   cause?: unknown,
 ): LimitResult {
@@ -154,30 +218,32 @@ function degradeToInMemory(
       "Falling back to process-local rate limiting so analyze requests keep working.",
   });
 
-  return applyInMemoryLimit(identifier, cost);
+  return applyInMemoryLimit(identifier, cost, tier);
 }
 
 export async function applyRateLimit(
   identifier: string,
   cost = 1,
+  tier: RateLimitTier = "scan",
 ): Promise<LimitResult> {
   if (
     process.env.NODE_ENV === "development" ||
     process.env.NODE_ENV === "test"
   ) {
-    return applyInMemoryLimit(identifier, cost);
+    return applyInMemoryLimit(identifier, cost, tier);
   }
 
   const { url: redisUrl, token: redisToken } = getRedisRestConfig();
 
   if (!redisUrl || !redisToken) {
-    return degradeToInMemory(identifier, cost, "missing_credentials");
+    return degradeToInMemory(identifier, cost, tier, "missing_credentials");
   }
 
   try {
     const { minute: minuteLimiter, day: dayLimiter } = getUpstashLimiters(
       redisUrl,
       redisToken,
+      tier,
     );
 
     // allSettled so a throw in one window cannot discard a deny from the other.
@@ -192,7 +258,7 @@ export async function applyRateLimit(
       daySettled.status === "fulfilled" ? daySettled.value : undefined;
 
     if (minute && day) {
-      return toLimitResult(minute, day);
+      return toLimitResult(minute, day, tier);
     }
 
     const rejection =
@@ -229,24 +295,37 @@ export async function applyRateLimit(
         remaining: Number.MAX_SAFE_INTEGER,
         reset: Number.MAX_SAFE_INTEGER,
       };
-      return toLimitResult(minute ?? passthrough, day ?? passthrough);
+      return toLimitResult(minute ?? passthrough, day ?? passthrough, tier);
     }
 
     // Both threw, or the only successful window allowed — intended prod-500 fix.
     globalThis.__scrutinixRateLimiters = undefined;
-    return degradeToInMemory(identifier, cost, "upstash_error", rejection);
+    return degradeToInMemory(
+      identifier,
+      cost,
+      tier,
+      "upstash_error",
+      rejection,
+    );
   } catch (error) {
     // Drop the singleton so the next request can rebuild against Redis if it
     // recovers; otherwise every subsequent call would keep a dead client.
     globalThis.__scrutinixRateLimiters = undefined;
-    return degradeToInMemory(identifier, cost, "upstash_error", error);
+    return degradeToInMemory(identifier, cost, tier, "upstash_error", error);
   }
 }
 
 /** Entry count that triggers a sweep of expired windows (one-off IPs otherwise accumulate forever). */
 const STORE_SWEEP_THRESHOLD = 5_000;
 
-function applyInMemoryLimit(identifier: string, cost: number): LimitResult {
+function applyInMemoryLimit(
+  identifier: string,
+  cost: number,
+  tier: RateLimitTier,
+): LimitResult {
+  const limits = TIERS[tier];
+  // The scan tier keeps its historical keys; other tiers are namespaced.
+  const key = tier === "scan" ? identifier : `${tier}:${identifier}`;
   const store =
     globalThis.__devRateLimitStore ?? new Map<string, WindowRecord>();
   globalThis.__devRateLimitStore = store;
@@ -262,22 +341,22 @@ function applyInMemoryLimit(identifier: string, cost: number): LimitResult {
 
   const minute = incrementWindow(
     store,
-    `minute:${identifier}`,
-    MINUTE_LIMIT,
+    `minute:${key}`,
+    limits.minute,
     60_000,
     now,
     cost,
   );
   const day = incrementWindow(
     store,
-    `day:${identifier}`,
-    DAY_LIMIT,
+    `day:${key}`,
+    limits.day,
     86_400_000,
     now,
     cost,
   );
 
-  return toLimitResult(minute, day);
+  return toLimitResult(minute, day, tier);
 }
 
 function incrementWindow(

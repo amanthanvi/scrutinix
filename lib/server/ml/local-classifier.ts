@@ -103,7 +103,7 @@ export async function classifyUrlLocally(
     label,
     score: Number(top.score.toFixed(2)),
     reasons: [
-      `The local URL model classified this link as ${className} with ${(top.score * 100).toFixed(0)}% confidence.`,
+      `The link pattern model read this link as ${className} (${(top.score * 100).toFixed(0)}% sure).`,
     ],
     model: MODEL_NAME,
   };

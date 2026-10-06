@@ -1,5 +1,7 @@
 import * as z from "zod";
 
+import { severities } from "@/lib/domain/signal-severity";
+
 /**
  * Single source of truth for every data shape that crosses a trust boundary:
  * the NDJSON stream, the shared result cache, IndexedDB history, and shared
@@ -324,7 +326,9 @@ export type SignalResults = {
   [K in SignalName]: SignalResult<SignalPayloadMap[K]>;
 };
 
-const MISSING_SIGNAL_DATA = "Signal data was missing from the stored result.";
+/** What the sanitizer writes for a check a stored record never had. */
+export const MISSING_SIGNAL_DATA =
+  "Signal data was missing from the stored result.";
 
 function parseSignalResult<K extends SignalName>(
   name: K,
@@ -403,6 +407,13 @@ export interface ScanMetadata {
   scanId: string;
   startedAt: string;
   completedAt: string;
+  /**
+   * When the providers actually ran. Equal to `completedAt` on a fresh
+   * scan; a cache hit keeps the original time, so a signed share never
+   * claims fresher evidence than it has. Optional for in-memory records;
+   * the sanitizer defaults older records to their own `completedAt`.
+   */
+  checkedAt?: string;
   cacheHit: boolean;
   partialFailure: boolean;
   signalCount: number;
@@ -423,6 +434,7 @@ function parseScanMetadata(
     scanId: tolerantString("").parse(record.scanId),
     startedAt,
     completedAt,
+    checkedAt: tolerantString(completedAt).parse(record.checkedAt),
     cacheHit: tolerantBoolean(false).parse(record.cacheHit),
     partialFailure: tolerantBoolean(false).parse(record.partialFailure),
     signalCount: nonNegative(
@@ -432,6 +444,24 @@ function parseScanMetadata(
   };
 }
 
+/** Longest `?shared=` payload accepted anywhere (page, image, history). */
+export const SHARED_PAYLOAD_MAX_LENGTH = 12_000;
+
+/** base64url of an HMAC-SHA256 digest: 32 bytes, 43 characters, no padding. */
+export const SHARE_SIGNATURE_PATTERN = /^[A-Za-z0-9_-]{43}$/;
+
+/**
+ * The share link the server issued with a result: the canonical snapshot
+ * payload and, when a signing secret is configured, its HMAC. Absent on
+ * results from before signing and on anything the sanitizer rejects.
+ */
+export const resultShareSchema = z.object({
+  payload: z.string().min(1).max(SHARED_PAYLOAD_MAX_LENGTH),
+  sig: z.string().regex(SHARE_SIGNATURE_PATTERN).optional().catch(undefined),
+});
+
+export type ResultShare = z.infer<typeof resultShareSchema>;
+
 export interface AnalysisResult {
   id: string;
   url: string;
@@ -439,6 +469,8 @@ export interface AnalysisResult {
   signals: SignalResults;
   threatInfo: ThreatInfo | null;
   metadata: ScanMetadata;
+  /** Server-issued share link parts; optional so older data still parses. */
+  share?: ResultShare;
 }
 
 export type HistoryEntry = AnalysisResult & { savedAt: string };
@@ -471,6 +503,7 @@ export function createAnalysisResultSchema(fallbackTimestamp: string) {
         : null;
       const metadata = parseScanMetadata(record.metadata, fallbackTimestamp);
       const id = tolerantString("").parse(record.id).trim() || metadata.scanId;
+      const share = resultShareSchema.safeParse(record.share);
 
       return {
         id,
@@ -481,6 +514,7 @@ export function createAnalysisResultSchema(fallbackTimestamp: string) {
         signals: signalResultsSchema.parse(record.signals),
         threatInfo,
         metadata,
+        ...(share.success ? { share: share.data } : {}),
       };
     });
 }
@@ -686,11 +720,24 @@ export const batchEventSchema = z.discriminatedUnion("type", [
  * Shared snapshots ride in a URL query parameter, so unlike stored results
  * this gate is strict: wrong types or oversized fields reject outright.
  */
+/**
+ * The eight-cell signature: one per-signal severity in `signalNames` order.
+ * Shared snapshots carry it so the shared view and its preview image can
+ * draw the strip without the full signal payloads.
+ */
+export const signalSignatureSchema = z
+  .array(z.enum(severities))
+  .length(signalNames.length);
+
+export type SignalSignature = z.infer<typeof signalSignatureSchema>;
+
 export const sharedSnapshotSchema = z.object({
   verdict: verdictSchema,
   url: z.string().max(2048),
   summary: z.string().max(600),
   capturedAt: z.string().max(128),
+  // Added with the eight-cell strip; links shared before it still parse.
+  signature: signalSignatureSchema.optional().catch(undefined),
 });
 
 export type SharedSnapshot = z.infer<typeof sharedSnapshotSchema>;
