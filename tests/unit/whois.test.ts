@@ -58,6 +58,17 @@ describe("runWhoisSignal", () => {
     expect(result.observations).toEqual([]);
   });
 
+  it("identifies itself to rdap.org, which rejects anonymous clients", async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(new Response(null, { status: 404 }));
+
+    await runWhoisSignal("https://example.com");
+
+    const headers = new Headers(fetchMock.mock.calls[0]?.[1]?.headers);
+    expect(headers.get("user-agent")).toMatch(/^scrutinix\//);
+  });
+
   it("propagates network failures as signal errors instead of fake success", async () => {
     vi.spyOn(globalThis, "fetch").mockRejectedValue(
       new Error("Timed out after 8000ms"),

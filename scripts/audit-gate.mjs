@@ -45,7 +45,20 @@ const REQUIRED_FIELDS = ["id", "package", "reviewed", "expires", "reason"];
 //
 // Entries take the shape { id, package, reviewed, expires, reason } -- see
 // REQUIRED_FIELDS. Empty is the healthy state.
-const ACCEPTED_ADVISORIES = [];
+const ACCEPTED_ADVISORIES = [
+  {
+    id: "GHSA-vfj7-8cjw-p6xm",
+    package: "braces",
+    reviewed: "2026-10-06",
+    expires: "2026-12-05",
+    reason:
+      "Dev-only: reached through @next/eslint-plugin-next -> fast-glob -> " +
+      "micromatch, which expands the repo's own lint globs. No untrusted " +
+      "pattern reaches braces, and it is absent from the deployed functions. " +
+      "There is no patched release (3.0.3 is the latest publish and sits " +
+      "inside the affected range).",
+  },
+];
 
 await main();
 

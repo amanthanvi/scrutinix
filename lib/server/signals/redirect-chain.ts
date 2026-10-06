@@ -4,6 +4,7 @@ import type { IncomingMessage } from "node:http";
 
 import { analyzePageContent } from "@/lib/domain/content-analysis";
 import type { RedirectData } from "@/lib/domain/types";
+import { SCRUTINIX_USER_AGENT } from "@/lib/server/http";
 import {
   assertPublicNetworkTarget,
   selectPublicProbeAddresses,
@@ -222,7 +223,7 @@ async function requestRedirectHopAtAddress(
         servername,
         headers: {
           host: target.host,
-          "user-agent": "scrutinix/3.0",
+          "user-agent": SCRUTINIX_USER_AGENT,
         },
       },
       (response) => {

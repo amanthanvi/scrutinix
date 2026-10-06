@@ -41,6 +41,7 @@
     "test:coverage": "vitest --config vitest.unit.config.ts --coverage --run",
     "test:e2e": "node ./scripts/run-e2e.mjs",
     "audit:ci": "node ./scripts/audit-gate.mjs",
+    "check:trace": "node ./scripts/check-function-trace.mjs",
     "lighthouse": "node ./scripts/run-lighthouse.mjs"
   },
   "dependencies": {
@@ -106,6 +107,7 @@
     },
     "postcss": "8.5.28",
     "sharp": "0.35.4",
+    "source-map-js": "1.2.2",
     "ws": "8.21.1"
   }
 }

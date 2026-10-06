@@ -1,3 +1,6 @@
+/** Outbound identity; rdap.org rejects requests with no or a generic UA (403). */
+export const SCRUTINIX_USER_AGENT = "scrutinix/3.0";
+
 export async function fetchWithTimeout(
   input: RequestInfo | URL,
   init: RequestInit = {},

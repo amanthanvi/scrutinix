@@ -522,7 +522,7 @@ describe("analysis routes", () => {
           data: {
             transformerModel: null,
             warnings: [
-              "Classifier unavailable. Falling back to lexical heuristics only.",
+              "The local URL classifier is unavailable. Falling back to lexical heuristics only.",
             ],
           },
         },
