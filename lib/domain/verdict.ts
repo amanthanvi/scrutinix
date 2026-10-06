@@ -1,4 +1,5 @@
 import { capitalize, countOf, formatAge, formatList } from "@/lib/domain/copy";
+import { getLimitedChecks } from "@/lib/domain/coverage";
 import {
   describeFeedMatch,
   describeSafeBrowsingThreats,
@@ -147,6 +148,10 @@ export function buildThreatAssessment(
   const reasons = [...new Set(contributions.map((item) => item.reason))];
   const categories = [...new Set(contributions.map((item) => item.category))];
   const limitations = buildLimitations(signals);
+  // The "some checks were limited" claim and the coverage caveat come from
+  // this one list; `limitations` keeps the detailed strings for Details and
+  // the confidence math.
+  const limitedCoverage = getLimitedChecks(signals).length > 0;
   const confidence = calculateConfidence({
     signals,
     verdict,
@@ -170,16 +175,11 @@ export function buildThreatAssessment(
     ),
     confidenceReasons: buildConfidenceReasons(signals, verdict, limitations),
     score,
-    summary: buildSummary(
-      verdict,
-      contributions,
-      reasons,
-      limitations.length > 0,
-    ),
+    summary: buildSummary(verdict, contributions, reasons, limitedCoverage),
     categories,
     reasons: reasons.length ? reasons : ["No check flagged this link."],
     recommendations: buildRecommendations(verdict, {
-      limitedCoverage: limitations.length > 0,
+      limitedCoverage,
       // Same rule as the "Probably safe" imperative, so the first "What
       // to do" item never repeats it.
       provisional: confidenceLabel !== "high" || hasPositiveEvidence,

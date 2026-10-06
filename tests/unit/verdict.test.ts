@@ -1709,3 +1709,159 @@ describe("Safe recommendations", () => {
     );
   });
 });
+
+describe("limited coverage: summary and caveat agree", () => {
+  const LIMITED = /some checks were limited/;
+
+  /**
+   * Builds the verdict, then checks the agreement both ways: the summary
+   * claims a limit exactly when the caveat names one, and the caveat
+   * names the expected check.
+   */
+  function assess(signals: SignalResults) {
+    const { verdict, threatInfo } = buildThreatAssessment(signals);
+    const summary = threatInfo?.summary ?? "";
+    const caveat = getCoverageCaveat({ verdict, signals });
+    expect(LIMITED.test(summary)).toBe(caveat !== null);
+    return { verdict, threatInfo, summary, caveat };
+  }
+
+  it("claims no limit and names nothing when every check ran in full", async () => {
+    const { verdict, summary, caveat } = assess(
+      await fixtureSignals("example.com"),
+    );
+    expect(verdict).toBe("safe");
+    expect(summary).not.toMatch(LIMITED);
+    expect(caveat).toBeNull();
+  });
+
+  it("names an SSL certificate that couldn't be fully verified", async () => {
+    const signals = await fixtureSignals("example.com");
+    const baseline = buildThreatAssessment(signals);
+    if (!signals.ssl.data) throw new Error("fixture lost its SSL data");
+    signals.ssl.data.validationState = "warning";
+    signals.ssl.data.observations = [
+      "The certificate chain could not be fully verified.",
+    ];
+
+    const { verdict, threatInfo, summary, caveat } = assess(signals);
+    expect(verdict).toBe("safe");
+    expect(threatInfo?.score).toBe(baseline.threatInfo?.score);
+    expect(summary).toMatch(LIMITED);
+    expect(caveat).toBe("TLS Certificate couldn't be fully verified.");
+  });
+
+  it("names an SSL warning even when it carries no observation text", async () => {
+    const signals = await fixtureSignals("example.com");
+    if (!signals.ssl.data) throw new Error("fixture lost its SSL data");
+    signals.ssl.data.validationState = "warning";
+    signals.ssl.data.observations = [];
+
+    const { summary, caveat } = assess(signals);
+    expect(summary).toMatch(LIMITED);
+    expect(caveat).toBe("TLS Certificate couldn't be fully verified.");
+  });
+
+  it("names a redirect chain that couldn't reach the site", async () => {
+    const signals = await fixtureSignals("example.com");
+    if (!signals.redirectChain.data) {
+      throw new Error("fixture lost its redirect data");
+    }
+    signals.redirectChain.data.reachable = false;
+    signals.redirectChain.data.terminalStatus = null;
+    signals.redirectChain.data.observations = [
+      "The site did not answer the redirect probe.",
+    ];
+
+    // TLS still answered, so the host isn't Unknown.
+    const { verdict, summary, caveat } = assess(signals);
+    expect(verdict).toBe("safe");
+    expect(summary).toMatch(LIMITED);
+    expect(caveat).toBe("Redirect Chain couldn't reach the site.");
+  });
+
+  it("names a WHOIS lookup that was unavailable", async () => {
+    const signals = await fixtureSignals("example.com");
+    if (!signals.whois.data) throw new Error("fixture lost its WHOIS data");
+    signals.whois.data.available = false;
+    signals.whois.data.observations = ["RDAP returned no record."];
+
+    const { verdict, summary, caveat } = assess(signals);
+    expect(verdict).toBe("safe");
+    expect(summary).toMatch(LIMITED);
+    expect(caveat).toBe("Domain Registration couldn't be looked up.");
+  });
+
+  it("names a stale VirusTotal analysis", async () => {
+    const signals = await fixtureSignals("example.com");
+    if (!signals.virusTotal.data) {
+      throw new Error("fixture lost its VirusTotal data");
+    }
+    signals.virusTotal.data.lastAnalysisDate = new Date(
+      Date.now() - 90 * 24 * 60 * 60 * 1000,
+    ).toISOString();
+
+    const { verdict, summary, caveat } = assess(signals);
+    expect(verdict).toBe("safe");
+    expect(summary).toMatch(LIMITED);
+    expect(caveat).toBe("VirusTotal's analysis is 90 days old.");
+  });
+
+  it("names a check that errored", async () => {
+    const signals = await fixtureSignals("example.com");
+    signals.dns = {
+      status: "error",
+      data: null,
+      error: "DNS lookup timed out.",
+      durationMs: 5_000,
+    };
+
+    const { verdict, summary, caveat } = assess(signals);
+    expect(verdict).toBe("safe");
+    expect(summary).toMatch(LIMITED);
+    expect(caveat).toBe("DNS Profile didn't finish.");
+  });
+
+  it("names a skipped check", async () => {
+    const signals = await fixtureSignals("example.com");
+    signals.googleSafeBrowsing = {
+      status: "skipped",
+      data: null,
+      error: "Google Safe Browsing is not configured.",
+      durationMs: 0,
+    };
+
+    const { verdict, summary, caveat } = assess(signals);
+    expect(verdict).toBe("safe");
+    expect(summary).toMatch(LIMITED);
+    expect(caveat).toBe("Google Safe Browsing doesn't apply to this link.");
+  });
+
+  it("names every limited check at once, in one sentence", async () => {
+    const signals = await fixtureSignals("example.com");
+    if (!signals.ssl.data || !signals.whois.data) {
+      throw new Error("fixture lost its SSL or WHOIS data");
+    }
+    signals.ssl.data.validationState = "warning";
+    signals.whois.data.available = false;
+    signals.dns = { status: "error", data: null, error: "x", durationMs: 1 };
+
+    const { summary, caveat } = assess(signals);
+    expect(summary).toMatch(LIMITED);
+    expect(caveat).toBe(
+      "DNS Profile didn't finish; TLS Certificate couldn't be fully verified; Domain Registration couldn't be looked up.",
+    );
+  });
+
+  it("lets Unknown's summary alone say the site didn't respond", async () => {
+    const signals = await fixtureSignals("unreachable.scrutinix.test");
+    const { verdict, threatInfo } = buildThreatAssessment(signals);
+    const summary = threatInfo?.summary;
+    expect(verdict).toBe("unknown");
+    expect(summary).toMatch(/didn't respond/);
+    expect(summary).not.toMatch(/some checks were limited/);
+    expect(getCoverageCaveat({ verdict, signals }) ?? "").not.toMatch(
+      /couldn't reach the site/,
+    );
+  });
+});
