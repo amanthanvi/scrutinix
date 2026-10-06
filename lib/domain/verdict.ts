@@ -180,7 +180,8 @@ function applyExculpatoryEvidence(
     whois.status === "success" &&
     whois.data &&
     whois.data.ageDays !== null &&
-    whois.data.ageDays >= 365 * 5
+    whois.data.ageDays >= 365 * 5 &&
+    !whois.data.subdomainOf
   ) {
     contributions.push({
       score: -8,

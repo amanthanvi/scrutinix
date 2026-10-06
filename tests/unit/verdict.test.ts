@@ -755,6 +755,37 @@ describe("buildThreatAssessment", () => {
     expect(twoScore).toBeLessThan(25);
   });
 
+  it("grants the registration-age discount only to the registered domain itself", () => {
+    const withAge = (subdomainOf?: string) => {
+      const signals = createPendingSignalResults();
+      signals.whois = {
+        status: "success",
+        error: null,
+        durationMs: 12,
+        data: {
+          subjectType: "domain",
+          available: true,
+          registrar: "Example Registrar",
+          registeredAt: "2010-01-01T00:00:00.000Z",
+          updatedAt: null,
+          expiresAt: null,
+          ageDays: 365 * 15,
+          country: null,
+          handle: null,
+          rdapUrl: "https://rdap.example.com/domain/example.com",
+          ...(subdomainOf ? { subdomainOf } : {}),
+          observations: [],
+        },
+      };
+      return buildThreatAssessment(signals).threatInfo?.reasons.join(" ") ?? "";
+    };
+
+    expect(withAge()).toContain("years of registration history");
+    expect(withAge("example.com")).not.toContain(
+      "years of registration history",
+    );
+  });
+
   it("convicts on an exact URLhaus listing but not on a host-level listing", () => {
     const exact = createPendingSignalResults();
     withThreatFeedMatches(exact, [

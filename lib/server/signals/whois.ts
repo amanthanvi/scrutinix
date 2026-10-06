@@ -37,6 +37,11 @@ export async function runWhoisSignal(
   // stay distinct so they never inherit the platform's registration age.
   const domain = getRegistrableDomain(hostname);
   const rdapUrl = `https://rdap.org/domain/${encodeURIComponent(domain)}`;
+  // A deeper subdomain may be a tenant the PSL does not know about; its
+  // parent's registration history must not vouch for it.
+  const host = hostname.replace(/\.$/, "");
+  const subdomainOf =
+    host !== domain && host !== `www.${domain}` ? domain : undefined;
   const response = await fetchWithTimeout(
     rdapUrl,
     {
@@ -105,10 +110,17 @@ export async function runWhoisSignal(
     country: typeof payload?.country === "string" ? payload.country : null,
     handle: typeof payload?.handle === "string" ? payload.handle : null,
     rdapUrl: readHref(links[0]) ?? rdapUrl,
-    observations:
-      registrar === null
+    ...(subdomainOf ? { subdomainOf } : {}),
+    observations: [
+      ...(registrar === null
         ? ["The RDAP response did not identify a registrar name."]
-        : [],
+        : []),
+      ...(subdomainOf
+        ? [
+            `Registration data describes the parent domain ${subdomainOf}, not this subdomain.`,
+          ]
+        : []),
+    ],
   };
 }
 

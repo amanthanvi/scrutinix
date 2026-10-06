@@ -85,6 +85,28 @@ describe("runWhoisSignal", () => {
     ]);
   });
 
+  it("marks deeper subdomains so the parent's age cannot vouch for them", async () => {
+    const rdap = () =>
+      Response.json({
+        events: [
+          {
+            eventAction: "registration",
+            eventDate: "2010-01-01T00:00:00.000Z",
+          },
+        ],
+      });
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => rdap());
+
+    const apex = await runWhoisSignal("https://www.example.com./");
+    expect(apex.subdomainOf).toBeUndefined();
+
+    const tenant = await runWhoisSignal("https://tenant.example.com/");
+    expect(tenant.subdomainOf).toBe("example.com");
+    expect(tenant.observations.join(" ")).toContain(
+      "parent domain example.com",
+    );
+  });
+
   it("propagates network failures as signal errors instead of fake success", async () => {
     vi.spyOn(globalThis, "fetch").mockRejectedValue(
       new Error("Timed out after 8000ms"),
