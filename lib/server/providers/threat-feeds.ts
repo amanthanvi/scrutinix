@@ -1,5 +1,6 @@
 import { getEnv } from "@/lib/config/env";
 import { getRegistrableDomain } from "@/lib/domain/registrable-domain";
+import { isSharedPlatformHost } from "@/lib/domain/shared-platforms";
 import type { ThreatFeedsData } from "@/lib/domain/types";
 import { simplifyUrlForMatching } from "@/lib/domain/url";
 import { fetchWithTimeout } from "@/lib/server/http";
@@ -93,9 +94,23 @@ export async function runThreatFeedsProvider(
     throw new Error("All threat-feed lookups failed.");
   }
 
+  // On a path-tenanted platform a host-level listing describes other
+  // users' content; keep it visible but let only exact-URL evidence score.
+  const scoredMatches = isSharedPlatformHost(hostname)
+    ? matches.filter((match) => {
+        if (match.matchType !== "host") {
+          return true;
+        }
+        observations.push(
+          `${hostname} is a shared platform, so a host-level listing is not counted against this URL (${match.feed}: ${match.detail}).`,
+        );
+        return false;
+      })
+    : matches;
+
   return {
     checkedAt: new Date().toISOString(),
-    matches,
+    matches: scoredMatches,
     observations,
     warnings,
   };

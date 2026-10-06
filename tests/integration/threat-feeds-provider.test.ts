@@ -101,6 +101,58 @@ describe("threat feed provider", () => {
     expect(result.observations).toEqual([]);
   });
 
+  it("does not score host-level listings on a shared platform", async () => {
+    const listed = "https://github.com/someone/tool/releases/download/v1/x.exe";
+    server.use(
+      http.post("https://urlhaus-api.abuse.ch/v1/url/", async ({ request }) => {
+        const body = new URLSearchParams(await request.text());
+        return HttpResponse.json(
+          body.get("url") === listed
+            ? { query_status: "ok", threat: "malware_download" }
+            : { query_status: "no_results" },
+        );
+      }),
+      http.post("https://urlhaus-api.abuse.ch/v1/host/", () =>
+        HttpResponse.json({ query_status: "ok", url_count: 8006 }),
+      ),
+      http.get(
+        "https://openphish.com/feed.txt",
+        () => new HttpResponse("", { status: 200 }),
+      ),
+      http.post("https://threatfox-api.abuse.ch/api/v1/", () =>
+        HttpResponse.json({
+          query_status: "ok",
+          data: [
+            {
+              ioc: listed,
+              threat_type: "payload_delivery",
+              confidence_level: 100,
+            },
+          ],
+        }),
+      ),
+    );
+
+    const repo = await runThreatFeedsProvider(
+      "https://github.com/vercel/next.js",
+    );
+    expect(repo.matches).toEqual([]);
+    expect(repo.observations).toContainEqual(
+      expect.stringContaining(
+        "github.com is a shared platform, so a host-level listing is not counted",
+      ),
+    );
+
+    // Exact listings on the platform still convict.
+    const release = await runThreatFeedsProvider(listed);
+    expect(
+      release.matches.map((match) => [match.feed, match.matchType]),
+    ).toEqual([
+      ["urlhaus", "url"],
+      ["threatfox", "url"],
+    ]);
+  });
+
   it("warns when the URLhaus host fallback returns an HTTP error", async () => {
     server.use(
       http.post("https://urlhaus-api.abuse.ch/v1/url/", () =>
