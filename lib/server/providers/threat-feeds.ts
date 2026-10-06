@@ -34,7 +34,7 @@ export async function runThreatFeedsProvider(
     await Promise.allSettled([
       checkUrlhaus(url, signal),
       checkOpenPhishFeed(url),
-      checkThreatFox(hostname, signal),
+      checkThreatFox(url, signal),
       queryDnsbls(registrableDomain),
     ]);
 

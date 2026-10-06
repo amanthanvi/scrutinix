@@ -17,7 +17,7 @@ describe("checkThreatFox", () => {
     delete process.env.URLHAUS_AUTH_KEY;
     resetEnvForTests();
 
-    const outcome = await checkThreatFox("example.com");
+    const outcome = await checkThreatFox("https://example.com/");
 
     expect(outcome.match).toBeNull();
     expect(outcome.warning).toContain("no abuse.ch Auth-Key");
@@ -49,15 +49,75 @@ describe("checkThreatFox", () => {
     );
     vi.stubGlobal("fetch", fetchMock);
 
-    const outcome = await checkThreatFox("evil.example");
+    const outcome = await checkThreatFox("https://evil.example/payload");
 
     expect(outcome.match).toEqual({
       feed: "threatfox",
-      matchedUrl: "evil.example",
+      matchedUrl: "https://evil.example/payload",
       detail: "payload_delivery indicator for AgentTesla in ThreatFox",
       confidence: "high",
-      matchType: "host",
+      matchType: "url",
     });
+  });
+
+  it("does not let one listed URL convict the rest of a shared host", async () => {
+    vi.stubEnv("URLHAUS_AUTH_KEY", "abusech-key");
+    resetEnvForTests();
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        Response.json({
+          query_status: "ok",
+          data: [
+            {
+              ioc: "https://github.com/someone/tool/releases/download/v1/x.exe",
+              threat_type: "payload_delivery",
+              malware_printable: "Unknown Stealer",
+              confidence_level: 100,
+            },
+          ],
+        }),
+      ),
+    );
+
+    const other = await checkThreatFox("https://github.com/vercel/next.js");
+    expect(other.match).toBeNull();
+
+    const listed = await checkThreatFox(
+      "http://github.com/someone/tool/releases/download/v1/x.exe",
+    );
+    expect(listed.match).toMatchObject({
+      matchType: "url",
+      confidence: "high",
+    });
+  });
+
+  it("treats domain and host-root IOCs as host-level indicators", async () => {
+    vi.stubEnv("URLHAUS_AUTH_KEY", "abusech-key");
+    resetEnvForTests();
+
+    for (const ioc of [
+      "evil.example",
+      "evil.example:443",
+      "http://evil.example/",
+    ]) {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async () =>
+          Response.json({
+            query_status: "ok",
+            data: [{ ioc, threat_type: "botnet_cc", confidence_level: 90 }],
+          }),
+        ),
+      );
+
+      const outcome = await checkThreatFox("https://evil.example/any/path");
+      expect(outcome.match, ioc).toMatchObject({
+        matchedUrl: "evil.example",
+        matchType: "host",
+      });
+    }
   });
 
   it("returns no match for empty results and unrelated IOCs", async () => {
@@ -74,7 +134,7 @@ describe("checkThreatFox", () => {
       ),
     );
 
-    const outcome = await checkThreatFox("evil.example");
+    const outcome = await checkThreatFox("https://evil.example/");
     expect(outcome.match).toBeNull();
   });
 
@@ -102,7 +162,7 @@ describe("checkThreatFox", () => {
       ),
     );
 
-    const outcome = await checkThreatFox("example.com");
+    const outcome = await checkThreatFox("https://example.com/payload");
 
     expect(outcome.match).toBeNull();
   });
@@ -116,7 +176,7 @@ describe("checkThreatFox", () => {
       vi.fn(async () => new Response("", { status: 502 })),
     );
 
-    await expect(checkThreatFox("evil.example")).rejects.toThrow(
+    await expect(checkThreatFox("https://evil.example/")).rejects.toThrow(
       "ThreatFox lookup failed with status 502.",
     );
   });

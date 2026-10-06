@@ -1,5 +1,6 @@
 import { getEnv } from "@/lib/config/env";
 import type { ThreatFeedsData } from "@/lib/domain/types";
+import { simplifyUrlForMatching } from "@/lib/domain/url";
 import { fetchWithTimeout } from "@/lib/server/http";
 
 type FeedMatch = ThreatFeedsData["matches"][number];
@@ -11,11 +12,17 @@ const TIMEOUT_MS = 5_000;
  * abuse.ch ThreatFox IOC lookup by hostname. Reuses the URLhaus Auth-Key
  * (both services share the abuse.ch account key); without a key the lookup
  * is skipped with a coverage warning rather than failing the signal.
+ *
+ * A domain or IP IOC names the host itself. A URL IOC names one resource:
+ * on path-tenanted platforms (github.com, docs.google.com) one listed
+ * release download must not convict every other repo or document, so it
+ * only matches the exact scanned URL - unless it names the host root.
  */
 export async function checkThreatFox(
-  hostname: string,
+  url: string,
   signal?: AbortSignal,
 ): Promise<{ match: FeedMatch | null; warning: string | null }> {
+  const hostname = new URL(url).hostname;
   const env = getEnv();
   if (!env.URLHAUS_AUTH_KEY) {
     return {
@@ -53,19 +60,32 @@ export async function checkThreatFox(
   }
 
   const normalizedHostname = hostname.toLowerCase().replace(/\.$/, "");
-  const entry = payload.data.find((item): item is Record<string, unknown> => {
+  const scannedUrl = simplifyUrlForMatching(url);
+  const scannedKey = resourceKey(scannedUrl);
+  let entry: Record<string, unknown> | undefined;
+  let matchType: FeedMatch["matchType"] = "host";
+
+  for (const item of payload.data) {
     if (!item || typeof item !== "object") {
-      return false;
+      continue;
     }
 
-    const ioc = (item as Record<string, unknown>).ioc;
-    if (typeof ioc !== "string") {
-      return false;
+    const record = item as Record<string, unknown>;
+    const ioc = typeof record.ioc === "string" ? parseIoc(record.ioc) : null;
+    if (!ioc || ioc.hostname !== normalizedHostname) {
+      continue;
     }
 
-    const iocHostname = parseIocHostname(ioc);
-    return iocHostname === normalizedHostname;
-  });
+    if (ioc.url !== null && resourceKey(ioc.url) === scannedKey) {
+      entry = record;
+      matchType = "url";
+      break;
+    }
+
+    if (ioc.url === null) {
+      entry ??= record;
+    }
+  }
 
   if (!entry) {
     return { match: null, warning: null };
@@ -84,21 +104,34 @@ export async function checkThreatFox(
   return {
     match: {
       feed: "threatfox",
-      matchedUrl: hostname,
+      matchedUrl: matchType === "url" ? scannedUrl : normalizedHostname,
       detail: malware
         ? `${threatType} indicator for ${malware} in ThreatFox`
         : `${threatType} indicator in ThreatFox`,
       confidence: confidenceLevel >= 75 ? "high" : "medium",
-      matchType: "host",
+      matchType,
     },
     warning: null,
   };
 }
 
-function parseIocHostname(ioc: string): string | null {
+/** Feeds often list http:// while users paste https://; compare without the scheme. */
+function resourceKey(url: string) {
+  return url.replace(/^https?:\/\//i, "");
+}
+
+/** `url` is null when the IOC names only a host (domain, ip:port, or root URL). */
+function parseIoc(
+  ioc: string,
+): { hostname: string; url: string | null } | null {
   try {
-    const value = ioc.includes("://") ? ioc : `http://${ioc}`;
-    return new URL(value).hostname.toLowerCase().replace(/\.$/, "");
+    const isUrl = ioc.includes("://");
+    const parsed = new URL(isUrl ? ioc : `http://${ioc}`);
+    const namesResource = isUrl && (parsed.pathname !== "/" || parsed.search);
+    return {
+      hostname: parsed.hostname.toLowerCase().replace(/\.$/, ""),
+      url: namesResource ? simplifyUrlForMatching(ioc) : null,
+    };
   } catch {
     return null;
   }
