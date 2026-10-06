@@ -63,7 +63,7 @@ describe("queryDnsbls", () => {
     expect(outcome.matches).toContainEqual({
       feed: "spamhaus-dbl",
       matchedUrl: "phish.example",
-      detail: "listed as a phishing domain by Spamhaus DBL",
+      detail: "lists this domain as a phishing domain",
       confidence: "high",
       matchType: "host",
     });
@@ -78,7 +78,7 @@ describe("queryDnsbls", () => {
     expect(outcome.matches).toContainEqual(
       expect.objectContaining({
         feed: "surbl",
-        detail: "listed as phishing by SURBL",
+        detail: "lists this domain for phishing",
         confidence: "high",
       }),
     );

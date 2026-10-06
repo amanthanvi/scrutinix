@@ -66,7 +66,7 @@ describe("threat feed provider", () => {
       {
         feed: "openphish",
         matchedUrl: "https://example.com",
-        detail: "listed in the OpenPhish community feed",
+        detail: "lists this exact link as phishing",
         confidence: "high",
         matchType: "url",
       },
@@ -93,7 +93,7 @@ describe("threat feed provider", () => {
     expect(result.matches).toContainEqual({
       feed: "urlhaus",
       matchedUrl: "bad-host.example",
-      detail: "host has 12 malware URL listings in URLhaus",
+      detail: "lists 12 malware links on this host",
       confidence: "medium",
       matchType: "host",
     });
@@ -139,7 +139,7 @@ describe("threat feed provider", () => {
     expect(repo.matches).toEqual([]);
     expect(repo.observations).toContainEqual(
       expect.stringContaining(
-        "github.com is a shared platform, so a host-level listing is not counted",
+        "github.com is a shared platform, so this host-level listing is not counted against this link: URLhaus lists",
       ),
     );
 
@@ -271,7 +271,8 @@ describe("threat feed provider", () => {
     expect(result.matches).toContainEqual({
       feed: "threatfox",
       matchedUrl: "evil.example",
-      detail: "botnet_cc indicator for Cobalt Strike in ThreatFox",
+      detail:
+        "lists this host as an indicator of botnet command-and-control (Cobalt Strike)",
       confidence: "high",
       matchType: "host",
     });

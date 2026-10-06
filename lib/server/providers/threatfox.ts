@@ -1,4 +1,5 @@
 import { getEnv } from "@/lib/config/env";
+import { threatIndicatorPhrase } from "@/lib/domain/feed-copy";
 import type { ThreatFeedsData } from "@/lib/domain/types";
 import { simplifyUrlForMatching } from "@/lib/domain/url";
 import { fetchWithTimeout } from "@/lib/server/http";
@@ -90,21 +91,28 @@ export async function checkThreatFox(
   // entry must not mask a strong listing of the whole host.
   if (exact && confidenceLevel(exact) >= confidenceLevel(hostIoc)) {
     return {
-      match: toMatch(exact, "url", simplifyUrlForMatching(url)),
+      match: toMatch(exact, "url", simplifyUrlForMatching(url), "this link"),
       warning: null,
     };
   }
 
   if (hostIoc) {
-    return { match: toMatch(hostIoc, "host", hostname), warning: null };
+    return {
+      match: toMatch(hostIoc, "host", hostname, "this host"),
+      warning: null,
+    };
   }
 
   if (elsewhereOnHost) {
-    const match = toMatch(elsewhereOnHost, "host", hostname);
+    const match = toMatch(
+      elsewhereOnHost,
+      "host",
+      hostname,
+      "another link on this host",
+    );
     return {
       match: {
         ...match,
-        detail: `host has another URL listed as a ${match.detail}`,
         confidence: "medium",
         listedElsewhereOnHost: true,
       },
@@ -119,9 +127,10 @@ function toMatch(
   entry: Record<string, unknown>,
   matchType: NonNullable<FeedMatch["matchType"]>,
   matchedUrl: string,
+  subject: string,
 ): FeedMatch {
   const threatType =
-    typeof entry.threat_type === "string" ? entry.threat_type : "IOC";
+    typeof entry.threat_type === "string" ? entry.threat_type : null;
   const malware =
     typeof entry.malware_printable === "string" &&
     entry.malware_printable !== "Unknown malware"
@@ -131,9 +140,7 @@ function toMatch(
   return {
     feed: "threatfox",
     matchedUrl,
-    detail: malware
-      ? `${threatType} indicator for ${malware} in ThreatFox`
-      : `${threatType} indicator in ThreatFox`,
+    detail: `lists ${subject} as ${threatIndicatorPhrase(threatType, malware)}`,
     confidence: confidenceLevel(entry) >= 75 ? "high" : "medium",
     matchType,
   };

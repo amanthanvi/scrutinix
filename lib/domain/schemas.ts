@@ -187,6 +187,12 @@ export const threatFeedsDataSchema = z.object({
         "surbl",
       ]),
       matchedUrl: tolerantString(""),
+      /**
+       * A lowercase clause that completes a sentence starting with the
+       * feed's display name, e.g. "lists this link as phishing". Never
+       * repeat the feed name here; `lib/domain/feed-copy.ts` adds it and
+       * also tolerates older free-form strings.
+       */
       detail: tolerantString("listed"),
       confidence: z.enum(["medium", "high"]).catch("medium"),
       /** "url" = exact listing, "host" = hostname-level listing. */
@@ -376,6 +382,12 @@ export const threatInfoSchema = z.object({
   confidenceLabel: z.enum(["low", "moderate", "high"]).catch("low"),
   confidenceReasons: stringArray,
   hasPositiveEvidence: tolerantBoolean(false),
+  /**
+   * Checks that added score to the verdict, in signal order. Absent on
+   * results stored before it existed; the client then falls back to the
+   * per-signal severity.
+   */
+  scoredSignals: z.array(z.enum(signalNames)).optional().catch(undefined),
   score: finiteNumber(0).transform(clampScore),
   summary: tolerantString(""),
   categories: stringArray,

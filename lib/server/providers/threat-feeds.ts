@@ -1,4 +1,6 @@
 import { getEnv } from "@/lib/config/env";
+import { countOf } from "@/lib/domain/copy";
+import { describeFeedMatch, humanizeThreatType } from "@/lib/domain/feed-copy";
 import { getRegistrableDomain } from "@/lib/domain/registrable-domain";
 import { isSharedPlatformHost } from "@/lib/domain/shared-platforms";
 import type { ThreatFeedsData } from "@/lib/domain/types";
@@ -102,7 +104,7 @@ export async function runThreatFeedsProvider(
           return true;
         }
         observations.push(
-          `${hostname} is a shared platform, so a host-level listing is not counted against this URL (${match.feed}: ${match.detail}).`,
+          `${hostname} is a shared platform, so this host-level listing is not counted against this link: ${describeFeedMatch(match)}`,
         );
         return false;
       })
@@ -157,7 +159,7 @@ async function checkUrlhaus(
       match: {
         feed: "urlhaus" as const,
         matchedUrl: simplifyUrlForMatching(url),
-        detail: threat ?? urlStatus ?? "listed in URLhaus",
+        detail: urlhausUrlClause(threat, urlStatus),
         confidence: "high" as const,
         matchType: "url" as const,
       },
@@ -223,11 +225,23 @@ async function checkUrlhausHost(
     return {
       feed: "urlhaus",
       matchedUrl: hostname,
-      detail: `host has ${urlCount} malware URL listing${urlCount === 1 ? "" : "s"} in URLhaus`,
+      detail: `lists ${countOf(urlCount, "malware link")} on this host`,
       confidence: "medium",
       matchType: "host",
     };
   }
 
   return null;
+}
+
+/** The `detail` clause for an exact URLhaus listing (URLhaus is malware-only). */
+function urlhausUrlClause(threat: string | null, urlStatus: string | null) {
+  if (threat === "malware_download") {
+    return "lists this link as a malware download";
+  }
+
+  const qualifier = threat ? humanizeThreatType(threat) : urlStatus;
+  return qualifier
+    ? `lists this link as malware (${qualifier})`
+    : "lists this link as malware";
 }
