@@ -315,13 +315,13 @@ function feedMatchWeight(match: FeedMatch): {
         ? { score: 25, quality: "medium" }
         : { score: 55, quality: "high" };
     case "threatfox":
-      // A high-confidence URL or host IOC convicts. A medium host-level hit
-      // (often a URL listed elsewhere on a shared host) only corroborates.
-      if (match.confidence === "high") {
-        return { score: 55, quality: "high" };
+      // A listed URL or host IOC convicts at high confidence; a different
+      // URL listed on a shared host only corroborates, like a URLhaus host.
+      if (match.listedElsewhereOnHost) {
+        return { score: 25, quality: "medium" };
       }
-      return match.matchType === "host"
-        ? { score: 25, quality: "medium" }
+      return match.confidence === "high"
+        ? { score: 55, quality: "high" }
         : { score: 40, quality: "medium" };
     case "spamhaus-dbl":
       if (match.confidence === "high") {

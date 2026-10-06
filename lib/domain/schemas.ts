@@ -191,6 +191,8 @@ export const threatFeedsDataSchema = z.object({
       confidence: z.enum(["medium", "high"]).catch("medium"),
       /** "url" = exact listing, "host" = hostname-level listing. */
       matchType: z.enum(["url", "host"]).optional().catch(undefined),
+      /** Host-level only because a different URL on the host is listed. */
+      listedElsewhereOnHost: z.boolean().optional().catch(undefined),
     }),
   ),
   /** Informational notes (e.g. URLhaus responded but this exact URL is not listed). */

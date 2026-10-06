@@ -104,6 +104,7 @@ export async function checkThreatFox(
         ...match,
         detail: `host has another URL listed as a ${match.detail}`,
         confidence: "medium",
+        listedElsewhereOnHost: true,
       },
       warning: null,
     };

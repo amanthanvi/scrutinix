@@ -89,6 +89,7 @@ describe("checkThreatFox", () => {
         "host has another URL listed as a payload_delivery indicator for Unknown Stealer in ThreatFox",
       confidence: "medium",
       matchType: "host",
+      listedElsewhereOnHost: true,
     });
 
     const listed = await checkThreatFox(

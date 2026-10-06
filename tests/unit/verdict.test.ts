@@ -803,11 +803,26 @@ describe("buildThreatAssessment", () => {
           "host has another URL listed as a payload_delivery indicator in ThreatFox",
         confidence: "medium",
         matchType: "host",
+        listedElsewhereOnHost: true,
       },
     ]);
     const result = buildThreatAssessment(shared);
     expect(result.verdict).toBe("suspicious");
     expect(result.threatInfo?.score).toBe(50);
+  });
+
+  it("still weighs a medium ThreatFox host IOC above host corroboration", () => {
+    const hostIoc = createPendingSignalResults();
+    withThreatFeedMatches(hostIoc, [
+      {
+        feed: "threatfox",
+        matchedUrl: "evil.example",
+        detail: "botnet_cc indicator in ThreatFox",
+        confidence: "medium",
+        matchType: "host",
+      },
+    ]);
+    expect(buildThreatAssessment(hostIoc).threatInfo?.score).toBe(40);
   });
 
   it("counts exact feed evidence, but not hostname fallbacks, as high-confidence support", () => {
