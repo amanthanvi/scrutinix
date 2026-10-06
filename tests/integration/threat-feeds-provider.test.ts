@@ -143,6 +143,8 @@ describe("threat feed provider", () => {
       ),
     );
 
+    expect(repo.sharedPlatformListingsIgnored).toBe(true);
+
     // Exact listings on the platform still convict.
     const release = await runThreatFeedsProvider(listed);
     expect(
@@ -151,6 +153,43 @@ describe("threat feed provider", () => {
       ["urlhaus", "url"],
       ["threatfox", "url"],
     ]);
+  });
+
+  it("sets aside DNSBL listings of a shared platform's domain", async () => {
+    vi.mocked(queryDnsbls).mockResolvedValue({
+      matches: [
+        {
+          feed: "spamhaus-dbl",
+          matchedUrl: "bit.ly",
+          detail: "listed by Spamhaus DBL as an abused legitimate domain",
+          confidence: "medium",
+          matchType: "host",
+        },
+      ],
+      warnings: [],
+      observations: [],
+    });
+    server.use(
+      http.post("https://urlhaus-api.abuse.ch/v1/url/", () =>
+        HttpResponse.json({ query_status: "no_results" }),
+      ),
+      http.post("https://urlhaus-api.abuse.ch/v1/host/", () =>
+        HttpResponse.json({ query_status: "no_results" }),
+      ),
+      http.get(
+        "https://openphish.com/feed.txt",
+        () => new HttpResponse("", { status: 200 }),
+      ),
+    );
+    stubThreatFox();
+
+    const result = await runThreatFeedsProvider("https://bit.ly/3abcXYZ");
+
+    expect(result.matches).toEqual([]);
+    expect(result.sharedPlatformListingsIgnored).toBe(true);
+    expect(result.observations).toContainEqual(
+      expect.stringContaining("bit.ly is a shared platform"),
+    );
   });
 
   it("warns when the URLhaus host fallback returns an HTTP error", async () => {

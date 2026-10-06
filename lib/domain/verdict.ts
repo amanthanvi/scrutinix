@@ -181,7 +181,8 @@ function applyExculpatoryEvidence(
     whois.data &&
     whois.data.ageDays !== null &&
     whois.data.ageDays >= 365 * 5 &&
-    !whois.data.subdomainOf
+    !whois.data.subdomainOf &&
+    !whois.data.sharedPlatform
   ) {
     contributions.push({
       score: -8,
@@ -919,7 +920,9 @@ function countCleanHighConfidenceSources(signals: SignalResults) {
     signals.threatFeeds.status === "success" &&
     signals.threatFeeds.data &&
     (signals.threatFeeds.data.matches?.length ?? 0) === 0 &&
-    (signals.threatFeeds.data.warnings?.length ?? 0) === 0
+    (signals.threatFeeds.data.warnings?.length ?? 0) === 0 &&
+    // Set-aside platform listings are neither evidence nor a clean bill.
+    !signals.threatFeeds.data.sharedPlatformListingsIgnored
   ) {
     count += 1;
   }

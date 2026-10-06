@@ -100,6 +100,13 @@ describe("runWhoisSignal", () => {
     const apex = await runWhoisSignal("https://www.example.com./");
     expect(apex.subdomainOf).toBeUndefined();
 
+    const platform = await runWhoisSignal("https://github.com/vercel/next.js");
+    expect(platform.sharedPlatform).toBe(true);
+    expect(platform.observations.join(" ")).toContain(
+      "github.com is a shared platform",
+    );
+    expect(apex.sharedPlatform).toBeUndefined();
+
     const tenant = await runWhoisSignal("https://tenant.example.com/");
     expect(tenant.subdomainOf).toBe("example.com");
     expect(tenant.observations.join(" ")).toContain(

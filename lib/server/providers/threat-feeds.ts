@@ -113,6 +113,9 @@ export async function runThreatFeedsProvider(
     matches: scoredMatches,
     observations,
     warnings,
+    ...(scoredMatches.length < matches.length
+      ? { sharedPlatformListingsIgnored: true }
+      : {}),
   };
 }
 

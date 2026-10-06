@@ -29,14 +29,21 @@ interface DnsblZone {
  */
 const SPAMHAUS_ERROR_RANGE = /^127\.255\.255\.\d{1,3}$/;
 
-/** DQS key errors get a specific reason; the key itself is never echoed. */
+/**
+ * DQS key errors: the specific cause goes to server logs only; the public
+ * warning stays generic and the key itself is never echoed.
+ */
 const DQS_KEY_ERRORS: Record<string, string> = {
-  "127.255.255.250": "the Spamhaus DQS key is disabled",
-  "127.255.255.251": "the Spamhaus DQS key was rejected for this use",
+  "127.255.255.250": "dqs_key_disabled",
+  "127.255.255.251": "dqs_key_rejected",
 };
+const DQS_KEY_PUBLIC_REASON =
+  "the list did not accept this deployment's access key";
 
-/** DQS keys are a single alphanumeric DNS label; anything else could rewrite the query name. */
-const DQS_KEY_PATTERN = /^[a-z0-9]{8,64}$/i;
+/** DQS keys are a single alphanumeric DNS label (max 63); anything else could rewrite the query name. */
+const DQS_KEY_PATTERN = /^[a-z0-9]{8,63}$/i;
+
+let warnedMalformedKey = false;
 
 /**
  * With a DQS key, DBL is queried as <domain>.<key>.dbl.dq.spamhaus.net, which
@@ -44,11 +51,12 @@ const DQS_KEY_PATTERN = /^[a-z0-9]{8,64}$/i;
  * refuses most cloud resolvers, Vercel's included.
  */
 function spamhausZone(): string {
-  const key = getEnv().SPAMHAUS_DQS_KEY;
+  const key = getEnv().SPAMHAUS_DQS_KEY?.trim();
   if (key && DQS_KEY_PATTERN.test(key)) {
     return `${key}.dbl.dq.spamhaus.net`;
   }
-  if (key) {
+  if (key && !warnedMalformedKey) {
+    warnedMalformedKey = true;
     logWarn("dnsbl.dqs_key_malformed", {
       message:
         "SPAMHAUS_DQS_KEY is not a single alphanumeric label; using the public DBL mirror.",
@@ -116,10 +124,13 @@ const ZONE_DEFINITIONS: Array<
 
 const QUERY_TIMEOUT_MS = 2_000;
 const HEALTH_RECHECK_MS = 1000 * 60 * 60 * 6;
+/** A timeout or SERVFAIL says nothing lasting about the zone; retry soon. */
+const TRANSIENT_HEALTH_RECHECK_MS = 60_000;
 
 interface ZoneHealth {
   checkedAt: number;
   healthy: boolean;
+  ttlMs: number;
   /** Set when the self-test failed for a reason worth naming (a DQS key error). */
   reason?: string;
 }
@@ -130,6 +141,7 @@ declare global {
 
 export function resetDnsblStateForTests() {
   globalThis.__dnsblZoneHealth = undefined;
+  warnedMalformedKey = false;
 }
 
 function createResolver(): Resolver {
@@ -139,7 +151,12 @@ function createResolver(): Resolver {
 type LookupResult =
   | { status: "listed"; codes: string[] }
   | { status: "clean" }
-  | { status: "unavailable"; reason: string; keyError?: boolean };
+  | {
+      status: "unavailable";
+      reason: string;
+      keyError?: boolean;
+      transient?: boolean;
+    };
 
 async function lookupZone(
   resolver: Resolver,
@@ -150,7 +167,12 @@ async function lookupZone(
     const codes = await resolver.resolve4(`${name}.${zone}`);
     const keyError = codes.map((code) => DQS_KEY_ERRORS[code]).find(Boolean);
     if (keyError) {
-      return { status: "unavailable", reason: keyError, keyError: true };
+      logWarn("dnsbl.dqs_key_error", { feed: "spamhaus-dbl", error: keyError });
+      return {
+        status: "unavailable",
+        reason: DQS_KEY_PUBLIC_REASON,
+        keyError: true,
+      };
     }
     if (codes.some((code) => SPAMHAUS_ERROR_RANGE.test(code))) {
       return {
@@ -179,6 +201,7 @@ async function lookupZone(
     return {
       status: "unavailable",
       reason: `the lookup failed (${code || "network error"})`,
+      transient: true,
     };
   }
 }
@@ -195,7 +218,7 @@ async function checkZoneHealth(
 ): Promise<ZoneHealth> {
   const health = (globalThis.__dnsblZoneHealth ??= new Map());
   const cached = health.get(zone.zone);
-  if (cached && Date.now() - cached.checkedAt < HEALTH_RECHECK_MS) {
+  if (cached && Date.now() - cached.checkedAt < cached.ttlMs) {
     return cached;
   }
 
@@ -203,6 +226,10 @@ async function checkZoneHealth(
   const next: ZoneHealth = {
     checkedAt: Date.now(),
     healthy: result.status === "listed",
+    ttlMs:
+      result.status === "unavailable" && result.transient
+        ? TRANSIENT_HEALTH_RECHECK_MS
+        : HEALTH_RECHECK_MS,
     ...(result.status === "unavailable" && result.keyError
       ? { reason: result.reason }
       : {}),

@@ -202,7 +202,7 @@ describe("queryDnsbls", () => {
 
       expect(outcome.matches).toEqual([]);
       expect(outcome.warnings).toContain(
-        "spamhaus-dbl lookups are unavailable: the Spamhaus DQS key is disabled.",
+        "spamhaus-dbl lookups are unavailable: the list did not accept this deployment's access key.",
       );
       expect(JSON.stringify(outcome)).not.toContain(KEY);
     });
@@ -218,8 +218,65 @@ describe("queryDnsbls", () => {
 
       expect(outcome.matches).toEqual([]);
       expect(outcome.warnings).toContainEqual(
-        expect.stringContaining("DQS key was rejected"),
+        expect.stringContaining("did not accept this deployment's access key"),
       );
+    });
+
+    it("never leaks the key from a DNS error message", async () => {
+      useKey();
+      resolve4Mock.mockImplementation((name: string) => {
+        if (name === "test.surbl.org.multi.surbl.org") {
+          return Promise.resolve(["127.0.0.126"]);
+        }
+        if (name === `dbltest.com.${DQS}`) {
+          return Promise.resolve(["127.0.1.2"]);
+        }
+        const error = new Error(`queryA ETIMEOUT ${name}`) as Error & {
+          code: string;
+        };
+        error.code = "ETIMEOUT";
+        return Promise.reject(error);
+      });
+
+      const outcome = await queryDnsbls("any.example");
+
+      expect(outcome.warnings).toContain(
+        "spamhaus-dbl lookup failed: the lookup failed (ETIMEOUT).",
+      );
+      expect(JSON.stringify(outcome)).not.toContain(KEY);
+    });
+
+    it("treats resolver-block sentinels on the DQS zone as unavailable", async () => {
+      useKey();
+      routeDqs({
+        [`dbltest.com.${DQS}`]: ["127.0.1.2"],
+        [`any.example.${DQS}`]: ["127.255.255.254"],
+      });
+
+      const outcome = await queryDnsbls("any.example");
+
+      expect(outcome.matches).toEqual([]);
+      expect(outcome.warnings).toContainEqual(
+        expect.stringContaining("spamhaus-dbl lookup failed"),
+      );
+    });
+
+    it("trims the key and accepts up to the 63-character label limit", async () => {
+      const longKey = "a".repeat(63);
+      useKey(`  ${longKey}\n`);
+      routeLookups({});
+
+      await queryDnsbls("any.example");
+
+      const names = resolve4Mock.mock.calls.map(([name]) => String(name));
+      expect(names).toContain(`dbltest.com.${longKey}.dbl.dq.spamhaus.net`);
+
+      resolve4Mock.mockClear();
+      resetDnsblStateForTests();
+      useKey("a".repeat(64));
+      await queryDnsbls("any.example");
+      const fallback = resolve4Mock.mock.calls.map(([name]) => String(name));
+      expect(fallback).toContain("dbltest.com.dbl.spamhaus.org");
     });
 
     it("ignores a key that is not a single alphanumeric label", async () => {
@@ -232,6 +289,37 @@ describe("queryDnsbls", () => {
       expect(names).toContain("dbltest.com.dbl.spamhaus.org");
       expect(names.some((name) => name.includes("evil"))).toBe(false);
     });
+  });
+
+  it("retries a transiently failed self-test after a minute, not six hours", async () => {
+    vi.useFakeTimers();
+    try {
+      let spamhausUp = false;
+      resolve4Mock.mockImplementation((name: string) => {
+        if (name === "test.surbl.org.multi.surbl.org") {
+          return Promise.resolve(["127.0.0.126"]);
+        }
+        if (name === "dbltest.com.dbl.spamhaus.org" && spamhausUp) {
+          return Promise.resolve(["127.0.1.2"]);
+        }
+        if (name === "dbltest.com.dbl.spamhaus.org") {
+          const error = new Error("timeout") as Error & { code: string };
+          error.code = "ETIMEOUT";
+          return Promise.reject(error);
+        }
+        return nxdomain();
+      });
+
+      const first = await queryDnsbls("any.example");
+      expect(first.warnings).toHaveLength(1);
+
+      spamhausUp = true;
+      vi.advanceTimersByTime(61_000);
+      const second = await queryDnsbls("any.example");
+      expect(second.warnings).toEqual([]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("skips IP literals outright", async () => {

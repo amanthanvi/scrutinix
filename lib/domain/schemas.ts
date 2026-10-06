@@ -198,6 +198,8 @@ export const threatFeedsDataSchema = z.object({
   /** Informational notes (e.g. URLhaus responded but this exact URL is not listed). */
   observations: stringArray,
   warnings: stringArray,
+  /** Host-level listings were set aside because the host is a shared platform. */
+  sharedPlatformListingsIgnored: z.boolean().optional().catch(undefined),
 });
 
 export type ThreatFeedsData = z.infer<typeof threatFeedsDataSchema>;
@@ -235,6 +237,8 @@ export const whoisDataSchema = z.object({
   rdapUrl: tolerantString(""),
   /** Registered domain the record describes, when the scan was a deeper subdomain. */
   subdomainOf: z.string().optional().catch(undefined),
+  /** Path-tenanted platform: the registration describes the platform, not the publisher. */
+  sharedPlatform: z.boolean().optional().catch(undefined),
   observations: stringArray,
 });
 

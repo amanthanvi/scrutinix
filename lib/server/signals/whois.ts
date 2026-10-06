@@ -1,6 +1,7 @@
 import { isIP } from "node:net";
 
 import { getRegistrableDomain } from "@/lib/domain/registrable-domain";
+import { isSharedPlatformHost } from "@/lib/domain/shared-platforms";
 import type { WhoisData } from "@/lib/domain/types";
 import { fetchWithTimeout, SCRUTINIX_USER_AGENT } from "@/lib/server/http";
 import { getErrorMessage, SignalSkipError } from "@/lib/server/signal-error";
@@ -42,6 +43,7 @@ export async function runWhoisSignal(
   const host = hostname.replace(/\.$/, "");
   const subdomainOf =
     host !== domain && host !== `www.${domain}` ? domain : undefined;
+  const sharedPlatform = isSharedPlatformHost(host);
   const response = await fetchWithTimeout(
     rdapUrl,
     {
@@ -111,15 +113,20 @@ export async function runWhoisSignal(
     handle: typeof payload?.handle === "string" ? payload.handle : null,
     rdapUrl: readHref(links[0]) ?? rdapUrl,
     ...(subdomainOf ? { subdomainOf } : {}),
+    ...(sharedPlatform ? { sharedPlatform } : {}),
     observations: [
       ...(registrar === null
         ? ["The RDAP response did not identify a registrar name."]
         : []),
-      ...(subdomainOf
+      ...(sharedPlatform
         ? [
-            `Registration data describes the parent domain ${subdomainOf}, not this subdomain.`,
+            `${host} is a shared platform; its registration describes the platform, not whoever published this content.`,
           ]
-        : []),
+        : subdomainOf
+          ? [
+              `Registration data describes the parent domain ${subdomainOf}, not this subdomain.`,
+            ]
+          : []),
     ],
   };
 }
