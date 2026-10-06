@@ -35,7 +35,16 @@ const nextConfig: NextConfig = {
   // bundled model weights ride along with the analyze routes.
   serverExternalPackages: ["@huggingface/transformers", "onnxruntime-node"],
   outputFileTracingIncludes: {
-    "/api/analyze/**": ["./lib/server/ml/model/**"],
+    "/api/analyze/**": [
+      "./lib/server/ml/model/**",
+      // transformers loads the runtime via createRequire(), which file tracing
+      // cannot follow. Ship it by hand: JS + the Vercel (linux-x64) binary only.
+      "./node_modules/onnxruntime-node/package.json",
+      "./node_modules/onnxruntime-node/dist/**",
+      "./node_modules/onnxruntime-node/bin/napi-v6/linux/x64/**",
+      "./node_modules/onnxruntime-common/package.json",
+      "./node_modules/onnxruntime-common/dist/cjs/**",
+    ],
   },
   async headers() {
     return [

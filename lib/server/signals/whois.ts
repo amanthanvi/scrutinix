@@ -1,7 +1,7 @@
 import { isIP } from "node:net";
 
 import type { WhoisData } from "@/lib/domain/types";
-import { fetchWithTimeout } from "@/lib/server/http";
+import { fetchWithTimeout, SCRUTINIX_USER_AGENT } from "@/lib/server/http";
 import { getErrorMessage, SignalSkipError } from "@/lib/server/signal-error";
 
 /* RdapEvent interface removed — RDAP fields are now validated at runtime via asRecord(). */
@@ -38,6 +38,7 @@ export async function runWhoisSignal(
       signal,
       headers: {
         accept: "application/rdap+json, application/json",
+        "user-agent": SCRUTINIX_USER_AGENT,
       },
     },
     8_000,

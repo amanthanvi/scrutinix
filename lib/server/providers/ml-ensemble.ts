@@ -4,6 +4,7 @@ import { classifyConsensus } from "@/lib/domain/ml-consensus";
 import type { ClassificationFinding, MLSignalData } from "@/lib/domain/types";
 import { getUrlStructureRisk } from "@/lib/domain/url-structure-risk";
 import { normalizeUrlInput } from "@/lib/domain/url";
+import { logWarn } from "@/lib/server/logger";
 import { classifyUrlLocally } from "@/lib/server/ml/local-classifier";
 import { getErrorMessage } from "@/lib/server/signal-error";
 
@@ -54,8 +55,12 @@ export async function runMlEnsembleProvider(
   try {
     transformerModel = await classifyUrlLocally(url);
   } catch (error) {
+    // Raw errors can carry module paths and require stacks; keep them in logs.
+    logWarn("ml.classifier_unavailable", {
+      detail: getErrorMessage(error, "The local URL classifier failed."),
+    });
     warnings.push(
-      `${getErrorMessage(error, "The local URL classifier failed.")} Falling back to lexical heuristics only.`,
+      "The local URL classifier is unavailable. Falling back to lexical heuristics only.",
     );
   }
 
