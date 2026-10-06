@@ -16,6 +16,27 @@ export async function gotoApp(page: Page) {
   ).toBeVisible();
 }
 
+/**
+ * Wait for running entrance motion to settle so axe measures final colors.
+ * Infinite animations never finish, and React can cancel a transition when it
+ * re-renders after hydration - a cancelled animation's `finished` rejects with
+ * an AbortError - so only finite animations are awaited and cancellation
+ * counts as settled.
+ */
+export async function settleAnimations(page: Page) {
+  await page.evaluate(() =>
+    Promise.allSettled(
+      document
+        .getAnimations()
+        .filter(
+          (animation) =>
+            animation.effect?.getComputedTiming().endTime !== Infinity,
+        )
+        .map((animation) => animation.finished),
+    ),
+  );
+}
+
 /** Fill the single-scan input and submit it. */
 export async function submitSingleScan(page: Page, url: string) {
   const input = page.getByRole("textbox", { name: /url to analyze/i });
