@@ -231,6 +231,8 @@ export const whoisDataSchema = z.object({
   country: nullableString,
   handle: nullableString,
   rdapUrl: tolerantString(""),
+  /** Registered domain the record describes, when the scan was a deeper subdomain. */
+  subdomainOf: z.string().optional().catch(undefined),
   observations: stringArray,
 });
 

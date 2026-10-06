@@ -1,5 +1,6 @@
 import { isIP } from "node:net";
 
+import { getRegistrableDomain } from "@/lib/domain/registrable-domain";
 import type { WhoisData } from "@/lib/domain/types";
 import { fetchWithTimeout, SCRUTINIX_USER_AGENT } from "@/lib/server/http";
 import { getErrorMessage, SignalSkipError } from "@/lib/server/signal-error";
@@ -31,7 +32,16 @@ export async function runWhoisSignal(
     );
   }
 
-  const rdapUrl = `https://rdap.org/domain/${encodeURIComponent(hostname)}`;
+  // Registries answer only for the registered domain: www.wikipedia.org is a
+  // 400 and www.github.com a 404. Private-suffix tenants (safe.github.io)
+  // stay distinct so they never inherit the platform's registration age.
+  const domain = getRegistrableDomain(hostname);
+  const rdapUrl = `https://rdap.org/domain/${encodeURIComponent(domain)}`;
+  // A deeper subdomain may be a tenant the PSL does not know about; its
+  // parent's registration history must not vouch for it.
+  const host = hostname.replace(/\.$/, "");
+  const subdomainOf =
+    host !== domain && host !== `www.${domain}` ? domain : undefined;
   const response = await fetchWithTimeout(
     rdapUrl,
     {
@@ -100,10 +110,17 @@ export async function runWhoisSignal(
     country: typeof payload?.country === "string" ? payload.country : null,
     handle: typeof payload?.handle === "string" ? payload.handle : null,
     rdapUrl: readHref(links[0]) ?? rdapUrl,
-    observations:
-      registrar === null
+    ...(subdomainOf ? { subdomainOf } : {}),
+    observations: [
+      ...(registrar === null
         ? ["The RDAP response did not identify a registrar name."]
-        : [],
+        : []),
+      ...(subdomainOf
+        ? [
+            `Registration data describes the parent domain ${subdomainOf}, not this subdomain.`,
+          ]
+        : []),
+    ],
   };
 }
 

@@ -69,6 +69,44 @@ describe("runWhoisSignal", () => {
     expect(headers.get("user-agent")).toMatch(/^scrutinix\//);
   });
 
+  it("looks up the registered domain, keeping private-suffix tenants distinct", async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(new Response(null, { status: 404 }));
+
+    await runWhoisSignal("https://www.wikipedia.org/wiki/Main_Page");
+    await runWhoisSignal("https://login.example.co.uk/");
+    await runWhoisSignal("https://safe.github.io/");
+
+    expect(fetchMock.mock.calls.map(([input]) => String(input))).toEqual([
+      "https://rdap.org/domain/wikipedia.org",
+      "https://rdap.org/domain/example.co.uk",
+      "https://rdap.org/domain/safe.github.io",
+    ]);
+  });
+
+  it("marks deeper subdomains so the parent's age cannot vouch for them", async () => {
+    const rdap = () =>
+      Response.json({
+        events: [
+          {
+            eventAction: "registration",
+            eventDate: "2010-01-01T00:00:00.000Z",
+          },
+        ],
+      });
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => rdap());
+
+    const apex = await runWhoisSignal("https://www.example.com./");
+    expect(apex.subdomainOf).toBeUndefined();
+
+    const tenant = await runWhoisSignal("https://tenant.example.com/");
+    expect(tenant.subdomainOf).toBe("example.com");
+    expect(tenant.observations.join(" ")).toContain(
+      "parent domain example.com",
+    );
+  });
+
   it("propagates network failures as signal errors instead of fake success", async () => {
     vi.spyOn(globalThis, "fetch").mockRejectedValue(
       new Error("Timed out after 8000ms"),
