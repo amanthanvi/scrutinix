@@ -1,12 +1,15 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
-import { PublicPageShell } from "@/components/scrutinix/public-page-shell";
+import {
+  PROSE_MEASURE,
+  PublicPageShell,
+} from "@/components/scrutinix/public-page-shell";
 
 export const metadata: Metadata = {
   title: "About Scrutinix",
   description:
-    "How Scrutinix evaluates URLs with streamed multi-signal evidence and confidence scoring.",
+    "How Scrutinix checks a link against eight sources and turns what they find into a verdict.",
 };
 
 const scoreBands = [
@@ -28,24 +31,27 @@ export default function AboutPage() {
   return (
     <PublicPageShell
       title="How a scan becomes a verdict."
-      lead="Eight signals resolve independently and stream into one score. High-confidence reputation checks carry the most weight; local context keeps the result useful when a provider is degraded."
+      lead="Eight checks run at the same time and add up to one score. Reputation sources — lists of known bad links — count the most; checks of the link itself keep the result useful when a source is down."
     >
-      <section className="space-y-3">
+      <section id="scoring" className="scroll-mt-6 space-y-3">
         <SectionHeading>Scoring</SectionHeading>
-        <p className="max-w-[65ch] text-sm leading-6 text-[var(--sx-text-muted)]">
-          Safe Browsing matches, community feed hits, and multi-engine
-          detections move the verdict most. TLS quality, WHOIS age, DNS posture,
-          and redirect behavior are supporting evidence rather than the primary
-          driver.
+        <p
+          className={`${PROSE_MEASURE} text-sm leading-6 text-[var(--sx-text-muted)]`}
+        >
+          A Google Safe Browsing match, a threat-feed listing, or several
+          VirusTotal engines flagging a link move the verdict most. The
+          certificate, the domain&apos;s age, its DNS records, and where the
+          link redirects are supporting evidence.
         </p>
-        <dl className="max-w-[65ch] space-y-2 text-sm leading-6">
+        <dl className={`${PROSE_MEASURE} space-y-2 text-sm leading-6`}>
           <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-4">
             <dt className="w-40 shrink-0 font-medium text-[var(--sx-text)]">
-              Risk-moving
+              Moves the verdict
             </dt>
             <dd className="text-[var(--sx-text-muted)]">
-              Google Safe Browsing, threat feeds (URLhaus, OpenPhish),
-              VirusTotal detections, ML ensemble consensus.
+              Google Safe Browsing; threat feeds (URLhaus, OpenPhish, ThreatFox,
+              Spamhaus DBL, SURBL); VirusTotal; the link pattern model, a small
+              model that runs on our server and reads only the link&apos;s text.
             </dd>
           </div>
           <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-4">
@@ -53,8 +59,8 @@ export default function AboutPage() {
               Supporting
             </dt>
             <dd className="text-[var(--sx-text-muted)]">
-              TLS validation, WHOIS age and registrar, DNS anomalies,
-              redirect-chain hops.
+              The site&apos;s security certificate, domain age and registrar,
+              unusual DNS records, redirects.
             </dd>
           </div>
         </dl>
@@ -62,6 +68,14 @@ export default function AboutPage() {
 
       <section className="space-y-3">
         <SectionHeading>Score bands</SectionHeading>
+        <p
+          className={`${PROSE_MEASURE} text-sm leading-6 text-[var(--sx-text-muted)]`}
+        >
+          The score runs from 0 to 100. Unknown and Error results show no score:
+          the site didn&apos;t respond or the scan failed, so a number would
+          claim more than we know. Reputation checks still run on Unknown
+          results and are listed with the result.
+        </p>
         <dl className="max-w-xs">
           {scoreBands.map((band) => (
             <div
@@ -81,19 +95,24 @@ export default function AboutPage() {
 
       <section className="space-y-3">
         <SectionHeading>Confidence</SectionHeading>
-        <p className="max-w-[65ch] text-sm leading-6 text-[var(--sx-text-muted)]">
-          Confidence is coverage-aware, not just score bands. A safe verdict
-          loses confidence when primary reputation sources time out; a risky
-          verdict gains confidence when independent categories agree. Partial
-          coverage is always stated next to the verdict.
+        <p
+          className={`${PROSE_MEASURE} text-sm leading-6 text-[var(--sx-text-muted)]`}
+        >
+          Confidence says how much of the picture we saw. A Safe result loses
+          confidence when a major reputation source doesn&apos;t answer; a risky
+          result gains confidence when separate sources agree. Any check that
+          didn&apos;t finish is named next to the verdict.
         </p>
       </section>
 
       <section className="space-y-3">
         <SectionHeading>Using the scanner</SectionHeading>
-        <ul className="max-w-[65ch] space-y-2 text-sm leading-6 text-[var(--sx-text-muted)]">
+        <ul
+          className={`${PROSE_MEASURE} space-y-2 text-sm leading-6 text-[var(--sx-text-muted)]`}
+        >
           <li>
-            Each signal row expands to its full evidence — engines, certificate
+            Summary shows only the checks that drove the verdict; Full lists all
+            eight. Each row expands to its evidence — engines, certificate
             fields, redirect hops.
           </li>
           <li>
@@ -118,8 +137,8 @@ export default function AboutPage() {
             for what the server still processes.
           </li>
           <li>
-            URLhaus and OpenPhish treat exact listed URLs as high-confidence
-            evidence and hostname-only fallbacks as medium confidence. Browse
+            A feed listing of this exact link counts as strong evidence; a
+            listing of another link on the same site counts for less. Browse
             pages like urlhaus.abuse.ch/browse/ are not matches.
           </li>
         </ul>

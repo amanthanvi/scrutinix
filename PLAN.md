@@ -146,6 +146,24 @@ Observed results:
 - [x] Exempt known path-tenanted platforms from host-level feed scoring while exact-URL listings still convict (#56).
 - [x] Namespace shared-cache keys by Vercel environment and preview commit so previews cannot serve production results.
 
+### P27 Verdict trust fixes (2026-10-06, PR A of the redesign stack)
+
+Correctness, copy, and accessibility fixes in the current visual language; the
+visual redesign stacks on top and consumes the new pure modules.
+
+- [x] Feed reasons read as one sentence with proper feed names: `detail` is a clause after the feed's display name (`lib/domain/feed-copy.ts`), legacy strings are rewritten, and a contract test guards every provider literal.
+- [x] Every user-facing count agrees with its noun (`countOf`); verdict summaries name the evidence ("7 VirusTotal engines and URLhaus flagged this link.") instead of category jargon; Safe and Unknown each say their meaning once.
+- [x] `lib/domain/verdict-guidance.ts`: one imperative line per verdict (hedged for provisional Safe), no score for Unknown/Error, live-region announcement, and a coverage caveat that names limited checks and disappears when nothing was limited.
+- [x] Per-signal "safe" became neutral-gray "clear"; Unknown has its own slate token pair.
+- [x] Summary shows only the signals that drove the verdict plus one quiet-checks line that opens Full (`components/shared/signal-selection.ts`).
+- [x] "ML Ensemble" became "Link Pattern Model"; jargon removed from verdict copy and `/about` (which gained `#scoring` and a 31rem prose measure).
+- [x] Accessibility: imperative under a focusable verdict heading, score band + "How scoring works", verdict announcement on completion and focus on history/batch open, row names carry the finding, rows are list items, label-in-name for the Summary/Full switch, history heading and filter naming.
+- [x] Result actions moved after the evidence with scope-specific export labels; Analyze stays enabled (inline empty error) and drops to outline while a result is shown.
+- [x] History keeps one entry per normalized URL (upsert on save, older duplicates hidden on load). Investigation: no double-add bug; one entry per scan was the prior design.
+- [x] `scrollbar-gutter: stable`; `agentRules: false`; `E2E_PORT` for parallel e2e runs.
+- [x] Adversarial review round applied: Summary drivers come from the verdict engine (`threatInfo.scoredSignals`), "known threat" only on a confirmed reputation hit, neighbour-only feed listings never read as listing this link, Google threat types in plain words, provisional Safe covers minor warning signs, confidence reasons name shortfalls without "other"/count drift, Unknown states its cause once, a clean Safe no longer repeats "nothing flagged", reasons moved into Details, plain findings for checks that couldn't run (`formatAge`), re-announcement and focus fixes for opened results and the quiet-checks line, and the shared-snapshot imperative. Cached results re-derive their verdict on read so older entries gain current copy and `scoredSignals`.
+- [x] Verified: lint, typecheck, format, unit, integration, DOM, fixture-backed e2e, and production build.
+
 ### P24 Resolve September dependency maintenance
 
 - [x] Merge the green minor-and-patch dependency group, including the Next.js `16.3.3` security update.
