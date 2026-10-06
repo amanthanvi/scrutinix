@@ -786,6 +786,44 @@ describe("buildThreatAssessment", () => {
     );
   });
 
+  it("gives shared platforms neither an age discount nor a clean-feed credit", () => {
+    const platform = createPendingSignalResults();
+    withThreatFeedMatches(platform, []);
+    expect(
+      buildThreatAssessment(platform).threatInfo?.confidenceReasons,
+    ).toContain("1 high-confidence reputation sources returned clean results.");
+
+    if (platform.threatFeeds.data) {
+      platform.threatFeeds.data.sharedPlatformListingsIgnored = true;
+    }
+    platform.whois = {
+      status: "success",
+      error: null,
+      durationMs: 12,
+      data: {
+        subjectType: "domain",
+        available: true,
+        registrar: "MarkMonitor Inc.",
+        registeredAt: "2007-10-09T00:00:00.000Z",
+        updatedAt: null,
+        expiresAt: null,
+        ageDays: 365 * 18,
+        country: null,
+        handle: null,
+        rdapUrl: "https://rdap.verisign.com/com/v1/domain/github.com",
+        sharedPlatform: true,
+        observations: [],
+      },
+    };
+    const info = buildThreatAssessment(platform).threatInfo;
+    expect(info?.reasons.join(" ")).not.toContain(
+      "years of registration history",
+    );
+    expect(info?.confidenceReasons.join(" ")).not.toContain(
+      "returned clean results",
+    );
+  });
+
   it("convicts on an exact URLhaus listing but not on a host-level listing", () => {
     const exact = createPendingSignalResults();
     withThreatFeedMatches(exact, [

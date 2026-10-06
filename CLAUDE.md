@@ -119,6 +119,7 @@ them. See `.env.example` for the full annotated list.
 VIRUSTOTAL_API_KEY=...
 GOOGLE_SAFE_BROWSING_API_KEY=...  # optional
 URLHAUS_AUTH_KEY=...              # optional; also authenticates ThreatFox
+SPAMHAUS_DQS_KEY=...              # optional; DBL via DQS (public mirror blocks cloud DNS)
 UPSTASH_REDIS_REST_URL/TOKEN=...  # optional (rate limiting + shared cache)
 KV_REST_API_URL/TOKEN=...         # optional Vercel KV aliases
 OPENPHISH_FEED_URL=https://openphish.com/feed.txt

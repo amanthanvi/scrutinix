@@ -96,6 +96,7 @@ Core provider and deployment variables:
 VIRUSTOTAL_API_KEY=
 GOOGLE_SAFE_BROWSING_API_KEY=
 URLHAUS_AUTH_KEY=
+SPAMHAUS_DQS_KEY=
 UPSTASH_REDIS_REST_URL=
 UPSTASH_REDIS_REST_TOKEN=
 KV_REST_API_URL=
@@ -105,7 +106,9 @@ NEXT_PUBLIC_APP_URL=https://www.scrutinix.net
 ```
 
 The `URLHAUS_AUTH_KEY` also authenticates ThreatFox (both are abuse.ch
-services). Empty values are treated as unset. The ML classifier is bundled
+services). `SPAMHAUS_DQS_KEY` is a free Spamhaus Data Query Service key;
+without it, Spamhaus DBL is reported unavailable on most cloud hosts, whose
+resolvers the public mirror refuses. Empty values are treated as unset. The ML classifier is bundled
 with the app and needs no key. Scrutinix still runs in a degraded mode without
 third-party keys: local enrichment signals remain available, provider failures
 are surfaced explicitly, and safe-result confidence is capped when primary

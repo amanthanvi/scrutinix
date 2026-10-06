@@ -20,8 +20,8 @@ state plus the landed analysis-hardening and review-remediation work.
 
 ## Current Snapshot
 
-- Date: 2026-09-03
-- Execution status: `P21-P25 complete and verified on Node 24 LTS`
+- Date: 2026-10-06
+- Execution status: `P21-P26 complete and verified on Node 24 LTS`
 - Platform:
   - Next.js `16.3.4`
   - React `19.2.x`
@@ -33,8 +33,8 @@ state plus the landed analysis-hardening and review-remediation work.
   - Node.js route handlers orchestrate eight signals and stream normalized results.
   - IndexedDB stores client-only history, export state, and re-scan sources.
   - The ML ensemble uses a bundled quantized ONNX URL classifier plus lexical heuristics; scans do not call hosted inference.
-  - Threat-feed coverage combines URLhaus, cached OpenPhish, ThreatFox, and Spamhaus DBL / SURBL DNSBL lookups.
-  - Complete, non-partial results use a 15-minute process-local LRU plus optional shared Redis cache; error, partial-failure, and aborted results are never reused.
+  - Threat-feed coverage combines URLhaus, cached OpenPhish, ThreatFox, and Spamhaus DBL (via DQS when `SPAMHAUS_DQS_KEY` is set) / SURBL DNSBL lookups. On path-tenanted shared platforms only exact-URL feed evidence scores.
+  - Complete, non-partial results use a 15-minute process-local LRU plus optional shared Redis cache; error, partial-failure, and aborted results are never reused. Production uses the Vercel-connected Upstash store (`KV_REST_API_*`) for rate limiting and the shared cache.
   - The home page renders as a scanner-first, single-column product tool in a `44rem` shell: scan form, verdict, Summary/Full signal rows, and local history in one flow. Method and caveat notes live on `/about`.
   - The public site now shares one editorial shell across `/`, `/about`, and `/privacy`, so the trust, methodology, and privacy surfaces stay visually aligned with the scanner.
   - The UI now uses the actual pulled shadcn preset `b1D24VYe` as its baseline language: neutral `radix-mira` tokens, compact controls, and smaller radii adapted onto the branded `components/scrutinix/*` surface.
@@ -135,6 +135,15 @@ Observed results:
 - [x] Make Lighthouse Performance `>= 0.90` and Accessibility `>= 0.95` blocking thresholds.
 - [x] Pass the full CI-equivalent validation locally on Node 22.23.2, including browser smoke and Lighthouse.
 - [x] Re-enable repository-level GitHub Actions and validate the final `main` workflow after external review and local CI-equivalent validation.
+
+### P26 Verify production scanning after the Upstash connection
+
+- [x] Redeploy so production picks up the Vercel-connected Upstash env vars; prove shared rate limiting across production and preview deployments.
+- [x] Ship the ONNX runtime to the analyze functions (createRequire is untraceable) using only the linux-x64 CPU binaries, and guard the trace in CI (`npm run check:trace`) (#52).
+- [x] Restore WHOIS: send a User-Agent to rdap.org and query the PSL registrable domain; withhold the age discount from deeper subdomains (#52, #54).
+- [x] Stop a single ThreatFox URL IOC convicting a whole shared host; off-path URL IOCs only corroborate (#53).
+- [x] Query Spamhaus DBL through DQS so scans are no longer partial and results become cacheable (#56).
+- [x] Exempt known path-tenanted platforms from host-level feed scoring while exact-URL listings still convict (#56).
 
 ### P24 Resolve September dependency maintenance
 
