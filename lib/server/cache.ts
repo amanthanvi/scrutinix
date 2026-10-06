@@ -47,13 +47,14 @@ export class ResultCache {
     }
 
     const remote = this.getRemote();
-    if (!remote) {
+    const namespacedKey = remoteKey(key);
+    if (!remote || !namespacedKey) {
       return null;
     }
 
     try {
       const entry = await withTimeout(
-        remote.get(remoteKey(key)),
+        remote.get(namespacedKey),
         REMOTE_CACHE_TIMEOUT_MS,
         "Shared cache read",
       );
@@ -81,13 +82,14 @@ export class ResultCache {
     this.setLocal(key, result, ttlMs);
 
     const remote = this.getRemote();
-    if (!remote) {
+    const namespacedKey = remoteKey(key);
+    if (!remote || !namespacedKey) {
       return;
     }
 
     try {
       await withTimeout(
-        remote.set(remoteKey(key), result, ttlMs),
+        remote.set(namespacedKey, result, ttlMs),
         REMOTE_CACHE_TIMEOUT_MS,
         "Shared cache write",
       );
@@ -145,8 +147,40 @@ if (!globalThis.__analysisCache) {
 }
 
 /** Hash cache keys so raw scanned URLs never appear as Redis keys. */
+/** Null when no isolated namespace is available; the shared cache is then skipped. */
 function remoteKey(key: string) {
-  return `sx:result:${createHash("sha256").update(key).digest("hex")}`;
+  const namespace = cacheNamespace();
+  return namespace
+    ? `sx:result:${namespace}:${createHash("sha256").update(key).digest("hex")}`
+    : null;
+}
+
+/**
+ * One Redis store serves every Vercel environment, so results are
+ * namespaced: a preview running different code must never answer production
+ * scans. Each preview commit gets its own namespace for the same reason;
+ * production keeps one so the cache stays warm across releases. Outside
+ * Vercel (local dev with real credentials) the namespace is "local".
+ */
+function cacheNamespace(): string | null {
+  const env = process.env.VERCEL_ENV?.trim().toLowerCase();
+  if (env === "production" || env === "development") {
+    return env;
+  }
+  if (env === "preview") {
+    // Fail closed: without a per-deployment identity, previews could share
+    // a namespace, so they skip the shared cache instead.
+    const sha = process.env.VERCEL_GIT_COMMIT_SHA?.trim().toLowerCase();
+    if (sha && /^[0-9a-f]{7,40}$/.test(sha)) {
+      return `preview-${sha.slice(0, 12)}`;
+    }
+    const deployment = process.env.VERCEL_DEPLOYMENT_ID?.trim();
+    if (deployment && /^[a-zA-Z0-9_]{1,64}$/.test(deployment)) {
+      return `preview-${deployment.toLowerCase()}`;
+    }
+    return null;
+  }
+  return "local";
 }
 
 function getSharedRedisStore(): RemoteCacheStore | null {
