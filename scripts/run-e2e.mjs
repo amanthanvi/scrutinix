@@ -2,7 +2,8 @@ import { spawn, spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
 
 const HOST = "127.0.0.1";
-const PORT = "3000";
+// E2E_PORT lets parallel worktrees run the suite side by side.
+const PORT = process.env.E2E_PORT || "3000";
 const BASE_URL = `http://${HOST}:${PORT}/`;
 const TIMEOUT_MS = 60_000;
 const POLL_INTERVAL_MS = 1_000;
@@ -16,6 +17,7 @@ const playwrightCli = require.resolve("@playwright/test/cli");
 // the specs against the real providers instead.
 const childEnv = {
   ...process.env,
+  E2E_PORT: PORT,
   SCRUTINIX_TEST_FIXTURES: process.env.SCRUTINIX_TEST_FIXTURES ?? "1",
 };
 
