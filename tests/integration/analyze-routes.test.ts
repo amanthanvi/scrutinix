@@ -522,7 +522,7 @@ describe("analysis routes", () => {
           data: {
             transformerModel: null,
             warnings: [
-              "The local URL classifier is unavailable. Falling back to lexical heuristics only.",
+              "The link pattern model was unavailable, so only the structure checks ran.",
             ],
           },
         },

@@ -2,7 +2,12 @@ import type { ClassificationFinding } from "@/lib/domain/types";
 
 /**
  * Combine the transformer classifier with the lexical heuristics into one
- * ensemble finding. The transformer carries more weight, but benign
+ * ensemble finding. The notes it adds are shown to people in the Link
+ * Pattern Model's details, so they use the same two plain names as that
+ * panel's rows (`components/shared/signal-utils.ts`) and the verdict
+ * reasons (`lib/domain/verdict.ts`): "link pattern model" and "structure
+ * checks", never "transformer" or "lexical heuristics". The transformer
+ * carries more weight, but benign
  * transformer calls never suppress strong structural evidence from the
  * lexical side - phishing URLs frequently look "clean" to a text model
  * while tripping structural checks.
@@ -35,12 +40,12 @@ export function classifyConsensus(
     transformer.label !== lexical.label
       ? transformer.label === "benign" && lexical.label !== "benign"
         ? [
-            "The transformer model scored this link benign, but lexical heuristics disagreed; effective risk was raised to reflect structural evidence.",
+            "The link pattern model read this link as normal, but its structure looked risky, so the risk was raised to match the structure.",
           ]
-        : ["Model disagreement reduced the ensemble certainty."]
-      : [
-          "The transformer and lexical models agreed on the classification direction.",
-        ];
+        : [
+            "The link pattern model and the structure checks disagreed, so this result is less certain.",
+          ]
+      : ["The link pattern model and the structure checks agreed."];
 
   return {
     label:

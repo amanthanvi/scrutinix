@@ -23,9 +23,11 @@ describe("classifyConsensus", () => {
 
     expect(result.label).toBe("malicious");
     expect(result.score).toBeGreaterThanOrEqual(0.74);
-    expect(result.reasons.join(" ")).toMatch(/effective risk was raised/i);
+    expect(result.reasons.join(" ")).toMatch(
+      /risk was raised to match the structure/i,
+    );
     expect(result.reasons.join(" ")).not.toMatch(
-      /disagreement reduced the ensemble certainty/i,
+      /disagreed, so this result is less certain/i,
     );
   });
 
@@ -47,7 +49,9 @@ describe("classifyConsensus", () => {
 
     expect(result.label).toBe("risky");
     expect(result.score).toBeGreaterThanOrEqual(0.38);
-    expect(result.reasons.join(" ")).toMatch(/effective risk was raised/i);
+    expect(result.reasons.join(" ")).toMatch(
+      /risk was raised to match the structure/i,
+    );
   });
 
   it("does not elevate when transformer and lexical both agree on benign", () => {
@@ -67,9 +71,7 @@ describe("classifyConsensus", () => {
     );
 
     expect(result.label).toBe("benign");
-    expect(result.reasons.join(" ")).toMatch(
-      /agreed on the classification direction/i,
-    );
+    expect(result.reasons.join(" ")).toMatch(/structure checks agreed/i);
   });
 
   it("uses reduced-certainty wording when models disagree without the benign-transformer lexical boost", () => {
@@ -89,9 +91,11 @@ describe("classifyConsensus", () => {
     );
 
     expect(result.reasons.join(" ")).toMatch(
-      /Model disagreement reduced the ensemble certainty/i,
+      /disagreed, so this result is less certain/i,
     );
-    expect(result.reasons.join(" ")).not.toMatch(/effective risk was raised/i);
+    expect(result.reasons.join(" ")).not.toMatch(
+      /risk was raised to match the structure/i,
+    );
   });
 
   it("returns the lexical finding untouched when no transformer result exists", () => {
@@ -144,5 +148,37 @@ describe("classifyConsensus", () => {
 
     expect(result.verdict).toBe("suspicious");
     expect(result.threatInfo?.score).toBeGreaterThanOrEqual(25);
+  });
+});
+
+describe("one plain name per ensemble member", () => {
+  it("uses the same names in the details rows and the consensus notes", async () => {
+    const { getSignalDetailEntries } =
+      await import("@/components/shared/signal-utils");
+    const lexical = {
+      label: "benign" as const,
+      score: 0.05,
+      reasons: [],
+      model: "lexical-heuristic",
+    };
+    const transformer = { ...lexical, model: "urlbert" };
+    const consensus = classifyConsensus(transformer, lexical);
+    const labels = getSignalDetailEntries("mlEnsemble", {
+      transformerModel: transformer,
+      lexicalModel: lexical,
+      consensusLabel: consensus.label,
+      consensusScore: consensus.score,
+      reasons: consensus.reasons,
+      warnings: [],
+    }).map((entry) => entry.label);
+
+    expect(labels).toContain("Structure checks");
+    // The signal is "Link Pattern Model": its own part is not named after it.
+    expect(labels).toContain("Model reading");
+    expect(labels).not.toContain("Link pattern model");
+    const notes = consensus.reasons.join(" ").toLowerCase();
+    expect(notes).toContain("structure checks");
+    expect(notes).toContain("link pattern model");
+    expect(notes).not.toMatch(/transformer|lexical|rule-based/);
   });
 });

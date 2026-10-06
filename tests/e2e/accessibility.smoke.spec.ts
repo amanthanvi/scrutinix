@@ -72,3 +72,47 @@ test("home page keyboard navigation @smoke", async ({ page }) => {
   await page.keyboard.press("ArrowRight");
   await expect(page.getByRole("tab", { name: /^batch$/i })).toBeFocused();
 });
+
+for (const colorScheme of ["light", "dark"] as const) {
+  test(`${colorScheme} theme has zero axe violations on a result @smoke`, async ({
+    page,
+  }) => {
+    await page.emulateMedia({ colorScheme });
+    await gotoApp(page);
+    await submitSingleScan(page, "https://paypal.com.secure-login.xyz/verify");
+    await expect(page.getByLabel(/^scan result: safe$/i)).toBeVisible();
+    await page.getByRole("switch", { name: /^summary full/i }).click();
+    await page.evaluate(() =>
+      Promise.all(
+        document.getAnimations().map((animation) => animation.finished),
+      ),
+    );
+    await page
+      .getByRole("button", { name: /open next\.js dev tools/i })
+      .evaluateAll((elements) =>
+        elements.forEach((element) => element.remove()),
+      );
+
+    const report = await new AxeBuilder({ page }).analyze();
+    expect(report.violations).toEqual([]);
+  });
+
+  test(`${colorScheme} theme has zero axe violations at rest and on /about @smoke`, async ({
+    page,
+  }) => {
+    await page.emulateMedia({ colorScheme });
+    for (const path of ["/", "/about", "/privacy"]) {
+      await page.goto(path, { waitUntil: "domcontentloaded" });
+      await expect(
+        page.getByRole("button", { name: /switch to (light|dark) theme/i }),
+      ).toBeVisible();
+      await page
+        .getByRole("button", { name: /open next\.js dev tools/i })
+        .evaluateAll((elements) =>
+          elements.forEach((element) => element.remove()),
+        );
+      const report = await new AxeBuilder({ page }).analyze();
+      expect(report.violations, path).toEqual([]);
+    }
+  });
+}

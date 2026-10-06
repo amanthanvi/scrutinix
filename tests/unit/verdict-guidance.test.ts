@@ -7,13 +7,17 @@ import {
   type ThreatInfo,
   type Verdict,
 } from "@/lib/domain/types";
+import { sanitizeHistoryEntry } from "@/lib/domain/runtime-safety";
 import {
   clampScore,
+  getConfidenceReasons,
   getCoverageCaveat,
   getScoreBandText,
   getVerdictAnnouncement,
   getVerdictGuidance,
+  getVerdictRecommendations,
   isProvisionalSafe,
+  ownershipSentence,
   shouldShowVerdictSummary,
 } from "@/lib/domain/verdict-guidance";
 import { buildThreatAssessment } from "@/lib/domain/verdict";
@@ -80,26 +84,34 @@ function buildResult(
 
 describe("getVerdictGuidance", () => {
   it("tells the person what to do for every verdict", () => {
-    expect(getVerdictGuidance(buildResult("critical", { score: 90 }))).toEqual({
+    expect(
+      getVerdictGuidance(buildResult("critical", { score: 90 })),
+    ).toMatchObject({
       imperative: "Don't open this link.",
       showScore: true,
+      tone: "critical",
+      confidenceNote: null,
     });
-    expect(getVerdictGuidance(buildResult("malicious", { score: 73 }))).toEqual(
-      { imperative: "Don't open this link.", showScore: true },
-    );
+    expect(
+      getVerdictGuidance(buildResult("malicious", { score: 73 })),
+    ).toMatchObject({ imperative: "Don't open this link.", showScore: true });
     expect(
       getVerdictGuidance(buildResult("suspicious", { score: 40 })).imperative,
     ).toBe("Don't sign in or enter payment details here.");
     expect(getVerdictGuidance(buildResult("safe")).imperative).toBe(
       "Looks safe to open.",
     );
-    expect(getVerdictGuidance(buildResult("unknown"))).toEqual({
+    expect(getVerdictGuidance(buildResult("unknown"))).toMatchObject({
       imperative: "We couldn't check this link — treat it as unsafe.",
       showScore: false,
     });
     expect(
       getVerdictGuidance(buildResult("error", { threatInfo: null })),
-    ).toEqual({ imperative: "The scan failed — try again.", showScore: false });
+    ).toMatchObject({
+      imperative: "The scan failed — try again.",
+      showScore: false,
+      tone: "error",
+    });
   });
 
   it("hedges a Safe verdict it cannot fully stand behind", () => {
@@ -464,5 +476,155 @@ describe("shouldShowVerdictSummary", () => {
     expect(result.verdict).toBe("safe");
     expect(result.threatInfo?.summary).toBe("No check flagged this link.");
     expect(shouldShowVerdictSummary(result)).toBe(false);
+  });
+});
+
+describe("look-alike hedging (presentation only)", () => {
+  it("turns a look-alike Safe neutral and action-only, keeping its score", () => {
+    const safe = buildResult("safe", { score: 4, confidenceLabel: "high" });
+    expect(getVerdictGuidance(safe)).toMatchObject({
+      imperative: "Looks safe to open.",
+      showScore: true,
+      tone: "safe",
+      confidenceNote: null,
+    });
+    expect(getVerdictGuidance({ ...safe, impersonates: "paypal.com" })).toEqual(
+      {
+        // The owner fact is said once, by the anatomy: not here.
+        imperative: "Don't sign in or enter details here.",
+        showScore: true,
+        tone: "unknown",
+        confidenceNote: "No check flagged it, but the name is misleading.",
+      },
+    );
+    // The score itself is untouched.
+    expect(safe.threatInfo?.score).toBe(4);
+  });
+
+  it("keeps Unknown's own instruction for a look-alike", () => {
+    const unknown = buildResult("unknown");
+    expect(
+      getVerdictGuidance({ ...unknown, impersonates: "paypal.com" }),
+    ).toMatchObject({
+      imperative: "We couldn't check this link — treat it as unsafe.",
+      tone: "unknown",
+      confidenceNote: null,
+    });
+  });
+
+  it("states the owner with one shared sentence", () => {
+    expect(ownershipSentence("secure-login.xyz", "paypal.com")).toBe(
+      "This link belongs to secure-login.xyz, not paypal.com.",
+    );
+  });
+
+  it("leaves the stronger instructions alone", () => {
+    for (const verdict of ["suspicious", "malicious"] as const) {
+      const result = buildResult(verdict, { score: 60 });
+      expect(
+        getVerdictGuidance({ ...result, impersonates: "paypal.com" }),
+      ).toEqual(getVerdictGuidance(result));
+    }
+  });
+
+  it("states the owner in the announcement, which has no anatomy line", () => {
+    const safe = buildResult("safe", { score: 4, confidenceLabel: "high" });
+    expect(
+      getVerdictAnnouncement({
+        ...safe,
+        url: "https://paypal.com.secure-login.xyz/",
+        impersonates: "paypal.com",
+        registeredDomain: "secure-login.xyz",
+      }),
+    ).toBe(
+      "Result for paypal.com.secure-login.xyz: Safe, 4 out of 100. Don't sign in or enter details here. This link belongs to secure-login.xyz, not paypal.com.",
+    );
+    expect(
+      getVerdictAnnouncement({
+        ...buildResult("unknown"),
+        url: "https://paypal.com.secure-login.xyz/",
+        impersonates: "paypal.com",
+        registeredDomain: "secure-login.xyz",
+      }),
+    ).toBe(
+      "Result for paypal.com.secure-login.xyz: Unknown. We couldn't check this link — treat it as unsafe. This link belongs to secure-login.xyz, not paypal.com.",
+    );
+  });
+
+  it("hedges What to do, never permitting a sign-in after a sender check", () => {
+    const safe = buildResult("safe", { score: 4, confidenceLabel: "high" });
+    const hedged = getVerdictRecommendations({
+      ...safe,
+      impersonates: "paypal.com",
+    });
+    expect(hedged).toEqual([
+      "Don't sign in, pay, or enter codes on this site.",
+      "To reach paypal.com, type its address yourself or use its app.",
+    ]);
+    expect(getVerdictRecommendations(safe)).toEqual(
+      safe.threatInfo?.recommendations ?? [],
+    );
+    const malicious = buildResult("malicious", { score: 70 });
+    expect(
+      getVerdictRecommendations({ ...malicious, impersonates: "paypal.com" }),
+    ).toEqual(malicious.threatInfo?.recommendations ?? []);
+  });
+
+  it("qualifies a look-alike Safe's confidence reasons", () => {
+    const safe = buildResult("safe", { score: 4, confidenceLabel: "high" });
+    expect(
+      getConfidenceReasons({ ...safe, impersonates: "paypal.com" }).at(-1),
+    ).toBe(
+      "Confidence covers reputation only; the address still imitates paypal.com.",
+    );
+    expect(getConfidenceReasons(safe)).toEqual(
+      safe.threatInfo?.confidenceReasons ?? [],
+    );
+  });
+});
+
+describe("legacy records and the coverage caveat", () => {
+  const legacy = (verdict: string) =>
+    sanitizeHistoryEntry({
+      id: "legacy",
+      url: "https://example.com/",
+      verdict,
+      signals: {},
+      metadata: { scanId: "legacy" },
+      savedAt: "2026-01-01T00:00:00.000Z",
+    });
+
+  it("says nothing about checks that finished but were never stored", () => {
+    for (const verdict of ["safe", "suspicious"]) {
+      const entry = legacy(verdict);
+      expect(entry).not.toBeNull();
+      expect(getCoverageCaveat(entry!)).toBeNull();
+    }
+  });
+
+  it("still names checks that really failed with a provider message", () => {
+    const signals = createPendingSignalResults();
+    for (const name of Object.keys(signals) as Array<keyof SignalResults>) {
+      signals[name] = {
+        status: "error",
+        data: null,
+        error: "Provider timed out",
+        durationMs: 10,
+      };
+    }
+    expect(
+      getCoverageCaveat(buildResult("suspicious", { signals, score: 30 })),
+    ).toMatch(/didn't finish/);
+  });
+});
+
+describe("the verdict band's because line", () => {
+  it("yields to driver rows so one fact is stated once", () => {
+    const result = buildResult("malicious", {
+      score: 70,
+      summary: "7 VirusTotal engines flagged this link.",
+    });
+    expect(shouldShowVerdictSummary(result)).toBe(true);
+    expect(shouldShowVerdictSummary(result, 1)).toBe(false);
   });
 });
