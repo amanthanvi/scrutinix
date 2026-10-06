@@ -1,7 +1,13 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 
-import { gotoApp, submitSingleScan } from "./helpers";
+import {
+  encodeSharedPayload,
+  gotoApp,
+  sharedPath,
+  signSharedPayload,
+  submitSingleScan,
+} from "./helpers";
 
 test("home page accessibility @smoke", async ({ page }) => {
   await gotoApp(page);
@@ -95,6 +101,40 @@ for (const colorScheme of ["light", "dark"] as const) {
 
     const report = await new AxeBuilder({ page }).analyze();
     expect(report.violations).toEqual([]);
+  });
+
+  test(`${colorScheme} theme has zero axe violations on shared links, verified or not @smoke`, async ({
+    page,
+  }) => {
+    await page.emulateMedia({ colorScheme });
+    const payload = encodeSharedPayload({
+      verdict: "malicious",
+      url: "https://paypal.com.secure-login.xyz/verify",
+      summary: "Google Safe Browsing flagged this link.",
+      capturedAt: "2026-10-06T09:00:00.000Z",
+      signature: Array(8).fill("malicious"),
+    });
+    for (const [label, sig] of [
+      [/^scan result: malicious$/i, signSharedPayload(payload)],
+      ["Shared link, not verified", null],
+    ] as const) {
+      await page.goto(sharedPath(payload, sig), {
+        waitUntil: "domcontentloaded",
+      });
+      await expect(page.getByLabel(label)).toBeVisible();
+      await page.evaluate(() =>
+        Promise.all(
+          document.getAnimations().map((animation) => animation.finished),
+        ),
+      );
+      await page
+        .getByRole("button", { name: /open next\.js dev tools/i })
+        .evaluateAll((elements) =>
+          elements.forEach((element) => element.remove()),
+        );
+      const report = await new AxeBuilder({ page }).analyze();
+      expect(report.violations, String(label)).toEqual([]);
+    }
   });
 
   test(`${colorScheme} theme has zero axe violations at rest and on /about @smoke`, async ({

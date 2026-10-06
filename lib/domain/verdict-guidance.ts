@@ -72,6 +72,22 @@ export function isLookAlikeSafe(
 }
 
 /**
+ * What a share preview leads with: the verdict word, except that a Safe
+ * look-alike never leads with "Safe" (many chat clients show only the
+ * title and image). `short` is the card's one word, whose ownership line
+ * names both domains; the title names the imitated site.
+ */
+export function shareHeadline(
+  result: Pick<GuidanceInput, "verdict" | "impersonates">,
+  { short = false }: { short?: boolean } = {},
+): string {
+  if (isLookAlikeSafe(result)) {
+    return short ? "Look-alike" : `Look-alike of ${result.impersonates}`;
+  }
+  return verdictLabel(result.verdict);
+}
+
+/**
  * The one sentence that states a look-alike's real owner: "This link
  * belongs to secure-login.xyz, not paypal.com." Every surface that states
  * the fact (anatomy, live region, share description, share card) uses it.

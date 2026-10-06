@@ -94,7 +94,8 @@ lib/
     copy.ts               # countOf / formatList / capitalize / formatAge for user-facing copy
   og/                     # Share-card renderers (cards.tsx) and bundled-Geist loader (fonts.ts)
   server/                 # Orchestrator, providers, signals, cache, local ONNX ML
-    share-metadata.ts     # ?shared= validation → page metadata, server-side anatomy, image cap
+    share-metadata.ts     # ?shared= verify + validate → SharedView, page metadata, image cap
+    share-signing.ts      # HMAC sign/verify for share links; attaches result.share to streamed results
     rate-limit.ts         # Upstash/in-memory limiter with "scan" and "image" tiers
   client/                 # NDJSON parser, export utilities
   config/                 # Environment validation
@@ -165,8 +166,25 @@ tests/
   description, OG card). History/batch rows use `LinkAnatomyCompact`
   (`result-row.tsx`): the subdomain truncates from its left so the owner
   never gets cut. Shared
-  links get their anatomy from the server (`sharedAnatomy`) so the hedge is
-  in the first paint; verdict announcements wait for the parser.
+  links get their anatomy from the server (`SharedView.anatomy`) so the
+  hedge is in the first paint; verdict announcements wait for the parser.
+- **Signed shares**: a `?shared=` payload is plain base64 anyone can write,
+  so Scrutinix states a shared verdict only when `&sig=` is its own HMAC
+  (`lib/server/share-signing.ts`, `SHARE_SIGNING_SECRET`). The server builds
+  and signs the payload for every streamed result (`result.share`, kept in
+  history); `app/page.tsx` and `/og/result` verify it. Unverified links
+  (unsigned, tampered, secret unset, or shared before signing) keep the
+  site's default title, description, and card, and open a neutral "Check
+  this shared link yourself" band with Scrutinix's own link anatomy and
+  "Scan this link": no verdict, tint, score, summary, or strip from the
+  payload. The browser never decodes the payload; it receives a
+  `SharedView` whose `snapshot` is null unless verified. A signed Safe
+  look-alike's preview leads with "Look-alike of <brand>", never "Safe"
+  (`shareHeadline`). The signed check time is `metadata.checkedAt`, which a
+  cache hit keeps from the original scan. Spaces in `?shared=` are restored
+  to "+" before verifying (`normalizeSharedPayload`). Share with no `sig`
+  copies the link with a distinct "isn't verified" toast.
+  `share-signing.ts` and `env.ts` import `server-only` (vitest aliases it).
 - **UI danger is not a verdict**: form/stream errors and destructive
   confirms use `--sx-danger-fg` / `--sx-danger-border`, never
   `--sx-malicious-*`.
@@ -204,4 +222,15 @@ UPSTASH_REDIS_REST_URL/TOKEN=...  # optional (rate limiting + shared cache)
 KV_REST_API_URL/TOKEN=...         # optional Vercel KV aliases
 OPENPHISH_FEED_URL=https://openphish.com/feed.txt
 NEXT_PUBLIC_APP_URL=https://www.scrutinix.net
+SHARE_SIGNING_SECRET=...          # optional; >= 32 chars (openssl rand -base64 48); unset = shared links open neutral
+SHARE_SIGNING_SECRET_PREVIOUS=... # optional; verifies (never signs) during key rotation
 ```
+
+Set both share-signing keys in the Vercel **Production** environment only.
+Preview and Development leave them unset (shared links open neutral) or
+use a separate key that is never valid in production: any deployment
+holding the production key, including an unreviewed preview branch, can
+mint links production accepts as "Verified Scrutinix result". Never reuse
+the committed e2e key (`scripts/run-e2e.mjs`; `env.ts` ignores it outside
+`SCRUTINIX_E2E=1`). Rotate the production key if it was ever set for
+Preview/Development or pulled with `vercel env pull`.

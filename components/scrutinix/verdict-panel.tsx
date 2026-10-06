@@ -115,10 +115,35 @@ function Band({
   );
 }
 
+/** A shared band's one primary action. */
+function RunSharedScanButton({
+  onClick,
+  label,
+}: {
+  onClick: () => void;
+  label: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="sx-btn-press text-meta inline-flex min-h-11 items-center rounded-md bg-[var(--sx-accent-solid)] px-4 font-medium text-[var(--sx-accent-fg)] hover:bg-[var(--sx-accent-solid-hover)]"
+    >
+      {label}
+    </button>
+  );
+}
+
 interface VerdictBandProps {
   result: AnalysisResult | null;
   isStreaming: boolean;
+  /** A shared snapshot Scrutinix signed (verified on the server). */
   sharedSnapshot: SharedSnapshot | null;
+  /**
+   * The page was opened from a shared link without a valid Scrutinix
+   * signature: show the neutral "check it yourself" band, nothing from it.
+   */
+  unverifiedShare?: boolean;
   completedSignals?: number;
   /** Look-alike domain from the link anatomy; hedges Safe and Unknown. */
   impersonates?: string | null;
@@ -139,6 +164,7 @@ export function VerdictBand({
   result,
   isStreaming,
   sharedSnapshot,
+  unverifiedShare = false,
   completedSignals = 0,
   impersonates = null,
   driverRows = 0,
@@ -207,22 +233,42 @@ export function VerdictBand({
         ) : null}
         <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-2">
           {onRunSharedScan ? (
-            <button
-              type="button"
+            <RunSharedScanButton
               onClick={onRunSharedScan}
-              className="sx-btn-press text-meta inline-flex min-h-11 items-center rounded-md bg-[var(--sx-accent-solid)] px-4 font-medium text-[var(--sx-accent-fg)] hover:bg-[var(--sx-accent-solid-hover)]"
-            >
-              Run a fresh scan
-            </button>
+              label="Run a fresh scan"
+            />
           ) : null}
           <p className="text-meta text-[var(--sx-text-muted)]">
-            Shared snapshot from{" "}
+            Verified Scrutinix result · checked{" "}
             <time dateTime={sharedSnapshot.capturedAt}>
               {formatSnapshotTime(sharedSnapshot.capturedAt)}
             </time>
             . It may be out of date.
           </p>
         </div>
+      </Band>
+    );
+  }
+
+  if (!result && unverifiedShare) {
+    // Someone's claim, not ours: no verdict word, tint, score, summary, or
+    // strip from the payload. The link's anatomy below is Scrutinix's own.
+    return (
+      <Band
+        label="Shared link, not verified"
+        tone="pending"
+        heading={<span>Check this shared link yourself</span>}
+        headingClassName="text-headline sm:text-headline text-[var(--sx-text)]"
+        imperative="We can't confirm the result in this link came from Scrutinix. It may be old or edited, so we're not showing it."
+      >
+        {onRunSharedScan ? (
+          <div className="mt-5">
+            <RunSharedScanButton
+              onClick={onRunSharedScan}
+              label="Scan this link"
+            />
+          </div>
+        ) : null}
       </Band>
     );
   }

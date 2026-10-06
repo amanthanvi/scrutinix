@@ -27,7 +27,7 @@ const sections = [
   },
   {
     title: "Shared links",
-    body: "A shared link carries the result inside the link itself: the verdict, the link, a one-line summary, and the eight check results. We have no database of shared links. When a chat app previews a shared link, our server draws the preview image from what is in the link and doesn't save it, though the image may be cached for up to a day so previews load fast. A shared result shows one moment in time, so run a new scan to check again.",
+    body: "A shared link carries the result inside the link itself: the verdict, the link, a one-line summary, and the eight check results. We have no database of shared links. Our server signs each link it creates, so it can tell its own results from edited ones: a link without a valid signature opens as a link to check yourself, with no verdict and no preview of one. When a chat app previews a signed link, our server draws the preview image from what is in the link and doesn't save it, though the image may be cached for up to an hour so previews load fast. A shared result shows one moment in time, so run a new scan to check again.",
   },
 ] as const;
 

@@ -1,7 +1,10 @@
 import { http, HttpResponse } from "msw";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { resetEnvForTests } from "@/lib/config/env";
+import { decodeSharedSnapshot } from "@/lib/domain/signal-signature";
 import { classifyUrlLocally } from "@/lib/server/ml/local-classifier";
+import { verifySharePayload } from "@/lib/server/share-signing";
 import { runRedirectSignal } from "@/lib/server/signals/redirect-chain";
 import { server } from "@/tests/setup/msw.server";
 
@@ -690,6 +693,136 @@ describe("analysis routes", () => {
     expect(events.at(-1)?.type).toBe("batch_complete");
   });
 
+  describe("server-issued share links", () => {
+    const SECRET = "integration-share-secret-0123456789abcdef";
+
+    function scanRequest(path: string, body: unknown) {
+      return new Request(`http://localhost${path}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      });
+    }
+
+    function expectSignedShare(
+      result:
+        | {
+            url?: string;
+            verdict?: string;
+            share?: { payload?: string; sig?: string };
+          }
+        | undefined,
+    ) {
+      expect(result?.share?.sig).toMatch(/^[A-Za-z0-9_-]{43}$/);
+      expect(
+        verifySharePayload(result?.share?.payload, result?.share?.sig),
+      ).toBe(true);
+      // The payload states exactly the streamed result.
+      expect(decodeSharedSnapshot(result?.share?.payload)).toMatchObject({
+        url: result?.url,
+        verdict: result?.verdict,
+      });
+    }
+
+    it("signs every completed single scan, cache hits included", async () => {
+      vi.stubEnv("SHARE_SIGNING_SECRET", SECRET);
+      resetEnvForTests();
+      const { POST } = await import("@/app/api/analyze/route");
+      installHandlers();
+
+      const body = { url: "share-signing.example" };
+      const first = await parseNdjsonEvents(
+        await POST(scanRequest("/api/analyze", body)),
+      );
+      const second = await parseNdjsonEvents(
+        await POST(scanRequest("/api/analyze", body)),
+      );
+
+      expect(first.at(-1)?.type).toBe("scan_complete");
+      expectSignedShare(first.at(-1)?.result);
+      expect(second.at(-1)?.result?.metadata?.cacheHit).toBe(true);
+      expectSignedShare(second.at(-1)?.result);
+    });
+
+    it("dates a cache hit's share by when the evidence was gathered", async () => {
+      vi.stubEnv("SHARE_SIGNING_SECRET", SECRET);
+      resetEnvForTests();
+      const { POST } = await import("@/app/api/analyze/route");
+      installHandlers();
+      // Only the clock is faked; the stream's own timers stay real.
+      vi.useFakeTimers({ toFake: ["Date"] });
+      try {
+        const body = { url: "share-checked-at.example" };
+        vi.setSystemTime(new Date("2026-10-06T09:00:00.000Z"));
+        const first = (
+          await parseNdjsonEvents(await POST(scanRequest("/api/analyze", body)))
+        ).at(-1)?.result;
+        vi.setSystemTime(new Date("2026-10-06T09:10:00.000Z"));
+        const second = (
+          await parseNdjsonEvents(await POST(scanRequest("/api/analyze", body)))
+        ).at(-1)?.result;
+
+        const checkedAt = first?.metadata?.completedAt;
+        expect(checkedAt?.startsWith("2026-10-06T09:00")).toBe(true);
+        expect(second?.metadata?.cacheHit).toBe(true);
+        // The request finished later; the evidence did not get fresher.
+        expect(
+          second?.metadata?.completedAt?.startsWith("2026-10-06T09:10"),
+        ).toBe(true);
+        expect(second?.metadata?.checkedAt).toBe(checkedAt);
+        expect(decodeSharedSnapshot(second?.share?.payload)?.capturedAt).toBe(
+          checkedAt,
+        );
+        expectSignedShare(second);
+        // Same evidence, same signed statement.
+        expect(second?.share).toEqual(first?.share);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("signs every batch result", async () => {
+      vi.stubEnv("SHARE_SIGNING_SECRET", SECRET);
+      resetEnvForTests();
+      const { POST } = await import("@/app/api/analyze/batch/route");
+      installHandlers();
+
+      const events = await parseNdjsonEvents(
+        await POST(
+          scanRequest("/api/analyze/batch", {
+            urls: ["example.com", "https://example.org"],
+          }),
+        ),
+      );
+      const completed = events.filter((event) => event.type === "url_complete");
+      expect(completed).toHaveLength(2);
+      for (const event of completed) expectSignedShare(event.result);
+
+      const final = events.at(-1);
+      expect(final?.type).toBe("batch_complete");
+      expect(final?.results).toHaveLength(2);
+      for (const result of final?.results ?? []) {
+        expect(
+          verifySharePayload(result.share?.payload, result.share?.sig),
+        ).toBe(true);
+      }
+    });
+
+    it("issues an unsigned share when no secret is configured", async () => {
+      vi.stubEnv("SHARE_SIGNING_SECRET", "");
+      resetEnvForTests();
+      const { POST } = await import("@/app/api/analyze/route");
+      installHandlers();
+
+      const events = await parseNdjsonEvents(
+        await POST(scanRequest("/api/analyze", { url: "unsigned.example" })),
+      );
+      const share = events.at(-1)?.result?.share;
+      expect(decodeSharedSnapshot(share?.payload)).not.toBeNull();
+      expect(share?.sig).toBeUndefined();
+    });
+  });
+
   it("stops dispatching queued URLs after the client disconnects", async () => {
     vi.resetModules();
     const runAnalysis = vi.fn(
@@ -820,9 +953,17 @@ async function parseNdjsonEvents(response: Response) {
                 type: string;
                 cached?: boolean;
                 url?: string;
+                results?: { share?: { payload?: string; sig?: string } }[];
                 result?: {
+                  url?: string;
+                  share?: { payload?: string; sig?: string };
                   verdict?: string;
-                  metadata?: { cacheHit?: boolean; partialFailure?: boolean };
+                  metadata?: {
+                    cacheHit?: boolean;
+                    partialFailure?: boolean;
+                    completedAt?: string;
+                    checkedAt?: string;
+                  };
                 };
               },
           );

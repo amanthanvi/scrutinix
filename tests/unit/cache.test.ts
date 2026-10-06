@@ -217,6 +217,8 @@ function buildResult(url: string): AnalysisResult {
       scanId: "scan-1",
       startedAt: "2026-03-06T00:00:00.000Z",
       completedAt: "2026-03-06T00:00:01.000Z",
+      // A fresh scan stamps both; the remote layer's sanitizer would fill it.
+      checkedAt: "2026-03-06T00:00:01.000Z",
       cacheHit: false,
       partialFailure: false,
       signalCount: 8,

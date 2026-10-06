@@ -19,6 +19,12 @@ const childEnv = {
   ...process.env,
   E2E_PORT: PORT,
   SCRUTINIX_TEST_FIXTURES: process.env.SCRUTINIX_TEST_FIXTURES ?? "1",
+  // A fixed, test-only share-signing key, shared by the server and the specs
+  // (tests/e2e/helpers.ts signs shared links with it). Never a real secret,
+  // and never reuse it: lib/config/env.ts ignores it unless SCRUTINIX_E2E=1.
+  SCRUTINIX_E2E: "1",
+  SHARE_SIGNING_SECRET: "e2e-only-share-signing-key-not-a-real-secret-0001",
+  SHARE_SIGNING_SECRET_PREVIOUS: "",
 };
 
 if (childEnv.SCRUTINIX_TEST_FIXTURES === "1") {
