@@ -55,6 +55,10 @@ test("privacy page discloses what a scan sends @smoke", async ({ page }) => {
     "one-minute window",
     "one-day window",
     "Share links embed a browser-generated snapshot in the URL itself",
+    "Vercel",
+    "each later host",
+    "IPv6 address",
+    "does not open a connection",
   ];
 
   for (const phrase of text) {

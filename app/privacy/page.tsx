@@ -31,23 +31,23 @@ const recipients = [
   },
   {
     name: "Spamhaus DBL",
-    body: "The registrable domain — example.com in https://login.example.com/reset — queried over DNS. The path is not included, and an IP address is not queried. The resolver and Spamhaus both see that domain.",
+    body: "The registrable domain — example.com in https://login.example.com/reset — queried over DNS. The path is not included. An IPv4 address is not queried. An IPv6 address is not recognized as an IP, so it can be sent as a name, brackets included. The resolver and Spamhaus both see that name.",
   },
   {
     name: "SURBL",
-    body: "The same registrable domain, queried over DNS. The resolver and SURBL both see that domain, and an IP address is not queried.",
+    body: "The same registrable domain, queried over DNS, with the same IPv4 and IPv6 handling as Spamhaus DBL. The resolver and SURBL both see that name.",
   },
   {
     name: "rdap.org",
-    body: "The registrable domain, for public registration data. rdap.org forwards the request to the domain's registry, which sees the same name. An IP address is not sent.",
+    body: "The registrable domain, for public registration data. rdap.org forwards the request to the domain's registry, which sees the same name. An IPv4 address is not sent. An IPv6 address is not recognized as an IP, so it can be sent as a name, brackets included.",
   },
   {
     name: "DNS resolver",
-    body: "The hostname, for address, mail, name-server, and text records, using this server's DNS resolver. A scan of an IP address sends that IP for a reverse lookup instead.",
+    body: "The hostname, for address, mail, name-server, and text records, using this server's DNS resolver. A scan of an IPv4 address sends that IP for a reverse lookup instead. An IPv6 address is queried as a hostname, brackets included, rather than as a reverse lookup.",
   },
   {
     name: "The host in the URL",
-    body: "The full URL, in a request this server makes. The next section describes that fetch.",
+    body: "The full URL, in a request this server makes. If the page redirects, each later host receives the redirected URL, including its path and query. The next section describes that fetch.",
   },
 ] as const;
 
@@ -90,11 +90,15 @@ export default function PrivacyPage() {
           Each URL in a batch is handled the same way. A #fragment is not
           forwarded to these services: a single scan removes it in the browser,
           and a batch request can still carry it to this server, which drops it
-          before any lookup. VirusTotal and Google Safe Browsing are not
-          contacted when this deployment has no API key for them. ThreatFox is
-          not contacted when no abuse.ch key is configured. A source that was
-          not contacted is reported as missing coverage. Local and private
-          addresses are rejected and are not forwarded.
+          before any lookup. On scrutinix.net the request is handled by Vercel,
+          which receives the URL in the request body and the IP address of the
+          request. VirusTotal and Google Safe Browsing are not contacted when
+          this deployment has no API key for them. ThreatFox is not contacted
+          when no abuse.ch key is configured. A source that was not contacted is
+          reported as missing coverage. A URL whose hostname is a local or
+          private address is rejected and is not forwarded. A public hostname is
+          still sent to the services below. If that name resolves to a private
+          address, this server does not open a connection to it.
         </p>
         <dl className="max-w-[65ch] space-y-4 text-sm leading-6">
           {recipients.map((recipient) => (
@@ -114,12 +118,15 @@ export default function PrivacyPage() {
         </h2>
         <p className="max-w-[65ch] text-sm leading-6 text-[var(--sx-text-muted)]">
           To follow redirects, the server sends up to five HTTP GET requests
-          along the chain, counting the original URL. Each request includes the
-          path and query string and identifies itself as scrutinix/3.0. When the
-          final page is HTML, the server reads up to 64 KB of it. That GET can
-          sign someone in, accept an invite, or otherwise consume a one-time
-          link. A separate connection checks the certificate and sends the
-          hostname only, not the path or query.
+          along the chain, counting the original URL. Each request goes to the
+          host named in that hop, which may be a different site from the one you
+          submitted, and includes that hop's path and query. It identifies
+          itself as scrutinix/3.0. A redirect to a private address is not
+          fetched. When the final page is HTML, the server reads up to 64 KB of
+          it. That GET can sign someone in, accept an invite, or otherwise
+          consume a one-time link. A separate connection checks the certificate
+          of the host you submitted and sends that hostname only, not the path
+          or query.
         </p>
       </section>
 
