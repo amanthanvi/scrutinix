@@ -1,3 +1,4 @@
+import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
 import { gotoApp, submitSingleScan } from "./helpers";
@@ -109,6 +110,20 @@ test("a share link from the first release stays readable @smoke", async ({
     snapshot.getByText("Suspicious risk based on reputation signals."),
   ).toBeVisible();
   await expect(snapshot.getByText("Claimed scan time")).toBeVisible();
+});
+
+test("the unverified snapshot passes axe in both themes @smoke", async ({
+  page,
+}) => {
+  await gotoApp(page, forgedLink);
+  await expect(snapshotRegion(page)).toBeVisible();
+
+  for (const colorScheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme });
+    await expect(page.locator("html")).toHaveClass(new RegExp(colorScheme));
+    const report = await new AxeBuilder({ page }).analyze();
+    expect(report.violations, colorScheme).toEqual([]);
+  }
 });
 
 test("sharing a result copies a link that opens unverified @smoke", async ({
