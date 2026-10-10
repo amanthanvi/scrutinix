@@ -49,6 +49,7 @@ components/
     input-panels.tsx      # Input, cancel, and batch-export controls
     results-section.tsx   # Verdict/BatchTable, result actions, Summary/Full signal rows
     verdict-panel.tsx     # Verdict, score meter, confidence, reasons, details
+    shared-snapshot-panel.tsx # Neutral "Unverified snapshot" view of ?shared= links
     signal-row.tsx        # Typed per-signal disclosure row
     batch-table.tsx       # Plain batch result list
     history-section.tsx   # Dynamic-import wrapper; drains completed-result queue
@@ -96,6 +97,10 @@ tests/
   per signal. Verdict text uses AA-safe `--sx-<verdict>-fg` tokens.
 - **Static accent**: blue `--sx-accent`; verdict colors appear only where a
   verdict is stated.
+- **Shared snapshots are claims**: `?shared=` payloads are unsigned, so
+  `lib/domain/shared-snapshot.ts` normalizes and caps them and the UI shows
+  them as a neutral "Unverified snapshot" with a "Scan this URL" action —
+  never verdict colour, never a "Scan result" label, never an automatic scan.
 - **E2E fixtures**: `SCRUTINIX_TEST_FIXTURES=1` provides deterministic offline
   scenarios under `npm run test:e2e`.
 - **CSS layering**: `app/globals.css` owns semantic tokens;

@@ -23,7 +23,7 @@ const sections = [
   },
   {
     title: "Shared links",
-    body: "Share links embed a browser-generated snapshot in the URL itself — there is no server-side share database. A snapshot is a point-in-time record; run a fresh scan to verify against current provider responses.",
+    body: "Share links embed a browser-generated snapshot in the URL itself — there is no server-side share database. Nothing signs that snapshot, so anyone can edit it: an opened link shows it as unverified, and only a fresh scan produces a result. Opening a link doesn't scan it; the URL reaches the server only if you choose to scan.",
   },
 ] as const;
 

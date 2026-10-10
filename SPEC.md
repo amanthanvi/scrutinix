@@ -178,7 +178,7 @@ Both personas use the same tool. A **view mode toggle** (Summary / Full Report) 
 - **FR-20** MUST be responsive (mobile-friendly)
 - **FR-21** SHOULD include educational content about URL threats
 - **FR-22** SHOULD surface lightweight trust/privacy/methodology context on the public site
-- **FR-23** MAY include shareable result links (URL-encoded state, no server persistence)
+- **FR-23** MAY include shareable result links (URL-encoded state, no server persistence). Share links are unsigned, so an opened link MUST render as an unverified snapshot in neutral styling, never as a scan result, and MUST scan only when the visitor asks
 
 ## 4) System Design
 
@@ -344,6 +344,7 @@ Implementation note: batch streams also emit `batch_started`, `url_started`, and
 | Scanning internal/private URLs                   | URL validation rejects private IP ranges (10.x, 192.168.x, localhost) |
 | Using tool to enumerate which URLs are malicious | Rate limiting + no bulk API access                                    |
 | XSS via crafted URL display                      | Sanitize all URL rendering, never inject raw HTML                     |
+| Forged share link claiming a verdict             | Show it as an unverified snapshot; fresh scan on request              |
 
 - **Audit/logging policy:** Log scan requests (URL hash only, not full URL) + response status + timing. Never log full URLs server-side (could contain PII in query params)
 
@@ -505,6 +506,7 @@ Then all content is readable and interactive without horizontal scrolling
 | 2026-03-06 | Switch hosted classifier to Hugging Face router + `DunnBC22/codebert-base-Malicious_URLs` | Keep retired endpoint/model; lexical only | The old Hugging Face inference host was retired and the previous model was not served on the supported router  | Hosted ML depends on a currently routed third-party model                       |
 | 2026-08-01 | Replace hosted inference with a bundled quantized ONNX URL classifier                     | Keep router dependency; lexical only      | Hosted inference was unreliable and made scan coverage depend on a third-party runtime                         | Larger deployment artifact; deterministic local inference with bounded fallback |
 | 2026-03-09 | Add onboarding/trust surfaces on `/`, `/about`, and `/privacy`                            | Tool-only landing page                    | The UI audit showed that first-time visitors lacked value framing, methodology context, and privacy disclosure | Slightly larger static surface area that must stay aligned with implementation  |
+| 2026-10-10 | Show `?shared=` links as unverified snapshots and scan only on request                    | Auto-rescan on open; HMAC-signed links    | Unsigned links can claim any verdict; auto-scanning would query providers for every visitor and crawler        | One click before a visitor sees a real verdict                                  |
 
 ## 11) Assumptions, Open Questions, Risks
 

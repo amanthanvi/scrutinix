@@ -21,6 +21,7 @@ Project-local operating notes for agents working in this repository. Keep this f
 - Domain model:
   - Eight signals are always present in results: `virusTotal`, `mlEnsemble`, `googleSafeBrowsing`, `threatFeeds`, `ssl`, `whois`, `dns`, `redirectChain`.
   - History is client-side only and stored in IndexedDB.
+  - Share links (`?shared=`) are unsigned base64 JSON anyone can write. Decode them only through `lib/domain/shared-snapshot.ts` and render them only as the neutral "Unverified snapshot" panel; never give them verdict colour, a "Scan result" label, or an automatic scan. Read the query string after hydration, not in the first render.
   - Cache only complete, non-partial, non-error, non-aborted results for 15 minutes. A rerun after degraded coverage must reach providers again.
   - In composite ML/threat-feed payloads, `warnings` mean lost coverage and set `partialFailure`; benign notes belong in `observations`. Redirect terminal errors also mark partial coverage.
   - Page-content credential-post evidence requires form-owned password inputs and includes viable submit-control `formaction` overrides; never combine page-wide password and form counts.

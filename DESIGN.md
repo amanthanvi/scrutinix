@@ -28,6 +28,7 @@ The verdict is a sentence with a number, not a dashboard. One centered column, a
 ## Component grammar
 
 - **Verdict:** a typographic block, not a card — verdict word (colored `-fg`) + `role="meter"` score + confidence as text; mono URL; summary sentence; one merged amber caveat sentence; plain reason list; native `<details>` for recommendations, caveats, and scan metadata; result actions (Export/Share/Re-scan) below it.
+- **Shared snapshot:** a `?shared=` link is an unsigned claim, so it never uses verdict grammar — no verdict colour, no verdict headline, no score. Neutral "Unverified snapshot" heading, mono URL, one sentence saying Scrutinix did not produce it, the claim as a muted mono `<dl>` (verdict, scan time, quoted summary), and a primary "Scan this URL" button. Opening a link never scans by itself.
 - **Signal rows:** an accessible Summary/Full switch selects either the three most relevant completed signals or all eight signals in fixed order. Each lane uses `<details>` rows in a hairline table (`border-y` + `divide-y`) with one severity encoding, a 6px dot. Evidence is a mono `<dl>` from `getSignalDetailEntries`.
 - **Tabs:** text tabs with a 2px accent underline on the active trigger (Radix) — no pill container.
 - **History:** hairline-divided in-flow list — verdict word, mono URL, time. Search filters URL, verdict, and summary. Confirm-clear with undo; exports as quiet text buttons.
@@ -47,4 +48,4 @@ No CRT/terminal/radar/glow. No casefile/dossier/stamp costume. No cream/purple S
 
 ## Accessibility contracts (tests depend on these)
 
-`role="meter"` "Threat score" (post-scan), labelled `role="switch"` with visible Summary/Full labels, region "Scan history", per-signal `aria-label="{Label} signal: {status}"`, textbox names "URL to analyze"/"URLs to analyze", buttons Analyze / Start batch / Clear all history / Confirm clear all history / Undo clear, skip link, `id="scan-console"`, `id="main-content"`. Axe runs at zero violations; colored text always uses `-fg` tokens.
+`role="meter"` "Threat score" (post-scan), labelled `role="switch"` with visible Summary/Full labels, region "Scan history", region "Unverified snapshot" with button "Scan this URL" (never labelled "Scan result"), per-signal `aria-label="{Label} signal: {status}"`, textbox names "URL to analyze"/"URLs to analyze", buttons Analyze / Start batch / Clear all history / Confirm clear all history / Undo clear, skip link, `id="scan-console"`, `id="main-content"`. Axe runs at zero violations; colored text always uses `-fg` tokens.
