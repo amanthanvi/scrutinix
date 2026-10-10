@@ -55,7 +55,7 @@
     "geist": "^1.7.2",
     "idb": "^8.0.3",
     "lucide-react": "^1.48.0",
-    "next": "16.3.6",
+    "next": "16.3.8",
     "next-themes": "^0.4.6",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
@@ -66,7 +66,7 @@
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",
-    "@next/eslint-plugin-next": "16.3.6",
+    "@next/eslint-plugin-next": "16.3.8",
     "@playwright/test": "^1.63.0",
     "@tailwindcss/postcss": "^4.3.3",
     "@testing-library/react": "^16.3.3",
@@ -106,7 +106,7 @@
       "brace-expansion": "5.0.12"
     },
     "postcss": "8.5.28",
-    "sharp": "0.35.4",
+    "sharp": "0.35.5",
     "source-map-js": "1.2.2",
     "ws": "8.21.1"
   }
