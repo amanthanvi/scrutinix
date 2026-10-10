@@ -302,7 +302,7 @@ Implementation note: batch streams also emit `batch_started`, `url_started`, and
 ### 4.4 State, caching, concurrency
 
 - **Source of truth:** Each scan is ephemeral server-side (computed, cached briefly, not persisted). Client-side IndexedDB is the only persistence layer
-- **Server cache:** LRU cache (200 items, 15-min TTL) keyed by normalized URL, with optional shared Redis. Shared Redis keys are hashed and namespaced by `VERCEL_ENV` (each preview commit separately; `local` off Vercel), so previews never answer production scans; rate-limit state stays shared. Only complete, non-partial results are eligible; error, warning-degraded composite, incomplete redirect, partial-failure, and aborted scans always trigger fresh work. Composite `warnings` and redirect terminal errors represent lost coverage; informational feed notes use `observations`
+- **Server cache:** LRU cache (200 items, 15-min reuse TTL) keyed by normalized URL, with optional shared Redis. The in-memory TTL is enforced on the next read, not by a timer, so an unread entry can remain until eviction or process exit and is not served after it expires. Shared Redis entries expire on that TTL. Shared Redis keys are hashed and namespaced by `VERCEL_ENV` (each preview commit separately; `local` off Vercel), so previews never answer production scans; rate-limit state stays shared. Only complete, non-partial results are eligible; error, warning-degraded composite, incomplete redirect, partial-failure, and aborted scans always trigger fresh work. Composite `warnings` and redirect terminal errors represent lost coverage; informational feed notes use `observations`
 - **Concurrency:** Enrichment pipeline runs all 8 sources via `Promise.allSettled()`. Batch mode uses a concurrency limiter (max 3 URLs in-flight simultaneously to stay within API quotas)
 - **Hazards:** VT rate limit (4 req/min on free tier) — queue VT calls with backoff. Bound bundled-model initialization to 10 seconds and each local inference to 2 seconds so cold starts cannot consume the full scan budget
 
@@ -334,8 +334,8 @@ Implementation note: batch streams also emit `batch_started`, `url_started`, and
 ## 5) Security, Privacy, Compliance
 
 - **Authn/authz:** None. Anonymous usage. No user accounts
-- **PII:** No PII collected or stored server-side. URLs attached to eligible complete results may be cached for up to 15 minutes, then discarded; partial/error/aborted scans are not cached. Client-side history is user-controlled
-- **Public disclosure:** `/privacy` explains local history, hashed server logging, and client-only share links; `/about` explains the scoring and signal model
+- **PII:** No accounts. URLs on complete, non-partial results may be reused for 15 minutes. Upstash Redis deletes that copy when the window ends; the in-memory copy is not reused after 15 minutes but can remain until the next read, eviction from the 200-entry cache, or process exit. Partial, error, and aborted scans are not cached. Request IPs are used for rate limits and, when shared Redis is configured, stored for the one-minute and one-day windows. Client-side history is user-controlled. Application logs store a hash of the URL, not the raw string
+- **Public disclosure:** `/privacy` names every service that receives a submitted URL or its domain, the server-side page fetch, 15-minute caching, hashed logging, rate-limit IP storage, and client-only share links; `/about` names every feed and provider a scan uses and explains the scoring model
 - **Abuse cases + mitigations:**
 
 | Abuse case                                       | Mitigation                                                            |
