@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import { toast } from "sonner";
 
 import { useAnalyzerRuntime } from "@/components/scrutinix/analyzer-runtime";
+import { SharedSnapshotPanel } from "@/components/scrutinix/shared-snapshot-panel";
 import { SignalRow } from "@/components/scrutinix/signal-row";
 import { VerdictPanel } from "@/components/scrutinix/verdict-panel";
 import { SIGNAL_COUNT } from "@/components/shared/scrutinix-types";
@@ -77,21 +78,19 @@ export function ResultsSection() {
 
       {activeTab === "single" ? (
         <div className="flex flex-col gap-4">
-          <VerdictPanel
-            result={active}
-            isStreaming={scan.state.isStreaming}
-            streamUrl={scan.state.url}
-            sharedSnapshot={sharedSnapshot}
-            completedSignals={done}
-            onRunSharedScan={
-              sharedSnapshot
-                ? () => {
-                    setSingleUrl(sharedSnapshot.url);
-                    void rescanUrl(sharedSnapshot.url);
-                  }
-                : undefined
-            }
-          />
+          {sharedSnapshot && !active && !scan.state.isStreaming ? (
+            <SharedSnapshotPanel
+              snapshot={sharedSnapshot}
+              onScan={() => void rescanUrl(sharedSnapshot.url)}
+            />
+          ) : (
+            <VerdictPanel
+              result={active}
+              isStreaming={scan.state.isStreaming}
+              streamUrl={scan.state.url}
+              completedSignals={done}
+            />
+          )}
           {active ? (
             <div className="flex flex-wrap items-center gap-1">
               <Button

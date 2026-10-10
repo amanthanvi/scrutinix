@@ -52,7 +52,6 @@ describe("VerdictPanel", () => {
         })}
         isStreaming={false}
         streamUrl=""
-        sharedSnapshot={null}
         completedSignals={8}
       />,
     );
@@ -70,7 +69,6 @@ describe("VerdictPanel", () => {
         result={buildUnknownResult()}
         isStreaming={false}
         streamUrl=""
-        sharedSnapshot={null}
         completedSignals={8}
       />,
     );

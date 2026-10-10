@@ -1,43 +1,27 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
 import { formatDisplayUrl } from "@/lib/domain/url";
 import type { AnalysisResult } from "@/lib/domain/types";
 import {
   SIGNAL_COUNT,
+  formatTimestamp,
   verdictFg,
-  type SharedSnapshot,
 } from "@/components/shared/scrutinix-types";
 
 interface VerdictPanelProps {
   result: AnalysisResult | null;
   isStreaming: boolean;
   streamUrl: string;
-  sharedSnapshot: SharedSnapshot | null;
   completedSignals?: number;
-  onRunSharedScan?: () => void;
-}
-
-function formatTimestamp(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString("en-US", {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
 }
 
 export function VerdictPanel({
   result,
   isStreaming,
   streamUrl,
-  sharedSnapshot,
   completedSignals = 0,
-  onRunSharedScan,
 }: VerdictPanelProps) {
-  if (!result && !isStreaming && !sharedSnapshot) {
+  if (!result && !isStreaming) {
     return null;
   }
 
@@ -62,44 +46,6 @@ export function VerdictPanel({
               transform: `scaleX(${completedSignals / SIGNAL_COUNT})`,
             }}
           />
-        </div>
-      </section>
-    );
-  }
-
-  if (!result && sharedSnapshot) {
-    return (
-      <section
-        className="sx-enter"
-        aria-label={`Scan result: ${sharedSnapshot.verdict}`}
-      >
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h2
-            className="text-2xl font-semibold tracking-[-0.01em] capitalize"
-            style={{ color: verdictFg(sharedSnapshot.verdict) }}
-          >
-            {sharedSnapshot.verdict}
-          </h2>
-          <p className="text-xs text-[var(--sx-text-muted)]">
-            Shared snapshot · captured{" "}
-            {formatTimestamp(sharedSnapshot.capturedAt)}
-          </p>
-        </div>
-        <p className="mt-1 font-mono text-sm break-all text-[var(--sx-text-muted)]">
-          {formatDisplayUrl(sharedSnapshot.url)}
-        </p>
-        <p className="mt-3 text-sm leading-6 text-[var(--sx-text)]">
-          {sharedSnapshot.summary}
-        </p>
-        <div className="mt-4 flex flex-wrap items-center gap-3">
-          {onRunSharedScan ? (
-            <Button type="button" variant="outline" onClick={onRunSharedScan}>
-              Run fresh scan
-            </Button>
-          ) : null}
-          <p className="text-xs text-[var(--sx-text-muted)]">
-            Snapshots are embedded in the link — run a fresh scan to verify.
-          </p>
         </div>
       </section>
     );
