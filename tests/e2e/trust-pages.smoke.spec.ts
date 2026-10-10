@@ -50,6 +50,8 @@ test("privacy page discloses what a scan sends @smoke", async ({ page }) => {
     "64 KB",
     "one-time link",
     "15 minutes",
+    "not reused",
+    "tries one more",
     "Upstash Redis",
     "hash of the URL",
     "one-minute window",

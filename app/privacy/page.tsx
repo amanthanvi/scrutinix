@@ -117,16 +117,16 @@ export default function PrivacyPage() {
           The server fetches the page
         </h2>
         <p className="max-w-[65ch] text-sm leading-6 text-[var(--sx-text-muted)]">
-          To follow redirects, the server sends up to five HTTP GET requests
-          along the chain, counting the original URL. Each request goes to the
-          host named in that hop, which may be a different site from the one you
-          submitted, and includes that hop's path and query. It identifies
-          itself as scrutinix/3.0. A redirect to a private address is not
-          fetched. When the final page is HTML, the server reads up to 64 KB of
-          it. That GET can sign someone in, accept an invite, or otherwise
-          consume a one-time link. A separate connection checks the certificate
-          of the host you submitted and sends that hostname only, not the path
-          or query.
+          To follow redirects, the server requests up to five URLs, counting the
+          original. If the first address for a hop does not answer, it tries one
+          more. Each request goes to the host named in that hop, which may be a
+          different site from the one you submitted, and includes that hop's
+          path and query. It identifies itself as scrutinix/3.0. A redirect to a
+          private address is not fetched. When the final page is HTML, the
+          server reads up to 64 KB of it. That GET can sign someone in, accept
+          an invite, or otherwise consume a one-time link. A separate connection
+          checks the certificate of the host you submitted and sends that
+          hostname only, not the path or query.
         </p>
       </section>
 
@@ -135,12 +135,15 @@ export default function PrivacyPage() {
           Cache
         </h2>
         <p className="max-w-[65ch] text-sm leading-6 text-[var(--sx-text-muted)]">
-          A scan that finishes without missing coverage is kept for up to 15
-          minutes, including the URL, so a repeat can skip the providers. The
-          copy is held in memory on the server and, when shared caching is
-          configured, in Upstash Redis. The Redis key is a hash of the URL, not
-          the URL itself. Incomplete, failed, and cancelled scans are not
-          cached. History on your device is never uploaded.
+          A scan that finishes without missing coverage can be reused for 15
+          minutes, including the URL, so a repeat can skip the providers. In
+          memory, that copy can remain until the same URL is read again, until
+          newer results push it out of the 200-entry limit, or until the process
+          ends; after 15 minutes it is not reused. When shared caching is
+          configured, Upstash Redis deletes its copy at the end of those 15
+          minutes. The Redis key is a hash of the URL, not the URL itself.
+          Incomplete, failed, and cancelled scans are not cached. History on
+          your device is never uploaded.
         </p>
       </section>
 
