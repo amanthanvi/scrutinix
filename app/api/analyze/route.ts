@@ -1,5 +1,6 @@
 import { runAnalysis, SCAN_BUDGET_MS } from "@/lib/server/analyze";
 import { createApiError } from "@/lib/server/api-error";
+import { exposeClientError } from "@/lib/server/client-error";
 import { parseScanRequest } from "@/lib/server/scan-request";
 import { createNdjsonResponse } from "@/lib/server/stream";
 
@@ -65,15 +66,16 @@ export async function POST(request: Request) {
         result,
       });
     } catch (error) {
+      const failure = exposeClientError(error, {
+        correlationId: scanId,
+        summary: "The scan failed unexpectedly.",
+        code: "scan_failed",
+        logEvent: "scan.failed",
+        redact: [target.normalizedUrl, target.hostname],
+      });
       writer.send({
         type: "scan_error",
-        error: createApiError(
-          "scan_failed",
-          error instanceof Error
-            ? error.message
-            : "The scan failed unexpectedly.",
-          true,
-        ),
+        error: createApiError(failure.code, failure.message, failure.retryable),
       });
     }
   });

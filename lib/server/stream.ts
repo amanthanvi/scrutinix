@@ -1,4 +1,5 @@
 import type { AnalyzeEvent, BatchEvent } from "@/lib/domain/types";
+import { exposeClientError } from "@/lib/server/client-error";
 
 type StreamEvent = AnalyzeEvent | BatchEvent | { type: "keepalive" };
 
@@ -24,8 +25,16 @@ export function createNdjsonResponse(
         try {
           await run(writer, disconnect.signal);
         } catch (error) {
+          // Route handlers normally catch and emit a terminal event. This is
+          // the backstop so a leak never becomes the stream's error reason.
+          const failure = exposeClientError(error, {
+            correlationId: crypto.randomUUID(),
+            summary: "The scan stream failed unexpectedly.",
+            code: "stream_failed",
+            logEvent: "stream.failed",
+          });
           writer.markClosed();
-          controller.error(error);
+          controller.error(new Error(failure.message));
           return;
         }
         writer.close();

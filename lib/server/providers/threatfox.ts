@@ -1,4 +1,5 @@
 import { getEnv } from "@/lib/config/env";
+import { PublicError } from "@/lib/domain/public-error";
 import type { ThreatFeedsData } from "@/lib/domain/types";
 import { simplifyUrlForMatching } from "@/lib/domain/url";
 import { fetchWithTimeout } from "@/lib/server/http";
@@ -49,7 +50,10 @@ export async function checkThreatFox(
   );
 
   if (!response.ok) {
-    throw new Error(`ThreatFox lookup failed with status ${response.status}.`);
+    throw new PublicError(
+      "lookup_failed",
+      `ThreatFox lookup failed with status ${response.status}.`,
+    );
   }
 
   const payload = (await response.json()) as {

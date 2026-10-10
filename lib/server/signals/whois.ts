@@ -1,10 +1,11 @@
 import { isIP } from "node:net";
 
+import { PublicError } from "@/lib/domain/public-error";
 import { getRegistrableDomain } from "@/lib/domain/registrable-domain";
 import { isSharedPlatformHost } from "@/lib/domain/shared-platforms";
 import type { WhoisData } from "@/lib/domain/types";
 import { fetchWithTimeout, SCRUTINIX_USER_AGENT } from "@/lib/server/http";
-import { getErrorMessage, SignalSkipError } from "@/lib/server/signal-error";
+import { SignalSkipError } from "@/lib/server/signal-error";
 
 /* RdapEvent interface removed — RDAP fields are now validated at runtime via asRecord(). */
 
@@ -68,15 +69,20 @@ export async function runWhoisSignal(
   }
 
   if (!response.ok) {
-    throw new Error(`RDAP lookup failed with status ${response.status}.`);
+    throw new PublicError(
+      "lookup_failed",
+      `RDAP lookup failed with status ${response.status}.`,
+    );
   }
 
   let payload: Record<string, unknown> | null;
   try {
     payload = asRecord(await response.json());
   } catch (error) {
-    throw new Error(
-      `The RDAP response could not be parsed: ${getErrorMessage(error)}`,
+    throw new PublicError(
+      "lookup_failed",
+      "The RDAP response could not be parsed.",
+      { cause: error },
     );
   }
 

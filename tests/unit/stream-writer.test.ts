@@ -1,6 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createNdjsonResponse } from "@/lib/server/stream";
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 describe("createNdjsonResponse", () => {
   it("streams events and closes cleanly", async () => {
@@ -45,5 +49,36 @@ describe("createNdjsonResponse", () => {
     // Sends after disconnect must be swallowed, not thrown.
     expect(() => sendAfterCancel?.()).not.toThrow();
     releaseRun();
+  });
+
+  it("replaces a thrown exception with a generic stream error", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const response = createNdjsonResponse(async () => {
+      throw new Error(
+        "ONNXRuntime failed WRONGPASS s3cret-token redis://default:s3cret-token@cache.internal",
+      );
+    });
+
+    let caught: unknown;
+    try {
+      await response.text();
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toBeInstanceOf(Error);
+    const message = caught instanceof Error ? caught.message : "";
+    expect(message).toContain("The scan stream failed unexpectedly.");
+    expect(message).toMatch(/Reference: [0-9a-f-]{36}\./);
+    expect(message).not.toContain("s3cret-token");
+    expect(message).not.toContain("ONNXRuntime");
+    expect(message).not.toContain("redis://");
+
+    const logged = errorSpy.mock.calls
+      .map((call) => String(call[0]))
+      .join("\n");
+    expect(logged).toContain("ONNXRuntime");
+    expect(logged).toContain("WRONGPASS");
+    expect(logged).not.toContain("redis://");
   });
 });

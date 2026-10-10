@@ -76,6 +76,38 @@ describe("runSslSignal", () => {
     expect(result.observations[0]).toContain("38376");
   });
 
+  it("does not return raw TLS exception text", async () => {
+    vi.spyOn(tls, "connect").mockImplementation(() => {
+      const socket = {
+        setTimeout: vi.fn(),
+        once: vi.fn((event: string, handler: (err?: Error) => void) => {
+          if (event === "error") {
+            queueMicrotask(() => {
+              handler(
+                new Error(
+                  "handshake failed for redis://default:s3cret-token@cache.internal ONNXRuntime",
+                ),
+              );
+            });
+          }
+        }),
+        destroy: vi.fn(),
+        end: vi.fn(),
+      };
+      return socket as unknown as tls.TLSSocket;
+    });
+
+    const result = await runSslSignal("https://15.58.86.110:38376/bin.sh");
+    const observation = result.observations.join("\n");
+
+    expect(result.available).toBe(false);
+    expect(observation).toContain("The TLS probe failed unexpectedly.");
+    expect(observation).toMatch(/Reference: [0-9a-f-]{36}\./);
+    expect(observation).not.toContain("s3cret-token");
+    expect(observation).not.toContain("redis://");
+    expect(observation).not.toContain("ONNXRuntime");
+  });
+
   it("blocks private literal IPs before opening a TLS socket", async () => {
     const connectSpy = vi.spyOn(tls, "connect");
 

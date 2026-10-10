@@ -2,6 +2,7 @@ import tls from "node:tls";
 import { isIP } from "node:net";
 
 import type { SSLData } from "@/lib/domain/types";
+import { exposeClientError } from "@/lib/server/client-error";
 import {
   assertPublicNetworkTarget,
   selectPublicProbeAddresses,
@@ -63,6 +64,7 @@ export async function runSslSignal(
       port,
       probeAddress,
       Math.min(SSL_PROBE_TIMEOUT_MS, remaining),
+      [url, hostname],
       signal,
     );
     if (result.available) {
@@ -82,6 +84,7 @@ function runSslProbe(
   port: number,
   probeAddress: string,
   timeoutMs: number,
+  redact: readonly string[],
   signal?: AbortSignal,
 ): Promise<SSLData> {
   return new Promise<SSLData>((resolve) => {
@@ -180,7 +183,9 @@ function runSslProbe(
 
     socket.once("error", (error) => {
       socket.destroy();
-      resolve(createUnavailableSslData(describeTlsFailure(error, port)));
+      resolve(
+        createUnavailableSslData(describeTlsFailure(error, port, redact)),
+      );
     });
   });
 }
@@ -268,26 +273,35 @@ function getValidationState(
   return "invalid";
 }
 
-function describeTlsFailure(error: unknown, port: number) {
-  if (!(error instanceof Error)) {
-    return "The TLS probe failed unexpectedly.";
-  }
+const TLS_FAILURE_SUMMARIES: Record<string, (port: number) => string> = {
+  ECONNREFUSED: (port) => `The host refused a TLS connection on port ${port}.`,
+  ENOTFOUND: () => "The hostname could not be resolved for the TLS probe.",
+  ECONNRESET: () =>
+    "The TLS connection was reset before the handshake completed.",
+  ETIMEDOUT: () => "The TLS probe timed out before the host responded.",
+};
 
+function describeTlsFailure(
+  error: unknown,
+  port: number,
+  redact: readonly string[],
+) {
   const code =
-    "code" in error && typeof error.code === "string" ? error.code : null;
-
-  switch (code) {
-    case "ECONNREFUSED":
-      return `The host refused a TLS connection on port ${port}.`;
-    case "ENOTFOUND":
-      return "The hostname could not be resolved for the TLS probe.";
-    case "ECONNRESET":
-      return "The TLS connection was reset before the handshake completed.";
-    case "ETIMEDOUT":
-      return "The TLS probe timed out before the host responded.";
-    default:
-      return error.message || "The TLS probe failed unexpectedly.";
+    error instanceof Error && "code" in error && typeof error.code === "string"
+      ? error.code
+      : null;
+  const summary = code ? TLS_FAILURE_SUMMARIES[code] : undefined;
+  if (summary) {
+    return summary(port);
   }
+
+  return exposeClientError(error, {
+    correlationId: crypto.randomUUID(),
+    summary: "The TLS probe failed unexpectedly.",
+    code: "probe_failed",
+    logEvent: "ssl.probe_failed",
+    redact,
+  }).message;
 }
 
 function normalizeCertificateName(

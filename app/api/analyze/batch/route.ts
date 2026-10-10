@@ -1,6 +1,7 @@
 import { createErrorAnalysisResult } from "@/lib/domain/analysis-result";
 import { runAnalysis, SCAN_BUDGET_MS } from "@/lib/server/analyze";
 import { createApiError } from "@/lib/server/api-error";
+import { exposeClientError } from "@/lib/server/client-error";
 import { parseScanRequest } from "@/lib/server/scan-request";
 import { createNdjsonResponse } from "@/lib/server/stream";
 
@@ -16,6 +17,7 @@ export async function POST(request: Request) {
   }
 
   const targets = parsed.targets;
+  const batchId = crypto.randomUUID();
 
   return createNdjsonResponse(async (writer, clientGone) => {
     writer.startKeepalive();
@@ -54,14 +56,19 @@ export async function POST(request: Request) {
               signal,
             });
           } catch (error) {
+            const failure = exposeClientError(error, {
+              correlationId: scanId,
+              summary: "This URL could not be scanned.",
+              code: "scan_failed",
+              logEvent: "scan.failed",
+              redact: [target.normalizedUrl, target.hostname],
+              logFields: { batchId },
+            });
             result = createErrorAnalysisResult({
               url: target.normalizedUrl,
               scanId,
               startedAt,
-              message:
-                error instanceof Error
-                  ? error.message
-                  : "The batch item failed unexpectedly.",
+              message: failure.message,
             });
           }
 
@@ -81,15 +88,19 @@ export async function POST(request: Request) {
         results,
       });
     } catch (error) {
+      const failure = exposeClientError(error, {
+        correlationId: batchId,
+        summary: "The batch failed unexpectedly.",
+        code: "batch_failed",
+        logEvent: "batch.failed",
+        redact: targets.flatMap((target) => [
+          target.normalizedUrl,
+          target.hostname,
+        ]),
+      });
       writer.send({
         type: "batch_error",
-        error: createApiError(
-          "batch_failed",
-          error instanceof Error
-            ? error.message
-            : "The batch failed unexpectedly.",
-          true,
-        ),
+        error: createApiError(failure.code, failure.message, failure.retryable),
       });
     }
   });

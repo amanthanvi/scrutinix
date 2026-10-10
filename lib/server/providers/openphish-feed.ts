@@ -1,7 +1,8 @@
 import { getEnv } from "@/lib/config/env";
+import { PublicError } from "@/lib/domain/public-error";
+import type { ThreatFeedsData } from "@/lib/domain/types";
 import { simplifyUrlForMatching } from "@/lib/domain/url";
 import { fetchWithTimeout } from "@/lib/server/http";
-import type { ThreatFeedsData } from "@/lib/domain/types";
 
 interface FeedCache {
   fetchedAt: number;
@@ -79,7 +80,8 @@ async function downloadOpenPhishFeed(): Promise<FeedCache> {
   const env = getEnv();
   const response = await fetchWithTimeout(env.OPENPHISH_FEED_URL, {}, 8_000);
   if (!response.ok) {
-    throw new Error(
+    throw new PublicError(
+      "lookup_failed",
       `OpenPhish feed download failed with status ${response.status}.`,
     );
   }
