@@ -11,8 +11,8 @@ import {
 } from "react";
 import { toast } from "sonner";
 
-import { getSignalSeverity } from "@/components/shared/scrutinix-types";
 import type { SharedSnapshot } from "@/components/shared/scrutinix-types";
+import { selectSummarySignals } from "@/components/shared/signal-selection";
 import { useBatchStream } from "@/hooks/use-batch-stream";
 import { useScanStream } from "@/hooks/use-scan-stream";
 import { sharedSnapshotSchema } from "@/lib/domain/schemas";
@@ -25,27 +25,6 @@ import { normalizeUrlInput } from "@/lib/domain/url";
 
 export type Tab = "single" | "batch";
 export type ViewMode = "summary" | "full";
-
-const summarySignalOrder = [
-  "googleSafeBrowsing",
-  "threatFeeds",
-  "virusTotal",
-  "mlEnsemble",
-  "ssl",
-  "redirectChain",
-  "whois",
-  "dns",
-] as const;
-
-const severityRank = {
-  malicious: 5,
-  suspicious: 4,
-  error: 3,
-  neutral: 2,
-  skipped: 1,
-  safe: 0,
-  pending: -1,
-} as const;
 
 function readSnapshot(): SharedSnapshot | null {
   if (typeof window === "undefined") return null;
@@ -77,6 +56,12 @@ function useCreateAnalyzerRuntime() {
   const [selectedResult, setSelectedResult] = useState<AnalysisResult | null>(
     null,
   );
+  // True once the person edits the URL after a result is shown; Analyze then
+  // returns to the primary style. Until then the verdict owns the color.
+  const [inputEditedSinceResult, setInputEditedSinceResult] = useState(false);
+  // Bumped when a stored result (history, batch "Open") replaces the view,
+  // so the results section can move focus to the verdict heading.
+  const [verdictFocusRequest, setVerdictFocusRequest] = useState(0);
   const [sharedSnapshot] = useState<SharedSnapshot | null>(() =>
     readSnapshot(),
   );
@@ -113,38 +98,27 @@ function useCreateAnalyzerRuntime() {
     [signals],
   );
 
-  const summarySignals = useMemo(
-    () =>
-      [...summarySignalOrder]
-        .filter((signalName) => signals[signalName].status !== "pending")
-        .sort((left, right) => {
-          const leftSeverity = getSignalSeverity(
-            signals[left].status,
-            signals[left].data,
-            left,
-          );
-          const rightSeverity = getSignalSeverity(
-            signals[right].status,
-            signals[right].data,
-            right,
-          );
-          return severityRank[rightSeverity] - severityRank[leftSeverity];
-        })
-        .slice(0, 3),
-    [signals],
+  const scoredSignals = active?.threatInfo?.scoredSignals;
+  const summarySelection = useMemo(
+    () => selectSummarySignals(signals, scoredSignals),
+    [signals, scoredSignals],
   );
 
   const visibleSignals = useMemo(
     () =>
-      viewMode === "summary" && summarySignals.length > 0
-        ? summarySignals
-        : [...signalNames],
-    [summarySignals, viewMode],
+      viewMode === "summary" ? summarySelection.drivers : [...signalNames],
+    [summarySelection, viewMode],
   );
+
+  const updateSingleUrl = useCallback((value: string) => {
+    setSingleUrl(value);
+    setInputEditedSinceResult(true);
+  }, []);
 
   const startSingleScan = useCallback(async () => {
     setFormError(null);
     setSelectedResult(null);
+    setInputEditedSinceResult(false);
     const value = normalizeUrlInput(singleUrl);
     if (!value.ok) {
       setFormError(value.error);
@@ -161,7 +135,7 @@ function useCreateAnalyzerRuntime() {
       .filter(Boolean);
 
     if (!urls.length) {
-      setFormError("Add at least one URL.");
+      setFormError("Paste at least one link to check.");
       return;
     }
     if (urls.length > 10) {
@@ -205,17 +179,26 @@ function useCreateAnalyzerRuntime() {
       setFormError(null);
       setSelectedResult(null);
       setSingleUrl(url);
+      setInputEditedSinceResult(false);
       setActiveTab("single");
       await scan.startScan(url);
     },
     [scan],
   );
 
-  const selectHistoryEntry = useCallback((entry: HistoryEntry) => {
-    setSelectedResult(entry);
-    setSingleUrl(entry.url);
+  /** Show a stored result (history entry or batch row) as the active one. */
+  const openStoredResult = useCallback((result: AnalysisResult) => {
+    setSelectedResult(result);
+    setSingleUrl(result.url);
+    setInputEditedSinceResult(false);
     setActiveTab("single");
+    setVerdictFocusRequest((previous) => previous + 1);
   }, []);
+
+  const selectHistoryEntry = useCallback(
+    (entry: HistoryEntry) => openStoredResult(entry),
+    [openStoredResult],
+  );
 
   return {
     active,
@@ -226,7 +209,9 @@ function useCreateAnalyzerRuntime() {
     drainHistoryQueue,
     formError,
     historyQueue,
+    inputEditedSinceResult,
     live,
+    openStoredResult,
     rescanUrl,
     scan,
     selectedResult,
@@ -237,13 +222,15 @@ function useCreateAnalyzerRuntime() {
     setSelectedResult,
     setSingleUrl,
     setViewMode,
+    updateSingleUrl,
     shareResult,
     sharedSnapshot,
     signals,
     singleUrl,
     startBatchScan,
     startSingleScan,
-    summarySignals,
+    summarySelection,
+    verdictFocusRequest,
     viewMode,
     visibleSignals,
   };

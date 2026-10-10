@@ -11,6 +11,8 @@ interface SingleInputProps {
   onUrlChange: (v: string) => void;
   error?: string | null;
   streaming: boolean;
+  /** A result for this input is on screen: Analyze steps back to outline. */
+  showingResult?: boolean;
   onSubmit: () => void;
   onCancel: () => void;
 }
@@ -20,11 +22,10 @@ export function SingleInput({
   onUrlChange,
   error,
   streaming,
+  showingResult = false,
   onSubmit,
   onCancel,
 }: SingleInputProps) {
-  const hasUrl = url.trim().length > 0;
-
   return (
     <div className="space-y-3">
       <label htmlFor="sx-url-input" className="sr-only">
@@ -51,12 +52,13 @@ export function SingleInput({
           className="h-11 min-w-0 flex-1 font-mono text-sm aria-invalid:border-[var(--sx-suspicious-fg)]"
         />
 
+        {/* Never disabled at rest: an empty submit explains itself inline. */}
         <Button
           type="button"
           aria-label="Analyze URL"
           onClick={onSubmit}
-          disabled={streaming || !hasUrl}
-          variant="primary"
+          disabled={streaming}
+          variant={showingResult && !streaming ? "outline" : "primary"}
           className="h-11 shrink-0 px-4 text-sm sm:min-w-24"
         >
           Analyze
@@ -64,7 +66,11 @@ export function SingleInput({
       </div>
 
       {error ? (
-        <p id="sx-url-error" className="text-xs text-[var(--sx-suspicious-fg)]">
+        <p
+          id="sx-url-error"
+          role="alert"
+          className="text-xs text-[var(--sx-suspicious-fg)]"
+        >
           {error}
         </p>
       ) : null}
@@ -111,7 +117,6 @@ export function BatchInput({
         .filter(Boolean).length,
     [value],
   );
-  const hasUrls = value.trim().length > 0;
 
   return (
     <div className="space-y-3">
@@ -142,6 +147,7 @@ export function BatchInput({
       {error ? (
         <p
           id="sx-batch-error"
+          role="alert"
           className="text-xs text-[var(--sx-suspicious-fg)]"
         >
           {error}
@@ -157,7 +163,7 @@ export function BatchInput({
         <Button
           type="button"
           onClick={onSubmit}
-          disabled={streaming || !hasUrls}
+          disabled={streaming}
           variant="primary"
           className="h-11 px-4 text-sm"
         >
@@ -171,10 +177,10 @@ export function BatchInput({
         {hasResults && (
           <>
             <Button type="button" onClick={onCsv} variant="ghost" size="sm">
-              Export CSV
+              Export batch CSV
             </Button>
             <Button type="button" onClick={onJson} variant="ghost" size="sm">
-              Export JSON
+              Export batch JSON
             </Button>
           </>
         )}

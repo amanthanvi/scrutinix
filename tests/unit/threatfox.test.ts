@@ -54,7 +54,8 @@ describe("checkThreatFox", () => {
     expect(outcome.match).toEqual({
       feed: "threatfox",
       matchedUrl: "https://evil.example/payload",
-      detail: "payload_delivery indicator for AgentTesla in ThreatFox",
+      detail:
+        "lists this link as an indicator of malware delivery (AgentTesla)",
       confidence: "high",
       matchType: "url",
     });
@@ -86,7 +87,7 @@ describe("checkThreatFox", () => {
       feed: "threatfox",
       matchedUrl: "github.com",
       detail:
-        "host has another URL listed as a payload_delivery indicator for Unknown Stealer in ThreatFox",
+        "lists another link on this host as an indicator of malware delivery (Unknown Stealer)",
       confidence: "medium",
       matchType: "host",
       listedElsewhereOnHost: true,

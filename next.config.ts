@@ -28,6 +28,9 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  // `next dev` otherwise rewrites AGENTS.md/CLAUDE.md with a managed
+  // agent-rules block on every run; this repo curates those files by hand.
+  agentRules: false,
   turbopack: {
     root: rootDir,
   },

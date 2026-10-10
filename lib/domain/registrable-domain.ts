@@ -1,16 +1,17 @@
-import { isIP } from "node:net";
 import { getDomain } from "tldts";
 
 /**
  * Public-Suffix-List registrable domain (eTLD+1) for a hostname. Private
  * suffixes are enabled so independent tenants such as safe.github.io do not
  * collapse to a shared platform domain. IP literals and single-label hosts
- * are returned unchanged.
+ * are returned unchanged: tldts detects IPs itself (getDomain answers null),
+ * which keeps this module free of `node:net` so the verdict engine can also
+ * run in the browser (history backfill).
  */
 export function getRegistrableDomain(hostname: string): string {
   const normalized = hostname.trim().toLowerCase().replace(/\.$/, "");
 
-  if (!normalized || isIP(normalized) !== 0) {
+  if (!normalized) {
     return normalized;
   }
 

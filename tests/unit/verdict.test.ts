@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
 
+import { selectSummarySignals } from "@/components/shared/signal-selection";
 import { analyzePageContent } from "@/lib/domain/content-analysis";
 import { buildThreatAssessment } from "@/lib/domain/verdict";
+import {
+  getCoverageCaveat,
+  getVerdictGuidance,
+} from "@/lib/domain/verdict-guidance";
+import { fixtureSignals } from "@/tests/fixtures/scenario-signals";
 import {
   createPendingSignalResults,
   type SignalResults,
@@ -154,9 +160,7 @@ describe("buildThreatAssessment", () => {
     const result = buildThreatAssessment(signals);
 
     expect(result.verdict).toBe("safe");
-    expect(result.threatInfo?.summary).toMatch(
-      /No strong malicious indicators/,
-    );
+    expect(result.threatInfo?.summary).toBe("No check flagged this link.");
   });
 
   it("promotes high-confidence reputation signals to malicious or critical", () => {
@@ -325,7 +329,7 @@ describe("buildThreatAssessment", () => {
     expect(["malicious", "critical"]).toContain(result.verdict);
     expect(result.threatInfo?.confidence).toBeLessThan(0.85);
     expect(result.threatInfo?.confidenceReasons.join(" ")).toMatch(
-      /stayed clean|partial coverage/,
+      /other major reputation source.* found nothing|partial results/,
     );
   });
 
@@ -628,7 +632,7 @@ describe("buildThreatAssessment", () => {
     expect(result.threatInfo?.confidenceLabel).toBe("moderate");
     expect(result.threatInfo?.confidence).toBeLessThanOrEqual(0.79);
     expect(result.threatInfo?.confidenceReasons.join(" ")).toMatch(
-      /VirusTotal did not complete/i,
+      /VirusTotal didn't finish, which capped confidence/i,
     );
 
     withVirusTotal(signals, { harmless: 8, undetected: 12 });
@@ -641,7 +645,7 @@ describe("buildThreatAssessment", () => {
     expect(partialFeedResult.verdict).toBe("safe");
     expect(partialFeedResult.threatInfo?.confidence).toBeLessThanOrEqual(0.79);
     expect(partialFeedResult.threatInfo?.confidenceReasons.join(" ")).toMatch(
-      /Threat Feeds did not complete/i,
+      /Threat Feeds only partly finished, which capped confidence/i,
     );
   });
 
@@ -653,8 +657,8 @@ describe("buildThreatAssessment", () => {
     const result = buildThreatAssessment(signals);
 
     expect(result.verdict).toBe("unknown");
-    expect(result.threatInfo?.summary).toMatch(
-      /unreachable.*not evidence of safety/i,
+    expect(result.threatInfo?.summary).toBe(
+      "The site didn't respond, so we couldn't look at the page itself.",
     );
     expect(result.threatInfo?.confidence).toBeLessThanOrEqual(0.4);
     expect(result.threatInfo?.confidenceLabel).toBe("low");
@@ -689,7 +693,7 @@ describe("buildThreatAssessment", () => {
     const result = buildThreatAssessment(signals);
 
     expect(result.verdict).toBe("safe");
-    expect(result.threatInfo?.summary).not.toMatch(/unreachable/i);
+    expect(result.threatInfo?.summary).not.toMatch(/didn't respond/i);
     expect(result.threatInfo?.limitations).toContain(
       `Redirect Chain: ${terminalError}`,
     );
@@ -791,7 +795,7 @@ describe("buildThreatAssessment", () => {
     withThreatFeedMatches(platform, []);
     expect(
       buildThreatAssessment(platform).threatInfo?.confidenceReasons,
-    ).toContain("1 high-confidence reputation sources returned clean results.");
+    ).toContain("1 major reputation source found nothing.");
 
     if (platform.threatFeeds.data) {
       platform.threatFeeds.data.sharedPlatformListingsIgnored = true;
@@ -941,10 +945,10 @@ describe("buildThreatAssessment", () => {
       (hostResult.threatInfo?.confidence ?? 0) + 0.16,
     );
     expect(exactResult.threatInfo?.confidenceReasons.join(" ")).toMatch(
-      /2 high-confidence sources independently supported/,
+      /2 major reputation sources independently flagged this link/,
     );
     expect(hostResult.threatInfo?.confidenceReasons.join(" ")).toMatch(
-      /1 high-confidence sources independently supported/,
+      /1 major reputation source independently flagged this link/,
     );
   });
 
@@ -1181,6 +1185,23 @@ describe("buildThreatAssessment", () => {
     expect(result.threatInfo?.confidence).toBeLessThanOrEqual(0.85);
   });
 
+  it("names a stale VirusTotal analysis whenever the summary says checks were limited", async () => {
+    const signals = await fixtureSignals("example.com");
+    const vt = signals.virusTotal.data;
+    if (signals.virusTotal.status !== "success" || !vt) {
+      throw new Error("fixture lost its VirusTotal data");
+    }
+    vt.lastAnalysisDate = new Date(
+      Date.now() - 90 * 24 * 60 * 60 * 1000,
+    ).toISOString();
+
+    const { verdict, threatInfo } = buildThreatAssessment(signals);
+    expect(threatInfo?.summary).toMatch(/some checks were limited/);
+    const caveat = getCoverageCaveat({ verdict, signals });
+    expect(caveat).not.toBeNull();
+    expect(caveat).toMatch(/VirusTotal/);
+  });
+
   it("does not subtract clean-score points from stale VirusTotal harmless counts", () => {
     const signals = createPendingSignalResults();
     withVirusTotal(signals, {
@@ -1264,8 +1285,583 @@ describe("buildThreatAssessment", () => {
     // 12 (fresh cert on new domain) + 15 (domain age < 30d)
     expect(result.threatInfo?.score).toBe(27);
     expect(result.verdict).toBe("suspicious");
-    expect(result.threatInfo?.reasons.join(" ")).toMatch(
-      /phishing setup pattern/,
+    expect(result.threatInfo?.reasons.join(" ")).toMatch(/phishing setup/);
+  });
+});
+
+describe("verdict copy", () => {
+  /** Every user-facing string a result carries. */
+  function allCopy(signals: SignalResults) {
+    const info = buildThreatAssessment(signals).threatInfo;
+    return [
+      info?.summary ?? "",
+      ...(info?.reasons ?? []),
+      ...(info?.confidenceReasons ?? []),
+      ...(info?.recommendations ?? []),
+      ...(info?.limitations ?? []),
+    ];
+  }
+
+  it("names the evidence in the summary instead of category jargon", () => {
+    const signals = createPendingSignalResults();
+    withVirusTotal(signals, { malicious: 7, suspicious: 2, harmless: 40 });
+    withThreatFeedMatches(signals, [
+      {
+        feed: "urlhaus",
+        matchedUrl: "https://evil.example/",
+        detail: "lists this link as a malware download",
+        confidence: "high",
+        matchType: "url",
+      },
+    ]);
+
+    const info = buildThreatAssessment(signals).threatInfo;
+
+    // The D3 bug: "Malicious risk based on Reputation signals."
+    expect(info?.summary).toBe(
+      "7 VirusTotal engines and URLhaus flagged this link.",
+    );
+    expect(info?.summary).not.toMatch(/signals|Reputation|risk based/);
+    expect(info?.reasons).toContain(
+      "URLhaus lists this link as a malware download.",
+    );
+  });
+
+  it("names warning signs when no reputation source flagged the link", () => {
+    const signals = createPendingSignalResults();
+    signals.ssl = {
+      status: "success",
+      error: null,
+      durationMs: 9,
+      data: {
+        protocol: "TLSv1.2",
+        available: true,
+        validationState: "untrusted",
+        authorized: false,
+        authorizationError: "SELF_SIGNED_CERT_IN_CHAIN",
+        issuer: null,
+        subject: null,
+        validFrom: null,
+        validTo: null,
+        daysRemaining: null,
+        selfSigned: true,
+        fingerprint256: null,
+        observations: [],
+      },
+    };
+
+    const info = buildThreatAssessment(signals).threatInfo;
+
+    expect(info?.summary).toBe(
+      "An untrusted certificate makes this link look risky.",
+    );
+  });
+
+  describe("a VirusTotal domain flag is about the domain, not this link", () => {
+    const flaggedDomain = {
+      malicious: 5,
+      suspicious: 0,
+      harmless: 0,
+      reputation: -20,
+      categories: [],
+    };
+
+    it("never says VirusTotal flagged the link", () => {
+      const signals = createPendingSignalResults();
+      withVirusTotal(signals, { domain: flaggedDomain });
+      signals.mlEnsemble = {
+        status: "success",
+        error: null,
+        durationMs: 12,
+        data: {
+          transformerModel: null,
+          lexicalModel: {
+            label: "risky",
+            score: 0.9,
+            reasons: [],
+            model: "lexical-heuristic",
+          },
+          consensusLabel: "risky",
+          consensusScore: 0.9,
+          reasons: [],
+          warnings: [],
+        },
+      };
+
+      const { verdict, threatInfo } = buildThreatAssessment(signals);
+
+      // Scoring is unchanged: 15 (domain) + 14 (model).
+      expect(verdict).toBe("suspicious");
+      expect(threatInfo?.score).toBe(29);
+      expect(threatInfo?.summary).toBe(
+        "The link pattern model flagged this link.",
+      );
+      expect(threatInfo?.summary).not.toMatch(/VirusTotal.*flagged this link/);
+      expect(threatInfo?.reasons).toContain(
+        "VirusTotal flags this domain beyond this URL (5 engines mark the domain malicious).",
+      );
+    });
+
+    it("does not hide a URL-level VirusTotal detection", () => {
+      const signals = createPendingSignalResults();
+      withVirusTotal(signals, { malicious: 1, domain: flaggedDomain });
+
+      const { verdict, threatInfo } = buildThreatAssessment(signals);
+
+      // 12 (one engine) + 15 (domain), as before.
+      expect(verdict).toBe("suspicious");
+      expect(threatInfo?.score).toBe(27);
+      expect(threatInfo?.summary).toBe(
+        "1 VirusTotal engine flagged this link.",
+      );
+    });
+
+    it("reads as a warning sign beside other signs", () => {
+      const signals = createPendingSignalResults();
+      withVirusTotal(signals, { domain: flaggedDomain });
+      signals.ssl = {
+        status: "success",
+        error: null,
+        durationMs: 9,
+        data: {
+          protocol: "TLSv1.2",
+          available: true,
+          validationState: "untrusted",
+          authorized: false,
+          authorizationError: "SELF_SIGNED_CERT_IN_CHAIN",
+          issuer: null,
+          subject: null,
+          validFrom: null,
+          validTo: null,
+          daysRemaining: null,
+          selfSigned: true,
+          fingerprint256: null,
+          observations: [],
+        },
+      };
+
+      const { verdict, threatInfo } = buildThreatAssessment(signals);
+
+      expect(verdict).toBe("suspicious");
+      expect(threatInfo?.score).toBe(41);
+      expect(threatInfo?.summary).toBe(
+        "An untrusted certificate and a VirusTotal warning about this link's domain make this link look risky.",
+      );
+      expect(threatInfo?.summary).not.toMatch(/flagged this link/);
+    });
+  });
+
+  it("does not repeat the safe summary in the recommendations", () => {
+    const signals = createPendingSignalResults();
+    withVirusTotal(signals, { harmless: 70, undetected: 10 });
+    withThreatFeedMatches(signals, []);
+
+    const info = buildThreatAssessment(signals).threatInfo;
+
+    expect(info?.summary).toBe("No check flagged this link.");
+    for (const item of info?.recommendations ?? []) {
+      expect(item).not.toMatch(/indicators|flagged/i);
+    }
+  });
+
+  it("agrees every count with its noun", () => {
+    const signals = createPendingSignalResults();
+    withVirusTotal(signals, { malicious: 1, suspicious: 1 });
+    withThreatFeedMatches(signals, []);
+    signals.googleSafeBrowsing = {
+      status: "success",
+      error: null,
+      durationMs: 5,
+      data: {
+        checkedAt: "2026-10-06T00:00:00.000Z",
+        matches: [
+          {
+            threatType: "SOCIAL_ENGINEERING",
+            platformType: "ANY_PLATFORM",
+            threatEntryType: "URL",
+          },
+        ],
+      },
+    };
+    signals.dns = {
+      status: "error",
+      error: "DNS timed out.",
+      data: null,
+      durationMs: 2_000,
+    };
+
+    const copy = allCopy(signals);
+
+    expect(copy).toContain(
+      "1 VirusTotal engine marked this link as malicious.",
+    );
+    expect(copy).toContain(
+      "1 VirusTotal engine marked this link as suspicious.",
+    );
+    expect(copy.join(" ")).toMatch(/DNS Profile.*didn't finish/);
+    expect(copy.join(" ")).toMatch(/1 other major reputation source found/);
+    // The D2 bug: "1 high-confidence sources".
+    for (const line of copy) {
+      expect(line).not.toMatch(
+        /\b1 (?:[a-z-]+ ){0,3}(?:engines|sources|signals|checks|days|hops|matches|iframes|links|listings)\b/i,
+      );
+      expect(line).not.toMatch(/data-rich|lexical model|ML ensemble/i);
+    }
+  });
+});
+
+describe("confidence reasons and coverage", () => {
+  const COUNT =
+    /(\d+) (?:of \d+ )?(?:other )?(?:checks?|major reputation sources?)/g;
+
+  it("states the Unknown cause once and never calls clean sources 'other'", async () => {
+    const signals = await fixtureSignals("unreachable.scrutinix.test");
+    const { verdict, threatInfo } = buildThreatAssessment(signals);
+    const reasons = threatInfo?.confidenceReasons ?? [];
+
+    expect(verdict).toBe("unknown");
+    expect(threatInfo?.summary).toBe(
+      "The site didn't respond, so we couldn't look at the page itself.",
+    );
+    expect(threatInfo?.summary).not.toMatch(/most checks/);
+    for (const reason of reasons) {
+      expect(reason).not.toMatch(/didn't respond/);
+      expect(reason).not.toMatch(/\bother\b|lowers certainty|tempered/);
+      expect(reason).not.toMatch(/returned full results|of 8 checks/);
+    }
+    expect(reasons).toContain(
+      "VirusTotal, Google Safe Browsing, and Threat Feeds found nothing, but they can't vouch for the page itself.",
+    );
+
+    // Any count left in the reasons agrees with the Summary line's counts.
+    const selection = selectSummarySignals(signals, threatInfo?.scoredSignals);
+    const allowed = new Set([
+      selection.clear,
+      selection.limited,
+      selection.drivers.length,
+    ]);
+    for (const reason of reasons) {
+      for (const [, count] of reason.matchAll(COUNT)) {
+        expect(allowed).toContain(Number(count));
+      }
+    }
+  });
+
+  it("only says 'other' sources when a previous line named one", () => {
+    const signals = createPendingSignalResults();
+    withVirusTotal(signals, { harmless: 50 });
+    withThreatFeedMatches(signals, [
+      {
+        feed: "spamhaus-dbl",
+        matchedUrl: "evil.example",
+        detail: "lists this domain as a phishing domain",
+        confidence: "medium",
+        matchType: "host",
+      },
+    ]);
+    signals.googleSafeBrowsing = {
+      status: "success",
+      error: null,
+      durationMs: 5,
+      data: { checkedAt: "", matches: [] },
+    };
+    signals.mlEnsemble = {
+      status: "success",
+      error: null,
+      durationMs: 5,
+      data: {
+        transformerModel: null,
+        lexicalModel: {
+          label: "risky",
+          score: 0.7,
+          reasons: [],
+          model: "lexical-heuristic",
+        },
+        consensusLabel: "risky",
+        consensusScore: 0.7,
+        reasons: [],
+        warnings: [],
+      },
+    };
+
+    const { verdict, threatInfo } = buildThreatAssessment(signals);
+    expect(verdict).toBe("suspicious");
+    const reasons = threatInfo?.confidenceReasons ?? [];
+    expect(reasons.join(" ")).not.toMatch(/\bother\b/);
+    expect(reasons).toContain(
+      "2 major reputation sources found nothing, which lowers certainty.",
+    );
+  });
+
+  it("words a partial Threat Feeds result the same as the coverage caveat", () => {
+    const signals = createPendingSignalResults();
+    withVirusTotal(signals, { harmless: 8, undetected: 12 });
+    withThreatFeedMatches(signals, []);
+    signals.threatFeeds.data!.warnings = ["SURBL is unavailable."];
+    const { verdict, threatInfo } = buildThreatAssessment(signals);
+    const caveat = getCoverageCaveat({ verdict, signals });
+
+    expect(caveat).toMatch(/Threat Feeds only partly finished/);
+    expect(threatInfo?.confidenceReasons.join(" ")).toMatch(
+      /Threat Feeds only partly finished, which capped confidence\./,
+    );
+    for (const text of [
+      caveat ?? "",
+      ...(threatInfo?.confidenceReasons ?? []),
+    ]) {
+      expect(text).not.toMatch(/did not complete/);
+    }
+  });
+
+  it("says nothing about coverage when every check finished in full", async () => {
+    const { threatInfo } = buildThreatAssessment(
+      await fixtureSignals("example.com"),
+    );
+    for (const reason of threatInfo?.confidenceReasons ?? []) {
+      expect(reason).not.toMatch(
+        /of 8 checks finished|returned full results|didn't finish|partial results/,
+      );
+    }
+    expect(threatInfo?.limitations).toEqual([]);
+  });
+
+  it("names the checks that fell short, with agreement", async () => {
+    const signals = await fixtureSignals("example.com");
+    signals.dns = {
+      status: "error",
+      error: "timeout",
+      data: null,
+      durationMs: 1,
+    };
+    let reasons = buildThreatAssessment(signals).threatInfo?.confidenceReasons;
+    expect(reasons).toContain(
+      "DNS Profile didn't finish, which lowers confidence.",
+    );
+
+    signals.virusTotal = {
+      status: "error",
+      error: "timeout",
+      data: null,
+      durationMs: 1,
+    };
+    reasons = buildThreatAssessment(signals).threatInfo?.confidenceReasons;
+    expect(reasons).toContain(
+      "VirusTotal and DNS Profile didn't finish, which capped confidence.",
+    );
+
+    signals.virusTotal = (await fixtureSignals("example.com")).virusTotal;
+    signals.mlEnsemble.data!.warnings = ["The local model was unavailable."];
+    reasons = buildThreatAssessment(signals).threatInfo?.confidenceReasons;
+    expect(reasons).toContain(
+      "Link Pattern Model returned only partial results.",
+    );
+  });
+});
+
+describe("Safe recommendations", () => {
+  async function safeResult(edit: (signals: SignalResults) => void) {
+    const signals = await fixtureSignals("example.com");
+    edit(signals);
+    const assessment = buildThreatAssessment(signals);
+    return { ...assessment, url: "https://example.com/", signals };
+  }
+
+  it("does not repeat a provisional imperative as the first thing to do", async () => {
+    const limited = await safeResult((signals) => {
+      signals.virusTotal = {
+        status: "error",
+        error: "timeout",
+        data: null,
+        durationMs: 1,
+      };
+    });
+    const moderate = await safeResult((signals) => {
+      signals.googleSafeBrowsing = {
+        status: "skipped",
+        error: "No API key.",
+        data: null,
+        durationMs: 0,
+      };
+      signals.threatFeeds = {
+        status: "skipped",
+        error: "No feeds.",
+        data: null,
+        durationMs: 0,
+      };
+    });
+
+    for (const result of [limited, moderate]) {
+      expect(result.verdict).toBe("safe");
+      expect(getVerdictGuidance(result).imperative).toMatch(/who sent/i);
+      for (const item of result.threatInfo?.recommendations ?? []) {
+        expect(item).not.toMatch(/who sent/i);
+      }
+    }
+    expect(moderate.threatInfo?.confidenceLabel).not.toBe("high");
+  });
+
+  it("keeps the sender check for a confident, fully covered Safe", async () => {
+    const result = await safeResult(() => {});
+    expect(result.threatInfo?.confidenceLabel).toBe("high");
+    expect(getVerdictGuidance(result).imperative).toBe("Looks safe to open.");
+    expect(result.threatInfo?.recommendations).toContain(
+      "Still check who sent the link before you sign in or pay.",
+    );
+  });
+});
+
+describe("limited coverage: summary and caveat agree", () => {
+  const LIMITED = /some checks were limited/;
+
+  /**
+   * Builds the verdict, then checks the agreement both ways: the summary
+   * claims a limit exactly when the caveat names one, and the caveat
+   * names the expected check.
+   */
+  function assess(signals: SignalResults) {
+    const { verdict, threatInfo } = buildThreatAssessment(signals);
+    const summary = threatInfo?.summary ?? "";
+    const caveat = getCoverageCaveat({ verdict, signals });
+    expect(LIMITED.test(summary)).toBe(caveat !== null);
+    return { verdict, threatInfo, summary, caveat };
+  }
+
+  it("claims no limit and names nothing when every check ran in full", async () => {
+    const { verdict, summary, caveat } = assess(
+      await fixtureSignals("example.com"),
+    );
+    expect(verdict).toBe("safe");
+    expect(summary).not.toMatch(LIMITED);
+    expect(caveat).toBeNull();
+  });
+
+  it("names an SSL certificate that couldn't be fully verified", async () => {
+    const signals = await fixtureSignals("example.com");
+    const baseline = buildThreatAssessment(signals);
+    if (!signals.ssl.data) throw new Error("fixture lost its SSL data");
+    signals.ssl.data.validationState = "warning";
+    signals.ssl.data.observations = [
+      "The certificate chain could not be fully verified.",
+    ];
+
+    const { verdict, threatInfo, summary, caveat } = assess(signals);
+    expect(verdict).toBe("safe");
+    expect(threatInfo?.score).toBe(baseline.threatInfo?.score);
+    expect(summary).toMatch(LIMITED);
+    expect(caveat).toBe("TLS Certificate couldn't be fully verified.");
+  });
+
+  it("names an SSL warning even when it carries no observation text", async () => {
+    const signals = await fixtureSignals("example.com");
+    if (!signals.ssl.data) throw new Error("fixture lost its SSL data");
+    signals.ssl.data.validationState = "warning";
+    signals.ssl.data.observations = [];
+
+    const { summary, caveat } = assess(signals);
+    expect(summary).toMatch(LIMITED);
+    expect(caveat).toBe("TLS Certificate couldn't be fully verified.");
+  });
+
+  it("names a redirect chain that couldn't reach the site", async () => {
+    const signals = await fixtureSignals("example.com");
+    if (!signals.redirectChain.data) {
+      throw new Error("fixture lost its redirect data");
+    }
+    signals.redirectChain.data.reachable = false;
+    signals.redirectChain.data.terminalStatus = null;
+    signals.redirectChain.data.observations = [
+      "The site did not answer the redirect probe.",
+    ];
+
+    // TLS still answered, so the host isn't Unknown.
+    const { verdict, summary, caveat } = assess(signals);
+    expect(verdict).toBe("safe");
+    expect(summary).toMatch(LIMITED);
+    expect(caveat).toBe("Redirect Chain couldn't reach the site.");
+  });
+
+  it("names a WHOIS lookup that was unavailable", async () => {
+    const signals = await fixtureSignals("example.com");
+    if (!signals.whois.data) throw new Error("fixture lost its WHOIS data");
+    signals.whois.data.available = false;
+    signals.whois.data.observations = ["RDAP returned no record."];
+
+    const { verdict, summary, caveat } = assess(signals);
+    expect(verdict).toBe("safe");
+    expect(summary).toMatch(LIMITED);
+    expect(caveat).toBe("Domain Registration couldn't be looked up.");
+  });
+
+  it("names a stale VirusTotal analysis", async () => {
+    const signals = await fixtureSignals("example.com");
+    if (!signals.virusTotal.data) {
+      throw new Error("fixture lost its VirusTotal data");
+    }
+    signals.virusTotal.data.lastAnalysisDate = new Date(
+      Date.now() - 90 * 24 * 60 * 60 * 1000,
+    ).toISOString();
+
+    const { verdict, summary, caveat } = assess(signals);
+    expect(verdict).toBe("safe");
+    expect(summary).toMatch(LIMITED);
+    expect(caveat).toBe("VirusTotal's analysis is 90 days old.");
+  });
+
+  it("names a check that errored", async () => {
+    const signals = await fixtureSignals("example.com");
+    signals.dns = {
+      status: "error",
+      data: null,
+      error: "DNS lookup timed out.",
+      durationMs: 5_000,
+    };
+
+    const { verdict, summary, caveat } = assess(signals);
+    expect(verdict).toBe("safe");
+    expect(summary).toMatch(LIMITED);
+    expect(caveat).toBe("DNS Profile didn't finish.");
+  });
+
+  it("names a skipped check", async () => {
+    const signals = await fixtureSignals("example.com");
+    signals.googleSafeBrowsing = {
+      status: "skipped",
+      data: null,
+      error: "Google Safe Browsing is not configured.",
+      durationMs: 0,
+    };
+
+    const { verdict, summary, caveat } = assess(signals);
+    expect(verdict).toBe("safe");
+    expect(summary).toMatch(LIMITED);
+    expect(caveat).toBe("Google Safe Browsing doesn't apply to this link.");
+  });
+
+  it("names every limited check at once, in one sentence", async () => {
+    const signals = await fixtureSignals("example.com");
+    if (!signals.ssl.data || !signals.whois.data) {
+      throw new Error("fixture lost its SSL or WHOIS data");
+    }
+    signals.ssl.data.validationState = "warning";
+    signals.whois.data.available = false;
+    signals.dns = { status: "error", data: null, error: "x", durationMs: 1 };
+
+    const { summary, caveat } = assess(signals);
+    expect(summary).toMatch(LIMITED);
+    expect(caveat).toBe(
+      "DNS Profile didn't finish; TLS Certificate couldn't be fully verified; Domain Registration couldn't be looked up.",
+    );
+  });
+
+  it("lets Unknown's summary alone say the site didn't respond", async () => {
+    const signals = await fixtureSignals("unreachable.scrutinix.test");
+    const { verdict, threatInfo } = buildThreatAssessment(signals);
+    const summary = threatInfo?.summary;
+    expect(verdict).toBe("unknown");
+    expect(summary).toMatch(/didn't respond/);
+    expect(summary).not.toMatch(/some checks were limited/);
+    expect(getCoverageCaveat({ verdict, signals }) ?? "").not.toMatch(
+      /couldn't reach the site/,
     );
   });
 });

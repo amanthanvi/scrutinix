@@ -74,10 +74,14 @@ const ZONE_DEFINITIONS: Array<
     testRecord: "dbltest.com",
     describe: (codes) => {
       const known: Array<[string, string, "medium" | "high"]> = [
-        ["127.0.1.2", "listed as a spam domain by Spamhaus DBL", "medium"],
-        ["127.0.1.4", "listed as a phishing domain by Spamhaus DBL", "high"],
-        ["127.0.1.5", "listed as a malware domain by Spamhaus DBL", "high"],
-        ["127.0.1.6", "listed as a botnet C&C domain by Spamhaus DBL", "high"],
+        ["127.0.1.2", "lists this domain as a spam domain", "medium"],
+        ["127.0.1.4", "lists this domain as a phishing domain", "high"],
+        ["127.0.1.5", "lists this domain as a malware domain", "high"],
+        [
+          "127.0.1.6",
+          "lists this domain as a botnet command-and-control domain",
+          "high",
+        ],
       ];
       for (const [code, detail, confidence] of known) {
         if (codes.includes(code)) {
@@ -87,7 +91,8 @@ const ZONE_DEFINITIONS: Array<
       // 127.0.1.102-106: abused-but-legitimate ranges.
       if (codes.some((code) => /^127\.0\.1\.1\d\d$/.test(code))) {
         return {
-          detail: "listed by Spamhaus DBL as an abused legitimate domain",
+          detail:
+            "lists this domain as a legitimate domain that has been abused",
           confidence: "medium",
         };
       }
@@ -106,16 +111,19 @@ const ZONE_DEFINITIONS: Array<
         .reduce((mask, value) => mask | value, 0);
 
       if (bits & 8) {
-        return { detail: "listed as phishing by SURBL", confidence: "high" };
+        return { detail: "lists this domain for phishing", confidence: "high" };
       }
       if (bits & 16) {
-        return { detail: "listed as malware by SURBL", confidence: "high" };
+        return { detail: "lists this domain for malware", confidence: "high" };
       }
       if (bits & 128) {
-        return { detail: "listed as cracked by SURBL", confidence: "high" };
+        return {
+          detail: "lists this domain for cracked software",
+          confidence: "high",
+        };
       }
       if (bits & 64) {
-        return { detail: "listed as abused by SURBL", confidence: "medium" };
+        return { detail: "lists this domain as abused", confidence: "medium" };
       }
       return null;
     },

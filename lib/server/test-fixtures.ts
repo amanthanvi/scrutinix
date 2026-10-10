@@ -107,7 +107,7 @@ function buildFixtureSignals(target: NormalizedUrl): SignalPayloadMap {
             {
               feed: "urlhaus",
               matchedUrl: target.normalizedUrl,
-              detail: "listed as active malware distribution",
+              detail: "lists this link as active malware distribution",
               confidence: "high",
               matchType: "url",
             },
