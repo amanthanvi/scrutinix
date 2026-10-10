@@ -1,8 +1,9 @@
-export class SignalSkipError extends Error {
-  readonly code = "signal_skipped";
+import { PublicError } from "@/lib/domain/public-error";
 
+/** Intentional skip whose message is safe to show (not an internal failure). */
+export class SignalSkipError extends PublicError {
   constructor(message: string) {
-    super(message);
+    super("signal_skipped", message);
     this.name = "SignalSkipError";
   }
 }

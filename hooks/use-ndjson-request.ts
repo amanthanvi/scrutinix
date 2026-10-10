@@ -4,6 +4,7 @@ import { useCallback, useMemo, useRef } from "react";
 
 import { readNdjsonStream } from "@/lib/client/ndjson";
 import { streamFailureApiError } from "@/lib/client/stream-error";
+import { PublicError } from "@/lib/domain/public-error";
 import { sanitizeApiErrorResponse } from "@/lib/domain/runtime-safety";
 import type { ApiError } from "@/lib/domain/types";
 
@@ -70,7 +71,10 @@ export function useNdjsonRequest(options: NdjsonRequestOptions) {
         if (isActive() && !sawTerminalEvent) {
           handlers.onError(
             streamFailureApiError(
-              new Error("The result stream ended before a terminal event."),
+              new PublicError(
+                "stream_truncated",
+                "The result stream ended before a terminal event.",
+              ),
               streamFailureMessage,
             ),
           );

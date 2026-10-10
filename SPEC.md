@@ -295,7 +295,7 @@ BatchUpdate: { type: 'url_complete', url: string, result: AnalysisResult }
 
 Implementation note: batch streams also emit `batch_started`, `url_started`, and `batch_error`, with a concurrency limit of 3 URLs in flight.
 
-- **Error model:** `{ error: { code: string, message: string, retryable: boolean } }`
+- **Error model:** `{ error: { code: string, message: string, retryable: boolean } }`. Unexpected failures return a generic summary plus `Reference: <id>` (the scan id when the scan already has one). The exception text is logged server-side with URL redaction and is not sent to the client. Intentional copy — invalid URL, batch size, rate limit, and other messages thrown as `PublicError` — keeps its specific text.
 - **Idempotency:** Same normalized URL returns a cached result with a new scan ID only when a complete, non-partial result remains inside the 15-minute TTL
 - **Rate limits:** 10 tokens/min per IP, 50 tokens/day per IP. An admitted batch costs one token per URL; rejected requests cost one token (enforced in `proxy.ts` before analysis work starts)
 

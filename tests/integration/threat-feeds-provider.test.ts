@@ -233,9 +233,14 @@ describe("threat feed provider", () => {
 
     const result = await runThreatFeedsProvider("https://example.com/");
 
-    expect(result.warnings).toContain(
-      "URLhaus host lookup failed: Failed to fetch",
-    );
+    expect(result.warnings.join("\n")).not.toContain("Failed to fetch");
+    expect(
+      result.warnings.some(
+        (warning) =>
+          warning.startsWith("URLhaus lookup failed.") &&
+          /Reference: [0-9a-f-]{36}\./.test(warning),
+      ),
+    ).toBe(true);
     expect(result.observations).not.toContain(URLHAUS_NO_LISTING_OBSERVATION);
   });
 

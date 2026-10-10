@@ -20,7 +20,7 @@ state plus the landed analysis-hardening and review-remediation work.
 
 ## Current Snapshot
 
-- Date: 2026-10-06
+- Date: 2026-10-10
 - Execution status: `P21-P26 complete and verified on Node 24 LTS`
 - Platform:
   - Next.js `16.3.4`
@@ -354,3 +354,4 @@ Observed results:
 - 2026-08-10: Resolved the seven-PR queue by merging the six current implementation/dependency PRs and closing the conflicted, superseded spec-reconciliation draft; the final aggregate passed the full local CI-equivalent chain on Node 22.23.2.
 - 2026-08-10: Re-enabled repository-level GitHub Actions after clearing the open PR queue; the final `main` CI workflow passed install, audit, format, lint, typecheck, unit/integration/DOM tests, build, fixture-backed Playwright, and Lighthouse.
 - 2026-05-01: Keeping parallel PRs out of `PLAN.md` avoided artificial merge conflicts; use one consolidated plan update after the code branches land.
+- 2026-10-10: Unexpected analyze failures no longer forward `error.message`. Clients get a generic summary plus `Reference: <id>`; `PublicError` is the allowlist for intentional copy (validation, rate limit, authored provider status). Full exception text is logged with URL redaction.

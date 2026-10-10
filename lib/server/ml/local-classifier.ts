@@ -1,5 +1,6 @@
 import path from "node:path";
 
+import { PublicError } from "@/lib/domain/public-error";
 import type { ClassificationFinding } from "@/lib/domain/types";
 import { withTimeout } from "@/lib/server/http";
 
@@ -92,7 +93,10 @@ export async function classifyUrlLocally(
   );
 
   if (!top) {
-    throw new Error("The local URL classifier returned no predictions.");
+    throw new PublicError(
+      "lookup_failed",
+      "The local URL classifier returned no predictions.",
+    );
   }
 
   const className = CLASS_NAMES[top.label] ?? top.label;

@@ -120,7 +120,12 @@ describe("useNdjsonRequest", () => {
     // that the failure reaches onError as a sanitized ApiError.
     expect(events.length).toBeLessThanOrEqual(1);
     expect(onError).toHaveBeenCalledWith(
-      expect.objectContaining({ message: "connection reset" }),
+      expect.objectContaining({
+        message: "The scan stream failed unexpectedly.",
+      }),
+    );
+    expect(onError.mock.calls[0]?.[0]?.message).not.toContain(
+      "connection reset",
     );
   });
 

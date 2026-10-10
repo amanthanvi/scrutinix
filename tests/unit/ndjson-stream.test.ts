@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { readNdjsonStream } from "@/lib/client/ndjson";
 import { streamFailureApiError } from "@/lib/client/stream-error";
+import { PublicError } from "@/lib/domain/public-error";
 
 describe("readNdjsonStream", () => {
   it("skips isolated malformed lines instead of killing the stream", async () => {
@@ -75,10 +76,29 @@ describe("readNdjsonStream", () => {
 });
 
 describe("streamFailureApiError", () => {
-  it("maps Error messages into ApiError without rethrowing shapes", () => {
-    expect(streamFailureApiError(new Error("bad line"), "fallback")).toEqual({
+  it("keeps intentional public messages and hides other exception text", () => {
+    expect(
+      streamFailureApiError(
+        new PublicError(
+          "stream_corrupt",
+          "The result stream contained too many malformed lines.",
+        ),
+        "fallback",
+      ),
+    ).toEqual({
+      code: "stream_corrupt",
+      message: "The result stream contained too many malformed lines.",
+      retryable: false,
+    });
+
+    expect(
+      streamFailureApiError(
+        new Error("redis://default:s3cret@host WRONGPASS"),
+        "The scan stream failed unexpectedly.",
+      ),
+    ).toEqual({
       code: "unexpected_error",
-      message: "bad line",
+      message: "The scan stream failed unexpectedly.",
       retryable: false,
     });
   });

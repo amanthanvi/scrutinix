@@ -20,15 +20,16 @@ Project-local operating notes for agents working in this repository. Keep this f
   - `POST /api/analyze/batch` streams NDJSON events for batch scans.
 - Domain model:
   - Eight signals are always present in results: `virusTotal`, `mlEnsemble`, `googleSafeBrowsing`, `threatFeeds`, `ssl`, `whois`, `dns`, `redirectChain`.
-  - History is client-side only and stored in IndexedDB.
-  - Cache only complete, non-partial, non-error, non-aborted results for 15 minutes. A rerun after degraded coverage must reach providers again.
-  - In composite ML/threat-feed payloads, `warnings` mean lost coverage and set `partialFailure`; benign notes belong in `observations`. Redirect terminal errors also mark partial coverage.
-  - Page-content credential-post evidence requires form-owned password inputs and includes viable submit-control `formaction` overrides; never combine page-wide password and form counts.
-  - Rate limiting is enforced in `proxy.ts` with Upstash when configured and a process-local in-memory fallback otherwise; accept either `UPSTASH_REDIS_REST_*` or Vercel KV `KV_REST_API_*` env names.
-  - The ML ensemble runs entirely locally: a quantized ONNX transformer (`lib/server/ml/`, urlbert-tiny-v4, Apache-2.0) via `@huggingface/transformers` plus a lexical heuristic scorer. There is no hosted inference call and no `HUGGINGFACE_*` env var.
-  - Threat feeds combine URLhaus (documented `Auth-Key` header), cached OpenPhish community feed data, ThreatFox (reuses the URLhaus key), and Spamhaus DBL / SURBL DNSBL lookups with sentinel-code handling; do not reintroduce the removed PhishTank adapter.
-  - The branded UI lives under `components/scrutinix/*`; shared shadcn/ui primitives live under `components/ui/*`.
-  - Production responses ship browser-hardening headers from `next.config.ts`. Per-request CSP (nonce `script-src`, narrow `connect-src`) is applied in `proxy.ts` via `lib/server/csp.ts` so document responses get fresh nonces; do not reintroduce a static CSP-only approach in `next.config.ts` without an equivalent nonce path.
+- Unexpected scan, batch, signal, and probe failures return a generic summary plus `Reference: <id>`. Only `PublicError` (and `SignalSkipError`) messages are client-visible; log the rest through `exposeClientError` so URLs stay redacted.
+- History is client-side only and stored in IndexedDB.
+- Cache only complete, non-partial, non-error, non-aborted results for 15 minutes. A rerun after degraded coverage must reach providers again.
+- In composite ML/threat-feed payloads, `warnings` mean lost coverage and set `partialFailure`; benign notes belong in `observations`. Redirect terminal errors also mark partial coverage.
+- Page-content credential-post evidence requires form-owned password inputs and includes viable submit-control `formaction` overrides; never combine page-wide password and form counts.
+- Rate limiting is enforced in `proxy.ts` with Upstash when configured and a process-local in-memory fallback otherwise; accept either `UPSTASH_REDIS_REST_*` or Vercel KV `KV_REST_API_*` env names.
+- The ML ensemble runs entirely locally: a quantized ONNX transformer (`lib/server/ml/`, urlbert-tiny-v4, Apache-2.0) via `@huggingface/transformers` plus a lexical heuristic scorer. There is no hosted inference call and no `HUGGINGFACE_*` env var.
+- Threat feeds combine URLhaus (documented `Auth-Key` header), cached OpenPhish community feed data, ThreatFox (reuses the URLhaus key), and Spamhaus DBL / SURBL DNSBL lookups with sentinel-code handling; do not reintroduce the removed PhishTank adapter.
+- The branded UI lives under `components/scrutinix/*`; shared shadcn/ui primitives live under `components/ui/*`.
+- Production responses ship browser-hardening headers from `next.config.ts`. Per-request CSP (nonce `script-src`, narrow `connect-src`) is applied in `proxy.ts` via `lib/server/csp.ts` so document responses get fresh nonces; do not reintroduce a static CSP-only approach in `next.config.ts` without an equivalent nonce path.
 
 ## Proven Commands
 
