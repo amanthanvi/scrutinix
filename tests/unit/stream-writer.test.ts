@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { readNdjsonStream } from "@/lib/client/ndjson";
+import { sanitizeAnalyzeEvent } from "@/lib/domain/runtime-safety";
 import { createNdjsonResponse } from "@/lib/server/stream";
 
 afterEach(() => {
@@ -51,28 +53,44 @@ describe("createNdjsonResponse", () => {
     releaseRun();
   });
 
-  it("replaces a thrown exception with a generic stream error", async () => {
+  it("writes a terminal scan_error the client reader can parse", async () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    const response = createNdjsonResponse(async () => {
-      throw new Error(
-        "ONNXRuntime failed WRONGPASS s3cret-token redis://default:s3cret-token@cache.internal",
-      );
+    const response = createNdjsonResponse(
+      async () => {
+        throw new Error(
+          "ONNXRuntime failed WRONGPASS s3cret-token redis://default:s3cret-token@cache.internal",
+        );
+      },
+      {
+        terminalError: (failure) => ({
+          type: "scan_error",
+          error: failure,
+        }),
+      },
+    );
+
+    const rawEvents: unknown[] = [];
+    await readNdjsonStream(response, (event) => {
+      rawEvents.push(event);
     });
+    const parsed = rawEvents.flatMap((event) => {
+      const sanitized = sanitizeAnalyzeEvent(event);
+      return sanitized ? [sanitized] : [];
+    });
+    const scanError = parsed.find((event) => event.type === "scan_error");
 
-    let caught: unknown;
-    try {
-      await response.text();
-    } catch (error) {
-      caught = error;
+    expect(scanError?.type).toBe("scan_error");
+    if (scanError?.type !== "scan_error") {
+      return;
     }
-
-    expect(caught).toBeInstanceOf(Error);
-    const message = caught instanceof Error ? caught.message : "";
-    expect(message).toContain("The scan stream failed unexpectedly.");
-    expect(message).toMatch(/Reference: [0-9a-f-]{36}\./);
-    expect(message).not.toContain("s3cret-token");
-    expect(message).not.toContain("ONNXRuntime");
-    expect(message).not.toContain("redis://");
+    expect(scanError.error.message).toContain(
+      "The scan stream failed unexpectedly.",
+    );
+    expect(scanError.error.message).toMatch(/Reference: [0-9a-f-]{36}\./);
+    const wire = JSON.stringify(rawEvents);
+    expect(wire).not.toContain("s3cret-token");
+    expect(wire).not.toContain("ONNXRuntime");
+    expect(wire).not.toContain("redis://");
 
     const logged = errorSpy.mock.calls
       .map((call) => String(call[0]))

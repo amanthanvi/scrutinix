@@ -30,53 +30,65 @@ export async function POST(request: Request) {
   const scanId = crypto.randomUUID();
   const startedAt = new Date().toISOString();
 
-  return createNdjsonResponse(async (writer, clientGone) => {
-    writer.startKeepalive();
-    const signal = AbortSignal.any([
-      request.signal,
-      clientGone,
-      AbortSignal.timeout(SCAN_BUDGET_MS),
-    ]);
+  return createNdjsonResponse(
+    async (writer, clientGone) => {
+      writer.startKeepalive();
+      const signal = AbortSignal.any([
+        request.signal,
+        clientGone,
+        AbortSignal.timeout(SCAN_BUDGET_MS),
+      ]);
 
-    try {
-      const result = await runAnalysis(target, {
-        scanId,
-        startedAt,
-        signal,
-        onScanReady: ({ cached, normalizedUrl }) => {
-          writer.send({
-            type: "scan_started",
-            scanId,
-            url: normalizedUrl,
-            cached,
-            startedAt,
-          });
-        },
-        onSignal: ({ name, result }) => {
-          writer.send({
-            type: "signal_result",
-            name,
-            result,
-          });
-        },
-      });
+      try {
+        const result = await runAnalysis(target, {
+          scanId,
+          startedAt,
+          signal,
+          onScanReady: ({ cached, normalizedUrl }) => {
+            writer.send({
+              type: "scan_started",
+              scanId,
+              url: normalizedUrl,
+              cached,
+              startedAt,
+            });
+          },
+          onSignal: ({ name, result }) => {
+            writer.send({
+              type: "signal_result",
+              name,
+              result,
+            });
+          },
+        });
 
-      writer.send({
-        type: "scan_complete",
-        result,
-      });
-    } catch (error) {
-      const failure = exposeClientError(error, {
-        correlationId: scanId,
-        summary: "The scan failed unexpectedly.",
-        code: "scan_failed",
-        logEvent: "scan.failed",
-        redact: [target.normalizedUrl, target.hostname],
-      });
-      writer.send({
+        writer.send({
+          type: "scan_complete",
+          result,
+        });
+      } catch (error) {
+        const failure = exposeClientError(error, {
+          correlationId: scanId,
+          summary: "The scan failed unexpectedly.",
+          code: "scan_failed",
+          logEvent: "scan.failed",
+          redact: [target.normalizedUrl, target.hostname],
+        });
+        writer.send({
+          type: "scan_error",
+          error: createApiError(
+            failure.code,
+            failure.message,
+            failure.retryable,
+          ),
+        });
+      }
+    },
+    {
+      terminalError: (failure) => ({
         type: "scan_error",
         error: createApiError(failure.code, failure.message, failure.retryable),
-      });
-    }
-  });
+      }),
+    },
+  );
 }
