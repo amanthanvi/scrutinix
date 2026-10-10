@@ -4,7 +4,7 @@ import { server } from "@/tests/setup/msw.server";
 
 beforeAll(() => {
   server.listen({
-    onUnhandledRequest: "error",
+    onUnhandledFrame: "error",
   });
 });
 
