@@ -334,8 +334,8 @@ Implementation note: batch streams also emit `batch_started`, `url_started`, and
 ## 5) Security, Privacy, Compliance
 
 - **Authn/authz:** None. Anonymous usage. No user accounts
-- **PII:** No PII collected or stored server-side. URLs attached to eligible complete results may be cached for up to 15 minutes, then discarded; partial/error/aborted scans are not cached. Client-side history is user-controlled
-- **Public disclosure:** `/privacy` explains local history, hashed server logging, and client-only share links; `/about` explains the scoring and signal model
+- **PII:** No accounts. URLs on complete, non-partial results may be cached for up to 15 minutes (in memory and, when configured, Upstash Redis), then discarded; partial, error, and aborted scans are not cached. Request IPs are used for rate limits and, when shared Redis is configured, stored for the one-minute and one-day windows. Client-side history is user-controlled. Application logs store a hash of the URL, not the raw string
+- **Public disclosure:** `/privacy` names every service that receives a submitted URL or its domain, the server-side page fetch, 15-minute caching, hashed logging, rate-limit IP storage, and client-only share links; `/about` names every feed and provider a scan uses and explains the scoring model
 - **Abuse cases + mitigations:**
 
 | Abuse case                                       | Mitigation                                                            |
