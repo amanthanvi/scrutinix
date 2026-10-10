@@ -23,7 +23,7 @@ const sections = [
   },
   {
     title: "Shared links",
-    body: "Share links embed a browser-generated snapshot in the URL itself — there is no server-side share database. Nothing signs that snapshot, so anyone can edit it: an opened link shows it as unverified, and only a fresh scan produces a result. Opening a link doesn't scan it; the URL reaches the server only if you choose to scan.",
+    body: "Share links embed a browser-generated snapshot in the URL itself — there is no server-side share database. Nothing signs that snapshot, so anyone can edit it: an opened link shows it as unverified, and only a fresh scan produces a result. Opening a link sends the snapshot to the web server as part of the page address, like any link, but Scrutinix doesn't scan the target URL or send it to providers unless you choose to scan.",
   },
 ] as const;
 
