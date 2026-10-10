@@ -6,8 +6,8 @@ import { expect, type Page } from "@playwright/test";
  * its first client render, so once it appears the page is interactive - no
  * fixed sleeps needed.
  */
-export async function gotoApp(page: Page) {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+export async function gotoApp(page: Page, path = "/") {
+  await page.goto(path, { waitUntil: "domcontentloaded" });
   await expect(
     page.getByRole("button", { name: /switch to (light|dark) theme/i }),
   ).toBeVisible();

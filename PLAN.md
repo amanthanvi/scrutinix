@@ -146,6 +146,13 @@ Observed results:
 - [x] Exempt known path-tenanted platforms from host-level feed scoring while exact-URL listings still convict (#56).
 - [x] Namespace shared-cache keys by Vercel environment and preview commit so previews cannot serve production results.
 
+### P27 Stop shared snapshots passing as scan results
+
+- [x] Render `?shared=` links as a neutral "Unverified snapshot" (no verdict colour, score, or "Scan result" label) with a primary "Scan this URL" action; never scan automatically.
+- [x] Decode snapshots in `lib/domain/shared-snapshot.ts`: normalize the URL (reject unscannable ones), keep `capturedAt` only as an ISO timestamp, strip control/bidi characters from the summary and cap it at 160 characters. Both historical encodings stay readable.
+- [x] Read `?shared=` after hydration; reading it in the first render made every shared link fail hydration.
+- [x] Cover decoding (unit), the panel, wiring, and hydration (DOM), and forged, legacy, and round-trip links (Playwright).
+
 ### P24 Resolve September dependency maintenance
 
 - [x] Merge the green minor-and-patch dependency group, including the Next.js `16.3.3` security update.

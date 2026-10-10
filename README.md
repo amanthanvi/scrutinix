@@ -46,7 +46,8 @@ and ML scoring in one place.
 - Summary and Full Report modes present the same scan at different levels of
   density.
 - Share links are client-generated snapshots; they do not create a server-side
-  share database.
+  share database. Nothing signs them, so an opened link shows an unverified
+  snapshot and scans only when the visitor asks.
 - `/about` and `/privacy` explain how verdicts are formed and what data stays in
   the browser.
 
