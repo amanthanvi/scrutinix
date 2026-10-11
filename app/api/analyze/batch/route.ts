@@ -1,7 +1,10 @@
 import { createErrorAnalysisResult } from "@/lib/domain/analysis-result";
 import { runAnalysis, SCAN_BUDGET_MS } from "@/lib/server/analyze";
 import { createApiError } from "@/lib/server/api-error";
-import { exposeClientError } from "@/lib/server/client-error";
+import {
+  exposeClientError,
+  type ClientErrorView,
+} from "@/lib/server/client-error";
 import { parseScanRequest } from "@/lib/server/scan-request";
 import { createNdjsonResponse } from "@/lib/server/stream";
 
@@ -9,6 +12,13 @@ export const runtime = "nodejs";
 export const maxDuration = 300;
 
 const CONCURRENCY = 3;
+
+function batchErrorEvent(failure: ClientErrorView) {
+  return {
+    type: "batch_error" as const,
+    error: createApiError(failure.code, failure.message, failure.retryable),
+  };
+}
 
 export async function POST(request: Request) {
   const parsed = await parseScanRequest(request, "batch");
@@ -99,22 +109,10 @@ export async function POST(request: Request) {
             target.hostname,
           ]),
         });
-        writer.send({
-          type: "batch_error",
-          error: createApiError(
-            failure.code,
-            failure.message,
-            failure.retryable,
-          ),
-        });
+        writer.send(batchErrorEvent(failure));
       }
     },
-    {
-      terminalError: (failure) => ({
-        type: "batch_error",
-        error: createApiError(failure.code, failure.message, failure.retryable),
-      }),
-    },
+    { terminalError: batchErrorEvent },
   );
 }
 

@@ -5,6 +5,10 @@ import {
 } from "@/lib/server/client-error";
 
 type StreamEvent = AnalyzeEvent | BatchEvent | { type: "keepalive" };
+type TerminalErrorEvent = Extract<
+  StreamEvent,
+  { type: "scan_error" | "batch_error" }
+>;
 
 const KEEPALIVE_INTERVAL_MS = 15_000;
 
@@ -15,12 +19,15 @@ const KEEPALIVE_INTERVAL_MS = 15_000;
  *
  * `terminalError` turns an escaped exception into a line the client schema
  * accepts. `controller.error()` would drop that line: the browser only sees
- * a broken stream and never receives the reference id.
+ * a broken stream and never receives the reference id. It is required and
+ * has no default because the right terminal event depends on the route
+ * (`scan_error` for a single scan, `batch_error` for a batch); a guessed
+ * default would end a batch stream with an event its client ignores.
  */
 export function createNdjsonResponse(
   run: (writer: NdjsonWriter, clientGone: AbortSignal) => Promise<void>,
-  options?: {
-    terminalError?: (failure: ClientErrorView) => StreamEvent;
+  options: {
+    terminalError: (failure: ClientErrorView) => TerminalErrorEvent;
   },
 ) {
   const encoder = new TextEncoder();
@@ -43,12 +50,7 @@ export function createNdjsonResponse(
             code: "stream_failed",
             logEvent: "stream.failed",
           });
-          writer.send(
-            options?.terminalError?.(failure) ?? {
-              type: "scan_error",
-              error: failure,
-            },
-          );
+          writer.send(options.terminalError(failure));
           writer.close();
           return;
         }

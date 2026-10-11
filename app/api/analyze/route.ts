@@ -1,11 +1,21 @@
 import { runAnalysis, SCAN_BUDGET_MS } from "@/lib/server/analyze";
 import { createApiError } from "@/lib/server/api-error";
-import { exposeClientError } from "@/lib/server/client-error";
+import {
+  exposeClientError,
+  type ClientErrorView,
+} from "@/lib/server/client-error";
 import { parseScanRequest } from "@/lib/server/scan-request";
 import { createNdjsonResponse } from "@/lib/server/stream";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
+
+function scanErrorEvent(failure: ClientErrorView) {
+  return {
+    type: "scan_error" as const,
+    error: createApiError(failure.code, failure.message, failure.retryable),
+  };
+}
 
 export async function POST(request: Request) {
   const parsed = await parseScanRequest(request, "single");
@@ -74,21 +84,9 @@ export async function POST(request: Request) {
           logEvent: "scan.failed",
           redact: [target.normalizedUrl, target.hostname],
         });
-        writer.send({
-          type: "scan_error",
-          error: createApiError(
-            failure.code,
-            failure.message,
-            failure.retryable,
-          ),
-        });
+        writer.send(scanErrorEvent(failure));
       }
     },
-    {
-      terminalError: (failure) => ({
-        type: "scan_error",
-        error: createApiError(failure.code, failure.message, failure.retryable),
-      }),
-    },
+    { terminalError: scanErrorEvent },
   );
 }
