@@ -45,6 +45,32 @@ describe("two terminal error events on one stream", () => {
     expect(result.current.state.isStreaming).toBe(false);
   });
 
+  it("keeps the first scan_error when a later line is truncated", async () => {
+    const first =
+      "The scan failed unexpectedly. Reference: 11111111-1111-1111-1111-111111111111.";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(
+            `${JSON.stringify({ type: "scan_error", error: apiError(first) })}\n{"type":"scan_error","error":`,
+            {
+              status: 200,
+              headers: { "content-type": "application/x-ndjson" },
+            },
+          ),
+      ),
+    );
+
+    const { result } = renderHook(() => useScanStream());
+    await act(async () => {
+      await result.current.startScan("https://example.com/");
+    });
+
+    expect(result.current.state.error?.message).toBe(first);
+    expect(result.current.state.isStreaming).toBe(false);
+  });
+
   it("keeps the first batch_error", async () => {
     vi.stubGlobal(
       "fetch",

@@ -83,7 +83,9 @@ export function useNdjsonRequest(options: NdjsonRequestOptions) {
           );
         }
       } catch (error) {
-        if (!isActive()) return;
+        // A later read failure, including a truncated line after the terminal
+        // event, must not replace that event or its reference id.
+        if (!isActive() || sawTerminalEvent) return;
 
         if (
           controller.signal.aborted ||
