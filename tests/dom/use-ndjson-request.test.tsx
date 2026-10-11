@@ -51,6 +51,43 @@ describe("useNdjsonRequest", () => {
     expect(onError).not.toHaveBeenCalled();
   });
 
+  it("ignores events that arrive after the first terminal event", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        ndjsonResponse([
+          '{"type":"a"}',
+          '{"type":"terminal","n":1}',
+          '{"type":"terminal","n":2}',
+          '{"type":"b"}',
+        ]),
+      ),
+    );
+
+    const { result } = renderHook(() => useNdjsonRequest(OPTIONS));
+    const events: unknown[] = [];
+    const onError = vi.fn();
+
+    await act(async () => {
+      await result.current.start(
+        { url: "https://example.com/" },
+        {
+          onEvent: (event) => {
+            events.push(event);
+            return (event as { type?: string }).type === "terminal"
+              ? "terminal"
+              : "continue";
+          },
+          onError,
+          onAborted: vi.fn(),
+        },
+      );
+    });
+
+    expect(events).toEqual([{ type: "a" }, { type: "terminal", n: 1 }]);
+    expect(onError).not.toHaveBeenCalled();
+  });
+
   it("sanitizes HTTP error payloads", async () => {
     vi.stubGlobal(
       "fetch",

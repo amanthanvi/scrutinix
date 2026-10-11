@@ -63,7 +63,10 @@ export function useNdjsonRequest(options: NdjsonRequestOptions) {
         }
 
         await readNdjsonStream(response, (event) => {
-          if (!isActive()) return;
+          // The first terminal event is the outcome. A later one (the stream
+          // backstop appends an error after a handler that already sent its
+          // own) must not overwrite it.
+          if (!isActive() || sawTerminalEvent) return;
           if (handlers.onEvent(event) === "terminal") {
             sawTerminalEvent = true;
           }
