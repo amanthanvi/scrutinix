@@ -233,7 +233,9 @@ describe("threat feed provider", () => {
 
     const result = await runThreatFeedsProvider("https://example.com/");
 
-    expect(result.warnings.join("\n")).not.toContain("Failed to fetch");
+    const warnings = result.warnings.join("\n");
+    expect(warnings).not.toContain("Failed to fetch");
+    expect(warnings).not.toContain("fetch failed");
     expect(
       result.warnings.some(
         (warning) =>
