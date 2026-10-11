@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { AnalyzerRuntimeProvider } from "@/components/scrutinix/analyzer-runtime";
 import { ResultsSection } from "@/components/scrutinix/results-section";
+import { ScanForm } from "@/components/scrutinix/scan-form";
 import { SharedSnapshotPanel } from "@/components/scrutinix/shared-snapshot-panel";
 import { decodeSharedSnapshot } from "@/lib/domain/shared-snapshot";
 
@@ -85,9 +86,17 @@ function scanResponse(url: string): Response {
 function renderResults() {
   return render(
     <AnalyzerRuntimeProvider>
+      <ScanForm />
       <ResultsSection />
     </AnalyzerRuntimeProvider>,
   );
+}
+
+function failedScanResponse(): Response {
+  return new Response(JSON.stringify({}), {
+    status: 503,
+    headers: { "content-type": "application/json" },
+  });
 }
 
 afterEach(() => {
@@ -194,6 +203,148 @@ describe("shared links", () => {
     expect(endpoint).toBe("/api/analyze");
     expect(JSON.parse(String(init?.body))).toEqual({ url: phishingUrl });
     expect(await screen.findByLabelText("Scan result: malicious")).toBeTruthy();
+    expect(
+      screen.queryByRole("region", { name: "Unverified snapshot" }),
+    ).toBeNull();
+  });
+
+  it("drop ?shared= from the address once a scan completes, keeping everything else", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => scanResponse(phishingUrl)),
+    );
+    window.history.replaceState(
+      null,
+      "",
+      `/?ref=mail&shared=${encodeURIComponent(forgedPayload)}#top`,
+    );
+    const first = renderResults();
+
+    await act(async () => {
+      fireEvent.click(
+        await screen.findByRole("button", { name: "Scan this URL" }),
+      );
+    });
+    await screen.findByLabelText("Scan result: malicious");
+
+    expect(window.location.search).toBe("?ref=mail");
+    expect(window.location.hash).toBe("#top");
+
+    // A reload mounts fresh state and reads the address again.
+    first.unmount();
+    renderResults();
+    await act(async () => {});
+    expect(
+      screen.queryByRole("region", { name: "Unverified snapshot" }),
+    ).toBeNull();
+  });
+
+  it("do not bring the snapshot back when a later re-scan fails", async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockImplementationOnce(async () => scanResponse(phishingUrl))
+      .mockImplementation(async () => failedScanResponse());
+    vi.stubGlobal("fetch", fetchMock);
+    openShareLink(forgedPayload);
+    renderResults();
+
+    await act(async () => {
+      fireEvent.click(
+        await screen.findByRole("button", { name: "Scan this URL" }),
+      );
+    });
+    await screen.findByLabelText("Scan result: malicious");
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Re-scan" }));
+    });
+
+    expect(
+      await screen.findByText("Scan request failed with status 503."),
+    ).toBeTruthy();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(screen.queryByLabelText(/scan result/i)).toBeNull();
+    expect(
+      screen.queryByRole("region", { name: "Unverified snapshot" }),
+    ).toBeNull();
+    expect(window.location.search).toBe("");
+  });
+
+  it("drop ?shared= when the scan was of a different URL", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => scanResponse("https://other.scrutinix.test/")),
+    );
+    openShareLink(forgedPayload);
+    renderResults();
+    await screen.findByRole("region", { name: "Unverified snapshot" });
+
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText("URL to analyze"), {
+        target: { value: "https://other.scrutinix.test/" },
+      });
+      fireEvent.click(screen.getByRole("button", { name: "Analyze URL" }));
+    });
+    await screen.findByLabelText("Scan result: malicious");
+
+    expect(window.location.search).toBe("");
+    expect(
+      screen.queryByRole("region", { name: "Unverified snapshot" }),
+    ).toBeNull();
+  });
+
+  it("hide the snapshot beside a scan error, and keep the link for a reload", async () => {
+    const fetchMock = vi.fn<typeof fetch>(async () => failedScanResponse());
+    vi.stubGlobal("fetch", fetchMock);
+    openShareLink(forgedPayload);
+    const first = renderResults();
+
+    await act(async () => {
+      fireEvent.click(
+        await screen.findByRole("button", { name: "Scan this URL" }),
+      );
+    });
+
+    expect(
+      await screen.findByText("Scan request failed with status 503."),
+    ).toBeTruthy();
+    expect(
+      screen.queryByRole("region", { name: "Unverified snapshot" }),
+    ).toBeNull();
+    expect(screen.queryByRole("button", { name: "Scan this URL" })).toBeNull();
+    expect(
+      (screen.getByLabelText("URL to analyze") as HTMLInputElement).value,
+    ).toBe(phishingUrl);
+    expect(new URLSearchParams(window.location.search).has("shared")).toBe(
+      true,
+    );
+
+    first.unmount();
+    renderResults();
+    expect(
+      await screen.findByRole("region", { name: "Unverified snapshot" }),
+    ).toBeTruthy();
+  });
+
+  it("keep the snapshot hidden when a scan of another URL fails", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => failedScanResponse()),
+    );
+    openShareLink(forgedPayload);
+    renderResults();
+    await screen.findByRole("region", { name: "Unverified snapshot" });
+
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText("URL to analyze"), {
+        target: { value: "https://other.scrutinix.test/" },
+      });
+      fireEvent.click(screen.getByRole("button", { name: "Analyze URL" }));
+    });
+
+    expect(
+      await screen.findByText("Scan request failed with status 503."),
+    ).toBeTruthy();
     expect(
       screen.queryByRole("region", { name: "Unverified snapshot" }),
     ).toBeNull();

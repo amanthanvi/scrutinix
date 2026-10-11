@@ -151,6 +151,7 @@ Observed results:
 - [x] Render `?shared=` links as a neutral "Unverified snapshot" (no verdict colour, score, or "Scan result" label) with a primary "Scan this URL" action; never scan automatically.
 - [x] Decode snapshots in `lib/domain/shared-snapshot.ts`: normalize the URL (reject unscannable ones), keep `capturedAt` only as an ISO timestamp, strip control/bidi characters from the summary and cap it at 160 characters. Both historical encodings stay readable.
 - [x] Read `?shared=` after hydration; reading it in the first render made every shared link fail hydration.
+- [x] Remove `?shared=` from the address (`history.replaceState`, via `lib/client/shared-link.ts`) when a scan completes, and hide the snapshot once any scan has been attempted so a failed scan's error never sits beside the claim.
 - [x] Cover decoding (unit), the panel, wiring, and hydration (DOM), and forged, legacy, and round-trip links (Playwright).
 
 ### P24 Resolve September dependency maintenance

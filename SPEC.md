@@ -178,7 +178,7 @@ Both personas use the same tool. A **view mode toggle** (Summary / Full Report) 
 - **FR-20** MUST be responsive (mobile-friendly)
 - **FR-21** SHOULD include educational content about URL threats
 - **FR-22** SHOULD surface lightweight trust/privacy/methodology context on the public site
-- **FR-23** MAY include shareable result links (URL-encoded state, no server persistence). Share links are unsigned, so an opened link MUST render as an unverified snapshot in neutral styling, never as a scan result, and MUST scan only when the visitor asks
+- **FR-23** MAY include shareable result links (URL-encoded state, no server persistence). Share links are unsigned, so an opened link MUST render as an unverified snapshot in neutral styling, never as a scan result, and MUST scan only when the visitor asks. A completed scan MUST remove `?shared=` from the address; once any scan has been attempted the snapshot MUST stay hidden
 
 ## 4) System Design
 

@@ -16,6 +16,11 @@ import { getSignalSeverity } from "@/components/shared/scrutinix-types";
 import { useBatchStream } from "@/hooks/use-batch-stream";
 import { useScanStream } from "@/hooks/use-scan-stream";
 import {
+  clearSharedPayload,
+  readSharedPayload,
+  subscribeToSharedPayload,
+} from "@/lib/client/shared-link";
+import {
   decodeSharedSnapshot,
   encodeSharedSnapshot,
 } from "@/lib/domain/shared-snapshot";
@@ -50,12 +55,6 @@ const severityRank = {
   pending: -1,
 } as const;
 
-const subscribeToNothing = () => () => {};
-
-function readSharedPayload(): string | null {
-  return new URLSearchParams(window.location.search).get("shared");
-}
-
 /**
  * The server render never sees the query string, so the payload is read
  * only after hydration; reading it during the first render would make the
@@ -63,7 +62,7 @@ function readSharedPayload(): string | null {
  */
 function useSharedSnapshot() {
   const payload = useSyncExternalStore(
-    subscribeToNothing,
+    subscribeToSharedPayload,
     readSharedPayload,
     () => null,
   );
@@ -98,6 +97,7 @@ function useCreateAnalyzerRuntime() {
   const scan = useScanStream((result) => {
     startTransition(() => setSelectedResult(result));
     pushHistoryEvent(result);
+    clearSharedPayload();
   });
 
   const batch = useBatchStream((result) => {
@@ -105,6 +105,13 @@ function useCreateAnalyzerRuntime() {
   });
 
   const active = selectedResult ?? scan.state.result;
+  // The link's claim is the page's subject only until something replaces it.
+  // Any scan attempt does, even a failed or cancelled one: the error already
+  // shows in the scan form, and the claim reappearing beside it would read as
+  // part of that failure (or, after a scan of another URL, as unrelated to it).
+  // The param stays in the URL until a scan completes, so a reload reopens it.
+  const unverifiedSnapshot =
+    active || scan.state.url !== "" ? null : sharedSnapshot;
   const signals = active?.signals ?? scan.state.signals;
   const live = scan.state.isStreaming || batch.state.isStreaming;
 
@@ -236,12 +243,12 @@ function useCreateAnalyzerRuntime() {
     setSingleUrl,
     setViewMode,
     shareResult,
-    sharedSnapshot,
     signals,
     singleUrl,
     startBatchScan,
     startSingleScan,
     summarySignals,
+    unverifiedSnapshot,
     viewMode,
     visibleSignals,
   };

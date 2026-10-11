@@ -101,6 +101,8 @@ tests/
   `lib/domain/shared-snapshot.ts` normalizes and caps them and the UI shows
   them as a neutral "Unverified snapshot" with a "Scan this URL" action —
   never verdict colour, never a "Scan result" label, never an automatic scan.
+  A completed scan drops `?shared=` from the address
+  (`lib/client/shared-link.ts`); any scan attempt hides the panel.
 - **E2E fixtures**: `SCRUTINIX_TEST_FIXTURES=1` provides deterministic offline
   scenarios under `npm run test:e2e`.
 - **CSS layering**: `app/globals.css` owns semantic tokens;

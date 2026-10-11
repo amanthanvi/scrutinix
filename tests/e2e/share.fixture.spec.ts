@@ -83,6 +83,7 @@ test("a forged share link opens as an unverified snapshot, then scans for real @
 
   await expect(page.getByLabel(/^scan result: malicious$/i)).toBeVisible();
   await expect(snapshot).toHaveCount(0);
+  await expect(page).not.toHaveURL(/shared=/);
   expect(pageErrors).toEqual([]);
 });
 

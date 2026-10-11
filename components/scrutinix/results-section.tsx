@@ -56,8 +56,8 @@ export function ResultsSection() {
     setSingleUrl,
     setViewMode,
     shareResult,
-    sharedSnapshot,
     signals,
+    unverifiedSnapshot,
     viewMode,
     visibleSignals,
   } = useAnalyzerRuntime();
@@ -78,10 +78,10 @@ export function ResultsSection() {
 
       {activeTab === "single" ? (
         <div className="flex flex-col gap-4">
-          {sharedSnapshot && !active && !scan.state.isStreaming ? (
+          {unverifiedSnapshot ? (
             <SharedSnapshotPanel
-              snapshot={sharedSnapshot}
-              onScan={() => void rescanUrl(sharedSnapshot.url)}
+              snapshot={unverifiedSnapshot}
+              onScan={() => void rescanUrl(unverifiedSnapshot.url)}
             />
           ) : (
             <VerdictPanel
