@@ -11,6 +11,9 @@ const config = defineConfig({
   resolve: {
     alias: {
       "@": rootDir,
+      // The marker throws outside the react-server condition; tests run the
+      // server modules directly, as Next does on the server.
+      "server-only": path.join(rootDir, "node_modules/server-only/empty.js"),
     },
   },
   test: {

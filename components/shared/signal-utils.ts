@@ -23,6 +23,20 @@ import type {
 } from "@/lib/domain/types";
 
 /** The finding as one sentence: what this check found, not its status. */
+/** Model labels in plain words: "benign" is jargon for "normal". */
+function plainModelLabel(label: string): string {
+  switch (label) {
+    case "benign":
+      return "Normal";
+    case "risky":
+      return "Looks risky";
+    case "malicious":
+      return "Looks malicious";
+    default:
+      return `Looks like ${label}`;
+  }
+}
+
 export function getSignalFinding<N extends SignalName>(
   name: N,
   result: SignalResult<SignalPayloadMap[N]>,
@@ -65,7 +79,7 @@ export function getSignalSummary(
         return "The link's wording and structure look normal.";
       }
 
-      return `The link's wording and structure look ${d.consensusLabel} (${(d.consensusScore * 100).toFixed(0)}/100).`;
+      return `The link's wording and structure look ${d.consensusLabel} (risk ${(d.consensusScore * 100).toFixed(0)} of 100).`;
     }
     case "googleSafeBrowsing": {
       const d = data as GoogleSafeBrowsingData;
@@ -93,7 +107,9 @@ export function getSignalSummary(
       const d = data as SSLData;
       // Fixed plain sentences; the provider's own wording stays in Notes.
       if (!d.available) {
-        return "The site didn't accept a secure connection.";
+        // Unavailable covers DNS failures and timeouts too: say what we
+        // know (no answer), never that the site refused encryption.
+        return "We couldn't check the site's security certificate.";
       }
 
       if (d.validationState === "trusted") {
@@ -216,17 +232,18 @@ export function getSignalDetailEntries(
       const entries: DetailEntry[] = [
         {
           label: "Combined result",
-          value: `${d.consensusLabel} (${(d.consensusScore * 100).toFixed(0)} risk)`,
+          value: `${plainModelLabel(d.consensusLabel)} · risk ${Math.round(d.consensusScore * 100)} of 100`,
         },
         {
-          label: "Rule-based check",
-          value: `${d.lexicalModel.label} (${(d.lexicalModel.score * 100).toFixed(0)}%)`,
+          label: "Structure checks",
+          value: `${plainModelLabel(d.lexicalModel.label)} · risk ${Math.round(d.lexicalModel.score * 100)} of 100`,
         },
       ];
       if (d.transformerModel) {
+        // The model's score is its confidence in the label it chose.
         entries.push({
-          label: "Local model",
-          value: `${d.transformerModel.label} (${((d.transformerModel.score ?? 0) * 100).toFixed(0)}%)`,
+          label: "Model reading",
+          value: `${plainModelLabel(d.transformerModel.label)} · ${Math.round((d.transformerModel.score ?? 0) * 100)}% sure`,
         });
       }
       if (d.reasons?.length) {

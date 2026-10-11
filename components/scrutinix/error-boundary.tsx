@@ -24,22 +24,31 @@ export class ScrutinixErrorBoundary extends Component<
   render() {
     if (this.state.hasError) {
       return (
-        <div className="py-4">
-          <p className="text-sm font-medium text-[var(--sx-text)]">
-            Something went wrong.
+        <div
+          role="alert"
+          className="rounded-xl border px-5 py-5 sm:px-7"
+          style={{
+            backgroundColor: "var(--sx-error-surface)",
+            borderColor: "var(--sx-error-edge)",
+          }}
+        >
+          <p className="text-lead font-semibold text-[var(--sx-text)]">
+            This part of the page stopped working.
           </p>
-          <p className="mt-1.5 text-[0.8125rem] leading-6 text-[var(--sx-text-muted)]">
-            {this.state.error?.message ?? "An unexpected error occurred."}{" "}
-            Reload the page and retry the scan.
+          <p className="text-body mt-1.5 text-[var(--sx-text-muted)]">
+            {this.state.error?.message
+              ? `${this.state.error.message.replace(/\.?$/, ".")} `
+              : ""}
+            Reload the page to try again; your saved history is not affected.
           </p>
           <button
             type="button"
             onClick={() => {
               window.location.reload();
             }}
-            className="sx-btn-press mt-3 inline-flex h-8 items-center justify-center rounded-md bg-[var(--sx-accent)] px-3 text-[0.8125rem] font-medium text-[var(--sx-accent-fg)] hover:opacity-90"
+            className="sx-btn-press text-meta mt-4 inline-flex min-h-11 items-center justify-center rounded-md bg-[var(--sx-accent-solid)] px-4 font-medium text-[var(--sx-accent-fg)] hover:bg-[var(--sx-accent-solid-hover)]"
           >
-            Reload
+            Reload page
           </button>
         </div>
       );

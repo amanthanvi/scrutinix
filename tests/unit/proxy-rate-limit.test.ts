@@ -39,7 +39,7 @@ describe("proxy batch rate-limit charging", () => {
 
     await proxy(request);
 
-    expect(applyRateLimit).toHaveBeenCalledWith("203.0.113.10", 1);
+    expect(applyRateLimit).toHaveBeenCalledWith("203.0.113.10", 1, "scan");
   });
 
   it("charges one token for a batch-looking hostile-origin request", async () => {
@@ -53,7 +53,7 @@ describe("proxy batch rate-limit charging", () => {
 
     await proxy(request);
 
-    expect(applyRateLimit).toHaveBeenCalledWith("203.0.113.10", 1);
+    expect(applyRateLimit).toHaveBeenCalledWith("203.0.113.10", 1, "scan");
   });
 
   it("charges valid same-origin batches by URL count", async () => {
@@ -73,7 +73,7 @@ describe("proxy batch rate-limit charging", () => {
 
     await proxy(request);
 
-    expect(applyRateLimit).toHaveBeenCalledWith("203.0.113.10", 3);
+    expect(applyRateLimit).toHaveBeenCalledWith("203.0.113.10", 3, "scan");
   });
 
   it("preserves the original request body after charging", async () => {
@@ -87,5 +87,45 @@ describe("proxy batch rate-limit charging", () => {
     await proxy(request);
 
     await expect(request.text()).resolves.toBe(body);
+  });
+
+  it("meters the per-result share image on the image tier", async () => {
+    await proxy(new NextRequest("https://scrutinix.test/og/result?shared=abc"));
+
+    expect(applyRateLimit).toHaveBeenCalledWith("203.0.113.10", 1, "image");
+  });
+
+  it("answers 429 when the share image budget is spent", async () => {
+    applyRateLimit.mockResolvedValue({
+      success: false,
+      remaining: 0,
+      reset: Date.now() + 30_000,
+      status: 429,
+      error: { code: "rate_limited" },
+    });
+
+    const response = await proxy(
+      new NextRequest("https://scrutinix.test/og/result?shared=abc"),
+    );
+
+    expect(response.status).toBe(429);
+    expect(response.headers.get("Retry-After")).toBeTruthy();
+  });
+
+  it("sends the same wait in Retry-After that the message was worded from", async () => {
+    applyRateLimit.mockResolvedValue({
+      success: false,
+      remaining: 0,
+      reset: Date.now() + 5 * 3_600_000,
+      retryAfterSeconds: 18_000,
+      status: 429,
+      error: { code: "rate_limited" },
+    });
+
+    const response = await proxy(
+      new NextRequest("https://scrutinix.test/og/result?shared=abc"),
+    );
+
+    expect(response.headers.get("Retry-After")).toBe("18000");
   });
 });

@@ -5,27 +5,33 @@ interface AppFooterProps {
   children?: ReactNode;
 }
 
+const LINK =
+  "inline-flex min-h-11 items-center transition-colors hover:text-[var(--sx-text)]";
+
 export function AppFooter({ children }: AppFooterProps) {
   return (
-    <footer className="border-border border-t">
-      <div className="mx-auto flex w-full max-w-[44rem] flex-wrap items-center gap-x-4 gap-y-2 px-4 py-6 text-[0.8125rem] text-[var(--sx-text-muted)] sm:px-6">
-        <span className="font-medium text-[var(--sx-text)]">Scrutinix</span>
-        <nav aria-label="Footer" className="flex items-center gap-x-4">
-          <Link
-            href="/about"
-            className="transition-colors hover:text-[var(--sx-text)]"
-          >
+    <footer className="mt-16 border-t border-[var(--sx-border)]">
+      <div className="text-meta mx-auto flex w-full max-w-[46rem] flex-wrap items-center gap-x-5 gap-y-1 px-4 py-4 text-[var(--sx-text-soft)] sm:px-6">
+        <span className="font-medium text-[var(--sx-text-muted)]">
+          Scrutinix
+        </span>
+        <nav aria-label="Footer" className="flex items-center gap-x-5">
+          <Link href="/about" className={LINK}>
             About
           </Link>
-          <Link
-            href="/privacy"
-            className="transition-colors hover:text-[var(--sx-text)]"
-          >
+          <Link href="/privacy" className={LINK}>
             Privacy
           </Link>
+          <a
+            href="https://github.com/amanthanvi/scrutinix"
+            className={LINK}
+            rel="noreferrer"
+          >
+            Source
+          </a>
         </nav>
-        <span className="ml-auto">
-          {children ?? "History stays on this device"}
+        <span className="sm:ml-auto">
+          {children ?? "Free and open source. No account needed."}
         </span>
       </div>
     </footer>

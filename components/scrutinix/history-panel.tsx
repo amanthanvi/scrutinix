@@ -7,10 +7,17 @@ import {
   resultsToCsv,
   resultsToJson,
 } from "@/lib/client/export";
-import { formatDisplayUrl } from "@/lib/domain/url";
 import type { HistoryEntry } from "@/lib/domain/types";
-import { verdictFg } from "@/components/shared/scrutinix-types";
+import {
+  ROW_LAYOUT,
+  ROW_TRAILING,
+  RowLink,
+  RowVerdict,
+  useRowAnatomy,
+} from "@/components/scrutinix/result-row";
+import { SignalGlyph } from "@/components/scrutinix/signal-strip";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 
 interface HistoryPanelProps {
@@ -38,6 +45,43 @@ function formatTimestamp(iso: string): string {
   }
 
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+function HistoryRow({
+  entry,
+  onSelect,
+}: {
+  entry: HistoryEntry;
+  onSelect: (entry: HistoryEntry) => void;
+}) {
+  const anatomy = useRowAnatomy(entry.url);
+  return (
+    <li>
+      <button
+        type="button"
+        onClick={() => onSelect(entry)}
+        className={cn(
+          ROW_LAYOUT,
+          "-mx-2 w-[calc(100%+1rem)] rounded-md px-2 py-2.5 text-left transition-colors hover:bg-[var(--sx-subtle)]",
+        )}
+      >
+        <SignalGlyph result={entry} />
+        <RowVerdict
+          verdict={entry.verdict}
+          impersonates={anatomy?.impersonates ?? null}
+        />
+        <RowLink url={entry.url} anatomy={anatomy} />
+        <span
+          className={cn(
+            ROW_TRAILING,
+            "text-caption font-mono text-[var(--sx-text-soft)]",
+          )}
+        >
+          {formatTimestamp(entry.savedAt)}
+        </span>
+      </button>
+    </li>
+  );
 }
 
 export function HistoryPanel({
@@ -79,16 +123,22 @@ export function HistoryPanel({
     }, 3000);
   };
 
+  // Absence is the empty state: with nothing saved and nothing to undo, the
+  // region stays in the page (landmark and tests) but draws nothing.
+  if (totalCount === 0 && !canUndoClear) {
+    return <section aria-label="Scan history" />;
+  }
+
   return (
     <section aria-label="Scan history">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="text-base font-semibold tracking-[-0.01em] text-[var(--sx-text)]">
+      <div className="flex min-h-11 flex-wrap items-center justify-between gap-x-3 gap-y-1">
+        <h2 className="text-title font-semibold text-[var(--sx-text)]">
           History
           {totalCount > 0 ? (
             <>
               <span
                 aria-hidden="true"
-                className="ml-2 font-mono text-xs font-normal text-[var(--sx-text-soft)] tabular-nums"
+                className="text-meta ml-2 font-mono font-normal text-[var(--sx-text-soft)]"
               >
                 {totalCount}
               </span>
@@ -100,7 +150,7 @@ export function HistoryPanel({
           ) : null}
         </h2>
 
-        <div className="flex items-center gap-1">
+        <div className="-mr-2.5 flex items-center gap-1">
           {canUndoClear ? (
             <Button
               type="button"
@@ -119,7 +169,9 @@ export function HistoryPanel({
               variant="ghost"
               size="sm"
               className={
-                confirmClear ? "text-[var(--sx-malicious-fg)]" : undefined
+                confirmClear
+                  ? "text-[var(--sx-danger-fg)] hover:text-[var(--sx-danger-fg)]"
+                  : undefined
               }
               aria-label={
                 confirmClear ? "Confirm clear all history" : "Clear all history"
@@ -132,7 +184,7 @@ export function HistoryPanel({
       </div>
 
       {canUndoClear ? (
-        <p className="mt-2 text-[0.8125rem] text-[var(--sx-text-muted)]">
+        <p className="text-meta mt-1 text-[var(--sx-text-muted)]">
           History was cleared. Undo restores the previous list.
         </p>
       ) : null}
@@ -144,46 +196,27 @@ export function HistoryPanel({
           type="search"
           value={historyQuery}
           onChange={(event) => onHistoryQueryChange(event.target.value)}
-          placeholder="Filter by URL or verdict"
+          placeholder="Filter by link or verdict"
           aria-label="Filter scan history"
-          className="mt-3 h-9 text-[0.8125rem]"
+          className="mt-3 h-10 text-sm"
         />
       ) : null}
 
       {entries.length === 0 ? (
-        <p className="mt-3 text-[0.8125rem] text-[var(--sx-text-soft)]">
-          {historyQuery
-            ? "No scans match this filter."
-            : "Finished scans appear here."}
-        </p>
+        historyQuery ? (
+          <p className="mt-2 text-sm text-[var(--sx-text-soft)]">
+            No scans match this filter.
+          </p>
+        ) : null
       ) : (
         <>
-          <ul className="border-border divide-border mt-3 divide-y border-y">
+          <ul className="mt-3 divide-y divide-[var(--sx-border)] border-y border-[var(--sx-border)]">
             {entries.map((entry) => (
-              <li key={entry.id}>
-                <button
-                  type="button"
-                  onClick={() => onSelect(entry)}
-                  className="hover:bg-muted/40 flex min-h-11 w-full items-center gap-3 py-2.5 text-left"
-                >
-                  <span
-                    className="w-20 shrink-0 text-[0.8125rem] font-medium capitalize"
-                    style={{ color: verdictFg(entry.verdict) }}
-                  >
-                    {entry.verdict}
-                  </span>
-                  <span className="min-w-0 flex-1 truncate font-mono text-[0.8125rem] text-[var(--sx-text-muted)]">
-                    {formatDisplayUrl(entry.url)}
-                  </span>
-                  <span className="shrink-0 font-mono text-xs text-[var(--sx-text-soft)] tabular-nums">
-                    {formatTimestamp(entry.savedAt)}
-                  </span>
-                </button>
-              </li>
+              <HistoryRow key={entry.id} entry={entry} onSelect={onSelect} />
             ))}
           </ul>
 
-          <div className="mt-2 flex items-center gap-1">
+          <div className="mt-2 -ml-2.5 flex flex-wrap items-center gap-1">
             <Button
               type="button"
               onClick={() =>

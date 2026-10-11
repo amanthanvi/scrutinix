@@ -38,6 +38,15 @@ const nextConfig: NextConfig = {
   // bundled model weights ride along with the analyze routes.
   serverExternalPackages: ["@huggingface/transformers", "onnxruntime-node"],
   outputFileTracingIncludes: {
+    // Share images read Geist from the installed package (lib/og/fonts.ts).
+    "/og/result": [
+      "./node_modules/geist/dist/fonts/geist-sans/*.ttf",
+      "./node_modules/geist/dist/fonts/geist-mono/GeistMono-Medium.ttf",
+    ],
+    "/opengraph-image": [
+      "./node_modules/geist/dist/fonts/geist-sans/*.ttf",
+      "./node_modules/geist/dist/fonts/geist-mono/GeistMono-Medium.ttf",
+    ],
     "/api/analyze/**": [
       "./lib/server/ml/model/**",
       // transformers loads the runtime via createRequire(), which file tracing

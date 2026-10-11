@@ -47,7 +47,7 @@ describe("normalizeUrlInput", () => {
 
     expect(result.ok).toBe(false);
     if (!result.ok) {
-      expect(result.error).toMatch(/Only HTTP and HTTPS/);
+      expect(result.error).toMatch(/Only web links \(http or https\)/);
     }
   });
 

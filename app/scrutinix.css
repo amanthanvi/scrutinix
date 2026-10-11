@@ -1,4 +1,11 @@
-/* Scrutinix — minimal product tool */
+/*
+ * Scrutinix — motion and effect utilities (sx-*). Tokens live in
+ * globals.css. Motion is CSS-only, under 300ms, ease-out from an
+ * already-visible default, and collapses under prefers-reduced-motion.
+ *
+ * The one authored moment: the eight cells fill as checks land, then the
+ * verdict band takes its colour and the verdict word arrives.
+ */
 
 .scrutinix-theme {
   min-height: 100vh;
@@ -22,34 +29,215 @@
   }
 }
 
-.sx-progress {
-  height: 2px;
-  overflow: hidden;
-  background: var(--sx-border);
-}
+/* ---------------------------------------------------------------------
+ * The eight-cell strip. A cell is a slot (the track) with a fill layer;
+ * `data-severity` picks the fill. Shape carries every state as well as
+ * hue, so no two states differ by colour alone:
+ *   flagged = solid block       caution = hatched block
+ *   found nothing = thin dash   partial answer = centred short block
+ *   failed = outline            didn't apply = dashed outline
+ *   still running = empty track
+ * ------------------------------------------------------------------- */
 
-.sx-progress > span {
+.sx-cell {
+  position: relative;
   display: block;
-  height: 100%;
-  background: var(--sx-accent);
-  transform-origin: left;
-  transition: transform 280ms var(--sx-ease);
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--sx-cell-track);
 }
 
-/* The live dot is the app's only infinite animation. */
+.sx-cell::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--sx-cell-clear);
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition:
+    transform 260ms var(--sx-ease),
+    background-color 200ms var(--sx-ease);
+}
+
+.sx-cell[data-severity="malicious"]::before {
+  background: var(--sx-cell-flagged);
+  transform: scaleX(1);
+}
+
+/* Caution: warning hatch over the track. */
+.sx-cell[data-severity="suspicious"]::before {
+  background: repeating-linear-gradient(
+    -45deg,
+    var(--sx-cell-caution) 0 2px,
+    transparent 2px 3.5px
+  );
+  transform: scaleX(1);
+}
+
+/* Found nothing: a thin centred dash, never a block. */
+.sx-cell[data-severity="clear"]::before {
+  inset: 36% 0;
+  background: var(--sx-cell-clear);
+  transform: scaleX(1);
+}
+
+/*
+ * A partial answer: a centred short block, never a length. It grows from
+ * the centre, so left-anchored length stays reserved for arrival fills
+ * and a settled cell never reads as a check stuck halfway.
+ */
+.sx-cell[data-severity="neutral"]::before {
+  inset: 20% 30%;
+  border-radius: 1px;
+  background: var(--sx-cell-limited);
+  transform-origin: center;
+  transform: scaleX(1);
+}
+
+.sx-cell[data-severity="error"] {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--sx-cell-failed);
+}
+
+.sx-cell[data-severity="skipped"] {
+  background: transparent;
+  outline: 1px dashed var(--sx-cell-na);
+  outline-offset: -1px;
+}
+
+/* Still running: the app's only infinite animation. */
 @keyframes sx-live {
   0%,
   100% {
     opacity: 1;
   }
   50% {
-    opacity: 0.4;
+    opacity: 0.45;
   }
 }
 
-.sx-live {
+.sx-live,
+.sx-cell-live[data-severity="pending"] {
   animation: sx-live 1.2s ease-in-out infinite;
 }
+
+/* History, batch, and the brand mark draw settled signatures. */
+.sx-cell-static::before {
+  transition: none;
+}
+
+/*
+ * Forced colours (Windows High Contrast) wipe backgrounds and gradients,
+ * which would erase every cell. Opt the cells out and redraw the shape
+ * ramp in system colours: shape still tells the states apart.
+ */
+@media (forced-colors: active) {
+  .sx-cell {
+    forced-color-adjust: none;
+    background: Canvas;
+    box-shadow: inset 0 0 0 1px GrayText;
+  }
+
+  .sx-cell::before {
+    background: CanvasText;
+  }
+
+  .sx-cell[data-severity="clear"]::before,
+  .sx-cell[data-severity="neutral"]::before {
+    background: CanvasText;
+  }
+
+  .sx-cell[data-severity="suspicious"]::before {
+    background: repeating-linear-gradient(
+      -45deg,
+      CanvasText 0 2px,
+      transparent 2px 3.5px
+    );
+  }
+
+  .sx-cell[data-severity="error"] {
+    background: Canvas;
+    box-shadow: inset 0 0 0 1.5px CanvasText;
+  }
+
+  .sx-cell[data-severity="skipped"] {
+    background: Canvas;
+    box-shadow: none;
+    outline: 1px dashed GrayText;
+    outline-offset: -1px;
+  }
+
+  /* Selected tab and Summary/Full segment: one underline, in Highlight. */
+  [data-slot="tabs-trigger"] {
+    border-bottom-color: Canvas;
+  }
+
+  [data-slot="tabs-trigger"][data-state="active"],
+  .sx-segment[data-selected="true"] {
+    border-bottom-color: Highlight;
+  }
+
+  .sx-segment[data-selected="false"] {
+    border-bottom-color: Canvas;
+  }
+}
+
+/*
+ * Once a verdict band is on the page, the hero headline steps down to the
+ * headline size so one display size (the verdict) owns the moment. Keyed
+ * on the band's heading, which mounts when a scan starts (or with a shared
+ * snapshot from first paint), so the reflow happens once, before the
+ * verdict lands, never after.
+ */
+@media (min-width: 40rem) {
+  main:has(#sx-verdict-heading) > .sx-hero-title {
+    font-size: var(--text-headline);
+    line-height: var(--text-headline--line-height);
+    letter-spacing: var(--text-headline--letter-spacing);
+  }
+
+  main:has(#sx-verdict-heading) > .sx-hero-form {
+    margin-top: 1.5rem;
+  }
+}
+
+/* Strip controls: a quiet hover plate behind the cell and its label. */
+.sx-strip-cell {
+  transition: background-color 160ms var(--sx-ease);
+}
+
+.sx-strip-cell:hover {
+  background: var(--sx-subtle);
+}
+
+/* ---------------------------------------------------------------------
+ * The verdict band: neutral while checks run, then the verdict surface.
+ * ------------------------------------------------------------------- */
+
+.sx-band {
+  transition:
+    background-color 280ms var(--sx-ease),
+    border-color 280ms var(--sx-ease);
+}
+
+.sx-band-arrive {
+  opacity: 1;
+  translate: 0 0;
+  transition:
+    opacity 240ms var(--sx-ease),
+    translate 240ms var(--sx-ease);
+}
+
+@starting-style {
+  .sx-band-arrive {
+    opacity: 0;
+    translate: 0 6px;
+  }
+}
+
+/* ---------------------------------------------------------------------
+ * Controls
+ * ------------------------------------------------------------------- */
 
 .sx-disclosure > summary {
   cursor: pointer;
@@ -64,7 +252,7 @@
   transition: rotate 200ms var(--sx-ease);
 }
 
-.sx-disclosure[open] .sx-chevron {
+.sx-disclosure[open] > summary .sx-chevron {
   rotate: 90deg;
 }
 
@@ -73,12 +261,24 @@
     scale 160ms var(--sx-ease),
     border-color 160ms var(--sx-ease),
     background-color 160ms var(--sx-ease),
-    color 160ms var(--sx-ease),
-    opacity 160ms var(--sx-ease);
+    color 160ms var(--sx-ease);
 }
 
 .sx-btn-press:active {
   scale: 0.97;
+}
+
+.sx-link {
+  color: var(--sx-accent);
+  text-decoration-line: underline;
+  text-decoration-color: color-mix(in oklch, var(--sx-accent) 35%, transparent);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  transition: text-decoration-color 160ms var(--sx-ease);
+}
+
+.sx-link:hover {
+  text-decoration-color: var(--sx-accent);
 }
 
 .sx-skip-link:focus-visible,
@@ -94,6 +294,13 @@
   outline-offset: 2px;
 }
 
+/* Fields show focus on their own edge, flush with the 1px border. */
+.scrutinix-theme input:focus-visible,
+.scrutinix-theme textarea:focus-visible {
+  outline-offset: 0;
+  border-color: var(--sx-focus-ring);
+}
+
 .sx-skip-link {
   position: absolute;
   top: 0.75rem;
@@ -101,7 +308,7 @@
   z-index: 50;
   min-height: 2.75rem;
   transform: translateY(-180%);
-  border: 1px solid var(--sx-border);
+  border: 1px solid var(--sx-control);
   border-radius: var(--radius);
   background: var(--sx-surface);
   color: var(--sx-text);
@@ -116,19 +323,23 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .sx-enter {
+  .sx-enter,
+  .sx-band-arrive {
     translate: none;
     transition-duration: 150ms;
     transition-property: opacity;
   }
 
-  .sx-live {
+  .sx-live,
+  .sx-cell-live[data-severity="pending"] {
     animation: none;
   }
 
-  .sx-progress > span,
+  .sx-cell::before,
+  .sx-band,
   .sx-chevron,
   .sx-btn-press,
+  .sx-strip-cell,
   .sx-skip-link {
     transition: none;
   }
