@@ -1,8 +1,13 @@
+import { randomBytes } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   getEnv,
   isProviderConfigured,
+  MIN_SHARE_SECRET_LENGTH,
   resetEnvForTests,
 } from "@/lib/config/env";
 
@@ -118,5 +123,42 @@ describe("env parsing", () => {
     expect(warn).toHaveBeenCalledTimes(1);
     expect(String(warn.mock.calls[0]?.[0])).not.toContain("p".repeat(31));
     warn.mockRestore();
+  });
+
+  it("leaves share signing unset, without a warning, for a copied .env.example", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const example = readFileSync(
+      resolve(process.cwd(), ".env.example"),
+      "utf8",
+    );
+    const entries = new Map(
+      example
+        .split("\n")
+        .map((line) => /^([A-Z][A-Z0-9_]*)=(.*)$/.exec(line))
+        .flatMap((match) => (match ? [[match[1]!, match[2]!] as const] : [])),
+    );
+
+    expect(entries.get("SHARE_SIGNING_SECRET")).toBe("");
+    expect(entries.get("SHARE_SIGNING_SECRET_PREVIOUS")).toBe("");
+    for (const [key, value] of entries) vi.stubEnv(key, value);
+    resetEnvForTests();
+
+    const env = getEnv();
+    expect(env.SHARE_SIGNING_SECRET).toBeUndefined();
+    expect(env.SHARE_SIGNING_SECRET_PREVIOUS).toBeUndefined();
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it("accepts a key made the way .env.example says to make one", () => {
+    // `openssl rand -base64 48` and the documented Node one-liner both emit
+    // 48 random bytes as base64.
+    const key = randomBytes(48).toString("base64");
+    expect(key.length).toBeGreaterThanOrEqual(MIN_SHARE_SECRET_LENGTH);
+
+    vi.stubEnv("SHARE_SIGNING_SECRET", key);
+    vi.stubEnv("SHARE_SIGNING_SECRET_PREVIOUS", "");
+    resetEnvForTests();
+    expect(getEnv().SHARE_SIGNING_SECRET).toBe(key);
   });
 });
