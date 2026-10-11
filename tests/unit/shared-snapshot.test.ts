@@ -66,6 +66,14 @@ describe("decodeSharedSnapshot", () => {
     expect(decodeSharedSnapshot(encodeLegacy(snapshot))).toEqual(snapshot);
   });
 
+  it("reads Latin-1 text in the first links, the only text they could carry", () => {
+    const summary = "Risque élevé : hôte suspect.";
+
+    expect(
+      decodeSharedSnapshot(encodeLegacy({ ...snapshot, summary }))?.summary,
+    ).toBe(summary);
+  });
+
   it("keeps non-Latin-1 summaries intact", () => {
     const summary = "Risque élevé — 钓鱼 signals.";
     expect(

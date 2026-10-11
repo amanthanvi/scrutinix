@@ -65,8 +65,10 @@ export function decodeSharedSnapshot(
 }
 
 function parseSnapshotPayload(payload: string): SharedSnapshot | null {
-  // Current links percent-encode the JSON before base64; the first links
-  // base64-encoded the raw JSON. Both stay readable.
+  // Current links percent-encode the JSON before base64. The first release
+  // base64-encoded the raw JSON, and `btoa` throws on any character above
+  // U+00FF, so those links exist only for Latin-1 text; that is all this
+  // fallback needs to read.
   const decoders = [(text: string) => decodeURIComponent(text), String];
   for (const decode of decoders) {
     try {
