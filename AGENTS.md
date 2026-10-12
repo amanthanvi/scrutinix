@@ -46,6 +46,13 @@ Project-local operating notes for agents working in this repository. Keep this f
 - Build: `npm run build`
 - Lighthouse: `npm run lighthouse`
 - Security audit: `npm audit`
+- Verify the running app: `npm run verify:launch`, then `npm run verify:doctor`, `npm run verify:smoke` or `npm run verify:drive`, then `npm run verify:cleanup`
+
+## Verification
+
+Drive the local scanner with `.agents/skills/verify-scrutinix/SKILL.md` (linked from `.cursor/skills/verify-scrutinix`). `verify:launch` starts `next dev` in tmux with `SCRUTINIX_TEST_FIXTURES=1`. Evidence stays in `/tmp/scrutinix-verify/evidence` after cleanup. Cleanup stops only the session recorded in `/tmp/scrutinix-verify/run.json`.
+
+The feature map at `.agents/skills/verify-scrutinix/references/features/README.md` is the regression sweep order. Feature pull requests need a Proof section: the exact commands, screenshot or trace paths that survive cleanup, the result of each command, and `INCONCLUSIVE` when a step could not run. Live provider calls are `INCONCLUSIVE` in this loop.
 
 ## Conventions
 
@@ -90,8 +97,8 @@ Project-local operating notes for agents working in this repository. Keep this f
 
 ## Learned Workspace Facts
 
-- List `.cursor/` in `.gitignore` so local Cursor hooks, hook state JSON (including continual-learning index files under `.cursor/hooks/state/`), and other IDE-only paths are not committed; if anything under `.cursor/` was ever tracked, drop it with `git rm -r --cached .cursor` while keeping files on disk.
-- Ignoring the whole `.cursor/` directory means team-shared Cursor rules under that tree will not be versioned from this repo unless you adopt a narrower ignore pattern later.
+- Keep Cursor hook state and local IDE files out of git with `.cursor/*` in `.gitignore`, and keep the `!.cursor/skills/verify-scrutinix` exception so the verification skill symlink stays tracked. If hook state under `.cursor/` was ever tracked, drop it with `git rm -r --cached .cursor` while keeping files on disk.
+- `.gitignore` ignores `.cursor/*` except the `verify-scrutinix` skill symlink. Other Cursor hook state and local rules under that tree stay unversioned.
 
 ## Self-Correction Log
 

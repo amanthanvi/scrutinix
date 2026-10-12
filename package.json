@@ -45,7 +45,12 @@
     "check:contrast": "node ./scripts/check-contrast.mjs",
     "icons": "node --no-warnings ./scripts/generate-icons.mjs",
     "lighthouse": "node ./scripts/run-lighthouse.mjs",
-    "check:bundle": "node ./scripts/check-bundle-budget.mjs"
+    "check:bundle": "node ./scripts/check-bundle-budget.mjs",
+    "verify:launch": "node .agents/skills/verify-scrutinix/scripts/launch.mjs",
+    "verify:doctor": "node .agents/skills/verify-scrutinix/scripts/doctor.mjs",
+    "verify:smoke": "node .agents/skills/verify-scrutinix/scripts/smoke.mjs",
+    "verify:drive": "node .agents/skills/verify-scrutinix/scripts/smoke.mjs --drive",
+    "verify:cleanup": "node .agents/skills/verify-scrutinix/scripts/cleanup.mjs"
   },
   "dependencies": {
     "@huggingface/transformers": "^4.3.1",
