@@ -51,6 +51,7 @@ const env = {
   ...process.env,
   E2E_BASE_URL: defaultBaseUrl,
   VERIFY_EVIDENCE_DIR: evidenceDir,
+  VERIFY_SUITE: drive ? "drive" : "smoke",
 };
 const child = spawnSync(
   process.execPath,
