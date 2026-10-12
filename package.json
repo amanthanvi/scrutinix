@@ -42,7 +42,12 @@
     "test:e2e": "node ./scripts/run-e2e.mjs",
     "audit:ci": "node ./scripts/audit-gate.mjs",
     "check:trace": "node ./scripts/check-function-trace.mjs",
-    "lighthouse": "node ./scripts/run-lighthouse.mjs"
+    "lighthouse": "node ./scripts/run-lighthouse.mjs",
+    "verify:launch": "node .agents/skills/verify-scrutinix/scripts/launch.mjs",
+    "verify:doctor": "node .agents/skills/verify-scrutinix/scripts/doctor.mjs",
+    "verify:smoke": "node .agents/skills/verify-scrutinix/scripts/smoke.mjs",
+    "verify:drive": "node .agents/skills/verify-scrutinix/scripts/smoke.mjs --drive",
+    "verify:cleanup": "node .agents/skills/verify-scrutinix/scripts/cleanup.mjs"
   },
   "dependencies": {
     "@huggingface/transformers": "^4.3.0",

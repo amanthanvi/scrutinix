@@ -1,0 +1,54 @@
+#!/usr/bin/env node
+import { checkHealth, defaultBaseUrl } from "./runtime.mjs";
+
+const help = `verify-scrutinix doctor
+
+Read-only check that the local app is worth driving. Sends GET / , GET /about,
+and GET /privacy. It does not start a scan.
+
+Usage:
+  node .agents/skills/verify-scrutinix/scripts/doctor.mjs [--json] [--base-url URL]
+  npm run verify:doctor
+
+READY (exit 0) means all of the following:
+  - GET / is 200 and the HTML contains "URL to analyze"
+  - GET /about is 200 and the HTML contains "How a scan becomes a verdict."
+  - GET /privacy is 200 and the HTML contains "History stays in the browser."
+  - /tmp/scrutinix-verify/run.json lists tmux session scrutinix-verify-next and that session exists
+
+Anything else prints NOT_READY and exits 2.
+
+Codes:
+  unreachable         nothing answered on the base URL
+  home-unhealthy      home is up without the scan box, or the status is not 200
+  about-unhealthy     home is healthy and /about is not
+  privacy-unhealthy   home and about are healthy and /privacy is not
+  foreign-server      the pages look healthy and verify:launch does not own the server
+
+A healthy foreign server is not worth driving. Live provider mode is not
+observable from these GET requests. The malicious.scrutinix.test verdict in
+verify:drive is the check that fixture mode is active.
+`;
+
+if (process.argv.includes("--help") || process.argv.includes("-h")) {
+  process.stdout.write(help);
+  process.exit(0);
+}
+
+function argValue(name) {
+  const index = process.argv.indexOf(name);
+  if (index === -1) return undefined;
+  return process.argv[index + 1];
+}
+
+const asJson = process.argv.includes("--json");
+const baseUrl = argValue("--base-url") || defaultBaseUrl;
+const report = await checkHealth(baseUrl);
+
+if (asJson) {
+  process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
+} else {
+  process.stdout.write(`${report.lines.join("\n")}\n`);
+}
+
+process.exit(report.ok ? 0 : 2);
