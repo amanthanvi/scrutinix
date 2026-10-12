@@ -2,6 +2,7 @@ import { defineConfig, devices } from "@playwright/test";
 
 const evidenceDir =
   process.env.VERIFY_EVIDENCE_DIR || "/tmp/scrutinix-verify/evidence";
+const suite = process.env.VERIFY_SUITE || "playwright";
 
 export default defineConfig({
   testDir: "./scripts",
@@ -16,11 +17,11 @@ export default defineConfig({
       "html",
       {
         open: "never",
-        outputFolder: `${evidenceDir}/playwright-report`,
+        outputFolder: `${evidenceDir}/playwright-report/${suite}`,
       },
     ],
   ],
-  outputDir: `${evidenceDir}/test-results`,
+  outputDir: `${evidenceDir}/test-results/${suite}`,
   use: {
     baseURL: process.env.E2E_BASE_URL || "http://127.0.0.1:3000",
     trace: "on",

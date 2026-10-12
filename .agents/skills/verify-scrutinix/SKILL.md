@@ -142,8 +142,8 @@ Proof artifacts go to `/tmp/scrutinix-verify/evidence/` (override with `VERIFY_E
 
 - `*.png` screenshots taken by the specs (`smoke-home.png`, `smoke-safe.png`, and the drive shots such as `verdict-malicious.png`)
 - `scan.json`, `scan-history.csv`, and `batch.csv` saved from the download the UI produced
-- `test-results/` Playwright traces (`trace.zip` per test, trace is `on`)
-- `playwright-report/` HTML report
+- `test-results/smoke/` and `test-results/drive/` Playwright traces (`trace.zip` per test, trace is `on`). A later smoke run does not delete drive traces, and a later drive run does not delete smoke traces.
+- `playwright-report/smoke/` and `playwright-report/drive/` HTML reports
 
 A proof exercises the user path: type in the scan box, click Analyze, press Enter, switch Summary to Full, open a signal row, export, share, clear history. Reading `GET /` is the doctor check, not the proof that a scan works.
 
