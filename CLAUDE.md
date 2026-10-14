@@ -23,7 +23,7 @@ npm run format:check               # Prettier
 npm run test:unit -- --run         # Vitest, node
 npm run test:integration -- --run  # Vitest, node + MSW
 npm run test:dom -- --run          # Vitest, jsdom + fake-indexeddb
-npm run test:e2e                   # Playwright with offline fixtures
+npm run test:e2e                   # Playwright with offline fixtures (E2E_PORT, default 3000)
 npm run lighthouse                 # Lighthouse audit
 ```
 
@@ -47,17 +47,18 @@ components/
     app-footer.tsx        # One-line footer
     scan-form.tsx         # Single/Batch tabs + inputs (id="scan-console")
     input-panels.tsx      # Input, cancel, and batch-export controls
-    results-section.tsx   # Verdict/BatchTable, result actions, Summary/Full signal rows
-    verdict-panel.tsx     # Verdict, score meter, confidence, reasons, details
-    signal-row.tsx        # Typed per-signal disclosure row
+    results-section.tsx   # Verdict/BatchTable, Summary/Full signal rows, result actions, live region
+    verdict-panel.tsx     # Verdict, imperative line, score meter + band, caveat, details (reasons live here)
+    signal-row.tsx        # Typed per-signal disclosure row (<li>)
     batch-table.tsx       # Plain batch result list
     history-section.tsx   # Dynamic-import wrapper; drains completed-result queue
     history-panel.tsx     # Search, clear/undo, export, entry list
     public-page-shell.tsx # Shared 44rem shell for /about and /privacy
     error-boundary.tsx    # Class-based error boundary
   shared/
-    scrutinix-types.ts    # Verdict/severity presentation helpers
-    signal-utils.ts       # Signal summaries + detail entries
+    scrutinix-types.ts    # Verdict/severity presentation helpers ("clear" = found nothing)
+    signal-utils.ts       # Signal findings, summaries + detail entries
+    signal-selection.ts   # Summary selection: verdict drivers + quiet-check line
 
 hooks/
   use-ndjson-request.ts   # Shared stream core
@@ -67,6 +68,11 @@ hooks/
 
 lib/
   domain/                 # Zod schemas, URL validation, verdict logic
+    verdict-guidance.ts   # Imperative line, showScore, announcement, coverage caveat
+    feed-copy.ts          # Feed display names, feed-match + Google threat-type wording
+    reputation.ts         # Client-safe reputation thresholds + hasConfirmedReputationHit
+    signal-severity.ts    # Per-signal severity ("clear" = found nothing; scored => warning)
+    copy.ts               # countOf / formatList / capitalize / formatAge for user-facing copy
   server/                 # Orchestrator, providers, signals, cache, local ONNX ML
   client/                 # NDJSON parser, export utilities
   config/                 # Environment validation
@@ -93,7 +99,15 @@ tests/
 - **Verdict engine**: confirmed sources can convict; unreachable hosts produce
   an honest `unknown`; exculpatory evidence never erases confirmed hits.
 - **One encoding per fact**: threat score renders once; severity renders once
-  per signal. Verdict text uses AA-safe `--sx-<verdict>-fg` tokens.
+  per signal. Verdict text uses AA-safe `--sx-<verdict>-fg` tokens. A source
+  that found nothing is `clear` (gray `--sx-clear`), never green; Unknown has
+  its own slate `--sx-unknown` pair.
+- **Verdict copy is pure**: `lib/domain/verdict-guidance.ts` (imperative,
+  score visibility, live announcement, caveat) and `lib/domain/verdict.ts`
+  (summary naming the evidence, reasons) own every verdict string; counts go
+  through `countOf`. `threatInfo.scoredSignals` (from `getScoredSignals`) is
+  the single source of truth for which rows Summary shows. Feed-match `detail` is a clause that follows the feed's
+  display name ("lists this link as phishing"); `describeFeedMatch` adds it.
 - **Static accent**: blue `--sx-accent`; verdict colors appear only where a
   verdict is stated.
 - **E2E fixtures**: `SCRUTINIX_TEST_FIXTURES=1` provides deterministic offline

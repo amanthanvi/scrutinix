@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
 
-import { PublicPageShell } from "@/components/scrutinix/public-page-shell";
+import {
+  PROSE_MEASURE,
+  PublicPageShell,
+} from "@/components/scrutinix/public-page-shell";
 
 export const metadata: Metadata = {
   title: "Scrutinix Privacy",
@@ -11,7 +14,7 @@ export const metadata: Metadata = {
 const sections = [
   {
     title: "What stays local",
-    body: "Completed scans are stored in IndexedDB on your device only. Clearing history removes the browser-side archive, with an immediate undo in the same session.",
+    body: "Finished scans are stored in IndexedDB on your device only, one entry per link: a new scan of the same link replaces the older one. Clearing history removes the browser-side archive, with an immediate undo in the same session.",
   },
   {
     title: "What the server does",
@@ -38,7 +41,9 @@ export default function PrivacyPage() {
           <h2 className="text-base font-semibold tracking-[-0.01em] text-[var(--sx-text)]">
             {section.title}
           </h2>
-          <p className="max-w-[65ch] text-sm leading-6 text-[var(--sx-text-muted)]">
+          <p
+            className={`${PROSE_MEASURE} text-sm leading-6 text-[var(--sx-text-muted)]`}
+          >
             {section.body}
           </p>
         </section>

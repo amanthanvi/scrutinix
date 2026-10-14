@@ -237,35 +237,77 @@ test("single scan flow @smoke", async ({ page }) => {
   const singleUrlInput = page.getByRole("textbox", {
     name: /url to analyze/i,
   });
+  const analyze = page.getByRole("button", { name: /analyze url/i });
   await expect(page.getByRole("tab", { name: /^single$/i })).toBeVisible();
   await expect(singleUrlInput).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: /analyze url/i }),
-  ).toBeVisible();
+  await expect(analyze).toBeEnabled();
   await expect(
     page.getByRole("region", { name: /scan history/i }),
   ).toBeVisible();
 
+  // An empty submit explains itself instead of a dead, disabled button.
+  await analyze.click();
+  await expect(page.locator("#sx-url-error")).toHaveText(
+    "Paste a link to check.",
+  );
+
   await submitSingleScan(page, "example.com");
 
   await expect(page.getByText(/example\.com/i).first()).toBeVisible();
-  await expect(page.getByLabel(/VirusTotal signal:/i)).toBeVisible();
-  const signalView = page.getByRole("switch", {
-    name: /show full signal list/i,
+  const verdict = page.getByLabel(/^scan result: safe$/i);
+  await expect(verdict.getByText("Looks safe to open.")).toBeVisible();
+  await expect(page.getByRole("meter", { name: /threat score/i })).toBeVisible({
+    timeout: 30_000,
   });
+  // Nothing drove a clean verdict, so Summary shows one line, not rows.
+  await expect(page.getByLabel(/VirusTotal signal:/i)).toHaveCount(0);
+  await expect(page.getByText("All 8 checks found nothing.")).toBeVisible();
+  // The quiet line already says it; the panel doesn't repeat it.
+  await expect(verdict.getByText("No check flagged this link.")).toHaveCount(0);
+
+  const signalView = page.getByRole("switch", { name: /^summary full/i });
   await expect(signalView).toHaveAttribute("aria-checked", "false");
   await expect(signalView.getByText("Summary")).toBeVisible();
   await expect(signalView.getByText("Full")).toBeVisible();
   await signalView.click();
   await expect(signalView).toHaveAttribute("aria-checked", "true");
+  await expect(page.getByLabel(/VirusTotal signal:/i)).toHaveAttribute(
+    "aria-label",
+    "VirusTotal signal: No engines flagged this link.",
+  );
   await expect(page.getByLabel(/DNS Profile signal:/i)).toBeVisible();
   await expect(page.getByLabel(/Redirect Chain signal:/i)).toBeVisible();
-  await expect(page.getByRole("meter", { name: /threat score/i })).toBeVisible({
-    timeout: 30_000,
-  });
+  await expect(
+    page.getByRole("button", { name: "Download result (JSON)" }),
+  ).toBeVisible();
+  await expect(analyze).toHaveAttribute("data-variant", "outline");
   await expect(
     page.getByRole("region", { name: /scan history/i }),
   ).toBeVisible();
+});
+
+test("opening a history entry focuses its verdict @smoke", async ({ page }) => {
+  await gotoApp(page);
+  await submitSingleScan(page, "https://malicious.scrutinix.test/login");
+  await expect(page.getByLabel(/^scan result: malicious$/i)).toBeVisible();
+
+  await submitSingleScan(page, "example.com");
+  await expect(page.getByLabel(/^scan result: safe$/i)).toBeVisible();
+
+  const historyRegion = page.getByRole("region", { name: /scan history/i });
+  await expect(
+    historyRegion.getByRole("heading", { name: /^History \(2 scans\)$/ }),
+  ).toBeVisible();
+  await historyRegion
+    .getByRole("button", { name: /malicious\.scrutinix\.test/i })
+    .click();
+
+  await expect(
+    page.getByRole("heading", { level: 2, name: /^malicious$/i }),
+  ).toBeFocused();
+  await expect(page.locator("[aria-live='polite']").first()).toHaveText(
+    /^Result for malicious\.scrutinix\.test: Malicious, \d+ out of 100\. Don't open this link\.$/,
+  );
 });
 
 test("batch scan flow @smoke", async ({ page }) => {

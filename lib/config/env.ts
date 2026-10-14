@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod";
 
 /**
  * Empty strings are treated as unset so a copied .env.example (which ships

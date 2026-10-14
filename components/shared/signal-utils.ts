@@ -1,3 +1,13 @@
+import { capitalize, countOf, formatAge, formatList } from "@/lib/domain/copy";
+import {
+  describeFeedFinding,
+  describeFeedMatch,
+  describeSafeBrowsingThreat,
+  describeSafeBrowsingThreats,
+  feedDisplayName,
+  humanizeToken,
+  isElsewhereOnHost,
+} from "@/lib/domain/feed-copy";
 import type {
   DNSData,
   GoogleSafeBrowsingData,
@@ -5,11 +15,31 @@ import type {
   RedirectData,
   SignalName,
   SignalPayloadMap,
+  SignalResult,
   SSLData,
   ThreatFeedsData,
   VirusTotalData,
   WhoisData,
 } from "@/lib/domain/types";
+
+/** The finding as one sentence: what this check found, not its status. */
+export function getSignalFinding<N extends SignalName>(
+  name: N,
+  result: SignalResult<SignalPayloadMap[N]>,
+): string {
+  switch (result.status) {
+    case "pending":
+      return "Waiting.";
+    case "skipped":
+      return result.error ?? "Not applicable.";
+    case "error":
+      return result.error ?? "This check failed.";
+    default:
+      return result.data
+        ? getSignalSummary(name, result.data)
+        : "Check complete.";
+  }
+}
 
 export function getSignalSummary(
   name: SignalName,
@@ -18,28 +48,35 @@ export function getSignalSummary(
   switch (name) {
     case "virusTotal": {
       const d = data as VirusTotalData;
-      return d.malicious === 0 && d.suspicious === 0
-        ? "No engines flagged this URL."
-        : `${d.malicious} malicious and ${d.suspicious} suspicious engine flags.`;
+      if (d.malicious === 0 && d.suspicious === 0) {
+        return "No engines flagged this link.";
+      }
+      if (d.suspicious === 0) {
+        return `${countOf(d.malicious, "engine")} flagged this link as malicious.`;
+      }
+      if (d.malicious === 0) {
+        return `${countOf(d.suspicious, "engine")} flagged this link as suspicious.`;
+      }
+      return `${countOf(d.malicious, "engine")} flagged this link as malicious, ${d.suspicious} as suspicious.`;
     }
     case "mlEnsemble": {
       const d = data as MLSignalData;
       if (d.consensusLabel === "benign") {
-        return "Below the risk threshold.";
+        return "The link's wording and structure look normal.";
       }
 
-      return `Scored ${d.consensusLabel} (${(d.consensusScore * 100).toFixed(0)}/100).`;
+      return `The link's wording and structure look ${d.consensusLabel} (${(d.consensusScore * 100).toFixed(0)}/100).`;
     }
     case "googleSafeBrowsing": {
       const d = data as GoogleSafeBrowsingData;
       return (d.matches?.length ?? 0) > 0
-        ? `${d.matches.length} threat match${d.matches.length === 1 ? "" : "es"} found.`
+        ? `Google lists this link for ${describeSafeBrowsingThreats(d.matches)}.`
         : "No threat matches.";
     }
     case "threatFeeds": {
       const d = data as ThreatFeedsData;
       if (d.matches?.length) {
-        return `${d.matches.length} feed match${d.matches.length === 1 ? "" : "es"} found.`;
+        return describeFeedMatches(d.matches);
       }
 
       if (d.warnings?.length) {
@@ -54,57 +91,88 @@ export function getSignalSummary(
     }
     case "ssl": {
       const d = data as SSLData;
+      // Fixed plain sentences; the provider's own wording stays in Notes.
       if (!d.available) {
-        return d.observations?.[0] ?? "No TLS service responded on port 443.";
+        return "The site didn't accept a secure connection.";
       }
 
       if (d.validationState === "trusted") {
-        return `Valid certificate over ${d.protocol ?? "TLS"}.`;
+        return "The site's security certificate is valid.";
       }
 
       if (d.validationState === "warning") {
-        return "Certificate could not be fully verified.";
+        return "We couldn't fully verify the site's security certificate.";
       }
 
-      return d.observations?.[0] ?? "Certificate is not trusted.";
+      return "The site's security certificate isn't trusted.";
     }
     case "whois": {
       const d = data as WhoisData;
       if (!d.available) {
-        return d.observations?.[0] ?? "Registration data was unavailable.";
+        return "Registration records weren't available.";
       }
 
       return d.ageDays !== null
-        ? `Domain registered ${d.ageDays} day${d.ageDays === 1 ? "" : "s"} ago.`
-        : "Registration data has no domain age.";
+        ? `Registered ${formatAge(d.ageDays)} ago.`
+        : "The registration records don't say when it was registered.";
     }
     case "dns": {
       const d = data as DNSData;
       if (d.subjectType === "ip") {
-        return d.observations?.[0] ?? "The target is a literal IP address.";
+        return "This link uses a raw IP address instead of a domain name.";
       }
 
       if ((d.addresses?.length ?? 0) === 0 && (d.cnames?.length ?? 0) === 0) {
-        return (
-          d.observations?.[0] ?? "Hostname did not resolve to address records."
-        );
+        return "This address doesn't point to any server.";
       }
 
-      return `${d.addresses?.length ?? 0} address${(d.addresses?.length ?? 0) === 1 ? "" : "es"}, ${d.mx?.length ?? 0} mail record${(d.mx?.length ?? 0) === 1 ? "" : "s"}.`;
+      return `${countOf(d.addresses?.length ?? 0, "address", "addresses")}, ${countOf(d.mx?.length ?? 0, "mail record")}.`;
     }
     case "redirectChain": {
       const d = data as RedirectData;
       if (!d.reachable) {
-        return d.observations?.[0] ?? "Target did not accept a redirect probe.";
+        return "The site didn't respond when we tried to open it.";
       }
 
       return d.totalHops === 0
         ? "Resolved without redirects."
-        : `${d.totalHops} redirect hop${d.totalHops === 1 ? "" : "s"} to ${d.finalUrl}.`;
+        : `${countOf(d.totalHops, "redirect")} to ${d.finalUrl}.`;
     }
     default:
       return "Signal complete.";
   }
+}
+
+/**
+ * The Threat Feeds finding. A feed listing this link (or its domain) is a
+ * direct listing and keeps the feed's own description; a feed listing a
+ * different link on the same host must not read as if this link were
+ * listed.
+ */
+function describeFeedMatches(matches: ThreatFeedsData["matches"]): string {
+  const direct = matches.filter((match) => !isElsewhereOnHost(match));
+  const elsewhereFeeds = [
+    ...new Set(
+      matches
+        .filter((match) => isElsewhereOnHost(match))
+        .map((match) => feedDisplayName(match.feed)),
+    ),
+  ];
+  const elsewhere =
+    elsewhereFeeds.length > 0
+      ? `${formatList(elsewhereFeeds)} ${
+          elsewhereFeeds.length === 1 ? "lists" : "list"
+        } other links on this site`
+      : null;
+
+  if (direct.length === 0) {
+    return `No listing for this link; ${elsewhere ?? "no feed lists it"}.`;
+  }
+
+  const directSentences = [...new Set(direct.map(describeFeedMatch))].join(" ");
+  return elsewhere
+    ? `${directSentences} ${capitalize(elsewhere)}.`
+    : directSentences;
 }
 
 export interface DetailEntry {
@@ -132,7 +200,7 @@ export function getSignalDetailEntries(
       if (d.domain) {
         entries.push({
           label: "Domain reputation",
-          value: `${d.domain.malicious} malicious engine${d.domain.malicious === 1 ? "" : "s"}, reputation ${d.domain.reputation}`,
+          value: `${countOf(d.domain.malicious, "malicious engine")}, reputation ${d.domain.reputation}`,
         });
         if (d.domain.categories.length) {
           entries.push({
@@ -147,11 +215,11 @@ export function getSignalDetailEntries(
       const d = data as MLSignalData;
       const entries: DetailEntry[] = [
         {
-          label: "Ensemble verdict",
+          label: "Combined result",
           value: `${d.consensusLabel} (${(d.consensusScore * 100).toFixed(0)} risk)`,
         },
         {
-          label: "Lexical heuristic",
+          label: "Rule-based check",
           value: `${d.lexicalModel.label} (${(d.lexicalModel.score * 100).toFixed(0)}%)`,
         },
       ];
@@ -172,15 +240,15 @@ export function getSignalDetailEntries(
     case "googleSafeBrowsing": {
       const d = data as GoogleSafeBrowsingData;
       return (d.matches ?? []).map((m) => ({
-        label: m.threatType,
-        value: `${m.platformType} / ${m.threatEntryType}`,
+        label: capitalize(describeSafeBrowsingThreat(m.threatType)),
+        value: `${humanizeToken(m.platformType)} / ${humanizeToken(m.threatEntryType)}`,
       }));
     }
     case "threatFeeds": {
       const d = data as ThreatFeedsData;
       const entries: DetailEntry[] = (d.matches ?? []).map((m) => ({
-        label: m.matchType === "host" ? `${m.feed} (host)` : m.feed,
-        value: m.detail,
+        label: feedDisplayName(m.feed),
+        value: describeFeedFinding(m),
       }));
       if (d.observations?.length) {
         entries.push({
@@ -219,7 +287,7 @@ export function getSignalDetailEntries(
       if (certAgeDays !== null) {
         entries.push({
           label: "Certificate age",
-          value: `${certAgeDays} day${certAgeDays === 1 ? "" : "s"}`,
+          value: countOf(certAgeDays, "day"),
         });
       }
       if (d.observations?.length) {
@@ -284,7 +352,7 @@ export function getSignalDetailEntries(
       }));
       if (d.terminalError) {
         entries.push({
-          label: "Probe",
+          label: "What happened",
           value: d.terminalError,
         });
       }
@@ -301,7 +369,7 @@ export function getSignalDetailEntries(
         if (d.content.passwordInputCount > 0) {
           entries.push({
             label: "Credential fields",
-            value: `${d.content.passwordInputCount} password input${d.content.passwordInputCount === 1 ? "" : "s"} on the final page`,
+            value: `${countOf(d.content.passwordInputCount, "password input")} on the final page`,
           });
         }
         if (d.content.obfuscationHints.length) {
