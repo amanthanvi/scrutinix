@@ -50,7 +50,7 @@ Project-local operating notes for agents working in this repository. Keep this f
 
 ## Verification
 
-Drive the local scanner with `.agents/skills/verify-scrutinix/SKILL.md` (linked from `.cursor/skills/verify-scrutinix`). `verify:launch` starts `next dev` in tmux with `SCRUTINIX_TEST_FIXTURES=1`. Evidence stays in `/tmp/scrutinix-verify/evidence` after cleanup. Cleanup stops only the session recorded in `/tmp/scrutinix-verify/run.json`.
+Drive the local scanner with `.agents/skills/verify-scrutinix/SKILL.md` (linked from `.cursor/skills/verify-scrutinix`). `verify:launch` starts `next dev` in tmux with `SCRUTINIX_TEST_FIXTURES=1`. Evidence stays in `/tmp/scrutinix-verify/evidence` after cleanup. Cleanup stops only the session recorded in `/tmp/scrutinix-verify/run.json` for this checkout. `verify:launch` and `verify:cleanup` restore `next-env.d.ts` and strip Next-managed blocks from this file. Leave those generated edits out of commits.
 
 The feature map at `.agents/skills/verify-scrutinix/references/features/README.md` is the regression sweep order. Feature pull requests need a Proof section: the exact commands, screenshot or trace paths that survive cleanup, the result of each command, and `INCONCLUSIVE` when a step could not run. Live provider calls are `INCONCLUSIVE` in this loop.
 

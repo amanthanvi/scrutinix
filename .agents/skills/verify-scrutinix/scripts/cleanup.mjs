@@ -2,11 +2,14 @@
 import { setTimeout as delay } from "node:timers/promises";
 
 import {
+  canonicalPath,
   cmdline,
   evidenceDir,
   killTmuxSession,
   readState,
   repoRoot,
+  restoreTrackedDevFiles,
+  sameCheckout,
   sessionExists,
   tcpOpen,
   writeState,
@@ -15,8 +18,10 @@ import {
 const help = `verify-scrutinix cleanup
 
 Stop only the tmux session and listener pids recorded in
-/tmp/scrutinix-verify/run.json. Evidence under /tmp/scrutinix-verify/evidence
-is left in place.
+/tmp/scrutinix-verify/run.json for this checkout. A run.json whose repoRoot
+is a different checkout is left running. Evidence under
+/tmp/scrutinix-verify/evidence is left in place. next-env.d.ts is restored
+and Next.js agent-rule blocks are removed from AGENTS.md.
 
 Usage:
   node .agents/skills/verify-scrutinix/scripts/cleanup.mjs
@@ -30,8 +35,18 @@ if (process.argv.includes("--help") || process.argv.includes("-h")) {
 
 const state = readState();
 if (!state) {
+  restoreTrackedDevFiles();
   process.stdout.write(
     "cleanup: no run.json. Nothing recorded by verify:launch was stopped.\n",
+  );
+  process.stdout.write(`cleanup: evidence directory ${evidenceDir}\n`);
+  process.exit(0);
+}
+
+if (!sameCheckout(state)) {
+  restoreTrackedDevFiles();
+  process.stdout.write(
+    `cleanup: run.json belongs to ${state.repoRoot || "another checkout"}. Leaving that server running. This checkout is ${canonicalPath(repoRoot)}.\n`,
   );
   process.stdout.write(`cleanup: evidence directory ${evidenceDir}\n`);
   process.exit(0);
@@ -78,10 +93,12 @@ await delay(500);
 const stillOpen = await tcpOpen(3000);
 writeState({
   ...state,
+  repoRoot: canonicalPath(repoRoot),
   sessions: [],
   pids: [],
   stoppedAt: new Date().toISOString(),
 });
+restoreTrackedDevFiles();
 
 process.stdout.write(`cleanup: evidence directory ${evidenceDir}\n`);
 if (stillOpen) {

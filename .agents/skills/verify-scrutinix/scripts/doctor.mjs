@@ -14,7 +14,7 @@ READY (exit 0) means all of the following:
   - GET / is 200 and the HTML contains "URL to analyze"
   - GET /about is 200 and the HTML contains "How a scan becomes a verdict."
   - GET /privacy is 200 and the HTML contains "History stays in the browser."
-  - /tmp/scrutinix-verify/run.json lists tmux session scrutinix-verify-next and that session exists
+  - /tmp/scrutinix-verify/run.json repoRoot is this checkout, it lists tmux session scrutinix-verify-next, and that session exists
 
 Anything else prints NOT_READY and exits 2.
 
