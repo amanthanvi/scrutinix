@@ -5,7 +5,9 @@ import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 
 import {
+  agentEnvUnset,
   baseUrlParts,
+  canonicalPath,
   checkHealth,
   defaultBaseUrl,
   ensureDirs,
@@ -15,8 +17,11 @@ import {
   nodePathExport,
   ownsInstance,
   readState,
+  rememberRun,
   repoRoot,
+  restoreTrackedDevFiles,
   runCommand,
+  sameCheckout,
   sessionExists,
   sessions,
   shellQuote,
@@ -24,7 +29,6 @@ import {
   stateDir,
   tcpOpen,
   tmuxAvailable,
-  writeState,
 } from "./runtime.mjs";
 
 const help = `verify-scrutinix launch
@@ -36,8 +40,9 @@ Usage:
   node .agents/skills/verify-scrutinix/scripts/launch.mjs [--base-url URL]
   npm run verify:launch
 
-A READY instance this skill already owns is reused.
-Cleanup will not stop a server this skill did not start.
+A READY instance this skill already owns for this checkout is reused.
+Cleanup will not stop a server this skill did not start, including one
+recorded for a different checkout.
 Set VERIFY_SKIP_BROWSER_INSTALL=1 to skip Playwright Chromium install.
 `;
 
@@ -82,33 +87,56 @@ if (!loopback || port !== 3000 || new URL(baseUrl).hostname !== "127.0.0.1") {
 ensureDirs();
 
 function remember(started, extra = {}) {
-  const previous = readState();
-  const mergedSessions = new Set([...(previous?.sessions ?? []), ...started]);
-  const mergedPids = new Set([
-    ...(previous?.pids ?? []),
-    ...(extra.pids ?? []),
-  ]);
-  writeState({
-    baseUrl,
-    evidenceDir,
-    sessions: [...mergedSessions],
-    pids: [...mergedPids],
-    fixtureMode: true,
-    reused: started.length === 0,
-    startedAt: previous?.startedAt || new Date().toISOString(),
-  });
+  rememberRun(started, { ...extra, baseUrl });
+}
+
+async function restoreSettledFiles() {
+  let previous = "";
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    restoreTrackedDevFiles();
+    const stamp = `${existsStamp("next-env.d.ts")}:${existsStamp("AGENTS.md")}`;
+    if (attempt > 0 && stamp === previous) return;
+    previous = stamp;
+    await delay(500);
+  }
+  restoreTrackedDevFiles();
+}
+
+function existsStamp(relativePath) {
+  const file = path.join(repoRoot, relativePath);
+  if (!existsSync(file)) return "missing";
+  return readFileSync(file, "utf8");
 }
 
 const require = createRequire(import.meta.url);
 const initial = await checkHealth(baseUrl);
 const listening = await tcpOpen(port);
 const owned = ownsInstance();
+const state = readState();
+const foreignSession =
+  Boolean(state) && !sameCheckout(state) && sessionExists(sessions.next);
 
 if (initial.ok && owned) {
   process.stdout.write(`${initial.lines.join("\n")}\n`);
-  process.stdout.write("launch: REUSED existing READY instance\n");
+  process.stdout.write(
+    `launch: REUSED existing READY instance for ${canonicalPath(repoRoot)}\n`,
+  );
   remember([]);
+  await restoreSettledFiles();
   process.exit(0);
+}
+
+if (
+  foreignSession ||
+  (state &&
+    !sameCheckout(state) &&
+    (listening || initial.code === "foreign-server"))
+) {
+  process.stdout.write(`${initial.lines.join("\n")}\n`);
+  process.stderr.write(
+    `launch: port 3000 or session ${sessions.next} belongs to ${state?.repoRoot || "another checkout"}. Refusing to reuse or stop it from ${canonicalPath(repoRoot)}.\n`,
+  );
+  process.exit(2);
 }
 
 if ((listening || initial.code === "foreign-server") && !owned) {
@@ -163,6 +191,7 @@ const nextScript = `#!/usr/bin/env bash
 set -euo pipefail
 ${nodePathExport()}
 cd ${shellQuote(repoRoot)}
+${agentEnvUnset()}
 export SCRUTINIX_TEST_FIXTURES=1
 export NEXT_TELEMETRY_DISABLED=1
 export UPSTASH_REDIS_REST_URL=
@@ -185,6 +214,7 @@ if (up !== "ready") {
     `launch: Next session ${up === "dead" ? "exited" : "timed out"}. Log: ${logPath}\n`,
   );
   process.stderr.write(readLog(logPath).slice(-4000));
+  await restoreSettledFiles();
   process.exit(1);
 }
 
@@ -198,6 +228,7 @@ while (
   if (!sessionExists(sessions.next)) {
     process.stderr.write(`launch: Next session exited. Log: ${logPath}\n`);
     process.stderr.write(readLog(logPath).slice(-4000));
+    await restoreSettledFiles();
     process.exit(1);
   }
   await delay(1_000);
@@ -205,6 +236,7 @@ while (
 }
 
 remember(started, { pids: listenerPids(port) });
+await restoreSettledFiles();
 process.stdout.write(`${report.lines.join("\n")}\n`);
 if (!report.ok) {
   process.stderr.write(

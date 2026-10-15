@@ -1,10 +1,13 @@
 import { execFileSync, spawnSync } from "node:child_process";
 import {
+  chmodSync,
   existsSync,
+  lstatSync,
   mkdirSync,
   readdirSync,
   readFileSync,
   readlinkSync,
+  realpathSync,
   writeFileSync,
 } from "node:fs";
 import net from "node:net";
@@ -30,9 +33,81 @@ const homeMarker = "URL to analyze";
 const aboutMarker = "How a scan becomes a verdict.";
 const privacyMarker = "History stays in the browser.";
 
+const agentEnvNames = [
+  "AI_AGENT",
+  "CURSOR_TRACE_ID",
+  "CURSOR_AGENT",
+  "CURSOR_EXTENSION_HOST_ROLE",
+  "GEMINI_CLI",
+  "CODEX_SANDBOX",
+  "CODEX_CI",
+  "CODEX_THREAD_ID",
+  "ANTIGRAVITY_AGENT",
+  "AUGMENT_AGENT",
+  "OPENCODE_CLIENT",
+  "CLAUDECODE",
+  "CLAUDE_CODE",
+  "CLAUDE_CODE_IS_COWORK",
+  "REPL_ID",
+  "COPILOT_MODEL",
+  "COPILOT_ALLOW_ALL",
+  "COPILOT_GITHUB_TOKEN",
+];
+
+const managedAgentBlocks = [
+  ["<!-- BEGIN:nextjs-agent-rules -->", "<!-- END:nextjs-agent-rules -->"],
+  [
+    "<!-- BEGIN:nextjs-agent-feedback -->",
+    "<!-- END:nextjs-agent-feedback -->",
+  ],
+  ["<!-- NEXT-AGENTS-MD-START -->", "<!-- NEXT-AGENTS-MD-END -->"],
+];
+
+export function canonicalPath(value) {
+  const resolved = path.resolve(String(value));
+  try {
+    return realpathSync(resolved);
+  } catch {
+    return resolved;
+  }
+}
+
+export function sameCheckout(state) {
+  if (!state || typeof state.repoRoot !== "string" || state.repoRoot === "") {
+    return false;
+  }
+  return canonicalPath(state.repoRoot) === canonicalPath(repoRoot);
+}
+
+function assertPrivateDir(dir) {
+  const stat = lstatSync(dir);
+  const mode = stat.mode & 0o777;
+  if (stat.isSymbolicLink() || !stat.isDirectory()) {
+    throw new Error(
+      `verify: ${dir} must be a real directory owned by this user with mode 0700`,
+    );
+  }
+  const uid = typeof process.getuid === "function" ? process.getuid() : null;
+  if (uid !== null && stat.uid !== uid) {
+    throw new Error(
+      `verify: ${dir} is owned by uid ${stat.uid}, expected ${uid}. Refusing to write scripts there.`,
+    );
+  }
+  if ((mode & 0o077) !== 0) {
+    throw new Error(
+      `verify: ${dir} is group or world accessible (mode 0${mode.toString(8)}). Refusing to write scripts there.`,
+    );
+  }
+}
+
 export function ensureDirs() {
-  mkdirSync(stateDir, { recursive: true });
-  mkdirSync(evidenceDir, { recursive: true });
+  for (const dir of [stateDir, evidenceDir]) {
+    if (!existsSync(dir)) {
+      mkdirSync(dir, { recursive: true, mode: 0o700 });
+      chmodSync(dir, 0o700);
+    }
+    assertPrivateDir(dir);
+  }
 }
 
 export function readState() {
@@ -154,14 +229,17 @@ export function portDetails(port) {
   return rows.join("\n");
 }
 
-export function listenerPids(port) {
-  const details = portDetails(port);
+export function parseListenerPids(details) {
   const pids = new Set();
-  for (const match of details.matchAll(/\bpid (\d+)/g)) {
+  for (const match of String(details).matchAll(/\bpid(?:=|\s+)(\d+)/g)) {
     const pid = Number(match[1]);
     if (Number.isInteger(pid) && pid > 0) pids.add(pid);
   }
   return [...pids];
+}
+
+export function listenerPids(port) {
+  return parseListenerPids(portDetails(port));
 }
 
 export function cmdline(pid) {
@@ -176,9 +254,89 @@ export function cmdline(pid) {
 
 export function ownsInstance() {
   const state = readState();
-  if (!Array.isArray(state?.sessions)) return false;
+  if (!sameCheckout(state)) return false;
+  if (!Array.isArray(state.sessions)) return false;
   if (!state.sessions.includes(sessions.next)) return false;
   return sessionExists(sessions.next);
+}
+
+export function rememberRun(started, extra = {}) {
+  const previous = readState();
+  const base = previous && sameCheckout(previous) ? previous : null;
+  const mergedSessions = new Set([
+    ...(Array.isArray(base?.sessions) ? base.sessions : []),
+    ...started,
+  ]);
+  const mergedPids = new Set([
+    ...(Array.isArray(base?.pids) ? base.pids : []),
+    ...(extra.pids ?? []),
+  ]);
+  writeState({
+    baseUrl: extra.baseUrl || base?.baseUrl || defaultBaseUrl,
+    evidenceDir,
+    repoRoot: canonicalPath(repoRoot),
+    sessions: [...mergedSessions],
+    pids: [...mergedPids],
+    fixtureMode: true,
+    reused: extra.reused ?? started.length === 0,
+    startedAt: base?.startedAt || new Date().toISOString(),
+  });
+}
+
+function stripManagedBlocks(content) {
+  let next = content;
+  for (const [startMarker, endMarker] of managedAgentBlocks) {
+    let guard = 0;
+    while (guard < 5) {
+      const startIdx = next.indexOf(startMarker);
+      if (startIdx === -1) break;
+      const endIdx = next.indexOf(endMarker, startIdx);
+      if (endIdx === -1) break;
+      let cutStart = startIdx;
+      while (cutStart > 0 && /[\t ]/.test(next[cutStart - 1] ?? "")) {
+        cutStart -= 1;
+      }
+      if (cutStart > 0 && next[cutStart - 1] === "\n") {
+        cutStart -= 1;
+        if (cutStart > 0 && next[cutStart - 1] === "\r") cutStart -= 1;
+      }
+      let cutEnd = endIdx + endMarker.length;
+      while (cutEnd < next.length && /[\t ]/.test(next[cutEnd] ?? "")) {
+        cutEnd += 1;
+      }
+      if (next[cutEnd] === "\r") cutEnd += 1;
+      if (next[cutEnd] === "\n") cutEnd += 1;
+      if (cutStart === 0) {
+        if (next[cutEnd] === "\r") cutEnd += 1;
+        if (next[cutEnd] === "\n") cutEnd += 1;
+      }
+      next = next.slice(0, cutStart) + next.slice(cutEnd);
+      guard += 1;
+    }
+  }
+  return next;
+}
+
+export function restoreTrackedDevFiles() {
+  const agentsPath = path.join(repoRoot, "AGENTS.md");
+  if (existsSync(agentsPath)) {
+    const current = readFileSync(agentsPath, "utf8");
+    const stripped = stripManagedBlocks(current);
+    if (stripped !== current) writeFileSync(agentsPath, stripped);
+  }
+
+  const declarationPath = path.join(repoRoot, "next-env.d.ts");
+  const head = spawnSync("git", ["show", "HEAD:next-env.d.ts"], {
+    cwd: repoRoot,
+    encoding: "utf8",
+  });
+  if (head.status !== 0 || !existsSync(declarationPath)) return;
+  const current = readFileSync(declarationPath, "utf8");
+  if (current !== head.stdout) writeFileSync(declarationPath, head.stdout);
+}
+
+export function agentEnvUnset() {
+  return `unset ${agentEnvNames.join(" ")}`;
 }
 
 export async function checkHealth(baseUrl = defaultBaseUrl) {
@@ -191,6 +349,12 @@ export async function checkHealth(baseUrl = defaultBaseUrl) {
   const privacyOk =
     privacy.status === 200 && privacy.text.includes(privacyMarker);
   const owned = ownsInstance();
+  const state = readState();
+  if (state && !sameCheckout(state)) {
+    lines.push(
+      `doctor: run.json repo is ${state.repoRoot || "missing"}, this checkout is ${canonicalPath(repoRoot)}`,
+    );
+  }
 
   if (home.status === 0 && about.status === 0 && privacy.status === 0) {
     lines.push(`doctor: home unreachable (${home.error || "no response"})`);
@@ -291,6 +455,7 @@ exec bash ${shellQuote(scriptPath)} > ${shellQuote(logPath)} 2>&1
       created.stderr || created.stdout || `tmux new-session ${name} failed`,
     );
   }
+  rememberRun([name], { reused: false });
   return { logPath };
 }
 
