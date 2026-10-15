@@ -5,6 +5,7 @@ import {
   canonicalPath,
   cmdline,
   evidenceDir,
+  hasNextEnvRecord,
   killTmuxSession,
   readState,
   repoRoot,
@@ -23,10 +24,10 @@ Stop only the tmux session and listener pids recorded in
 is a different checkout is left running. Evidence under
 /tmp/scrutinix-verify/evidence is left in place. next-env.d.ts is restored
 to the pre-launch snapshot only when it still matches what this run wrote.
-Otherwise it is left unchanged and a warning is printed. Either way, that
-cleanup consumes the snapshot so a later launch can take a new one. Until
-then, launch keeps the original snapshot for this checkout. Next.js
-agent-rule blocks are removed from AGENTS.md.
+Otherwise it is left unchanged, the snapshot bytes are saved under the
+evidence directory, and that path is printed. An unfinished snapshot, one
+taken before the run recorded what it wrote, is dropped too, including when
+run.json is missing. Next.js agent-rule blocks are removed from AGENTS.md.
 
 Usage:
   node .agents/skills/verify-scrutinix/scripts/cleanup.mjs
@@ -41,6 +42,12 @@ if (process.argv.includes("--help") || process.argv.includes("-h")) {
 const state = readState();
 if (!state) {
   restoreTrackedDevFiles();
+  if (hasNextEnvRecord()) {
+    const declaration = restoreNextEnvSnapshot();
+    if (declaration.warning) {
+      process.stderr.write(`${declaration.warning}\n`);
+    }
+  }
   process.stdout.write(
     "cleanup: no run.json. Nothing recorded by verify:launch was stopped.\n",
   );
