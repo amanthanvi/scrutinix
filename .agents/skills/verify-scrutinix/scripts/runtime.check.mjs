@@ -97,37 +97,92 @@ if (ssMissing) {
     `pids ${parsed.join(",")} output ${ssOutput.trim()}`,
   );
 }
+
+const awk = spawnSync(
+  "awk",
+  [
+    "-v",
+    `port=${port}`,
+    `function fromhex(s,    i, c, n, d) {
+  n = 0
+  for (i = 1; i <= length(s); i++) {
+    c = tolower(substr(s, i, 1))
+    d = index("0123456789abcdef", c)
+    if (d == 0) return -1
+    n = n * 16 + (d - 1)
+  }
+  return n
+}
+NR > 1 && $4 == "0A" {
+  split($2, a, ":")
+  if (fromhex(a[2]) == port) print $10
+}`,
+    "/proc/net/tcp",
+    "/proc/net/tcp6",
+  ],
+  { encoding: "utf8" },
+);
+check(
+  "portable awk finds listener inode",
+  awk.status === 0 && /^\d+$/m.test(awk.stdout.trim()),
+  `${awk.stdout}${awk.stderr}`,
+);
 server.close();
 
 const noSsDir = path.join(scratch, "no-ss");
 mkdirSync(noSsDir);
+const noSsNext = path.join(scratch, "next");
+const noSsPortFile = path.join(scratch, "no-ss-port");
+writeFileSync(
+  noSsNext,
+  `const net = require("net");
+const fs = require("fs");
+const server = net.createServer();
+server.listen(0, "127.0.0.1", () => {
+  fs.writeFileSync(process.argv[2], String(server.address().port));
+});
+setInterval(() => {}, 1000);
+`,
+);
 const noSsProbe = path.join(scratch, "no-ss-probe.mjs");
 writeFileSync(
   noSsProbe,
-  `import net from "node:net";
-import { listenerPids, formatForeignNext } from ${JSON.stringify(path.join(scriptDir, "runtime.mjs"))};
-const server = net.createServer();
-await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
-const address = server.address();
-const port = typeof address === "object" && address ? address.port : 0;
-const pids = listenerPids(port);
-const hint = formatForeignNext(port);
-server.close();
-if (!pids.includes(process.pid)) {
-  process.stderr.write(pids.join(",") + "\\n");
+  `import { spawn } from "node:child_process";
+import { readFileSync } from "node:fs";
+import { formatForeignNext } from ${JSON.stringify(path.join(scriptDir, "runtime.mjs"))};
+const child = spawn(process.execPath, [process.argv[2], process.argv[3]], {
+  stdio: "ignore",
+});
+const deadline = Date.now() + 2000;
+let listenPort = 0;
+while (Date.now() < deadline) {
+  try {
+    listenPort = Number(readFileSync(process.argv[3], "utf8"));
+    if (listenPort > 0) break;
+  } catch {
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+}
+const hint = formatForeignNext(listenPort);
+child.kill("SIGTERM");
+if (!hint.includes("another next dev") || !hint.includes("pid " + child.pid)) {
+  process.stderr.write(hint + "\\n");
   process.exit(1);
 }
 process.stdout.write(hint + "\\n");
 `,
 );
-const noSs = spawnSync(process.execPath, [noSsProbe], {
+const noSs = spawnSync(process.execPath, [noSsProbe, noSsNext, noSsPortFile], {
   encoding: "utf8",
   env: { ...process.env, PATH: noSsDir },
 });
 check(
   "listener pids without ss",
-  noSs.status === 0 && noSs.stderr.includes("ENOENT") === false,
-  `status ${noSs.status} ${noSs.stderr}`,
+  noSs.status === 0 &&
+    noSs.stdout.includes("another next dev") &&
+    noSs.stdout.includes("pid ") &&
+    noSs.stderr.includes("ENOENT") === false,
+  `status ${noSs.status} stdout ${noSs.stdout} stderr ${noSs.stderr}`,
 );
 
 function runCli(script, args) {
@@ -158,7 +213,38 @@ for (const script of ["launch.mjs", "doctor.mjs"]) {
     missing.status === 2 && missing.stderr.includes("needs a URL"),
     `status ${missing.status} ${missing.stderr}`,
   );
+  const equalsEmpty = runCli(script, ["--base-url="]);
+  check(
+    `${script} rejects empty equals base url`,
+    equalsEmpty.status === 2 && equalsEmpty.stderr.includes("needs a URL"),
+    `status ${equalsEmpty.status} ${equalsEmpty.stderr}`,
+  );
+  const equalsInvalid = runCli(script, ["--base-url=not-a-url"]);
+  check(
+    `${script} rejects invalid equals base url`,
+    equalsInvalid.status === 2 &&
+      equalsInvalid.stderr.includes("not a valid URL") &&
+      !`${equalsInvalid.stdout}${equalsInvalid.stderr}`.includes("TypeError"),
+    `status ${equalsInvalid.status} ${equalsInvalid.stderr}`,
+  );
 }
+const equalsParsed = runtime.parseCliBaseUrl([
+  "node",
+  "launch.mjs",
+  "--base-url=http://127.0.0.1:3000",
+]);
+check(
+  "equals base url is parsed",
+  equalsParsed.ok === true && equalsParsed.baseUrl === "http://127.0.0.1:3000",
+  equalsParsed.baseUrl,
+);
+const equalsOther = runCli("launch.mjs", ["--base-url=http://example.com"]);
+check(
+  "equals base url does not fall back",
+  equalsOther.status === 2 &&
+    equalsOther.stderr.includes("refusing http://example.com"),
+  equalsOther.stderr,
+);
 const hint = runtime.foreignNextStopHint(3000);
 check(
   "stop hint works without ss",

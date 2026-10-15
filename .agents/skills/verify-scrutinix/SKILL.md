@@ -18,7 +18,7 @@ This skill owns one app on `http://127.0.0.1:3000`. Playwright gives each test a
 
 When doctor already reports `READY` for a server this skill started from this checkout, launch reuses that server. `run.json` stores the checkout path in `repoRoot`. A different checkout does not reuse that server and does not stop it. Cleanup stops only the tmux session and listener pids recorded for this checkout. A server this skill did not start is left running.
 
-Launch refuses a base URL other than `http://127.0.0.1:3000`. An empty `--base-url` or a value that is not a URL exits 2 with a message. It does not fall back to the default and it does not throw. Launch refuses to start a second Next server when port 3000 is already taken by someone else.
+Launch refuses a base URL other than `http://127.0.0.1:3000`. `--base-url URL` and `--base-url=URL` are both read. An empty value or a value that is not a URL exits 2 with a message. It does not fall back to the default and it does not throw. Launch refuses to start a second Next server when port 3000 is already taken by someone else.
 
 Two verify drives must not share one server at the same time. The minute rate limit is 10 analyze requests for the whole process.
 
@@ -103,7 +103,22 @@ Doctor cannot see `SCRUTINIX_TEST_FIXTURES` in the HTTP response. Ownership plus
 Find the listener from `/proc` when `ss` is not installed:
 
 ```bash
-awk 'NR>1 && $4=="0A" { split($2, a, ":"); if (strtonum("0x" a[2])==3000) print $10 }' /proc/net/tcp /proc/net/tcp6
+awk '
+function fromhex(s,    i, c, n, d) {
+  n = 0
+  for (i = 1; i <= length(s); i++) {
+    c = tolower(substr(s, i, 1))
+    d = index("0123456789abcdef", c)
+    if (d == 0) return -1
+    n = n * 16 + (d - 1)
+  }
+  return n
+}
+NR > 1 && $4 == "0A" {
+  split($2, a, ":")
+  if (fromhex(a[2]) == 3000) print $10
+}
+' /proc/net/tcp /proc/net/tcp6
 ```
 
 Match `socket:[inode]` under `/proc/<pid>/fd`, then read the process:

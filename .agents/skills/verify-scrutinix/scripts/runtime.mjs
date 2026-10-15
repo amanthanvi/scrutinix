@@ -136,9 +136,14 @@ export function baseUrlParts(baseUrl) {
 }
 
 export function parseCliBaseUrl(argv = process.argv) {
-  const index = argv.indexOf("--base-url");
+  const index = argv.findIndex(
+    (arg) => arg === "--base-url" || arg.startsWith("--base-url="),
+  );
   if (index === -1) return { ok: true, baseUrl: defaultBaseUrl, message: "" };
-  const raw = argv[index + 1];
+  const token = argv[index] ?? "";
+  const raw = token.startsWith("--base-url=")
+    ? token.slice("--base-url=".length)
+    : argv[index + 1];
   if (typeof raw !== "string" || raw.trim() === "") {
     return {
       ok: false,
