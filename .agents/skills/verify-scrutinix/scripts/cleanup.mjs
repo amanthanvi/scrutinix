@@ -23,8 +23,10 @@ Stop only the tmux session and listener pids recorded in
 is a different checkout is left running. Evidence under
 /tmp/scrutinix-verify/evidence is left in place. next-env.d.ts is restored
 to the pre-launch snapshot only when it still matches what this run wrote.
-Otherwise it is left unchanged and a warning is printed. Next.js agent-rule
-blocks are removed from AGENTS.md.
+Otherwise it is left unchanged and a warning is printed. Either way, that
+cleanup consumes the snapshot so a later launch can take a new one. Until
+then, launch keeps the original snapshot for this checkout. Next.js
+agent-rule blocks are removed from AGENTS.md.
 
 Usage:
   node .agents/skills/verify-scrutinix/scripts/cleanup.mjs

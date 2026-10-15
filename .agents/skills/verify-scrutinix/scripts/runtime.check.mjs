@@ -243,12 +243,26 @@ check(
   keptSnap.kept === true && keptSnap.snapshot === originalDeclaration,
   String(keptSnap.snapshot),
 );
+writeFileSync(path.join(gitRoot, "next-env.d.ts"), "rewritten again\n");
+const keptDespite = runtime.snapshotNextEnv(gitRoot);
+check(
+  "restart keeps snapshot after another rewrite",
+  keptDespite.kept === true && keptDespite.snapshot === originalDeclaration,
+  String(keptDespite.snapshot),
+);
+writeFileSync(path.join(gitRoot, "next-env.d.ts"), "next wrote\n");
 const restartRestore = runtime.restoreNextEnvSnapshot(gitRoot);
 const restartStatus = git(["status", "--porcelain"]);
 check(
   "restart git status clean",
   restartRestore.action === "restored" && restartStatus.stdout.trim() === "",
   restartStatus.stdout,
+);
+const consumed = runtime.snapshotNextEnv(gitRoot);
+check(
+  "cleanup consumed snapshot",
+  consumed.kept !== true && consumed.snapshot === originalDeclaration,
+  String(consumed.snapshot),
 );
 
 check(

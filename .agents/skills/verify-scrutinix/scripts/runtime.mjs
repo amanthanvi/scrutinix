@@ -356,16 +356,64 @@ function nextEnvRecordPath() {
   return path.join(stateDir, "next-env.json");
 }
 
-function readNextEnvRecord() {
+function readNextEnvStore() {
   const file = nextEnvRecordPath();
-  if (!existsSync(file)) return null;
+  if (!existsSync(file)) return {};
   try {
     const parsed = JSON.parse(readFileSync(file, "utf8"));
-    if (!parsed || typeof parsed !== "object") return null;
-    return parsed;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return {};
+    }
+    if (
+      typeof parsed.repoRoot === "string" &&
+      Object.hasOwn(parsed, "snapshot")
+    ) {
+      return { [canonicalPath(String(parsed.repoRoot))]: parsed };
+    }
+    const checkouts = parsed.checkouts;
+    if (
+      !checkouts ||
+      typeof checkouts !== "object" ||
+      Array.isArray(checkouts)
+    ) {
+      return {};
+    }
+    return checkouts;
   } catch {
+    return {};
+  }
+}
+
+function writeNextEnvStore(checkouts) {
+  ensureDirs();
+  writeFileSync(nextEnvRecordPath(), `${JSON.stringify({ checkouts })}\n`);
+}
+
+function readNextEnvRecord(root = repoRoot) {
+  const record = readNextEnvStore()[canonicalPath(root)];
+  if (!record || typeof record !== "object" || Array.isArray(record)) {
     return null;
   }
+  return record;
+}
+
+function writeNextEnvRecord(root, record) {
+  const checkouts = readNextEnvStore();
+  checkouts[canonicalPath(root)] = record;
+  writeNextEnvStore(checkouts);
+}
+
+function consumeNextEnvSnapshot(root = repoRoot) {
+  const checkouts = readNextEnvStore();
+  const key = canonicalPath(root);
+  if (!Object.hasOwn(checkouts, key)) return false;
+  delete checkouts[key];
+  if (Object.keys(checkouts).length === 0) {
+    unlinkSync(nextEnvRecordPath());
+    return true;
+  }
+  writeNextEnvStore(checkouts);
+  return true;
 }
 
 export function stripAgentRules(root = repoRoot) {
@@ -380,51 +428,34 @@ export function stripAgentRules(root = repoRoot) {
 
 export function snapshotNextEnv(root = repoRoot) {
   ensureDirs();
+  const existing = readNextEnvRecord(root);
+  if (existing && Object.hasOwn(existing, "snapshot")) {
+    return { ...existing, kept: true };
+  }
   const source = path.join(root, "next-env.d.ts");
   const missing = !existsSync(source);
   const current = missing ? "" : readFileSync(source, "utf8");
-  const existing = readNextEnvRecord();
-  if (
-    existing &&
-    canonicalPath(String(existing.repoRoot)) === canonicalPath(root) &&
-    Object.hasOwn(existing, "written")
-  ) {
-    const writtenMissing = Boolean(existing.writtenMissing);
-    const written = writtenMissing ? "" : String(existing.written ?? "");
-    if (missing === writtenMissing && current === written) {
-      return { ...existing, kept: true };
-    }
-  }
   const record = {
-    repoRoot: canonicalPath(root),
     missing,
     snapshot: current,
   };
-  writeFileSync(nextEnvRecordPath(), `${JSON.stringify(record)}\n`);
+  writeNextEnvRecord(root, record);
   return record;
 }
 
 export function recordNextEnvWritten(root = repoRoot) {
-  const record = readNextEnvRecord();
-  if (
-    !record ||
-    canonicalPath(String(record.repoRoot)) !== canonicalPath(root)
-  ) {
-    return false;
-  }
+  const record = readNextEnvRecord(root);
+  if (!record || !Object.hasOwn(record, "snapshot")) return false;
   const source = path.join(root, "next-env.d.ts");
   record.writtenMissing = !existsSync(source);
   record.written = record.writtenMissing ? "" : readFileSync(source, "utf8");
-  writeFileSync(nextEnvRecordPath(), `${JSON.stringify(record)}\n`);
+  writeNextEnvRecord(root, record);
   return true;
 }
 
 export function restoreNextEnvSnapshot(root = repoRoot) {
-  const record = readNextEnvRecord();
-  if (
-    !record ||
-    canonicalPath(String(record.repoRoot)) !== canonicalPath(root)
-  ) {
+  const record = readNextEnvRecord(root);
+  if (!record || !Object.hasOwn(record, "snapshot")) {
     return {
       action: "left",
       warning:
@@ -446,6 +477,7 @@ export function restoreNextEnvSnapshot(root = repoRoot) {
     currentMissing !== Boolean(record.writtenMissing) ||
     current !== written
   ) {
+    consumeNextEnvSnapshot(root);
     return {
       action: "left",
       warning:
@@ -457,6 +489,7 @@ export function restoreNextEnvSnapshot(root = repoRoot) {
   } else if (current !== record.snapshot) {
     writeFileSync(source, String(record.snapshot ?? ""));
   }
+  consumeNextEnvSnapshot(root);
   return { action: "restored", warning: "" };
 }
 
