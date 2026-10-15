@@ -13,20 +13,24 @@ import {
   ensureDirs,
   evidenceDir,
   killTmuxSession,
+  cmdline,
   listenerPids,
   nodePathExport,
+  formatForeignNext,
   ownsInstance,
   readState,
+  recordNextEnvWritten,
   rememberRun,
   repoRoot,
-  restoreTrackedDevFiles,
   runCommand,
   sameCheckout,
   sessionExists,
   sessions,
   shellQuote,
+  snapshotNextEnv,
   startTmuxSession,
   stateDir,
+  stripAgentRules,
   tcpOpen,
   tmuxAvailable,
 } from "./runtime.mjs";
@@ -90,16 +94,30 @@ function remember(started, extra = {}) {
   rememberRun(started, { ...extra, baseUrl });
 }
 
-async function restoreSettledFiles() {
+async function captureSettledDevEdits() {
   let previous = "";
   for (let attempt = 0; attempt < 8; attempt += 1) {
-    restoreTrackedDevFiles();
+    stripAgentRules();
     const stamp = `${existsStamp("next-env.d.ts")}:${existsStamp("AGENTS.md")}`;
-    if (attempt > 0 && stamp === previous) return;
+    if (attempt > 0 && stamp === previous) {
+      recordNextEnvWritten();
+      return;
+    }
     previous = stamp;
     await delay(500);
   }
-  restoreTrackedDevFiles();
+  stripAgentRules();
+  recordNextEnvWritten();
+}
+
+function refuseForeignNext(port) {
+  const summary = formatForeignNext(port);
+  if (!summary) return false;
+  process.stderr.write(`launch: ${summary}\n`);
+  process.stderr.write(
+    `launch: find it with ss -ltnp 'sport = :${port}'. Read /proc/<pid>/cmdline and /proc/<pid>/cwd, then stop that pid with kill <pid>. Do not kill by name.\n`,
+  );
+  return true;
 }
 
 function existsStamp(relativePath) {
@@ -113,8 +131,13 @@ const initial = await checkHealth(baseUrl);
 const listening = await tcpOpen(port);
 const owned = ownsInstance();
 const state = readState();
-const foreignSession =
-  Boolean(state) && !sameCheckout(state) && sessionExists(sessions.next);
+const foreignListeners = listenerPids(port).some((pid) =>
+  cmdline(pid).includes(String(state?.repoRoot ?? "\0")),
+);
+const foreignLive =
+  Boolean(state) &&
+  !sameCheckout(state) &&
+  (sessionExists(sessions.next) || foreignListeners);
 
 if (initial.ok && owned) {
   process.stdout.write(`${initial.lines.join("\n")}\n`);
@@ -122,28 +145,30 @@ if (initial.ok && owned) {
     `launch: REUSED existing READY instance for ${canonicalPath(repoRoot)}\n`,
   );
   remember([]);
-  await restoreSettledFiles();
   process.exit(0);
 }
 
-if (
-  foreignSession ||
-  (state &&
-    !sameCheckout(state) &&
-    (listening || initial.code === "foreign-server"))
-) {
+if (foreignLive) {
   process.stdout.write(`${initial.lines.join("\n")}\n`);
   process.stderr.write(
     `launch: port 3000 or session ${sessions.next} belongs to ${state?.repoRoot || "another checkout"}. Refusing to reuse or stop it from ${canonicalPath(repoRoot)}.\n`,
   );
+  refuseForeignNext(port);
   process.exit(2);
 }
 
-if ((listening || initial.code === "foreign-server") && !owned) {
+if (
+  (listening ||
+    initial.code === "foreign-server" ||
+    initial.code === "foreign-next") &&
+  !owned
+) {
   process.stdout.write(`${initial.lines.join("\n")}\n`);
-  process.stderr.write(
-    "launch: port 3000 is already taken by a process this skill did not start. Refusing to start a second server.\n",
-  );
+  if (!refuseForeignNext(port)) {
+    process.stderr.write(
+      "launch: port 3000 is already taken by a process this skill did not start. Refusing to start a second server.\n",
+    );
+  }
   process.exit(2);
 }
 
@@ -177,6 +202,9 @@ if (process.env.VERIFY_SKIP_BROWSER_INSTALL !== "1") {
     process.exit(browsers.status ?? 1);
   }
 }
+
+snapshotNextEnv();
+process.stdout.write("launch: snapshotted next-env.d.ts\n");
 
 if (owned && sessionExists(sessions.next)) {
   process.stdout.write("launch: restarting the Next session this skill owns\n");
@@ -214,7 +242,7 @@ if (up !== "ready") {
     `launch: Next session ${up === "dead" ? "exited" : "timed out"}. Log: ${logPath}\n`,
   );
   process.stderr.write(readLog(logPath).slice(-4000));
-  await restoreSettledFiles();
+  await captureSettledDevEdits();
   process.exit(1);
 }
 
@@ -223,12 +251,13 @@ let report = await checkHealth(baseUrl);
 while (
   !report.ok &&
   report.code !== "foreign-server" &&
+  report.code !== "foreign-next" &&
   Date.now() < deadline
 ) {
   if (!sessionExists(sessions.next)) {
     process.stderr.write(`launch: Next session exited. Log: ${logPath}\n`);
     process.stderr.write(readLog(logPath).slice(-4000));
-    await restoreSettledFiles();
+    await captureSettledDevEdits();
     process.exit(1);
   }
   await delay(1_000);
@@ -236,7 +265,7 @@ while (
 }
 
 remember(started, { pids: listenerPids(port) });
-await restoreSettledFiles();
+await captureSettledDevEdits();
 process.stdout.write(`${report.lines.join("\n")}\n`);
 if (!report.ok) {
   process.stderr.write(

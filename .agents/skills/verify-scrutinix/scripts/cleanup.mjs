@@ -8,6 +8,7 @@ import {
   killTmuxSession,
   readState,
   repoRoot,
+  restoreNextEnvSnapshot,
   restoreTrackedDevFiles,
   sameCheckout,
   sessionExists,
@@ -21,7 +22,9 @@ Stop only the tmux session and listener pids recorded in
 /tmp/scrutinix-verify/run.json for this checkout. A run.json whose repoRoot
 is a different checkout is left running. Evidence under
 /tmp/scrutinix-verify/evidence is left in place. next-env.d.ts is restored
-and Next.js agent-rule blocks are removed from AGENTS.md.
+to the pre-launch snapshot only when it still matches what this run wrote.
+Otherwise it is left unchanged and a warning is printed. Next.js agent-rule
+blocks are removed from AGENTS.md.
 
 Usage:
   node .agents/skills/verify-scrutinix/scripts/cleanup.mjs
@@ -99,6 +102,14 @@ writeState({
   stoppedAt: new Date().toISOString(),
 });
 restoreTrackedDevFiles();
+const declaration = restoreNextEnvSnapshot();
+if (declaration.action === "restored") {
+  process.stdout.write(
+    "cleanup: restored next-env.d.ts to the pre-launch snapshot.\n",
+  );
+} else if (declaration.warning) {
+  process.stderr.write(`${declaration.warning}\n`);
+}
 
 process.stdout.write(`cleanup: evidence directory ${evidenceDir}\n`);
 if (stillOpen) {

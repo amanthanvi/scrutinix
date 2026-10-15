@@ -1,9 +1,10 @@
-import { execFileSync, spawnSync } from "node:child_process";
+import { execFileSync, spawn, spawnSync } from "node:child_process";
 import {
   chmodSync,
   lstatSync,
   mkdirSync,
   mkdtempSync,
+  readFileSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -188,6 +189,85 @@ check(
 spawnSync(bin, [...prefix, "kill-session", "-t", foreignName], {
   encoding: "utf8",
 });
+
+const declRoot = path.join(scratch, "decl");
+mkdirSync(declRoot);
+const decl = path.join(declRoot, "next-env.d.ts");
+writeFileSync(decl, "user edit\n");
+runtime.snapshotNextEnv(declRoot);
+writeFileSync(decl, "next wrote this\n");
+check("recorded written", runtime.recordNextEnvWritten(declRoot));
+const restored = runtime.restoreNextEnvSnapshot(declRoot);
+check(
+  "restore snapshot",
+  restored.action === "restored" && readFileSync(decl, "utf8") === "user edit\n",
+  restored.warning,
+);
+
+writeFileSync(decl, "next wrote this\n");
+runtime.snapshotNextEnv(declRoot);
+runtime.recordNextEnvWritten(declRoot);
+writeFileSync(decl, "edited after\n");
+const left = runtime.restoreNextEnvSnapshot(declRoot);
+check(
+  "leave later edit",
+  left.action === "left" &&
+    readFileSync(decl, "utf8") === "edited after\n" &&
+    left.warning.includes("Leaving it unchanged"),
+  left.warning,
+);
+
+check(
+  "next dev command",
+  runtime.isNextDevCommand(
+    "node /workspace/node_modules/.bin/next dev --port 3000",
+  ),
+);
+check(
+  "next-server command",
+  runtime.isNextDevCommand("next-server (v16.4.0)"),
+);
+check(
+  "not a next command",
+  !runtime.isNextDevCommand("node /tmp/runtime.check.mjs"),
+);
+
+const holderScript = path.join(scratch, "next");
+const holderPortFile = path.join(scratch, "holder-port");
+writeFileSync(
+  holderScript,
+  `const net = require("net");
+const fs = require("fs");
+const server = net.createServer();
+server.listen(0, "127.0.0.1", () => {
+  fs.writeFileSync(${JSON.stringify(holderPortFile)}, String(server.address().port));
+});
+setInterval(() => {}, 1000);
+`,
+);
+const holder = spawn(process.execPath, [holderScript, "dev"], {
+  stdio: "ignore",
+});
+const holderPort = await new Promise((resolve) => {
+  const deadline = Date.now() + 2_000;
+  const tick = () => {
+    try {
+      resolve(Number(readFileSync(holderPortFile, "utf8")));
+    } catch {
+      if (Date.now() > deadline) resolve(0);
+      else setTimeout(tick, 20);
+    }
+  };
+  tick();
+});
+const foreignNext = runtime.formatForeignNext(holderPort);
+check(
+  "foreign next listener",
+  foreignNext.includes(`pid ${holder.pid}`) &&
+    foreignNext.includes("another next dev"),
+  foreignNext,
+);
+holder.kill("SIGTERM");
 
 rmSync(scratch, { recursive: true, force: true });
 

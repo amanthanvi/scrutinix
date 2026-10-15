@@ -35,12 +35,12 @@ npm run verify:launch
 `npm run verify:launch` is `node .agents/skills/verify-scrutinix/scripts/launch.mjs`. It does the following:
 
 1. If doctor is `READY`, `run.json` `repoRoot` is this checkout, and tmux session `scrutinix-verify-next` is alive, print `REUSED` and exit 0.
-2. If port 3000 is open and this checkout does not own it, or `run.json` names another checkout whose session is still alive, exit 2 and leave that process alone.
+2. If port 3000 is open and this checkout does not own it, or `run.json` names another checkout whose session is still alive, exit 2 and leave that process alone. When the listener is another `next dev`, launch names its pid and cwd and prints how to stop that pid.
 3. Run `npm ci` when `node_modules` is missing.
 4. Install Playwright Chromium. Set `VERIFY_SKIP_BROWSER_INSTALL=1` to skip. If Chromium's system libraries are missing, run `npx playwright install --with-deps chromium` and launch again.
 5. When this checkout already owns an unhealthy session, stop that session and start it again.
 6. Start tmux session `scrutinix-verify-next` with `SCRUTINIX_TEST_FIXTURES=1`, empty Upstash and Vercel KV variables, the agent-detection variables unset, and `npm run dev -- --hostname 127.0.0.1 --port 3000`. The session name is written to `run.json` as soon as tmux creates it, before ready is checked, so a failed boot is still cleaned up. Ready means doctor reports `READY`. The hostname is required so the dev server accepts the browser on IPv4 loopback.
-7. Restore `next-env.d.ts` from git `HEAD` and strip Next.js agent-rule blocks from `AGENTS.md`. `next dev` rewrites the declaration file to point at `.next/dev/types`. Those generated edits stay out of commits.
+7. Snapshot `next-env.d.ts` before the dev server starts, then record the content `next dev` wrote after the file settles. Strip Next.js agent-rule blocks from `AGENTS.md`. Cleanup puts `next-env.d.ts` back only later, and only from that snapshot.
 
 Fixture mode swaps the analyze orchestrator onto `lib/server/test-fixtures.ts`. Hostnames:
 
@@ -84,6 +84,7 @@ Anything else prints `NOT_READY` and exits 2. Codes:
 | `about-unhealthy`   | Home is healthy and `/about` is not                           |
 | `privacy-unhealthy` | Home and about are healthy and `/privacy` is not              |
 | `foreign-server`    | The pages look healthy and this skill does not own the server |
+| `foreign-next`      | Another `next dev` holds port 3000 and this skill did not start it |
 
 ```bash
 node .agents/skills/verify-scrutinix/scripts/doctor.mjs --help
@@ -93,7 +94,27 @@ node .agents/skills/verify-scrutinix/scripts/doctor.mjs --base-url http://127.0.
 
 Doctor prints who is listening on port 3000. It uses `ss -ltnp` when `ss` exists, and otherwise reads `/proc/net/tcp`. A screenshot taken while doctor is `NOT_READY` is not evidence.
 
-Doctor cannot see `SCRUTINIX_TEST_FIXTURES` in the HTTP response. Ownership plus the fixture verdicts in `verify:drive` are the check. A healthy server this skill did not start is `foreign-server` and is not worth driving.
+Doctor cannot see `SCRUTINIX_TEST_FIXTURES` in the HTTP response. Ownership plus the fixture verdicts in `verify:drive` are the check. A healthy server this skill did not start is `foreign-server` or `foreign-next` and is not worth driving.
+
+## Another next dev
+
+`npm run dev` from a boot script or another terminal can already be listening on port 3000. Doctor then prints `another next dev holds port 3000` with the pid and cwd, and the code `foreign-next`. Launch exits 2 with the same pid and cwd. Neither command stops that process.
+
+Find the listener:
+
+```bash
+ss -ltnp 'sport = :3000'
+tr '\0' ' ' < /proc/<pid>/cmdline
+readlink /proc/<pid>/cwd
+```
+
+Stop only that pid after the command line is the dev server you mean:
+
+```bash
+kill <pid>
+```
+
+Do not use `pkill` or kill by process name. `verify:cleanup` will not stop a next dev this skill did not start. When the port is free, run `npm run verify:launch` again.
 
 ## Drive
 
@@ -169,7 +190,7 @@ The fixture table is the same production orchestrator path with the provider fun
 npm run verify:cleanup
 ```
 
-That runs `node .agents/skills/verify-scrutinix/scripts/cleanup.mjs`. It `tmux kill-session`s only sessions listed in `run.json` when `repoRoot` is this checkout, then sends `SIGTERM` only to recorded listener pids whose command line still contains this repo or `next`. A `run.json` for another checkout is printed and left running. It does not kill processes by name. It leaves `/tmp/scrutinix-verify/evidence/` in place and prints that path. It restores `next-env.d.ts` and strips Next.js agent-rule blocks from `AGENTS.md`. After every failed launch or drive, run cleanup before starting again so a half-started session does not keep the port.
+That runs `node .agents/skills/verify-scrutinix/scripts/cleanup.mjs`. It `tmux kill-session`s only sessions listed in `run.json` when `repoRoot` is this checkout, then sends `SIGTERM` only to recorded listener pids whose command line still contains this repo or `next`. A `run.json` for another checkout is printed and left running. It does not kill processes by name. It leaves `/tmp/scrutinix-verify/evidence/` in place and prints that path. It strips Next.js agent-rule blocks from `AGENTS.md`. It restores `next-env.d.ts` to the snapshot taken at launch only when the file still equals the content this run wrote. If the file differs, cleanup leaves it unchanged and prints a warning. After every failed launch or drive, run cleanup before starting again so a half-started session does not keep the port.
 
 Confirm the evidence directory still exists after cleanup before citing it.
 

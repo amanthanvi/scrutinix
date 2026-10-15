@@ -24,8 +24,11 @@ Codes:
   about-unhealthy     home is healthy and /about is not
   privacy-unhealthy   home and about are healthy and /privacy is not
   foreign-server      the pages look healthy and verify:launch does not own the server
+  foreign-next        another next dev holds port 3000 and this skill did not start it
 
-A healthy foreign server is not worth driving. Live provider mode is not
+A healthy foreign server is not worth driving. When the holder is next dev,
+doctor names the pid and cwd. Stop that pid yourself. See SKILL.md,
+"Another next dev". Live provider mode is not
 observable from these GET requests. The malicious.scrutinix.test verdict in
 verify:drive is the check that fixture mode is active.
 `;
