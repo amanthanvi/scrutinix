@@ -382,10 +382,23 @@ export function snapshotNextEnv(root = repoRoot) {
   ensureDirs();
   const source = path.join(root, "next-env.d.ts");
   const missing = !existsSync(source);
+  const current = missing ? "" : readFileSync(source, "utf8");
+  const existing = readNextEnvRecord();
+  if (
+    existing &&
+    canonicalPath(String(existing.repoRoot)) === canonicalPath(root) &&
+    Object.hasOwn(existing, "written")
+  ) {
+    const writtenMissing = Boolean(existing.writtenMissing);
+    const written = writtenMissing ? "" : String(existing.written ?? "");
+    if (missing === writtenMissing && current === written) {
+      return { ...existing, kept: true };
+    }
+  }
   const record = {
     repoRoot: canonicalPath(root),
     missing,
-    snapshot: missing ? "" : readFileSync(source, "utf8"),
+    snapshot: current,
   };
   writeFileSync(nextEnvRecordPath(), `${JSON.stringify(record)}\n`);
   return record;
