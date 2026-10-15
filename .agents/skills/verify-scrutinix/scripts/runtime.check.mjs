@@ -200,7 +200,8 @@ check("recorded written", runtime.recordNextEnvWritten(declRoot));
 const restored = runtime.restoreNextEnvSnapshot(declRoot);
 check(
   "restore snapshot",
-  restored.action === "restored" && readFileSync(decl, "utf8") === "user edit\n",
+  restored.action === "restored" &&
+    readFileSync(decl, "utf8") === "user edit\n",
   restored.warning,
 );
 
@@ -256,10 +257,7 @@ check(
     "node /workspace/node_modules/.bin/next dev --port 3000",
   ),
 );
-check(
-  "next-server command",
-  runtime.isNextDevCommand("next-server (v16.4.0)"),
-);
+check("next-server command", runtime.isNextDevCommand("next-server (v16.4.0)"));
 check(
   "not a next command",
   !runtime.isNextDevCommand("node /tmp/runtime.check.mjs"),

@@ -406,7 +406,10 @@ export function snapshotNextEnv(root = repoRoot) {
 
 export function recordNextEnvWritten(root = repoRoot) {
   const record = readNextEnvRecord();
-  if (!record || canonicalPath(String(record.repoRoot)) !== canonicalPath(root)) {
+  if (
+    !record ||
+    canonicalPath(String(record.repoRoot)) !== canonicalPath(root)
+  ) {
     return false;
   }
   const source = path.join(root, "next-env.d.ts");
@@ -418,7 +421,10 @@ export function recordNextEnvWritten(root = repoRoot) {
 
 export function restoreNextEnvSnapshot(root = repoRoot) {
   const record = readNextEnvRecord();
-  if (!record || canonicalPath(String(record.repoRoot)) !== canonicalPath(root)) {
+  if (
+    !record ||
+    canonicalPath(String(record.repoRoot)) !== canonicalPath(root)
+  ) {
     return {
       action: "left",
       warning:
@@ -436,7 +442,10 @@ export function restoreNextEnvSnapshot(root = repoRoot) {
   const currentMissing = !existsSync(source);
   const current = currentMissing ? "" : readFileSync(source, "utf8");
   const written = record.writtenMissing ? "" : String(record.written ?? "");
-  if (currentMissing !== Boolean(record.writtenMissing) || current !== written) {
+  if (
+    currentMissing !== Boolean(record.writtenMissing) ||
+    current !== written
+  ) {
     return {
       action: "left",
       warning:
@@ -485,7 +494,9 @@ export async function checkHealth(baseUrl = defaultBaseUrl) {
   if (home.status === 0 && about.status === 0 && privacy.status === 0) {
     lines.push(`doctor: home unreachable (${home.error || "no response"})`);
     lines.push(
-      nextHint ? "doctor: NOT_READY foreign-next" : "doctor: NOT_READY unreachable",
+      nextHint
+        ? "doctor: NOT_READY foreign-next"
+        : "doctor: NOT_READY unreachable",
     );
     return {
       ok: false,

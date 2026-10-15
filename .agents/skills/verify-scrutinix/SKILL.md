@@ -77,13 +77,13 @@ npm run verify:doctor
 
 Anything else prints `NOT_READY` and exits 2. Codes:
 
-| Code                | Meaning                                                       |
-| ------------------- | ------------------------------------------------------------- |
-| `unreachable`       | Nothing answered on the base URL                              |
-| `home-unhealthy`    | Home is up without the scan box, or the status is not 200     |
-| `about-unhealthy`   | Home is healthy and `/about` is not                           |
-| `privacy-unhealthy` | Home and about are healthy and `/privacy` is not              |
-| `foreign-server`    | The pages look healthy and this skill does not own the server |
+| Code                | Meaning                                                            |
+| ------------------- | ------------------------------------------------------------------ |
+| `unreachable`       | Nothing answered on the base URL                                   |
+| `home-unhealthy`    | Home is up without the scan box, or the status is not 200          |
+| `about-unhealthy`   | Home is healthy and `/about` is not                                |
+| `privacy-unhealthy` | Home and about are healthy and `/privacy` is not                   |
+| `foreign-server`    | The pages look healthy and this skill does not own the server      |
 | `foreign-next`      | Another `next dev` holds port 3000 and this skill did not start it |
 
 ```bash
