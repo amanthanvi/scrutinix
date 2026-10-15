@@ -8,6 +8,7 @@ import {
   readFileSync,
   readlinkSync,
   realpathSync,
+  rmSync,
   unlinkSync,
   writeFileSync,
 } from "node:fs";
@@ -437,11 +438,38 @@ function consumeNextEnvSnapshot(root = repoRoot) {
   if (!Object.hasOwn(checkouts, key)) return false;
   delete checkouts[key];
   if (Object.keys(checkouts).length === 0) {
-    unlinkSync(nextEnvRecordPath());
+    rmSync(nextEnvRecordPath(), { force: true });
     return true;
   }
   writeNextEnvStore(checkouts);
   return true;
+}
+
+export function hasNextEnvRecord() {
+  return existsSync(nextEnvRecordPath());
+}
+
+export function commandIncludesCheckout(command, repoRootValue) {
+  if (typeof repoRootValue !== "string" || repoRootValue.length === 0) {
+    return false;
+  }
+  return String(command).includes(repoRootValue);
+}
+
+function fileMatchesRecord(missing, current, recordMissing, recorded) {
+  if (missing !== Boolean(recordMissing)) return false;
+  if (missing) return true;
+  return current === String(recorded ?? "");
+}
+
+function saveSnapshotCopy(record) {
+  ensureDirs();
+  const dest = path.join(
+    evidenceDir,
+    `next-env-${Date.now().toString(36)}.snapshot`,
+  );
+  writeFileSync(dest, String(record.snapshot ?? ""));
+  return dest;
 }
 
 export function stripAgentRules(root = repoRoot) {
@@ -456,18 +484,43 @@ export function stripAgentRules(root = repoRoot) {
 
 export function snapshotNextEnv(root = repoRoot) {
   ensureDirs();
-  const existing = readNextEnvRecord(root);
-  if (existing && Object.hasOwn(existing, "snapshot")) {
-    return { ...existing, kept: true };
-  }
   const source = path.join(root, "next-env.d.ts");
   const missing = !existsSync(source);
   const current = missing ? "" : readFileSync(source, "utf8");
+  const existing = readNextEnvRecord(root);
+  if (existing && Object.hasOwn(existing, "snapshot")) {
+    const matchesSnapshot = fileMatchesRecord(
+      missing,
+      current,
+      existing.missing,
+      existing.snapshot,
+    );
+    const matchesWritten =
+      Object.hasOwn(existing, "written") &&
+      fileMatchesRecord(
+        missing,
+        current,
+        existing.writtenMissing,
+        existing.written,
+      );
+    if (matchesSnapshot || matchesWritten) {
+      return { ...existing, kept: true };
+    }
+    consumeNextEnvSnapshot(root);
+  }
   const record = {
     missing,
     snapshot: current,
   };
   writeNextEnvRecord(root, record);
+  if (existing && Object.hasOwn(existing, "snapshot")) {
+    return {
+      ...record,
+      dropped: true,
+      warning:
+        "launch: next-env.d.ts does not match the saved snapshot or the recorded write. Dropping the old snapshot.",
+    };
+  }
   return record;
 }
 
@@ -490,26 +543,35 @@ export function restoreNextEnvSnapshot(root = repoRoot) {
         "cleanup: no snapshot of next-env.d.ts for this checkout. Leaving it unchanged.",
     };
   }
-  if (!Object.hasOwn(record, "written")) {
-    return {
-      action: "left",
-      warning:
-        "cleanup: this run did not record the next-env.d.ts content it wrote. Leaving it unchanged.",
-    };
-  }
   const source = path.join(root, "next-env.d.ts");
   const currentMissing = !existsSync(source);
   const current = currentMissing ? "" : readFileSync(source, "utf8");
+  if (!Object.hasOwn(record, "written")) {
+    const differs = !fileMatchesRecord(
+      currentMissing,
+      current,
+      record.missing,
+      record.snapshot,
+    );
+    const backup = differs ? saveSnapshotCopy(record) : "";
+    consumeNextEnvSnapshot(root);
+    return {
+      action: "left",
+      warning: backup
+        ? `cleanup: this run did not record the next-env.d.ts content it wrote. Leaving it unchanged. Snapshot saved to ${backup}`
+        : "cleanup: this run did not record the next-env.d.ts content it wrote. Leaving it unchanged. Dropped the unfinished snapshot.",
+    };
+  }
   const written = record.writtenMissing ? "" : String(record.written ?? "");
   if (
     currentMissing !== Boolean(record.writtenMissing) ||
     current !== written
   ) {
+    const backup = saveSnapshotCopy(record);
     consumeNextEnvSnapshot(root);
     return {
       action: "left",
-      warning:
-        "cleanup: next-env.d.ts is not the content this run wrote. Leaving it unchanged.",
+      warning: `cleanup: next-env.d.ts is not the content this run wrote. Leaving it unchanged. Snapshot saved to ${backup}`,
     };
   }
   if (record.missing) {

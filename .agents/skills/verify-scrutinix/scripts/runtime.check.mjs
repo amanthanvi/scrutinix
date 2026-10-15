@@ -1,6 +1,7 @@
 import { execFileSync, spawn, spawnSync } from "node:child_process";
 import {
   chmodSync,
+  existsSync,
   lstatSync,
   mkdirSync,
   mkdtempSync,
@@ -47,6 +48,18 @@ function assertPrivate(dir) {
 
 const spaced = runtime.parseListenerPids("users:(('node',pid 4321,fd=9))");
 check("pid space", spaced.length === 1 && spaced[0] === 4321, spaced.join(","));
+check(
+  "empty repo root is not a listener match",
+  runtime.commandIncludesCheckout("node /tmp/next dev", "") === false &&
+    runtime.commandIncludesCheckout("node /tmp/next dev", undefined) === false,
+);
+check(
+  "repo root matches its checkout",
+  runtime.commandIncludesCheckout(
+    "node /tmp/scrutinix-clean/node_modules/next dev",
+    "/tmp/scrutinix-clean",
+  ),
+);
 
 const server = net.createServer();
 await new Promise((resolve) => {
@@ -289,11 +302,14 @@ runtime.snapshotNextEnv(declRoot);
 runtime.recordNextEnvWritten(declRoot);
 writeFileSync(decl, "edited after\n");
 const left = runtime.restoreNextEnvSnapshot(declRoot);
+const backupPath = left.warning.split("Snapshot saved to ")[1] ?? "";
 check(
   "leave later edit",
   left.action === "left" &&
     readFileSync(decl, "utf8") === "edited after\n" &&
-    left.warning.includes("Leaving it unchanged"),
+    left.warning.includes("Leaving it unchanged") &&
+    backupPath.startsWith(evidenceDir) &&
+    readFileSync(backupPath, "utf8") === "next wrote this\n",
   left.warning,
 );
 
@@ -322,14 +338,6 @@ check(
   keptSnap.kept === true && keptSnap.snapshot === originalDeclaration,
   String(keptSnap.snapshot),
 );
-writeFileSync(path.join(gitRoot, "next-env.d.ts"), "rewritten again\n");
-const keptDespite = runtime.snapshotNextEnv(gitRoot);
-check(
-  "restart keeps snapshot after another rewrite",
-  keptDespite.kept === true && keptDespite.snapshot === originalDeclaration,
-  String(keptDespite.snapshot),
-);
-writeFileSync(path.join(gitRoot, "next-env.d.ts"), "next wrote\n");
 const restartRestore = runtime.restoreNextEnvSnapshot(gitRoot);
 const restartStatus = git(["status", "--porcelain"]);
 check(
@@ -342,6 +350,58 @@ check(
   "cleanup consumed snapshot",
   consumed.kept !== true && consumed.snapshot === originalDeclaration,
   String(consumed.snapshot),
+);
+writeFileSync(path.join(gitRoot, "next-env.d.ts"), "rewritten again\n");
+const dropped = runtime.snapshotNextEnv(gitRoot);
+check(
+  "drop snapshot when file matches neither",
+  dropped.dropped === true &&
+    dropped.kept !== true &&
+    dropped.snapshot === "rewritten again\n" &&
+    String(dropped.warning).includes("Dropping the old snapshot"),
+  String(dropped.warning),
+);
+writeFileSync(path.join(gitRoot, "next-env.d.ts"), originalDeclaration);
+
+const unfinishedDir = path.join(scratch, "unfinished");
+const unfinishedEvidence = path.join(unfinishedDir, "evidence");
+mkdirSync(unfinishedDir, { mode: 0o700 });
+mkdirSync(unfinishedEvidence, { mode: 0o700 });
+writeFileSync(
+  path.join(unfinishedDir, "next-env.json"),
+  `${JSON.stringify({
+    checkouts: {
+      [runtime.canonicalPath(runtime.repoRoot)]: {
+        missing: false,
+        snapshot: "unfinished snapshot\n",
+      },
+    },
+  })}\n`,
+);
+const unfinished = spawnSync(
+  process.execPath,
+  [path.join(scriptDir, "cleanup.mjs")],
+  {
+    encoding: "utf8",
+    env: {
+      ...process.env,
+      VERIFY_STATE_DIR: unfinishedDir,
+      VERIFY_EVIDENCE_DIR: unfinishedEvidence,
+    },
+  },
+);
+const unfinishedBackup = (unfinished.stderr || "").split(
+  "Snapshot saved to ",
+)[1];
+check(
+  "cleanup drops unfinished snapshot without run.json",
+  unfinished.status === 0 &&
+    !existsSync(path.join(unfinishedDir, "next-env.json")) &&
+    unfinished.stdout.includes("no run.json") &&
+    typeof unfinishedBackup === "string" &&
+    unfinishedBackup.includes("next-env-") &&
+    readFileSync(unfinishedBackup.trim(), "utf8") === "unfinished snapshot\n",
+  `${unfinished.stdout}\n${unfinished.stderr}`,
 );
 
 check(

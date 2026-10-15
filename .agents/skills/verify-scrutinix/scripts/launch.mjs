@@ -9,6 +9,7 @@ import {
   baseUrlParts,
   canonicalPath,
   checkHealth,
+  commandIncludesCheckout,
   foreignNextStopHint,
   parseCliBaseUrl,
   ensureDirs,
@@ -129,9 +130,13 @@ const initial = await checkHealth(baseUrl);
 const listening = await tcpOpen(port);
 const owned = ownsInstance();
 const state = readState();
-const foreignListeners = listenerPids(port).some((pid) =>
-  cmdline(pid).includes(String(state?.repoRoot ?? "\0")),
-);
+const recordedRoot =
+  state && typeof state.repoRoot === "string" ? state.repoRoot : "";
+const foreignListeners =
+  recordedRoot.length > 0 &&
+  listenerPids(port).some((pid) =>
+    commandIncludesCheckout(cmdline(pid), recordedRoot),
+  );
 const foreignLive =
   Boolean(state) &&
   !sameCheckout(state) &&
@@ -202,6 +207,9 @@ if (process.env.VERIFY_SKIP_BROWSER_INSTALL !== "1") {
 }
 
 const declaration = snapshotNextEnv();
+if (declaration.warning) {
+  process.stderr.write(`${declaration.warning}\n`);
+}
 process.stdout.write(
   declaration.kept
     ? "launch: kept the existing next-env.d.ts snapshot\n"
