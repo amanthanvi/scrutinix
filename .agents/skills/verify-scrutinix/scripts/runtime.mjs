@@ -8,6 +8,7 @@ import {
   readFileSync,
   readlinkSync,
   realpathSync,
+  unlinkSync,
   writeFileSync,
 } from "node:fs";
 import net from "node:net";
@@ -242,6 +243,40 @@ export function listenerPids(port) {
   return parseListenerPids(portDetails(port));
 }
 
+export function isNextDevCommand(command) {
+  if (!command) return false;
+  if (command.includes("next-server")) return true;
+  return /(^|[/\s])next(?=\s|$)/.test(command);
+}
+
+export function foreignNextListeners(port) {
+  const found = [];
+  for (const pid of listenerPids(port)) {
+    const command = cmdline(pid);
+    if (!isNextDevCommand(command)) continue;
+    let cwd = "";
+    try {
+      cwd = readlinkSync(`/proc/${pid}/cwd`);
+    } catch {
+      cwd = "";
+    }
+    found.push({ pid, command, cwd });
+  }
+  return found;
+}
+
+export function formatForeignNext(port) {
+  const holders = foreignNextListeners(port);
+  if (!holders.length) return "";
+  const detail = holders
+    .map((holder) => {
+      const cwd = holder.cwd ? `, cwd ${holder.cwd}` : "";
+      return `pid ${holder.pid}${cwd}`;
+    })
+    .join("; ");
+  return `another next dev holds port ${port} (${detail}). This skill did not start it and will not stop it.`;
+}
+
 export function cmdline(pid) {
   try {
     return readFileSync(`/proc/${pid}/cmdline`, "utf8")
@@ -317,22 +352,94 @@ function stripManagedBlocks(content) {
   return next;
 }
 
-export function restoreTrackedDevFiles() {
-  const agentsPath = path.join(repoRoot, "AGENTS.md");
-  if (existsSync(agentsPath)) {
-    const current = readFileSync(agentsPath, "utf8");
-    const stripped = stripManagedBlocks(current);
-    if (stripped !== current) writeFileSync(agentsPath, stripped);
-  }
+function nextEnvRecordPath() {
+  return path.join(stateDir, "next-env.json");
+}
 
-  const declarationPath = path.join(repoRoot, "next-env.d.ts");
-  const head = spawnSync("git", ["show", "HEAD:next-env.d.ts"], {
-    cwd: repoRoot,
-    encoding: "utf8",
-  });
-  if (head.status !== 0 || !existsSync(declarationPath)) return;
-  const current = readFileSync(declarationPath, "utf8");
-  if (current !== head.stdout) writeFileSync(declarationPath, head.stdout);
+function readNextEnvRecord() {
+  const file = nextEnvRecordPath();
+  if (!existsSync(file)) return null;
+  try {
+    const parsed = JSON.parse(readFileSync(file, "utf8"));
+    if (!parsed || typeof parsed !== "object") return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+export function stripAgentRules(root = repoRoot) {
+  const agentsPath = path.join(root, "AGENTS.md");
+  if (!existsSync(agentsPath)) return false;
+  const current = readFileSync(agentsPath, "utf8");
+  const stripped = stripManagedBlocks(current);
+  if (stripped === current) return false;
+  writeFileSync(agentsPath, stripped);
+  return true;
+}
+
+export function snapshotNextEnv(root = repoRoot) {
+  ensureDirs();
+  const source = path.join(root, "next-env.d.ts");
+  const missing = !existsSync(source);
+  const record = {
+    repoRoot: canonicalPath(root),
+    missing,
+    snapshot: missing ? "" : readFileSync(source, "utf8"),
+  };
+  writeFileSync(nextEnvRecordPath(), `${JSON.stringify(record)}\n`);
+  return record;
+}
+
+export function recordNextEnvWritten(root = repoRoot) {
+  const record = readNextEnvRecord();
+  if (!record || canonicalPath(String(record.repoRoot)) !== canonicalPath(root)) {
+    return false;
+  }
+  const source = path.join(root, "next-env.d.ts");
+  record.writtenMissing = !existsSync(source);
+  record.written = record.writtenMissing ? "" : readFileSync(source, "utf8");
+  writeFileSync(nextEnvRecordPath(), `${JSON.stringify(record)}\n`);
+  return true;
+}
+
+export function restoreNextEnvSnapshot(root = repoRoot) {
+  const record = readNextEnvRecord();
+  if (!record || canonicalPath(String(record.repoRoot)) !== canonicalPath(root)) {
+    return {
+      action: "left",
+      warning:
+        "cleanup: no snapshot of next-env.d.ts for this checkout. Leaving it unchanged.",
+    };
+  }
+  if (!Object.hasOwn(record, "written")) {
+    return {
+      action: "left",
+      warning:
+        "cleanup: this run did not record the next-env.d.ts content it wrote. Leaving it unchanged.",
+    };
+  }
+  const source = path.join(root, "next-env.d.ts");
+  const currentMissing = !existsSync(source);
+  const current = currentMissing ? "" : readFileSync(source, "utf8");
+  const written = record.writtenMissing ? "" : String(record.written ?? "");
+  if (currentMissing !== Boolean(record.writtenMissing) || current !== written) {
+    return {
+      action: "left",
+      warning:
+        "cleanup: next-env.d.ts is not the content this run wrote. Leaving it unchanged.",
+    };
+  }
+  if (record.missing) {
+    if (!currentMissing) unlinkSync(source);
+  } else if (current !== record.snapshot) {
+    writeFileSync(source, String(record.snapshot ?? ""));
+  }
+  return { action: "restored", warning: "" };
+}
+
+export function restoreTrackedDevFiles() {
+  stripAgentRules();
 }
 
 export function agentEnvUnset() {
@@ -341,25 +448,38 @@ export function agentEnvUnset() {
 
 export async function checkHealth(baseUrl = defaultBaseUrl) {
   const lines = [];
-  const home = await fetchText(new URL("/", baseUrl).href, 8_000);
-  const about = await fetchText(new URL("/about", baseUrl).href, 8_000);
-  const privacy = await fetchText(new URL("/privacy", baseUrl).href, 8_000);
+  const { port, loopback } = baseUrlParts(baseUrl);
+  const owned = ownsInstance();
+  const nextHint = loopback && !owned ? formatForeignNext(port) : "";
+  const timeoutMs = nextHint ? 1_500 : 8_000;
+  const [home, about, privacy] = await Promise.all([
+    fetchText(new URL("/", baseUrl).href, timeoutMs),
+    fetchText(new URL("/about", baseUrl).href, timeoutMs),
+    fetchText(new URL("/privacy", baseUrl).href, timeoutMs),
+  ]);
   const homeOk = home.status === 200 && home.text.includes(homeMarker);
   const aboutOk = about.status === 200 && about.text.includes(aboutMarker);
   const privacyOk =
     privacy.status === 200 && privacy.text.includes(privacyMarker);
-  const owned = ownsInstance();
   const state = readState();
   if (state && !sameCheckout(state)) {
     lines.push(
       `doctor: run.json repo is ${state.repoRoot || "missing"}, this checkout is ${canonicalPath(repoRoot)}`,
     );
   }
+  if (nextHint) lines.push(`doctor: ${nextHint}`);
 
   if (home.status === 0 && about.status === 0 && privacy.status === 0) {
     lines.push(`doctor: home unreachable (${home.error || "no response"})`);
-    lines.push("doctor: NOT_READY unreachable");
-    return { ok: false, code: "unreachable", lines, owned };
+    lines.push(
+      nextHint ? "doctor: NOT_READY foreign-next" : "doctor: NOT_READY unreachable",
+    );
+    return {
+      ok: false,
+      code: nextHint ? "foreign-next" : "unreachable",
+      lines,
+      owned,
+    };
   }
 
   lines.push(
@@ -377,7 +497,6 @@ export async function checkHealth(baseUrl = defaultBaseUrl) {
       : "doctor: fixture-mode unknown (verify:launch does not own this server)",
   );
 
-  const { port, loopback } = baseUrlParts(baseUrl);
   if (loopback) {
     const owners = portDetails(port);
     lines.push(
@@ -393,6 +512,10 @@ export async function checkHealth(baseUrl = defaultBaseUrl) {
   }
 
   if (homeOk && aboutOk && privacyOk && !owned) {
+    if (nextHint) {
+      lines.push("doctor: NOT_READY foreign-next");
+      return { ok: false, code: "foreign-next", lines, owned };
+    }
     lines.push("doctor: NOT_READY foreign-server");
     return { ok: false, code: "foreign-server", lines, owned };
   }
