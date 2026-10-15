@@ -25,6 +25,11 @@ npm run test:integration -- --run  # Vitest, node + MSW
 npm run test:dom -- --run          # Vitest, jsdom + fake-indexeddb
 npm run test:e2e                   # Playwright with offline fixtures
 npm run lighthouse                 # Lighthouse audit
+npm run verify:launch              # Fixture dev server in tmux
+npm run verify:doctor              # Read-only health check
+npm run verify:smoke               # One safe scan in Playwright
+npm run verify:drive               # Feature-map sweep
+npm run verify:cleanup             # Stop only what launch started
 ```
 
 ## Architecture
