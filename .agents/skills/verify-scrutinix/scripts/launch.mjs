@@ -203,8 +203,12 @@ if (process.env.VERIFY_SKIP_BROWSER_INSTALL !== "1") {
   }
 }
 
-snapshotNextEnv();
-process.stdout.write("launch: snapshotted next-env.d.ts\n");
+const declaration = snapshotNextEnv();
+process.stdout.write(
+  declaration.kept
+    ? "launch: kept the existing next-env.d.ts snapshot\n"
+    : "launch: snapshotted next-env.d.ts\n",
+);
 
 if (owned && sessionExists(sessions.next)) {
   process.stdout.write("launch: restarting the Next session this skill owns\n");

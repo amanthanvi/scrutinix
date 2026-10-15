@@ -40,7 +40,7 @@ npm run verify:launch
 4. Install Playwright Chromium. Set `VERIFY_SKIP_BROWSER_INSTALL=1` to skip. If Chromium's system libraries are missing, run `npx playwright install --with-deps chromium` and launch again.
 5. When this checkout already owns an unhealthy session, stop that session and start it again.
 6. Start tmux session `scrutinix-verify-next` with `SCRUTINIX_TEST_FIXTURES=1`, empty Upstash and Vercel KV variables, the agent-detection variables unset, and `npm run dev -- --hostname 127.0.0.1 --port 3000`. The session name is written to `run.json` as soon as tmux creates it, before ready is checked, so a failed boot is still cleaned up. Ready means doctor reports `READY`. The hostname is required so the dev server accepts the browser on IPv4 loopback.
-7. Snapshot `next-env.d.ts` before the dev server starts, then record the content `next dev` wrote after the file settles. Strip Next.js agent-rule blocks from `AGENTS.md`. Cleanup puts `next-env.d.ts` back only later, and only from that snapshot.
+7. Snapshot `next-env.d.ts` before the dev server starts, then record the content `next dev` wrote after the file settles. A later launch keeps that snapshot when the file still matches the recorded write, including a restart of an owned server and a relaunch with no cleanup in between. Strip Next.js agent-rule blocks from `AGENTS.md`. Cleanup puts `next-env.d.ts` back only later, and only from that snapshot.
 
 Fixture mode swaps the analyze orchestrator onto `lib/server/test-fixtures.ts`. Hostnames:
 

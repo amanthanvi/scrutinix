@@ -217,6 +217,39 @@ check(
   left.warning,
 );
 
+const gitRoot = path.join(scratch, "restart-repo");
+mkdirSync(gitRoot);
+const git = (args) =>
+  spawnSync("git", args, { cwd: gitRoot, encoding: "utf8" });
+git(["init"]);
+git(["config", "user.email", "verify@example.com"]);
+git(["config", "user.name", "verify"]);
+const originalDeclaration = "committed original\n";
+writeFileSync(path.join(gitRoot, "next-env.d.ts"), originalDeclaration);
+git(["add", "next-env.d.ts"]);
+const committed = git(["commit", "-m", "original"]);
+check("restart repo committed", committed.status === 0, committed.stderr);
+const firstSnap = runtime.snapshotNextEnv(gitRoot);
+check(
+  "restart first snapshot",
+  firstSnap.kept !== true && firstSnap.snapshot === originalDeclaration,
+);
+writeFileSync(path.join(gitRoot, "next-env.d.ts"), "next wrote\n");
+check("restart recorded write", runtime.recordNextEnvWritten(gitRoot));
+const keptSnap = runtime.snapshotNextEnv(gitRoot);
+check(
+  "restart keeps snapshot",
+  keptSnap.kept === true && keptSnap.snapshot === originalDeclaration,
+  String(keptSnap.snapshot),
+);
+const restartRestore = runtime.restoreNextEnvSnapshot(gitRoot);
+const restartStatus = git(["status", "--porcelain"]);
+check(
+  "restart git status clean",
+  restartRestore.action === "restored" && restartStatus.stdout.trim() === "",
+  restartStatus.stdout,
+);
+
 check(
   "next dev command",
   runtime.isNextDevCommand(
