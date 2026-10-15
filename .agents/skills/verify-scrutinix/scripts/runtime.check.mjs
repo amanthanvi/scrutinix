@@ -55,26 +55,105 @@ await new Promise((resolve) => {
 const address = server.address();
 const port = typeof address === "object" && address ? address.port : 0;
 let ssOutput = "";
+let ssMissing = false;
 try {
   ssOutput = execFileSync("ss", ["-ltnp", `sport = :${port}`], {
     encoding: "utf8",
   });
 } catch (error) {
-  const message = error instanceof Error ? error.message : String(error);
-  ssOutput = message;
+  if (error && error.code === "ENOENT") ssMissing = true;
+  else ssOutput = error instanceof Error ? error.message : String(error);
 }
-const parsed = runtime.parseListenerPids(ssOutput);
-check(
-  "real ss uses pid=",
-  ssOutput.includes("pid="),
-  ssOutput.trim().slice(0, 500),
-);
-check(
-  "real ss pid parsed",
-  parsed.includes(process.pid),
-  `pids ${parsed.join(",")} output ${ssOutput.trim()}`,
-);
+if (ssMissing) {
+  const fromProc = runtime.listenerPids(port);
+  check(
+    "ss missing, /proc pid",
+    fromProc.includes(process.pid),
+    fromProc.join(","),
+  );
+} else {
+  const parsed = runtime.parseListenerPids(ssOutput);
+  check(
+    "real ss uses pid=",
+    ssOutput.includes("pid="),
+    ssOutput.trim().slice(0, 500),
+  );
+  check(
+    "real ss pid parsed",
+    parsed.includes(process.pid),
+    `pids ${parsed.join(",")} output ${ssOutput.trim()}`,
+  );
+}
 server.close();
+
+const noSsDir = path.join(scratch, "no-ss");
+mkdirSync(noSsDir);
+const noSsProbe = path.join(scratch, "no-ss-probe.mjs");
+writeFileSync(
+  noSsProbe,
+  `import net from "node:net";
+import { listenerPids, formatForeignNext } from ${JSON.stringify(path.join(scriptDir, "runtime.mjs"))};
+const server = net.createServer();
+await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+const address = server.address();
+const port = typeof address === "object" && address ? address.port : 0;
+const pids = listenerPids(port);
+const hint = formatForeignNext(port);
+server.close();
+if (!pids.includes(process.pid)) {
+  process.stderr.write(pids.join(",") + "\\n");
+  process.exit(1);
+}
+process.stdout.write(hint + "\\n");
+`,
+);
+const noSs = spawnSync(process.execPath, [noSsProbe], {
+  encoding: "utf8",
+  env: { ...process.env, PATH: noSsDir },
+});
+check(
+  "listener pids without ss",
+  noSs.status === 0 && noSs.stderr.includes("ENOENT") === false,
+  `status ${noSs.status} ${noSs.stderr}`,
+);
+
+function runCli(script, args) {
+  return spawnSync(process.execPath, [path.join(scriptDir, script), ...args], {
+    encoding: "utf8",
+    env: process.env,
+  });
+}
+
+for (const script of ["launch.mjs", "doctor.mjs"]) {
+  const invalid = runCli(script, ["--base-url", "not a url"]);
+  check(
+    `${script} rejects invalid base url`,
+    invalid.status === 2 &&
+      invalid.stderr.includes("not a valid URL") &&
+      !`${invalid.stdout}${invalid.stderr}`.includes("TypeError"),
+    `status ${invalid.status} ${invalid.stderr}`,
+  );
+  const empty = runCli(script, ["--base-url", ""]);
+  check(
+    `${script} rejects empty base url`,
+    empty.status === 2 && empty.stderr.includes("needs a URL"),
+    `status ${empty.status} ${empty.stderr}`,
+  );
+  const missing = runCli(script, ["--base-url"]);
+  check(
+    `${script} rejects missing base url`,
+    missing.status === 2 && missing.stderr.includes("needs a URL"),
+    `status ${missing.status} ${missing.stderr}`,
+  );
+}
+const hint = runtime.foreignNextStopHint(3000);
+check(
+  "stop hint works without ss",
+  hint.includes("/proc/net/tcp") &&
+    hint.includes("/proc/<pid>/fd") &&
+    hint.includes("kill <pid>"),
+  hint,
+);
 
 runtime.ensureDirs();
 assertPrivate(stateDir);

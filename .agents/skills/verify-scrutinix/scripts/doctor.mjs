@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { checkHealth, defaultBaseUrl } from "./runtime.mjs";
+import { checkHealth, parseCliBaseUrl } from "./runtime.mjs";
 
 const help = `verify-scrutinix doctor
 
@@ -38,14 +38,13 @@ if (process.argv.includes("--help") || process.argv.includes("-h")) {
   process.exit(0);
 }
 
-function argValue(name) {
-  const index = process.argv.indexOf(name);
-  if (index === -1) return undefined;
-  return process.argv[index + 1];
-}
-
 const asJson = process.argv.includes("--json");
-const baseUrl = argValue("--base-url") || defaultBaseUrl;
+const parsedBaseUrl = parseCliBaseUrl();
+if (!parsedBaseUrl.ok) {
+  process.stderr.write(`doctor: ${parsedBaseUrl.message}\n`);
+  process.exit(2);
+}
+const baseUrl = parsedBaseUrl.baseUrl;
 const report = await checkHealth(baseUrl);
 
 if (asJson) {

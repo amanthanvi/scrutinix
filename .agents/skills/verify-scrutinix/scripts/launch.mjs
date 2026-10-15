@@ -9,7 +9,8 @@ import {
   baseUrlParts,
   canonicalPath,
   checkHealth,
-  defaultBaseUrl,
+  foreignNextStopHint,
+  parseCliBaseUrl,
   ensureDirs,
   evidenceDir,
   killTmuxSession,
@@ -55,12 +56,6 @@ if (process.argv.includes("--help") || process.argv.includes("-h")) {
   process.exit(0);
 }
 
-function argValue(name) {
-  const index = process.argv.indexOf(name);
-  if (index === -1) return undefined;
-  return process.argv[index + 1];
-}
-
 function readLog(file) {
   try {
     return existsSync(file) ? readFileSync(file, "utf8") : "";
@@ -79,7 +74,12 @@ async function waitFor(predicate, timeoutMs) {
   return "";
 }
 
-const baseUrl = argValue("--base-url") || defaultBaseUrl;
+const parsedBaseUrl = parseCliBaseUrl();
+if (!parsedBaseUrl.ok) {
+  process.stderr.write(`launch: ${parsedBaseUrl.message}\n`);
+  process.exit(2);
+}
+const baseUrl = parsedBaseUrl.baseUrl;
 const { port, loopback } = baseUrlParts(baseUrl);
 if (!loopback || port !== 3000 || new URL(baseUrl).hostname !== "127.0.0.1") {
   process.stderr.write(
@@ -114,9 +114,7 @@ function refuseForeignNext(port) {
   const summary = formatForeignNext(port);
   if (!summary) return false;
   process.stderr.write(`launch: ${summary}\n`);
-  process.stderr.write(
-    `launch: find it with ss -ltnp 'sport = :${port}'. Read /proc/<pid>/cmdline and /proc/<pid>/cwd, then stop that pid with kill <pid>. Do not kill by name.\n`,
-  );
+  process.stderr.write(`launch: ${foreignNextStopHint(port)}\n`);
   return true;
 }
 
