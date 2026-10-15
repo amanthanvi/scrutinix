@@ -134,6 +134,34 @@ export function baseUrlParts(baseUrl) {
   };
 }
 
+export function parseCliBaseUrl(argv = process.argv) {
+  const index = argv.indexOf("--base-url");
+  if (index === -1) return { ok: true, baseUrl: defaultBaseUrl, message: "" };
+  const raw = argv[index + 1];
+  if (typeof raw !== "string" || raw.trim() === "") {
+    return {
+      ok: false,
+      baseUrl: "",
+      message:
+        "--base-url needs a URL. This skill owns only http://127.0.0.1:3000",
+    };
+  }
+  try {
+    new URL(raw);
+  } catch {
+    return {
+      ok: false,
+      baseUrl: "",
+      message: `--base-url ${JSON.stringify(raw)} is not a valid URL. This skill owns only http://127.0.0.1:3000`,
+    };
+  }
+  return { ok: true, baseUrl: raw, message: "" };
+}
+
+export function foreignNextStopHint(port) {
+  return `find it from /proc/net/tcp and /proc/net/tcp6: local port ${port}, state 0A, then match socket:[inode] under /proc/<pid>/fd. ss -ltnp 'sport = :${port}' prints the same pid when ss is installed. Read /proc/<pid>/cmdline and /proc/<pid>/cwd, then stop that pid with kill <pid>. Do not kill by name.`;
+}
+
 export function tcpOpen(port, host = "127.0.0.1", timeoutMs = 400) {
   return new Promise((resolve) => {
     const socket = net.connect({ host, port });

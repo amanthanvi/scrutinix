@@ -18,7 +18,7 @@ This skill owns one app on `http://127.0.0.1:3000`. Playwright gives each test a
 
 When doctor already reports `READY` for a server this skill started from this checkout, launch reuses that server. `run.json` stores the checkout path in `repoRoot`. A different checkout does not reuse that server and does not stop it. Cleanup stops only the tmux session and listener pids recorded for this checkout. A server this skill did not start is left running.
 
-Launch refuses a base URL other than `http://127.0.0.1:3000`. It refuses to start a second Next server when port 3000 is already taken by someone else.
+Launch refuses a base URL other than `http://127.0.0.1:3000`. An empty `--base-url` or a value that is not a URL exits 2 with a message. It does not fall back to the default and it does not throw. Launch refuses to start a second Next server when port 3000 is already taken by someone else.
 
 Two verify drives must not share one server at the same time. The minute rate limit is 10 analyze requests for the whole process.
 
@@ -100,13 +100,20 @@ Doctor cannot see `SCRUTINIX_TEST_FIXTURES` in the HTTP response. Ownership plus
 
 `npm run dev` from a boot script or another terminal can already be listening on port 3000. Doctor then prints `another next dev holds port 3000` with the pid and cwd, and the code `foreign-next`. Launch exits 2 with the same pid and cwd. Neither command stops that process.
 
-Find the listener:
+Find the listener from `/proc` when `ss` is not installed:
 
 ```bash
-ss -ltnp 'sport = :3000'
+awk 'NR>1 && $4=="0A" { split($2, a, ":"); if (strtonum("0x" a[2])==3000) print $10 }' /proc/net/tcp /proc/net/tcp6
+```
+
+Match `socket:[inode]` under `/proc/<pid>/fd`, then read the process:
+
+```bash
 tr '\0' ' ' < /proc/<pid>/cmdline
 readlink /proc/<pid>/cwd
 ```
+
+When `ss` is installed, `ss -ltnp 'sport = :3000'` prints the same pid.
 
 Stop only that pid after the command line is the dev server you mean:
 
