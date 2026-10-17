@@ -5,9 +5,18 @@ import {
   type Verdict,
 } from "@/lib/domain/types";
 
-export type { SharedSnapshot } from "@/lib/domain/types";
-
 export const SIGNAL_COUNT = signalNames.length;
+
+export function formatTimestamp(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
 
 /** AA-contrast text color for a stated verdict. */
 export function verdictFg(verdict: Verdict | string): string {
