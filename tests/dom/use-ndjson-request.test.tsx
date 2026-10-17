@@ -51,6 +51,84 @@ describe("useNdjsonRequest", () => {
     expect(onError).not.toHaveBeenCalled();
   });
 
+  it("ignores events that arrive after the first terminal event", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        ndjsonResponse([
+          '{"type":"a"}',
+          '{"type":"terminal","n":1}',
+          '{"type":"terminal","n":2}',
+          '{"type":"b"}',
+        ]),
+      ),
+    );
+
+    const { result } = renderHook(() => useNdjsonRequest(OPTIONS));
+    const events: unknown[] = [];
+    const onError = vi.fn();
+
+    await act(async () => {
+      await result.current.start(
+        { url: "https://example.com/" },
+        {
+          onEvent: (event) => {
+            events.push(event);
+            return (event as { type?: string }).type === "terminal"
+              ? "terminal"
+              : "continue";
+          },
+          onError,
+          onAborted: vi.fn(),
+        },
+      );
+    });
+
+    expect(events).toEqual([{ type: "a" }, { type: "terminal", n: 1 }]);
+    expect(onError).not.toHaveBeenCalled();
+  });
+
+  it("keeps the first terminal event when the rest of the stream is truncated", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(
+            '{"type":"terminal","message":"First failure. Reference: abc."}\n{"type":"scan_error","error":',
+            {
+              status: 200,
+              headers: { "content-type": "application/x-ndjson" },
+            },
+          ),
+      ),
+    );
+
+    const { result } = renderHook(() => useNdjsonRequest(OPTIONS));
+    const events: unknown[] = [];
+    const onError = vi.fn();
+
+    await act(async () => {
+      await result.current.start(
+        { url: "https://example.com/" },
+        {
+          onEvent: (event) => {
+            events.push(event);
+            return (event as { type?: string }).type === "terminal"
+              ? "terminal"
+              : "continue";
+          },
+          onError,
+          onAborted: vi.fn(),
+        },
+      );
+    });
+
+    expect(events).toEqual([
+      { type: "terminal", message: "First failure. Reference: abc." },
+    ]);
+    expect(onError).not.toHaveBeenCalled();
+  });
+
   it("sanitizes HTTP error payloads", async () => {
     vi.stubGlobal(
       "fetch",
@@ -120,7 +198,12 @@ describe("useNdjsonRequest", () => {
     // that the failure reaches onError as a sanitized ApiError.
     expect(events.length).toBeLessThanOrEqual(1);
     expect(onError).toHaveBeenCalledWith(
-      expect.objectContaining({ message: "connection reset" }),
+      expect.objectContaining({
+        message: "The scan stream failed unexpectedly.",
+      }),
+    );
+    expect(onError.mock.calls[0]?.[0]?.message).not.toContain(
+      "connection reset",
     );
   });
 

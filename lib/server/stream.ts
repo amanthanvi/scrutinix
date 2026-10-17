@@ -1,6 +1,14 @@
 import type { AnalyzeEvent, BatchEvent } from "@/lib/domain/types";
+import {
+  exposeClientError,
+  type ClientErrorView,
+} from "@/lib/server/client-error";
 
 type StreamEvent = AnalyzeEvent | BatchEvent | { type: "keepalive" };
+type TerminalErrorEvent = Extract<
+  StreamEvent,
+  { type: "scan_error" | "batch_error" }
+>;
 
 const KEEPALIVE_INTERVAL_MS = 15_000;
 
@@ -8,9 +16,19 @@ const KEEPALIVE_INTERVAL_MS = 15_000;
  * NDJSON streaming response. `run` receives the writer plus an AbortSignal
  * that fires when the client disconnects, so in-flight signal work can stop
  * instead of burning provider quota on an audience of zero.
+ *
+ * `terminalError` turns an escaped exception into a line the client schema
+ * accepts. `controller.error()` would drop that line: the browser only sees
+ * a broken stream and never receives the reference id. It is required and
+ * has no default because the right terminal event depends on the route
+ * (`scan_error` for a single scan, `batch_error` for a batch); a guessed
+ * default would end a batch stream with an event its client ignores.
  */
 export function createNdjsonResponse(
   run: (writer: NdjsonWriter, clientGone: AbortSignal) => Promise<void>,
+  options: {
+    terminalError: (failure: ClientErrorView) => TerminalErrorEvent;
+  },
 ) {
   const encoder = new TextEncoder();
   const disconnect = new AbortController();
@@ -24,8 +42,16 @@ export function createNdjsonResponse(
         try {
           await run(writer, disconnect.signal);
         } catch (error) {
-          writer.markClosed();
-          controller.error(error);
+          // Route handlers normally catch and emit a terminal event. This is
+          // the backstop so a leak never becomes the stream's error reason.
+          const failure = exposeClientError(error, {
+            correlationId: crypto.randomUUID(),
+            summary: "The scan stream failed unexpectedly.",
+            code: "stream_failed",
+            logEvent: "stream.failed",
+          });
+          writer.send(options.terminalError(failure));
+          writer.close();
           return;
         }
         writer.close();

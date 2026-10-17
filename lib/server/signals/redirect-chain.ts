@@ -4,6 +4,7 @@ import type { IncomingMessage } from "node:http";
 
 import { analyzePageContent } from "@/lib/domain/content-analysis";
 import type { RedirectData } from "@/lib/domain/types";
+import { exposeClientError } from "@/lib/server/client-error";
 import { SCRUTINIX_USER_AGENT } from "@/lib/server/http";
 import {
   assertPublicNetworkTarget,
@@ -276,7 +277,7 @@ async function requestRedirectHopAtAddress(
 
     request.once("error", (error) => {
       resolve({
-        error: describeRedirectFailure(error),
+        error: describeRedirectFailure(error, target.toString()),
       });
     });
 
@@ -332,24 +333,36 @@ function captureBody(
   });
 }
 
-function describeRedirectFailure(error: unknown) {
-  if (!(error instanceof Error)) {
-    return "The redirect probe failed unexpectedly.";
-  }
+const REDIRECT_FAILURE_SUMMARIES: Record<string, string> = {
+  ECONNREFUSED: "The host refused the redirect probe on the target port.",
+  ENOTFOUND: "The hostname could not be resolved during the redirect probe.",
+  ECONNRESET:
+    "The redirect probe connection was reset before a response arrived.",
+  ETIMEDOUT: "The redirect probe timed out before the host responded.",
+};
 
+function describeRedirectFailure(error: unknown, url: string) {
   const code =
-    "code" in error && typeof error.code === "string" ? error.code : null;
-
-  switch (code) {
-    case "ECONNREFUSED":
-      return "The host refused the redirect probe on the target port.";
-    case "ENOTFOUND":
-      return "The hostname could not be resolved during the redirect probe.";
-    case "ECONNRESET":
-      return "The redirect probe connection was reset before a response arrived.";
-    case "ETIMEDOUT":
-      return "The redirect probe timed out before the host responded.";
-    default:
-      return error.message || "The redirect probe failed unexpectedly.";
+    error instanceof Error && "code" in error && typeof error.code === "string"
+      ? error.code
+      : null;
+  const summary = code ? REDIRECT_FAILURE_SUMMARIES[code] : undefined;
+  if (summary) {
+    return summary;
   }
+
+  let hostname = "";
+  try {
+    hostname = new URL(url).hostname;
+  } catch {
+    hostname = "";
+  }
+
+  return exposeClientError(error, {
+    correlationId: crypto.randomUUID(),
+    summary: "The redirect probe failed unexpectedly.",
+    code: "probe_failed",
+    logEvent: "redirect.probe_failed",
+    redact: [url, hostname],
+  }).message;
 }

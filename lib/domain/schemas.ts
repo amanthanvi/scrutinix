@@ -472,6 +472,10 @@ export function createAnalysisResultSchema(fallbackTimestamp: string) {
     });
 }
 
+/**
+ * Client-visible error. `message` is either intentional PublicError copy or
+ * a generic summary plus `Reference: <id>`. It must not carry exception text.
+ */
 export interface ApiError {
   code: string;
   message: string;

@@ -1,4 +1,5 @@
 import { getEnv } from "@/lib/config/env";
+import { PublicError } from "@/lib/domain/public-error";
 import type { GoogleSafeBrowsingData } from "@/lib/domain/types";
 import { fetchWithTimeout } from "@/lib/server/http";
 
@@ -18,7 +19,10 @@ export async function runGoogleSafeBrowsingProvider(
   const apiKey = env.GOOGLE_SAFE_BROWSING_API_KEY;
 
   if (!apiKey) {
-    throw new Error("Google Safe Browsing API key is not configured.");
+    throw new PublicError(
+      "not_configured",
+      "Google Safe Browsing API key is not configured.",
+    );
   }
 
   const response = await fetchWithTimeout(
@@ -53,7 +57,8 @@ export async function runGoogleSafeBrowsingProvider(
   );
 
   if (!response.ok) {
-    throw new Error(
+    throw new PublicError(
+      "lookup_failed",
       `Google Safe Browsing lookup failed with status ${response.status}.`,
     );
   }

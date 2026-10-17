@@ -1,7 +1,9 @@
 import { Ratelimit } from "@upstash/ratelimit";
 import { Redis } from "@upstash/redis";
 
+import { PublicError } from "@/lib/domain/public-error";
 import { createApiError } from "@/lib/server/api-error";
+import { redactForLogs } from "@/lib/server/client-error";
 import { logWarn } from "@/lib/server/logger";
 import { getRedisRestConfig } from "@/lib/server/redis-config";
 
@@ -112,6 +114,12 @@ function getUpstashLimiters(redisUrl: string, redisToken: string) {
   return globalThis.__scrutinixRateLimiters;
 }
 
+const rateLimitedError = new PublicError(
+  "rate_limited",
+  "Rate limit exceeded. Please retry after the cooldown window.",
+  { retryable: true },
+);
+
 function toLimitResult(minute: WindowOutcome, day: WindowOutcome): LimitResult {
   const remaining = Math.min(minute.remaining, day.remaining);
   const reset = Math.min(minute.reset, day.reset);
@@ -123,14 +131,24 @@ function toLimitResult(minute: WindowOutcome, day: WindowOutcome): LimitResult {
       reset,
       status: 429,
       error: createApiError(
-        "rate_limited",
-        "Rate limit exceeded. Please retry after the cooldown window.",
-        true,
+        rateLimitedError.code,
+        rateLimitedError.message,
+        rateLimitedError.retryable,
       ),
     };
   }
 
   return { success: true, remaining, reset };
+}
+
+function thrownDetail(cause: unknown) {
+  const message =
+    cause instanceof Error
+      ? cause.message
+      : typeof cause === "string"
+        ? cause
+        : undefined;
+  return message ? redactForLogs(message) : undefined;
 }
 
 function degradeToInMemory(
@@ -139,12 +157,7 @@ function degradeToInMemory(
   reason: DegradeReason,
   cause?: unknown,
 ): LimitResult {
-  const detail =
-    cause instanceof Error
-      ? cause.message
-      : typeof cause === "string"
-        ? cause
-        : undefined;
+  const detail = thrownDetail(cause);
 
   logWarn("rate_limit.degraded", {
     mode: "in-memory",
@@ -213,13 +226,10 @@ export async function applyRateLimit(
     if (deniedWindow) {
       // Sibling window failed; drop the client so the next call can rebuild.
       globalThis.__scrutinixRateLimiters = undefined;
+      const detail = thrownDetail(rejection);
       logWarn("rate_limit.partial_upstash_failure", {
         reason: "upstash_error",
-        ...(rejection instanceof Error
-          ? { detail: rejection.message }
-          : typeof rejection === "string"
-            ? { detail: rejection }
-            : {}),
+        ...(detail ? { detail } : {}),
         message:
           "Preserving Upstash deny despite sibling window failure; not degrading to in-memory.",
       });
