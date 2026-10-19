@@ -35,7 +35,7 @@ import {
 
 export const signalLabels: Record<SignalName, string> = {
   virusTotal: "VirusTotal",
-  mlEnsemble: "ML Ensemble",
+  mlEnsemble: "Link Pattern Model",
   googleSafeBrowsing: "Google Safe Browsing",
   threatFeeds: "Threat Feeds",
   ssl: "TLS Certificate",

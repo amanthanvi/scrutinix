@@ -141,6 +141,93 @@ describe("useScanHistory", () => {
     });
   });
 
+  it("keeps only the latest scan per link, across batch and single scans", async () => {
+    // A 5-URL batch after earlier single scans of some of the same links
+    // used to leave 9 entries: one per scan, never replaced.
+    const first = renderHook(() => useScanHistory());
+    await act(async () => {
+      await first.result.current.addResult(
+        buildResult("single-a", "https://a.example/"),
+      );
+      await first.result.current.addResult(
+        buildResult("single-b", "https://b.example/"),
+      );
+    });
+
+    await act(async () => {
+      await Promise.all(
+        ["a", "b", "c", "d", "e"].map((name) =>
+          first.result.current.addResult(
+            buildResult(`batch-${name}`, `https://${name}.example/`),
+          ),
+        ),
+      );
+    });
+
+    await waitFor(() => {
+      expect(first.result.current.entries).toHaveLength(5);
+    });
+    expect(
+      first.result.current.entries.map((entry) => entry.id).sort(),
+    ).toEqual(["batch-a", "batch-b", "batch-c", "batch-d", "batch-e"]);
+
+    // Spelling variants of one link are the same link.
+    await act(async () => {
+      await first.result.current.addResult(
+        buildResult("rescan-a", "https://A.example:443/#top"),
+      );
+    });
+    await waitFor(() => {
+      expect(first.result.current.entries[0]?.id).toBe("rescan-a");
+    });
+    expect(first.result.current.entries).toHaveLength(5);
+    first.unmount();
+
+    // The replacement is persisted, not just hidden in memory.
+    const second = renderHook(() => useScanHistory());
+    await waitFor(() => {
+      expect(second.result.current.entries).toHaveLength(5);
+    });
+    expect(
+      second.result.current.entries.some((entry) => entry.id === "batch-a"),
+    ).toBe(false);
+  });
+
+  it("hides duplicates saved before upserts, newest first", async () => {
+    await new Promise<void>((resolve, reject) => {
+      const request = indexedDB.open("scrutinix-v2", 1);
+      request.onupgradeneeded = () => {
+        const store = request.result.createObjectStore("scans", {
+          keyPath: "id",
+        });
+        store.createIndex("by-saved-at", "savedAt");
+      };
+      request.onsuccess = () => {
+        const tx = request.result.transaction("scans", "readwrite");
+        tx.objectStore("scans").put({
+          ...buildResult("old", "https://dup.example/"),
+          savedAt: "2026-07-01T00:00:00.000Z",
+        });
+        tx.objectStore("scans").put({
+          ...buildResult("new", "https://dup.example/"),
+          savedAt: "2026-07-02T00:00:00.000Z",
+        });
+        tx.oncomplete = () => {
+          request.result.close();
+          resolve();
+        };
+        tx.onerror = () => reject(tx.error);
+      };
+      request.onerror = () => reject(request.error);
+    });
+
+    const { result } = renderHook(() => useScanHistory());
+
+    await waitFor(() => {
+      expect(result.current.entries.map((entry) => entry.id)).toEqual(["new"]);
+    });
+  });
+
   it("degrades to historyUnavailable instead of throwing when IndexedDB is broken", async () => {
     const openSpy = vi.spyOn(indexedDB, "open").mockImplementation(() => {
       throw new Error("IndexedDB is disabled in this session.");
