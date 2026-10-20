@@ -672,6 +672,8 @@ export const batchEventSchema = z.discriminatedUnion("type", [
 /**
  * Shared snapshots ride in a URL query parameter, so unlike stored results
  * this gate is strict: wrong types or oversized fields reject outright.
+ * Passing it proves only the shape; lib/domain/shared-snapshot.ts decides
+ * what of an unsigned snapshot may be shown, and how.
  */
 export const sharedSnapshotSchema = z.object({
   verdict: verdictSchema,

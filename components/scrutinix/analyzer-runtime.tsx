@@ -7,15 +7,23 @@ import {
   useContext,
   useMemo,
   useState,
+  useSyncExternalStore,
   type ReactNode,
 } from "react";
 import { toast } from "sonner";
 
 import { getSignalSeverity } from "@/components/shared/scrutinix-types";
-import type { SharedSnapshot } from "@/components/shared/scrutinix-types";
 import { useBatchStream } from "@/hooks/use-batch-stream";
 import { useScanStream } from "@/hooks/use-scan-stream";
-import { sharedSnapshotSchema } from "@/lib/domain/schemas";
+import {
+  clearSharedPayload,
+  readSharedPayload,
+  subscribeToSharedPayload,
+} from "@/lib/client/shared-link";
+import {
+  decodeSharedSnapshot,
+  encodeSharedSnapshot,
+} from "@/lib/domain/shared-snapshot";
 import {
   signalNames,
   type AnalysisResult,
@@ -47,25 +55,21 @@ const severityRank = {
   pending: -1,
 } as const;
 
-function readSnapshot(): SharedSnapshot | null {
-  if (typeof window === "undefined") return null;
-  const payload = new URLSearchParams(window.location.search).get("shared");
-  if (!payload) return null;
-
-  const parseSnapshot = (value: unknown): SharedSnapshot | null => {
-    const parsed = sharedSnapshotSchema.safeParse(value);
-    return parsed.success ? parsed.data : null;
-  };
-
-  try {
-    return parseSnapshot(JSON.parse(decodeURIComponent(atob(payload))));
-  } catch {
-    try {
-      return parseSnapshot(JSON.parse(atob(payload)));
-    } catch {
-      return null;
-    }
-  }
+/**
+ * The server render never sees the query string, so the payload is read
+ * only after hydration; reading it during the first render would make the
+ * client tree disagree with the server HTML.
+ */
+function useSharedSnapshot() {
+  const payload = useSyncExternalStore(
+    subscribeToSharedPayload,
+    readSharedPayload,
+    () => null,
+  );
+  return useMemo(
+    () => (payload ? decodeSharedSnapshot(payload) : null),
+    [payload],
+  );
 }
 
 function useCreateAnalyzerRuntime() {
@@ -77,9 +81,7 @@ function useCreateAnalyzerRuntime() {
   const [selectedResult, setSelectedResult] = useState<AnalysisResult | null>(
     null,
   );
-  const [sharedSnapshot] = useState<SharedSnapshot | null>(() =>
-    readSnapshot(),
-  );
+  const sharedSnapshot = useSharedSnapshot();
   // React can batch several url_complete events into one render. Keep every
   // result so a fast batch cannot silently drop history entries.
   const [historyQueue, setHistoryQueue] = useState<AnalysisResult[]>([]);
@@ -95,6 +97,7 @@ function useCreateAnalyzerRuntime() {
   const scan = useScanStream((result) => {
     startTransition(() => setSelectedResult(result));
     pushHistoryEvent(result);
+    clearSharedPayload();
   });
 
   const batch = useBatchStream((result) => {
@@ -102,6 +105,13 @@ function useCreateAnalyzerRuntime() {
   });
 
   const active = selectedResult ?? scan.state.result;
+  // The link's claim is the page's subject only until something replaces it.
+  // Any scan attempt does, even a failed or cancelled one: the error already
+  // shows in the scan form, and the claim reappearing beside it would read as
+  // part of that failure (or, after a scan of another URL, as unrelated to it).
+  // The param stays in the URL until a scan completes, so a reload reopens it.
+  const unverifiedSnapshot =
+    active || scan.state.url !== "" ? null : sharedSnapshot;
   const signals = active?.signals ?? scan.state.signals;
   const live = scan.state.isStreaming || batch.state.isStreaming;
 
@@ -181,20 +191,15 @@ function useCreateAnalyzerRuntime() {
   }, [batch, batchInput]);
 
   const shareResult = useCallback(async (result: AnalysisResult) => {
-    const capturedAt = result.metadata?.completedAt ?? new Date().toISOString();
-    const payload = JSON.stringify({
-      verdict: result.verdict,
-      url: result.url,
-      summary: result.threatInfo?.summary ?? "",
-      capturedAt,
-    });
-    const encodedPayload = btoa(encodeURIComponent(payload));
     const targetUrl = new URL(window.location.href);
-    targetUrl.searchParams.set("shared", encodedPayload);
+    targetUrl.searchParams.set("shared", encodeSharedSnapshot(result));
 
     try {
       await navigator.clipboard.writeText(targetUrl.toString());
-      toast.success("Link copied to clipboard");
+      toast.success("Link copied to clipboard", {
+        description:
+          "It opens as an unverified snapshot until the recipient scans the URL.",
+      });
     } catch {
       toast.error("Clipboard access was blocked");
     }
@@ -238,12 +243,12 @@ function useCreateAnalyzerRuntime() {
     setSingleUrl,
     setViewMode,
     shareResult,
-    sharedSnapshot,
     signals,
     singleUrl,
     startBatchScan,
     startSingleScan,
     summarySignals,
+    unverifiedSnapshot,
     viewMode,
     visibleSignals,
   };
