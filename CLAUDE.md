@@ -92,6 +92,9 @@ tests/
   member. No hosted inference call is required.
 - **Verdict engine**: confirmed sources can convict; unreachable hosts produce
   an honest `unknown`; exculpatory evidence never erases confirmed hits.
+- **Client errors**: unexpected failures return a generic summary plus
+  `Reference: <id>`. Only `PublicError` messages are shown as written.
+  Exception text is logged with URL redaction and never forwarded.
 - **One encoding per fact**: threat score renders once; severity renders once
   per signal. Verdict text uses AA-safe `--sx-<verdict>-fg` tokens.
 - **Static accent**: blue `--sx-accent`; verdict colors appear only where a

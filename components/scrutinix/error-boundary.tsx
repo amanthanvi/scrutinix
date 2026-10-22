@@ -4,17 +4,16 @@ import { Component, type ErrorInfo, type ReactNode } from "react";
 
 interface ErrorBoundaryState {
   hasError: boolean;
-  error: Error | null;
 }
 
 export class ScrutinixErrorBoundary extends Component<
   { children: ReactNode },
   ErrorBoundaryState
 > {
-  state: ErrorBoundaryState = { hasError: false, error: null };
+  state: ErrorBoundaryState = { hasError: false };
 
-  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
-    return { hasError: true, error };
+  static getDerivedStateFromError(): ErrorBoundaryState {
+    return { hasError: true };
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
@@ -29,8 +28,7 @@ export class ScrutinixErrorBoundary extends Component<
             Something went wrong.
           </p>
           <p className="mt-1.5 text-[0.8125rem] leading-6 text-[var(--sx-text-muted)]">
-            {this.state.error?.message ?? "An unexpected error occurred."}{" "}
-            Reload the page and retry the scan.
+            An unexpected error occurred. Reload the page and retry the scan.
           </p>
           <button
             type="button"

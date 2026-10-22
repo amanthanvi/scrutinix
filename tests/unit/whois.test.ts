@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { PublicError } from "@/lib/domain/public-error";
 import { SignalSkipError } from "@/lib/server/signal-error";
 import { runWhoisSignal } from "@/lib/server/signals/whois";
 
@@ -122,6 +123,27 @@ describe("runWhoisSignal", () => {
     await expect(runWhoisSignal("https://example.com")).rejects.toThrow(
       "Timed out after 8000ms",
     );
+  });
+
+  it("does not attach parser exception text to RDAP failures", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response("not-json redis://default:s3cret-token@cache.internal", {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+
+    try {
+      await runWhoisSignal("https://example.com");
+      expect.fail("RDAP parse failure should reject");
+    } catch (error) {
+      expect(error).toBeInstanceOf(PublicError);
+      expect(error).toMatchObject({
+        message: "The RDAP response could not be parsed.",
+      });
+      expect((error as Error).message).not.toContain("s3cret-token");
+      expect((error as Error).message).not.toContain("redis://");
+    }
   });
 
   it("propagates RDAP server errors as signal errors", async () => {

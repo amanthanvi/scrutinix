@@ -212,6 +212,39 @@ describe("runRedirectSignal", () => {
     ]);
   });
 
+  it("does not return raw redirect exception text", async () => {
+    mockLookupAll([{ address: "93.184.216.34", family: 4 }]);
+    requestMock.mockImplementationOnce(() => {
+      const handlers = new Map<string, (error?: Error) => void>();
+      return {
+        once: vi.fn((event: string, handler: (error?: Error) => void) => {
+          handlers.set(event, handler);
+        }),
+        setTimeout: vi.fn(),
+        destroy: vi.fn(),
+        end: vi.fn(() => {
+          queueMicrotask(() => {
+            handlers.get("error")?.(
+              new Error(
+                "socket hang up redis://default:s3cret-token@cache.internal ONNXRuntime",
+              ),
+            );
+          });
+        }),
+      } as never;
+    });
+
+    const result = await runRedirectSignal("http://example.test/start");
+    const terminalError = result.terminalError ?? "";
+
+    expect(result.reachable).toBe(false);
+    expect(terminalError).toContain("The redirect probe failed unexpectedly.");
+    expect(terminalError).toMatch(/Reference: [0-9a-f-]{36}\./);
+    expect(terminalError).not.toContain("s3cret-token");
+    expect(terminalError).not.toContain("redis://");
+    expect(terminalError).not.toContain("ONNXRuntime");
+  });
+
   it("reports an indeterminate result when the redirect limit is exhausted", async () => {
     lookupMock.mockResolvedValue([
       { address: "93.184.216.34", family: 4 },

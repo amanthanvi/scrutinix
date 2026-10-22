@@ -1,3 +1,5 @@
+import { PublicError } from "@/lib/domain/public-error";
+
 /** Malformed lines tolerated before the stream is treated as corrupt. */
 const MAX_SKIPPED_LINES = 5;
 
@@ -7,7 +9,10 @@ export async function readNdjsonStream(
 ) {
   const reader = response.body?.getReader();
   if (!reader) {
-    throw new Error("Readable response body is not available.");
+    throw new PublicError(
+      "stream_unavailable",
+      "Readable response body is not available.",
+    );
   }
 
   const decoder = new TextDecoder();
@@ -27,7 +32,8 @@ export async function readNdjsonStream(
     } catch {
       skipped += 1;
       if (skipped > MAX_SKIPPED_LINES) {
-        throw new Error(
+        throw new PublicError(
+          "stream_corrupt",
           "The result stream contained too many malformed lines.",
         );
       }
@@ -60,7 +66,10 @@ export async function readNdjsonStream(
       try {
         onEvent(JSON.parse(buffer));
       } catch {
-        throw new Error("The result stream ended before completing.");
+        throw new PublicError(
+          "stream_truncated",
+          "The result stream ended before completing.",
+        );
       }
     }
   } finally {

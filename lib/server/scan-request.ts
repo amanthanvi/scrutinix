@@ -1,4 +1,5 @@
 import { getEnv } from "@/lib/config/env";
+import { PublicError } from "@/lib/domain/public-error";
 import { readRequestTextWithLimit } from "@/lib/domain/request-body";
 import { MAX_BATCH_SIZE, MAX_SCAN_BODY_BYTES } from "@/lib/domain/scan-limits";
 import { normalizeUrlInput, type NormalizedUrl } from "@/lib/domain/url";
@@ -198,10 +199,11 @@ function reject(
   code: string,
   message: string,
 ): ScanRequestOutcome {
+  const error = new PublicError(code, message);
   return {
     ok: false,
     response: Response.json(
-      { error: createApiError(code, message, false) },
+      { error: createApiError(error.code, error.message, error.retryable) },
       { status },
     ),
   };

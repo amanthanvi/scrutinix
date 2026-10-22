@@ -18,8 +18,10 @@ Project-local operating notes for agents working in this repository. Keep this f
 - API surface:
   - `POST /api/analyze` streams NDJSON events for a single scan.
   - `POST /api/analyze/batch` streams NDJSON events for batch scans.
+  - `createNdjsonResponse` requires a route-specific `terminalError` (`scan_error` or `batch_error`) for exceptions that escape the handler; it has no default. Clients keep the first terminal event and ignore anything after it.
 - Domain model:
   - Eight signals are always present in results: `virusTotal`, `mlEnsemble`, `googleSafeBrowsing`, `threatFeeds`, `ssl`, `whois`, `dns`, `redirectChain`.
+  - Unexpected scan, batch, signal, and probe failures return a generic summary plus `Reference: <id>`. Only `PublicError` (and `SignalSkipError`) messages are client-visible; log the rest through `exposeClientError` so URLs stay redacted.
   - History is client-side only and stored in IndexedDB.
   - Cache only complete, non-partial, non-error, non-aborted results for 15 minutes. A rerun after degraded coverage must reach providers again.
   - In composite ML/threat-feed payloads, `warnings` mean lost coverage and set `partialFailure`; benign notes belong in `observations`. Redirect terminal errors also mark partial coverage.
