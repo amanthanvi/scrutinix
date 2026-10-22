@@ -539,6 +539,28 @@ check(
 );
 holder.kill("SIGTERM");
 
+const privacyShell = (heading, current) =>
+  `<header><nav aria-label="Primary"><a href="/about">About</a><a ${current ? 'aria-current="page" ' : ""}href="/privacy" class="x">Privacy</a></nav></header><main id="main-content" class="mx-auto"><h1 class="text-xl">${heading}</h1></main>`;
+check(
+  "privacy anchor ignores heading copy",
+  runtime.privacyPageRendered(
+    privacyShell("History stays in the browser.", true),
+  ) &&
+    runtime.privacyPageRendered(
+      privacyShell("What leaves this browser.", true),
+    ),
+);
+check(
+  "privacy anchor needs aria-current on the privacy link",
+  !runtime.privacyPageRendered(privacyShell("Any heading", false)),
+);
+check(
+  "privacy anchor needs the main shell",
+  !runtime.privacyPageRendered(
+    '<a aria-current="page" href="/privacy">Privacy</a><h1>404</h1>',
+  ),
+);
+
 rmSync(scratch, { recursive: true, force: true });
 
 if (failures.length) {

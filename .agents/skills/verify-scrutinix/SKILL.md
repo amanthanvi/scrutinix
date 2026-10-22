@@ -72,7 +72,7 @@ npm run verify:doctor
 
 - `GET /` is 200 and the HTML contains `URL to analyze`
 - `GET /about` is 200 and the HTML contains `How a scan becomes a verdict.`
-- `GET /privacy` is 200 and the HTML contains `History stays in the browser.`
+- `GET /privacy` is 200 and the HTML has `<main id="main-content">`, an `<h1>`, and the header link `href="/privacy"` with `aria-current="page"`. This is structure, not copy, so privacy disclosure rewrites do not break doctor.
 - `run.json` `repoRoot` is this checkout, it lists tmux session `scrutinix-verify-next`, and that session exists
 
 Anything else prints `NOT_READY` and exits 2. Codes:

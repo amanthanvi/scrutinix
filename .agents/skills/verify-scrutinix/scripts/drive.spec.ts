@@ -85,11 +85,9 @@ test("about and privacy", async ({ page }) => {
   await capture(page, "about.png");
 
   await primary.getByRole("link", { name: "Privacy" }).click();
+  await expect(page).toHaveURL(/\/privacy$/);
   await expect(
-    page.getByRole("heading", { name: "History stays in the browser." }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("heading", { name: "What stays local" }),
+    page.locator("main#main-content").getByRole("heading", { level: 1 }),
   ).toBeVisible();
   await expect(
     page.getByRole("heading", { name: "Shared links" }),

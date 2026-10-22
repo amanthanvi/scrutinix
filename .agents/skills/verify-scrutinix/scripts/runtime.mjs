@@ -33,7 +33,19 @@ export const sessions = {
 
 const homeMarker = "URL to analyze";
 const aboutMarker = "How a scan becomes a verdict.";
-const privacyMarker = "History stays in the browser.";
+// /privacy is anchored on structure, not copy: the heading is product copy and
+// changes with disclosure edits. A rendered privacy page has the shared
+// <main id="main-content"> shell, an <h1>, and the header Privacy link marked
+// aria-current="page" (only true when the router pathname is /privacy).
+export function privacyPageRendered(html) {
+  if (!/<main\b[^>]*\bid="main-content"/.test(html)) return false;
+  if (!/<h1\b/.test(html)) return false;
+  const links = html.match(/<a\b[^>]*>/g) || [];
+  return links.some(
+    (tag) =>
+      /\bhref="\/privacy"/.test(tag) && /\baria-current="page"/.test(tag),
+  );
+}
 
 const agentEnvNames = [
   "AI_AGENT",
@@ -609,8 +621,7 @@ export async function checkHealth(baseUrl = defaultBaseUrl) {
   ]);
   const homeOk = home.status === 200 && home.text.includes(homeMarker);
   const aboutOk = about.status === 200 && about.text.includes(aboutMarker);
-  const privacyOk =
-    privacy.status === 200 && privacy.text.includes(privacyMarker);
+  const privacyOk = privacy.status === 200 && privacyPageRendered(privacy.text);
   const state = readState();
   if (state && !sameCheckout(state)) {
     lines.push(
@@ -641,7 +652,7 @@ export async function checkHealth(baseUrl = defaultBaseUrl) {
     `doctor: about ${about.status || "down"}${aboutOk ? " title-present" : " title-missing"}`,
   );
   lines.push(
-    `doctor: privacy ${privacy.status || "down"}${privacyOk ? " title-present" : " title-missing"}`,
+    `doctor: privacy ${privacy.status || "down"}${privacyOk ? " page-present" : " page-missing"}`,
   );
   lines.push(
     owned
