@@ -47,8 +47,8 @@ and ML scoring in one place.
   density.
 - Share links are client-generated snapshots; they do not create a server-side
   share database.
-- `/about` and `/privacy` explain how verdicts are formed and what data stays in
-  the browser.
+- `/about` and `/privacy` explain how verdicts are formed, which services
+  receive a submitted URL, and what stays in the browser.
 
 ## Stack
 
