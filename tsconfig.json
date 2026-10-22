@@ -29,6 +29,7 @@
     "next-env.d.ts",
     "**/*.ts",
     "**/*.tsx",
+    ".agents/skills/verify-scrutinix/**/*.ts",
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts"
   ],
