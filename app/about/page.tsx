@@ -52,7 +52,7 @@ function ScoringTableView({ table }: { table: ScoringTable }) {
     <div className="flex flex-col gap-3">
       <table
         id={`points-${table.id}`}
-        className={`${LIST_MEASURE} text-body w-full table-fixed border-collapse`}
+        className={`${LIST_MEASURE} text-body w-full table-fixed border-collapse wrap-break-word`}
       >
         <caption className="text-body pb-3 text-left font-medium text-[var(--sx-text)]">
           {table.caption}
@@ -200,7 +200,7 @@ export default function AboutPage() {
             How the figure adds up
           </summary>
           <table
-            className={`${LIST_MEASURE} text-body mt-2 w-full table-fixed border-collapse`}
+            className={`${LIST_MEASURE} text-body mt-2 w-full table-fixed border-collapse wrap-break-word`}
           >
             <caption className="sr-only">
               How the confidence figure adds up, before the limits above. The
