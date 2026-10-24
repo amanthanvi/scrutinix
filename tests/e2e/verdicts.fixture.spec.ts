@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
-import { gotoApp, submitSingleScan } from "./helpers";
+import { gotoApp, setDefaultTextSize, submitSingleScan } from "./helpers";
 
 /**
  * These specs depend on SCRUTINIX_TEST_FIXTURES=1 (set by scripts/run-e2e.mjs),
@@ -305,16 +305,6 @@ function headingWords(page: Page): Promise<string[]> {
   return page.evaluate(
     () => (window as unknown as { sxHeadings: string[] }).sxHeadings,
   );
-}
-
-/**
- * Set the browser's default text size, the setting a reader changes for
- * larger text: rem grows (padding included) while the viewport doesn't,
- * which page zoom or a root font-size override would not reproduce.
- */
-async function setDefaultTextSize(page: Page, standard: number) {
-  const cdp = await page.context().newCDPSession(page);
-  await cdp.send("Page.setFontSizes", { fontSizes: { standard, fixed: 13 } });
 }
 
 /** The verdict heading's size in px, and whether its word stays inside it. */

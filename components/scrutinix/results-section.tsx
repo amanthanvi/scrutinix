@@ -404,7 +404,7 @@ export function ResultsSection() {
               aria-labelledby="sx-evidence-heading"
               className="mt-10 flex flex-col sm:mt-14"
             >
-              <div className="flex items-end justify-between gap-4 border-b border-[var(--sx-text)]">
+              <div className="flex flex-wrap items-end justify-between gap-x-4 border-b border-[var(--sx-text)]">
                 <h3
                   id="sx-evidence-heading"
                   className="sx-section-title pb-3 sm:pb-3.5"

@@ -69,7 +69,7 @@ export function SignalRow<N extends SignalName>({
         className="mt-[0.3125rem] h-3.5 w-6 shrink-0 rounded-[2px]"
       />
       <span className="flex min-w-0 flex-1 flex-col gap-1 sm:flex-row sm:gap-6 lg:gap-12">
-        <span className="text-body flex shrink-0 items-baseline gap-[0.4375rem] font-medium whitespace-nowrap text-[var(--sx-text)] sm:w-52 lg:w-[16.625rem]">
+        <span className="text-body flex shrink-0 items-baseline gap-[0.4375rem] font-medium text-[var(--sx-text)] sm:w-52 sm:whitespace-nowrap lg:w-[16.625rem]">
           <span aria-hidden="true" className="sx-tag self-center">
             {cellNumber(name)}
           </span>
@@ -113,7 +113,7 @@ export function SignalRow<N extends SignalName>({
             <path d="M2 0l4 4-4 4z" />
           </svg>
         </summary>
-        <dl className="text-caption mb-5 ml-[2.375rem] grid grid-cols-[minmax(6.5rem,auto)_minmax(0,1fr)] gap-x-4 gap-y-1.5 rounded-[3px] bg-[var(--sx-subtle)] px-4 py-3.5 font-mono leading-5 sm:grid-cols-[12rem_minmax(0,1fr)] lg:ml-[22rem]">
+        <dl className="text-caption mb-5 ml-[2.375rem] grid grid-cols-[minmax(6.5rem,auto)_minmax(0,1fr)] gap-x-4 gap-y-1.5 rounded-[3px] bg-[var(--sx-subtle)] px-4 py-3.5 font-mono leading-5 max-[20rem]:grid-cols-1 sm:grid-cols-[12rem_minmax(0,1fr)] lg:ml-[22rem]">
           {entries.map((entry, entryIndex) => (
             <div key={`${entryIndex}-${entry.label}`} className="contents">
               <dt className="text-[var(--sx-text-soft)]">{entry.label}</dt>

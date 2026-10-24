@@ -25,7 +25,7 @@ export function AppHeader() {
 
   return (
     <header className="border-b border-[var(--sx-border)]">
-      <div className="mx-auto flex h-[3.75rem] w-full max-w-[71rem] items-center justify-between px-4 sm:h-[4.5rem] sm:px-6">
+      <div className="mx-auto flex min-h-[3.75rem] w-full max-w-[71rem] flex-wrap items-center justify-between px-4 sm:min-h-[4.5rem] sm:px-6">
         {isHome ? (
           wordmark
         ) : (
@@ -38,7 +38,10 @@ export function AppHeader() {
           </Link>
         )}
 
-        <nav aria-label="Primary" className="-mr-2 flex items-center gap-0.5">
+        <nav
+          aria-label="Primary"
+          className="-mr-2 flex flex-wrap items-center gap-0.5"
+        >
           {NAV.map(({ href, label }) => (
             <Link
               key={href}

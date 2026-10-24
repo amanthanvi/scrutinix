@@ -93,3 +93,13 @@ export function sharedPath(payload: string, sig: string | null): string {
   if (sig) params.set("sig", sig);
   return `/?${params.toString()}`;
 }
+
+/**
+ * Set the browser's default text size, the setting a reader changes for
+ * larger text: rem grows (padding included) while the viewport doesn't,
+ * which page zoom or a root font-size override would not reproduce.
+ */
+export async function setDefaultTextSize(page: Page, standard: number) {
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send("Page.setFontSizes", { fontSizes: { standard, fixed: 13 } });
+}

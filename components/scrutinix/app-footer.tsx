@@ -15,7 +15,10 @@ export function AppFooter({ children }: AppFooterProps) {
         <span className="mr-1 font-serif text-[1.0625rem] leading-none font-semibold tracking-[-0.01em] text-[var(--sx-text)]">
           Scrutinix
         </span>
-        <nav aria-label="Footer" className="flex items-center gap-x-5">
+        <nav
+          aria-label="Footer"
+          className="flex flex-wrap items-center gap-x-5"
+        >
           <Link href="/about" className={LINK}>
             About
           </Link>

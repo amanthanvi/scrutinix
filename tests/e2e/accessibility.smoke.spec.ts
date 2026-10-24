@@ -4,6 +4,7 @@ import { expect, test } from "@playwright/test";
 import {
   encodeSharedPayload,
   gotoApp,
+  setDefaultTextSize,
   settleAnimations,
   sharedPath,
   signSharedPayload,
@@ -46,6 +47,46 @@ test("result view accessibility @smoke", async ({ page }) => {
 
   const accessibilityReport = await new AxeBuilder({ page }).analyze();
   expect(accessibilityReport.violations).toEqual([]);
+});
+
+test("larger default text reflows without sideways scrolling @smoke", async ({
+  page,
+}) => {
+  const scrollsSideways = () =>
+    page.evaluate(
+      () =>
+        document.documentElement.scrollWidth >
+        document.documentElement.clientWidth,
+    );
+  // 150% from the narrowest phone; 200% from a common phone width.
+  for (const [standard, width] of [
+    [24, 320],
+    [32, 375],
+  ] as const) {
+    await page.setViewportSize({ width, height: 700 });
+    await setDefaultTextSize(page, standard);
+    await gotoApp(page);
+    expect(await scrollsSideways(), `home, ${standard}px at ${width}`).toBe(
+      false,
+    );
+
+    await submitSingleScan(page, "https://critical.scrutinix.test/login");
+    await expect(page.getByLabel(/^scan result: critical$/i)).toBeVisible();
+    expect(await scrollsSideways(), `result, ${standard}px at ${width}`).toBe(
+      false,
+    );
+
+    // Every check's details open, in the Full list.
+    await page.getByRole("switch", { name: /^summary full/i }).click();
+    await page.locator("li[data-signal] details").first().waitFor();
+    await page.evaluate(() => {
+      for (const row of document.querySelectorAll("details")) row.open = true;
+    });
+    expect(
+      await scrollsSideways(),
+      `full details, ${standard}px at ${width}`,
+    ).toBe(false);
+  }
 });
 
 test("home page keyboard navigation @smoke", async ({ page }) => {
