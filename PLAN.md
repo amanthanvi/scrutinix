@@ -21,7 +21,7 @@ state plus the landed analysis-hardening and review-remediation work.
 ## Current Snapshot
 
 - Date: 2026-10-06
-- Execution status: `P21-P27 complete; P28 canonical redesign implemented, verified locally, and documented (DESIGN.md); P29 layer 0 (public errors) implemented and verified locally`
+- Execution status: `P21-P27 complete; P28 canonical redesign implemented, verified locally, and documented (DESIGN.md); P29 layer 0 (public errors) implemented and verified locally; P29.2a evidence data (layer 2, part A) implemented and verified locally`
 - Platform:
   - Next.js `16.3.4`
   - React `19.2.x`
@@ -242,6 +242,22 @@ open methodology.
 - [x] Tightened two claims everywhere they appear: "eight separate checks" (not "independent": the sources don't vote independently) and "which site it really belongs to" (we know the registered domain, not the organisation behind it).
 - [x] A Safe look-alike is shown as "Look-alike" (`verdictWord`) on the band, history and batch rows, the live announcement, and share cards; its band shows no score, and the details state the checks' own verdict and score (`getUnderlyingVerdictNote`). The stored verdict and score are unchanged.
 - [x] Review round: "No check flagged it" only when the engine scored nothing (a Safe can carry minor findings); history/batch rows hold a Safe word until the link parser loads; history filtering matches the shown word; CSV exports gain "Look-alike of". Second round (P1, a delayed or failed parser let a look-alike read "Safe"): `useLinkAnatomy` reports `pending | ready | failed` (one retry after 1s; a failed import is never ready); a Safe band holds in its Checking state while pending, and reads "Unconfirmed" (neutral, no score, "Check the link's address before you open it.") if the parser failed, as do rows, the announcement, and history search; CSV says "Not checked" without the parser. DOM and e2e cover a held and an aborted parser chunk. Third round: only a Safe announcement waits for the parser (a Malicious result is spoken while it loads), and history search re-runs when the parser loads or fails (`useLinkParserStatus`), not only when the query changes.
+
+### P29.2a Evidence data (layer 2, part A)
+
+Scrutinix collected far more than it showed. Part A surfaces the collected
+data in the Full view, keeps two cheap facts the providers used to drop,
+and brings `/privacy` up to date (folding in #61's still-missing
+disclosures, corrected, and #62's review note). Part B (Summary as five
+plain questions) builds on it. No score or verdict changes: every new fact
+is evidence only.
+
+- [x] Hosting network: the DNS signal looks up the first public address (IPv4 preferred; private, reserved, and documentation addresses never queried) with Team Cymru IP-to-ASN over DNS (`lib/server/providers/team-cymru.ts`): `origin`/`origin6` TXT, then `AS<n>` for the name. Dedicated 2 s resolver, cancelled on scan abort; AS names cached per ASN (256 entries, 24 h); runs as soon as A/AAAA answer, overlapping the other lookups. NXDOMAIN is stored as `asn: null`; a timeout or malformed answer leaves `dns.hosting` unset, adds no warning, and never fails the signal. Logs carry the stage and DNS error code only.
+- [x] Feed listing dates: `matches[].listedAt` (ISO) from URLhaus `date_added` (exact URL) and ThreatFox `first_seen` (`lib/server/providers/abuse-ch.ts`); OpenPhish and DNSBLs have none. `detail` unchanged.
+- [x] Full-view rows (`getSignalDetailEntries`, explicit `now`): DNS network ("AS64500 EXAMPLE-NET, registered in NL"), CNAME, nameservers, TXT count with recognised kinds (no raw values); certificate expiry in days (from `validTo`), TLS version, self-signed only when true, shortened SHA-256; iframes/hidden iframes and password-receiving hosts only when present; "Listed … ago" after each dated feed match (`formatElapsed`); one VirusTotal engine breakdown row.
+- [x] Schemas back-compatible (`hosting` and `listedAt` are `.optional().catch(undefined)`); fixtures carry documentation ASNs (AS64496 FIXTURE-HOSTING US for clean hosts, AS64500 EXAMPLE-NET NL for flagged scenarios) and a 6-hours-ago URLhaus listing.
+- [x] `/privacy`: Team Cymru gets only the server's IP; ThreatFox gets the hostname; OpenPhish is matched on our server; checking a link visits it (one-time links); a link new to VirusTotal is submitted and can become visible to its users; in-memory cache entries outlive 15 minutes until read or crowded out; rate limiting stores the IP (Upstash keys expire after about 2 minutes and 48 hours, verified in `@upstash/ratelimit` 2.2.0); opening a shared link sends it to our server to verify, never to scan.
+- [x] Verified (`E2E_PORT=3108`): format, lint, typecheck clean; unit 44 files / 527 tests, integration 3 / 44, DOM 11 / 73, e2e 29 passed, build green. Full view checked by eye in both themes on the `feed-hit` fixture.
 
 ### P24 Resolve September dependency maintenance
 

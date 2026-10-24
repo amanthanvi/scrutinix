@@ -215,6 +215,17 @@ tests/
   tests pass fixed times. The share toast tells the sender the 3-day
   window, and sharing an expired history entry says so with "Scan again".
   `share-signing.ts` and `env.ts` import `server-only` (vitest aliases it).
+- **Evidence is not a score**: `dns.hosting` (Team Cymru IP-to-ASN over
+  DNS, `lib/server/providers/team-cymru.ts`) and feed `listedAt` are
+  evidence only; no scoring path reads them. Hosting looks up the first
+  public address (IPv4 preferred), never a private one, with a 2 s
+  abort-aware resolver; only the IP leaves the server. NXDOMAIN is
+  recorded as `asn: null` ("no network routes this address"); a timeout or
+  malformed answer leaves `hosting` unset and never fails the DNS signal.
+  The country is the network's registration: "registered in NL", never
+  "located in". Full-view rows come from `getSignalDetailEntries` (one
+  fact per row, explicit `now`); TXT values are counted and named by
+  kind, never dumped.
 - **UI danger is not a verdict**: form/stream errors and destructive
   confirms use `--sx-danger-fg` / `--sx-danger-border`, never
   `--sx-malicious-*`.
