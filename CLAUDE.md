@@ -103,11 +103,11 @@ lib/
     share-launch.ts       # Share-target link extraction, Sec-Fetch-Site gate, ?url= prefill, launch cookie/header names
   og/                     # Share-card renderers (cards.tsx) and bundled-Geist loader (fonts.ts)
   server/                 # Orchestrator, providers, signals, cache, local ONNX ML
-    share-launch-grant.ts # Launch grant: <id>.<sha256(link)>, redeemed once (Upstash SET NX, in-memory fallback)
+    share-launch-grant.ts # Launch grant: <id>.<sha256(link)>; launchGrantId checks the digest (no server store)
     share-metadata.ts     # ?shared= verify + validate → SharedView, page metadata, image cap
     share-signing.ts      # HMAC sign/verify for share links; attaches result.share to streamed results
     rate-limit.ts         # Upstash/in-memory limiter with "scan" and "image" tiers
-  client/                 # NDJSON parser, export utilities
+  client/                 # NDJSON parser, export utilities, launch-claims (scan each launch id once)
   config/                 # Environment validation
 
 scripts/
@@ -310,9 +310,14 @@ tests/
   `/`: it hands the grant to the page in `x-sx-share-launch` and clears
   the cookie in that response, matching or not (a proxy-cleared cookie is
   already gone from `cookies()` in the same render, so the header is the
-  only way through). The page scans only when `redeemLaunchGrant` finds
-  the digest equals `?url=` and wins the id's `SET NX` (Upstash, else
-  process memory). Never gate on the header at the page itself: a link
+  only way through); the server stores nothing else. The page passes the
+  grant's id to the client only when `launchGrantId` finds the digest
+  equals `?url=`, and the browser scans each id once
+  (`lib/client/launch-claims.ts`: a module-level set, so Back, which
+  restores the cached render into a new component, only prefills; plus
+  `localStorage` for other tabs, a few ids, dropped past 10 minutes).
+  `normalizeUrlInput` holds the 2,048 limit on the normalized link, so
+  every boundary agrees on a link that grows when percent-encoded. Never gate on the header at the page itself: a link
   tapped in another app is a browser-initiated GET that also carries
   `none`. `?shared=` outranks `?url=`. No service worker (not needed to
   install), and the site never mentions installing; the README documents
