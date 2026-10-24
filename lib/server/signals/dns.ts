@@ -9,14 +9,14 @@ import {
 } from "node:dns/promises";
 import { isIP } from "node:net";
 
-import { isBlockedNetworkAddress } from "@/lib/domain/blocked-address";
+import {
+  isBlockedNetworkAddress,
+  PRIVATE_ADDRESSES_OMITTED,
+} from "@/lib/domain/blocked-address";
 import type { DNSData } from "@/lib/domain/types";
 import { bareHostname } from "@/lib/domain/url";
 import { withTimeout } from "@/lib/server/http";
 import { lookupHostingNetwork } from "@/lib/server/providers/team-cymru";
-
-const REDACTED_ADDRESS_OBSERVATION =
-  "Private or reserved addresses were omitted from the DNS result.";
 
 /**
  * `signal` cancels the hosting-network lookup (the only lookup here that
@@ -45,7 +45,7 @@ export async function runDnsSignal(
     ];
 
     if (blockedCount > 0) {
-      observations.push(REDACTED_ADDRESS_OBSERVATION);
+      observations.push(PRIVATE_ADDRESSES_OMITTED);
     }
 
     return {
@@ -124,7 +124,7 @@ export async function runDnsSignal(
   }
 
   if (blockedCount > 0) {
-    observations.push(REDACTED_ADDRESS_OBSERVATION);
+    observations.push(PRIVATE_ADDRESSES_OMITTED);
   }
 
   return {

@@ -1,5 +1,13 @@
 const PRIVATE_HOSTS = new Set(["localhost", "0.0.0.0", "::1"]);
 
+/**
+ * The DNS signal's note when it dropped private or reserved addresses. The
+ * Summary reads it to say a name points only to private addresses rather
+ * than nowhere.
+ */
+export const PRIVATE_ADDRESSES_OMITTED =
+  "Private or reserved addresses were omitted from the DNS result.";
+
 const IPV4_BLOCKED_SUBNETS = [
   ["0.0.0.0", 8],
   ["10.0.0.0", 8],

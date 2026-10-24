@@ -1452,7 +1452,6 @@ describe("confidence reasons and coverage", () => {
     const reported = getSummaryQuestions({
       url: "https://unreachable.scrutinix.test/",
       signals,
-      threatInfo,
       now: Date.parse("2026-10-24T12:00:00.000Z"),
     })[0];
     expect(reported?.answer).toBe("Not on any list we checked.");

@@ -12,6 +12,7 @@ import {
   isElsewhereOnHost,
   type FeedMatch,
 } from "@/lib/domain/feed-copy";
+import { PRIVATE_ADDRESSES_OMITTED } from "@/lib/domain/blocked-address";
 import { hostOf } from "@/lib/domain/link-anatomy";
 import {
   hasConfirmedReputationHit,
@@ -25,7 +26,6 @@ import type {
   ClassificationFinding,
   SignalName,
   SignalResults,
-  ThreatInfo,
   VirusTotalData,
 } from "@/lib/domain/types";
 
@@ -76,6 +76,10 @@ const questionText: Record<SummaryQuestionId, string> = {
   other: "What did the other checks find?",
 };
 
+/** How long a lag between lists and a new site or listing is plausible. */
+const LISTS_LAG_DAYS = 7;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
 /** What an unanswered question shows while its checks run. */
 export const PENDING_ANSWER = "Checking…";
 
@@ -109,11 +113,6 @@ export interface SummaryQuestion {
 export interface SummaryQuestionInput {
   url: string;
   signals: SignalResults;
-  /**
-   * The verdict engine's view, null while a scan streams. Used for
-   * emphasis only, never to change which question cites a check.
-   */
-  threatInfo?: Pick<ThreatInfo, "scoredSignals"> | null;
   /**
    * Anchors "issued 2 hours ago" and "listed 6 hours ago", as the Full
    * rows do. Tests pass a fixed time.
@@ -328,7 +327,7 @@ function answerReported({ signals, lists, now }: Context): Answer {
   const gsb = signals.googleSafeBrowsing.data;
   if (gsb && gsb.matches.length > 0) {
     findings.push(
-      `Google Safe Browsing lists it for ${describeSafeBrowsingThreats(gsb.matches)}.`,
+      `Safe Browsing lists it for ${describeSafeBrowsingThreats(gsb.matches)}.`,
     );
   }
   const feeds = signals.threatFeeds.data;
@@ -474,7 +473,7 @@ function answerDestination({
       ? countOf(content.hiddenIframeCount, "hidden frame")
       : null,
     content && content.obfuscationHints.length > 0
-      ? "deliberately hidden code"
+      ? "code written to be hard to read"
       : null,
   ].filter((part): part is string => part !== null);
 
@@ -491,7 +490,7 @@ function answerDestination({
   let why: string;
   if (passwordHosts.length > 0) {
     why = "Your password would leave the site you reached.";
-  } else if (endsElsewhere || refreshesElsewhere) {
+  } else if ((endsElsewhere && registeredDomainOf) || refreshesElsewhere) {
     why = "The site you land on is the one you'd be trusting.";
   } else if (downgraded) {
     why =
@@ -518,6 +517,8 @@ function describePattern(signals: SignalResults): {
   text: string;
   flags: boolean;
   ran: boolean;
+  /** Who flagged it, as a sentence subject; null when nothing did. */
+  flaggedBy: { subject: string; plural: boolean } | null;
 } {
   const signal = signals.mlEnsemble;
   if (signal.status !== "success" || !signal.data) {
@@ -525,6 +526,7 @@ function describePattern(signals: SignalResults): {
       text: "The link pattern model and structure checks couldn't run.",
       flags: false,
       ran: false,
+      flaggedBy: null,
     };
   }
 
@@ -544,20 +546,44 @@ function describePattern(signals: SignalResults): {
         : "The structure checks didn't flag it; the link pattern model didn't run.",
       flags: false,
       ran: true,
+      flaggedBy: null,
     };
   }
 
-  let text: string;
+  const both = {
+    subject: "The link pattern model and structure checks",
+    plural: true,
+  };
   if (modelFlags && structureFlags) {
-    text = `The link pattern model and structure checks both find the link ${labelWord(consensusLabel)}.`;
-  } else if (modelFlags && transformerModel) {
-    text = `The link pattern model finds the link ${labelWord(transformerModel.label)}; the structure checks don't.`;
-  } else if (structureFlags) {
-    text = `The structure checks find the link ${labelWord(lexicalModel.label)}; ${modelMissing}.`;
-  } else {
-    text = `The link pattern model and structure checks find the link ${labelWord(consensusLabel)}.`;
+    return {
+      text: `The link pattern model and structure checks both find the link ${labelWord(consensusLabel)}.`,
+      flags: true,
+      ran: true,
+      flaggedBy: both,
+    };
   }
-  return { text, flags: true, ran: true };
+  if (modelFlags && transformerModel) {
+    return {
+      text: `The link pattern model finds the link ${labelWord(transformerModel.label)}; the structure checks don't.`,
+      flags: true,
+      ran: true,
+      flaggedBy: { subject: "The link pattern model", plural: false },
+    };
+  }
+  if (structureFlags) {
+    return {
+      text: `The structure checks find the link ${labelWord(lexicalModel.label)}; ${modelMissing}.`,
+      flags: true,
+      ran: true,
+      flaggedBy: { subject: "The structure checks", plural: true },
+    };
+  }
+  return {
+    text: `The link pattern model and structure checks find the link ${labelWord(consensusLabel)}.`,
+    flags: true,
+    ran: true,
+    flaggedBy: both,
+  };
 }
 
 /** The registered domain's age in days, when the registration tells it. */
@@ -626,24 +652,51 @@ const ONLY_THE_CONNECTION =
   "Even a valid certificate only protects the connection.";
 
 function answerHttps({ url, signals, now }: Context): Answer {
+  const redirect = signals.redirectChain.data;
   if (url.toLowerCase().startsWith("http://")) {
+    // Plain HTTP that moves to HTTPS: only the first request is exposed.
+    if (!redirect?.finalUrl.toLowerCase().startsWith("https://")) {
+      return {
+        answer:
+          "No. This link doesn't use HTTPS, so the connection isn't encrypted.",
+        why: "Without encryption, what you send can be read on the way.",
+      };
+    }
+    const secured = answerCertificate(signals, now);
     return {
-      answer:
-        "No. This link doesn't use HTTPS, so the connection isn't encrypted.",
-      why: "Without encryption, what you send can be read on the way.",
+      answer: sentences([
+        "No. This link starts on plain HTTP, then moves to HTTPS.",
+        secured.state,
+        secured.issued,
+      ]),
+      why: secured.why,
     };
   }
 
+  const secured = answerCertificate(signals, now);
+  return {
+    answer: sentences([`No. ${secured.state}`, secured.issued]),
+    why: secured.why,
+  };
+}
+
+/** The certificate's state, its age, and why, after the leading "No.". */
+function answerCertificate(
+  signals: SignalResults,
+  now: number,
+): { state: string; issued: string | null; why: string } {
   const signal = signals.ssl;
   if (signal.status === "skipped") {
     return {
-      answer: "No. We didn't check a certificate for this link.",
+      state: "We didn't check a certificate for this link.",
+      issued: null,
       why: ONLY_THE_CONNECTION,
     };
   }
   if (signal.status !== "success" || !signal.data || !signal.data.available) {
     return {
-      answer: "No. We couldn't check the certificate.",
+      state: "We couldn't check the certificate.",
+      issued: null,
       why: ONLY_THE_CONNECTION,
     };
   }
@@ -659,23 +712,20 @@ function answerHttps({ url, signals, now }: Context): Answer {
   switch (data.validationState) {
     case "trusted":
       return {
-        answer: sentences(["No. The site has a valid certificate.", issued]),
+        state: "The site has a valid certificate.",
+        issued,
         why: "Encryption protects the connection, not your trust in the site.",
       };
     case "warning":
       return {
-        answer: sentences([
-          "No. We couldn't fully verify the site's certificate.",
-          issued,
-        ]),
+        state: "We couldn't fully verify the site's certificate.",
+        issued,
         why: ONLY_THE_CONNECTION,
       };
     default:
       return {
-        answer: sentences([
-          "No. The site's certificate isn't trusted.",
-          issued,
-        ]),
+        state: "The site's certificate isn't trusted.",
+        issued,
         why: "With a certificate error, even the connection may not be private.",
       };
   }
@@ -684,7 +734,7 @@ function answerHttps({ url, signals, now }: Context): Answer {
 // ---------------------------------------------------------------------------
 // What did the other checks find? (DNS, with the hosting network)
 
-function answerOther({ signals, threatInfo, lists }: Context): Answer {
+function answerOther({ signals }: Context): Answer {
   const signal = signals.dns;
   if (signal.status === "skipped") {
     return {
@@ -700,20 +750,25 @@ function answerOther({ signals, threatInfo, lists }: Context): Answer {
   }
 
   const data = signal.data;
-  const pointsNowhere =
+  const noAddress =
     data.subjectType !== "ip" &&
     data.addresses.length === 0 &&
     data.cnames.length === 0;
+  // Private and reserved addresses are dropped before they reach us.
+  const onlyPrivate =
+    noAddress && data.observations.includes(PRIVATE_ADDRESSES_OMITTED);
   const anomalies = data.anomalies;
 
   const records =
     data.subjectType === "ip"
       ? "The link uses a raw IP address instead of a domain name."
-      : pointsNowhere
-        ? "The name doesn't point to any server."
-        : anomalies.length > 0
-          ? anomalies.join(" ")
-          : "Nothing unusual in its DNS records.";
+      : onlyPrivate
+        ? "It points only to private or reserved addresses."
+        : noAddress
+          ? "We found no address for this name."
+          : anomalies.length > 0
+            ? anomalies.join(" ")
+            : "Nothing unusual in its DNS records.";
 
   // The network's registered country, never where the server is.
   const hosting = data.hosting;
@@ -730,21 +785,20 @@ function answerOther({ signals, threatInfo, lists }: Context): Answer {
     network = `Its address belongs to network ${name}${country}.`;
   }
 
-  // Emphasis only: did the reported checks drive the verdict?
-  const reportsDrove = threatInfo
-    ? questionSources.reported.some((name) =>
-        (threatInfo.scoredSignals ?? []).includes(name),
-      )
-    : lists.some((list) => list.state === "hit");
+  // Only a confirmed report: a single engine or a listing elsewhere on
+  // the host can sit under a Safe verdict, and this must not contradict it.
+  const reportsStand = hasConfirmedReputationHit(signals);
 
   let why: string;
   if (anomalies.some((anomaly) => /punycode/i.test(anomaly))) {
     why = "Look-alike letters can make a fake name read like a real one.";
   } else if (anomalies.length > 0) {
     why = "Unusual records are a weak sign on their own.";
-  } else if (pointsNowhere) {
-    why = "A name that points nowhere can't be opened right now.";
-  } else if (reportsDrove) {
+  } else if (onlyPrivate) {
+    why = "A private address can only be reached inside one network.";
+  } else if (noAddress) {
+    why = "Without an address, we couldn't look at the site itself.";
+  } else if (reportsStand) {
     why = "These findings don't cancel the threat reports.";
   } else {
     why = "Ordinary DNS is common to good and bad sites alike.";
@@ -761,7 +815,7 @@ function disagreementFor(
   id: SummaryQuestionId,
   context: Context,
 ): string | null {
-  const { signals, lists } = context;
+  const { signals, lists, now } = context;
   const listsAnswered = lists.every((list) => isSettled(signals, list.name));
   const noHits =
     listsAnswered &&
@@ -769,14 +823,13 @@ function disagreementFor(
     lists.some((list) => list.state === "clean" || list.state === "partial");
   const everyListPassed = lists.every((list) => list.state === "clean");
   const ageDays = isSettled(signals, "whois") ? domainAgeDays(signals) : null;
+  // Days, not weeks: blocklists lag a new site by a day or two.
   const listsLagNewSite =
-    noHits && ageDays !== null && ageDays < NEW_DOMAIN_DAYS;
+    noHits && ageDays !== null && ageDays < LISTS_LAG_DAYS;
 
   if (id === "reported") {
     if (listsLagNewSite) {
-      return ageDays < 7
-        ? `Blocklists usually lag new sites by a day or two; this one is ${formatAge(ageDays)} old.`
-        : `Blocklists can miss new sites; this one is only ${formatAge(ageDays)} old.`;
+      return `Blocklists usually lag new sites by a day or two; this one is ${formatAge(ageDays)} old.`;
     }
 
     const vt = signals.virusTotal;
@@ -787,10 +840,19 @@ function disagreementFor(
     if (vt.status !== "success" || !vt.data) return null;
 
     // A list names it while VirusTotal shows few or no engines. The
-    // answer already dates the listing; this says why they differ.
+    // answer already dates the listing; this says why they differ, and
+    // only while the listing is fresh enough for engines to lag it.
+    const listedLongAgo =
+      directFeeds.length > 0 &&
+      gsbMatches.length === 0 &&
+      directFeeds.every((match) => {
+        const listedAt = listedAtOf(match);
+        return listedAt !== null && now - listedAt > LISTS_LAG_DAYS * DAY_MS;
+      });
     if (
       (gsbMatches.length > 0 || directFeeds.length > 0) &&
-      vt.data.malicious < VT_CONVICTION_ENGINES
+      vt.data.malicious < VT_CONVICTION_ENGINES &&
+      !listedLongAgo
     ) {
       return "Lists often name a threat before VirusTotal's engines catch up.";
     }
@@ -807,8 +869,11 @@ function disagreementFor(
 
   if (id === "concern") {
     // Said once: the "lists lag new sites" sentence already covers it.
-    if (everyListPassed && !listsLagNewSite && describePattern(signals).flags) {
-      return "The link pattern model reads the link itself, so it can flag a new scam before any list does.";
+    const { flaggedBy } = describePattern(signals);
+    if (everyListPassed && !listsLagNewSite && flaggedBy) {
+      return flaggedBy.plural
+        ? `${flaggedBy.subject} read the link itself, so they can flag a new scam before any list does.`
+        : `${flaggedBy.subject} reads the link itself, so it can flag a new scam before any list does.`;
     }
   }
 

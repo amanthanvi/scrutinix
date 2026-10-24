@@ -270,7 +270,6 @@ export function ResultsSection() {
       ? getSummaryQuestions({
           url: linkUrl,
           signals,
-          threatInfo: active?.threatInfo ?? null,
           registeredDomainOf: parse
             ? (host) => registrableDomainOf(parse, host)
             : null,

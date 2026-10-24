@@ -1,6 +1,7 @@
 import { parse } from "tldts";
 import { describe, expect, it } from "vitest";
 
+import { PRIVATE_ADDRESSES_OMITTED } from "@/lib/domain/blocked-address";
 import { registrableDomainOf } from "@/lib/domain/link-anatomy";
 import { sanitizeHistoryEntry } from "@/lib/domain/runtime-safety";
 import {
@@ -47,7 +48,6 @@ function ask(
   return getSummaryQuestions({
     url: "https://example.com/",
     signals,
-    threatInfo: buildThreatAssessment(signals).threatInfo,
     now: NOW,
     registeredDomainOf,
     ...options,
@@ -149,7 +149,7 @@ describe("the fixture scenarios", () => {
     const questions = ask(await scenario(host), { url: `https://${host}/` });
     expect(table(questions)).toEqual({
       reported: [
-        "24 of 70 VirusTotal engines flag it as malicious and 4 as suspicious. Google Safe Browsing lists it for phishing or a deceptive site and malware. URLhaus lists this link as active malware distribution (listed 6 hours ago).",
+        "24 of 70 VirusTotal engines flag it as malicious and 4 as suspicious. Safe Browsing lists it for phishing or a deceptive site and malware. URLhaus lists this link as active malware distribution (listed 6 hours ago).",
         "Direct threat reports are a reason to stay away.",
         null,
       ],
@@ -183,8 +183,8 @@ describe("the fixture scenarios", () => {
         null,
       ],
       other: [
-        "The name doesn't point to any server.",
-        "A name that points nowhere can't be opened right now.",
+        "We found no address for this name.",
+        "Without an address, we couldn't look at the site itself.",
         null,
       ],
     });
@@ -232,17 +232,6 @@ describe("the fixed mapping", () => {
     }
   });
 
-  it("never lets the verdict engine's scored list move a check", () => {
-    const signals = cleanSignals();
-    const unscored = ask(signals, { threatInfo: { scoredSignals: [] } });
-    const allScored = ask(signals, {
-      threatInfo: { scoredSignals: [...signalNames] },
-    });
-    expect(allScored.map((question) => question.sources)).toEqual(
-      unscored.map((question) => question.sources),
-    );
-  });
-
   it("changes no verdict or score", async () => {
     const signals = await scenario("feed-hit.scrutinix.test");
     const before = structuredClone(signals);
@@ -255,7 +244,7 @@ describe("the fixed mapping", () => {
 
 describe("pending questions", () => {
   it("are all pending before any check lands", () => {
-    const questions = ask(createPendingSignalResults(), { threatInfo: null });
+    const questions = ask(createPendingSignalResults());
     for (const question of questions) {
       expect(question).toMatchObject({
         state: "pending",
@@ -274,14 +263,14 @@ describe("pending questions", () => {
     signals.virusTotal = clean.virusTotal;
     signals.googleSafeBrowsing = clean.googleSafeBrowsing;
 
-    const questions = ask(signals, { threatInfo: null });
+    const questions = ask(signals);
     expect(byId(questions, "https").state).toBe("settled");
     // Two of its three lists answered: still waiting on the feeds.
     expect(byId(questions, "reported").state).toBe("pending");
     expect(byId(questions, "concern").state).toBe("pending");
 
     signals.threatFeeds = clean.threatFeeds;
-    expect(byId(ask(signals, { threatInfo: null }), "reported")).toMatchObject({
+    expect(byId(ask(signals), "reported")).toMatchObject({
       state: "settled",
       answer: "Not on any list we checked.",
     });
@@ -295,13 +284,11 @@ describe("pending questions", () => {
     signals.googleSafeBrowsing = clean.googleSafeBrowsing;
     signals.threatFeeds = clean.threatFeeds;
 
-    expect(
-      byId(ask(signals, { threatInfo: null }), "reported").disagreement,
-    ).toBeNull();
+    expect(byId(ask(signals), "reported").disagreement).toBeNull();
     signals.whois = clean.whois;
-    expect(
-      byId(ask(signals, { threatInfo: null }), "reported").disagreement,
-    ).toMatch(/^Blocklists usually lag/);
+    expect(byId(ask(signals), "reported").disagreement).toMatch(
+      /^Blocklists usually lag/,
+    );
   });
 });
 
@@ -318,12 +305,8 @@ describe("disagreement sentences", () => {
       "Blocklists usually lag new sites by a day or two; this one is less than a day old.",
     );
 
+    // Weeks old is past the lag: no sentence hedging a clean result.
     withDomainAge(signals, 20);
-    expect(byId(ask(signals), "reported").disagreement).toBe(
-      "Blocklists can miss new sites; this one is only 20 days old.",
-    );
-
-    withDomainAge(signals, 100);
     expect(byId(ask(signals), "reported").disagreement).toBeNull();
   });
 
@@ -342,6 +325,17 @@ describe("disagreement sentences", () => {
     ).toContain("(listed 3 days ago)");
 
     if (signals.virusTotal.data) signals.virusTotal.data.malicious = 2;
+    expect(byId(ask(signals), "reported").disagreement).toBe(lag);
+
+    // A listing weeks old is no longer a lag.
+    signals.virusTotal.data!.malicious = 0;
+    for (const match of signals.threatFeeds.data!.matches) {
+      match.listedAt = new Date(NOW - 30 * 24 * HOUR).toISOString();
+    }
+    expect(byId(ask(signals), "reported").disagreement).toBeNull();
+    for (const match of signals.threatFeeds.data!.matches) {
+      delete match.listedAt;
+    }
     expect(byId(ask(signals), "reported").disagreement).toBe(lag);
 
     if (signals.virusTotal.data) signals.virusTotal.data.malicious = 7;
@@ -372,9 +366,25 @@ describe("disagreement sentences", () => {
       signals.mlEnsemble.data.lexicalModel.label = "risky";
     }
     const questions = ask(signals);
+    // Only the structure checks flagged it, so they are the ones named.
+    expect(byId(questions, "concern").answer).toMatch(
+      /^The structure checks find the link risky; the link pattern model didn't run\./,
+    );
     expect(byId(questions, "concern").disagreement).toBe(
+      "The structure checks read the link itself, so they can flag a new scam before any list does.",
+    );
+    signals.mlEnsemble.data!.transformerModel = {
+      label: "malicious",
+      score: 0.9,
+      reasons: [],
+      model: "fixture",
+    };
+    signals.mlEnsemble.data!.lexicalModel.label = "benign";
+    expect(byId(ask(signals), "concern").disagreement).toBe(
       "The link pattern model reads the link itself, so it can flag a new scam before any list does.",
     );
+    signals.mlEnsemble.data!.transformerModel = null;
+    signals.mlEnsemble.data!.lexicalModel.label = "risky";
     expect(byId(questions, "reported").disagreement).toBeNull();
 
     // Said once: on a brand-new domain the lists-lag sentence covers it.
@@ -456,9 +466,27 @@ describe("Does HTTPS make it safe?", () => {
     );
   });
 
-  it("says so when the link uses plain HTTP", () => {
+  it("says when a plain HTTP link moves to HTTPS, and still gives the certificate", () => {
+    const signals = cleanSignals();
+    signals.redirectChain.data = {
+      ...signals.redirectChain.data!,
+      finalUrl: "https://example.com/",
+    };
     expect(
-      byId(ask(cleanSignals(), { url: "http://example.com/" }), "https"),
+      byId(ask(signals, { url: "http://example.com/" }), "https").answer,
+    ).toBe(
+      "No. This link starts on plain HTTP, then moves to HTTPS. The site has a valid certificate.",
+    );
+  });
+
+  it("says so when the link stays on plain HTTP", () => {
+    const signals = cleanSignals();
+    signals.redirectChain.data = {
+      ...signals.redirectChain.data!,
+      finalUrl: "http://example.com/",
+    };
+    expect(
+      byId(ask(signals, { url: "http://example.com/" }), "https"),
     ).toMatchObject({
       answer:
         "No. This link doesn't use HTTPS, so the connection isn't encrypted.",
@@ -651,6 +679,32 @@ describe("What did the other checks find?", () => {
     );
   });
 
+  it("never cites threat reports under a weak, unconfirmed hit", () => {
+    const signals = cleanSignals();
+    signals.virusTotal.data!.suspicious = 1;
+    expect(buildThreatAssessment(signals).verdict).toBe("safe");
+    expect(byId(ask(signals), "other").why).toBe(
+      "Ordinary DNS is common to good and bad sites alike.",
+    );
+  });
+
+  it("says a name points only to private addresses, not nowhere", () => {
+    const signals = cleanSignals();
+    signals.dns.data = {
+      ...signals.dns.data!,
+      addresses: [],
+      cnames: [],
+      observations: [
+        "No A, AAAA, or CNAME records were returned for the hostname.",
+        PRIVATE_ADDRESSES_OMITTED,
+      ],
+    };
+    expect(byId(ask(signals), "other")).toMatchObject({
+      answer: "It points only to private or reserved addresses.",
+      why: "A private address can only be reached inside one network.",
+    });
+  });
+
   it("states unusual records with a calm why", () => {
     const signals = cleanSignals();
     signals.dns.data!.anomalies = ["The hostname uses punycode encoding."];
@@ -690,10 +744,7 @@ describe("old and legacy records", () => {
       metadata: { scanId: "legacy" },
       savedAt: "2025-01-01T00:00:00.000Z",
     });
-    const questions = ask(legacy!.signals, {
-      url: legacy!.url,
-      threatInfo: null,
-    });
+    const questions = ask(legacy!.signals, { url: legacy!.url });
     expect(byId(questions, "reported").answer).toBe(
       "None of these lists could be checked.",
     );
