@@ -7,20 +7,35 @@ import {
   extractSharedLink,
   isShareTargetLaunch,
 } from "@/lib/domain/share-launch";
+import { readBoundedBody } from "@/lib/server/request-body";
 
 export const runtime = "nodejs";
 
 /**
  * Longest share body read. A shared message is a few hundred bytes; the
- * link is all that is kept, and the rest is dropped here unread past it.
+ * link is all that is kept, and a longer body is dropped whole: counted as
+ * it streams in (`readBoundedBody`), whatever `Content-Length` claims.
  */
 const MAX_SHARE_BODY_BYTES = 16 * 1024;
 
+/**
+ * The manifest asks for `application/x-www-form-urlencoded`. A share
+ * target that also took files would post `multipart/form-data`, so that
+ * is parsed too; both only ever from the bounded bytes. Anything else
+ * holds no fields.
+ */
+const FORM_TYPES = ["application/x-www-form-urlencoded", "multipart/form-data"];
+
 async function readSharedFields(request: Request) {
-  const length = Number(request.headers.get("content-length") ?? NaN);
-  if (!Number.isFinite(length) || length > MAX_SHARE_BODY_BYTES) return {};
+  const type = request.headers.get("content-type") ?? "";
+  const essence = type.split(";")[0]!.trim().toLowerCase();
+  if (!FORM_TYPES.includes(essence)) return {};
+  const body = await readBoundedBody(request, MAX_SHARE_BODY_BYTES);
+  if (!body) return {};
   try {
-    const form = await request.formData();
+    const form = await new Response(body, {
+      headers: { "content-type": type },
+    }).formData();
     const field = (name: string) => {
       const value = form.get(name);
       return typeof value === "string" ? value : null;
@@ -67,8 +82,12 @@ export function GET() {
  * 303, so the page is fetched with GET and a reload never re-posts. The
  * location is relative: the server's idea of its own origin (`request.url`
  * under `next start` names `localhost`) must never send the visitor to a
- * different site, where the launch cookie would not exist.
+ * different site, where the launch cookie would not exist. `no-store`: the
+ * answer (and its one-use cookie) belongs to this one share.
  */
 function redirectTo(location: string) {
-  return new NextResponse(null, { status: 303, headers: { location } });
+  return new NextResponse(null, {
+    status: 303,
+    headers: { location, "cache-control": "no-store" },
+  });
 }
