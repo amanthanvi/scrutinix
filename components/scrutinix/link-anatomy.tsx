@@ -334,7 +334,7 @@ function LinkPart({
   return (
     <span className={cn("sx-anat-part", owner && "sx-anat-owner")}>
       <span className="sr-only">{caption}: </span>
-      {children}
+      <span className="sx-anat-text">{children}</span>
       <span aria-hidden="true" className="sx-anat-caption">
         {caption}
       </span>

@@ -118,7 +118,7 @@ function BatchRow({
           }}
           variant="ghost"
           size="sm"
-          className={cn(ROW_TRAILING, "-mr-2.5")}
+          className={cn(ROW_TRAILING, "-mr-[10px]")}
           aria-label={`Open result for ${formatDisplayUrl(item.url)}${lookAlike ? " (look-alike link)" : ""}`}
         >
           Open

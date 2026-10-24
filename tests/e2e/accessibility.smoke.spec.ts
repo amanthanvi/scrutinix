@@ -1,5 +1,5 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 import {
   encodeSharedPayload,
@@ -49,44 +49,72 @@ test("result view accessibility @smoke", async ({ page }) => {
   expect(accessibilityReport.violations).toEqual([]);
 });
 
-test("larger default text reflows without sideways scrolling @smoke", async ({
-  page,
-}) => {
+/**
+ * No sideways scrolling on the home, a result, and the Full list with every
+ * check's details open, at each default text size and width given.
+ */
+async function expectReflow(
+  page: Page,
+  sizes: ReadonlyArray<readonly [standard: number, width: number]>,
+) {
   const scrollsSideways = () =>
     page.evaluate(
       () =>
         document.documentElement.scrollWidth >
         document.documentElement.clientWidth,
     );
-  // 150% from the narrowest phone; 200% from 360px.
-  for (const [standard, width] of [
-    [24, 320],
-    [32, 360],
-  ] as const) {
+  for (const [standard, width] of sizes) {
+    const at = `${standard}px text at ${width}px`;
     await page.setViewportSize({ width, height: 700 });
     await setDefaultTextSize(page, standard);
     await gotoApp(page);
-    expect(await scrollsSideways(), `home, ${standard}px at ${width}`).toBe(
-      false,
-    );
+    expect(await scrollsSideways(), `home, ${at}`).toBe(false);
 
+    // A short last part ("/login") whose caption runs past it, at the
+    // right edge just after the link goes inline.
     await submitSingleScan(page, "https://critical.scrutinix.test/login");
     await expect(page.getByLabel(/^scan result: critical$/i)).toBeVisible();
-    expect(await scrollsSideways(), `result, ${standard}px at ${width}`).toBe(
-      false,
-    );
+    expect(await scrollsSideways(), `result, ${at}`).toBe(false);
 
-    // Every check's details open, in the Full list.
     await page.getByRole("switch", { name: /^summary full/i }).click();
     await page.locator("li[data-signal] details").first().waitFor();
     await page.evaluate(() => {
       for (const row of document.querySelectorAll("details")) row.open = true;
     });
-    expect(
-      await scrollsSideways(),
-      `full details, ${standard}px at ${width}`,
-    ).toBe(false);
+    expect(await scrollsSideways(), `full details, ${at}`).toBe(false);
   }
+}
+
+// 150% from the narrowest phone, 200% from 360px; and where the link
+// first goes inline at each size.
+const REFLOW_SIZES = [
+  [24, 320],
+  [32, 360],
+  [16, 656],
+  [24, 960],
+  [32, 1280],
+] as const;
+
+test("larger default text reflows without sideways scrolling @smoke", async ({
+  page,
+}) => {
+  await expectReflow(page, REFLOW_SIZES);
+});
+
+test.describe("on a phone", () => {
+  // Overlay scrollbars: the full width is the page's, so a bleed past the
+  // gutter shows here even where a desktop scrollbar would absorb it.
+  test.use({ isMobile: true, hasTouch: true });
+
+  test("larger default text reflows without sideways scrolling @smoke", async ({
+    page,
+  }) => {
+    await expectReflow(page, [
+      [24, 320],
+      [32, 360],
+      [32, 375],
+    ]);
+  });
 });
 
 test("home page keyboard navigation @smoke", async ({ page }) => {

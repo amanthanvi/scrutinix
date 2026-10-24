@@ -300,7 +300,7 @@ export function VerdictBand({
         <button
           type="button"
           onClick={onCancelScan}
-          className="sx-btn-press text-body -mr-3 inline-flex min-h-11 items-center self-start rounded-md px-3 font-medium text-[var(--sx-text-muted)] hover:bg-[var(--sx-subtle)] hover:text-[var(--sx-text)]"
+          className="sx-btn-press text-body -mr-[12px] inline-flex min-h-11 items-center self-start rounded-md px-[12px] font-medium text-[var(--sx-text-muted)] hover:bg-[var(--sx-subtle)] hover:text-[var(--sx-text)]"
         >
           Cancel scan
         </button>

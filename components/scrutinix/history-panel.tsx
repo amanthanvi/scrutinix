@@ -63,7 +63,7 @@ function HistoryRow({
         onClick={() => onSelect(entry)}
         className={cn(
           ROW_LAYOUT,
-          "-mx-3 w-[calc(100%+1.5rem)] rounded-[3px] px-3 py-3 text-left transition-colors hover:bg-[var(--sx-subtle)]",
+          "-mx-[12px] w-[calc(100%+24px)] rounded-[3px] px-[12px] py-3 text-left transition-colors hover:bg-[var(--sx-subtle)]",
         )}
       >
         <SignalGlyph result={entry} />
@@ -152,7 +152,7 @@ export function HistoryPanel({
           ) : null}
         </h2>
 
-        <div className="-mr-2.5 flex items-center gap-1">
+        <div className="-mr-[10px] flex items-center gap-1">
           {canUndoClear ? (
             <Button
               type="button"
@@ -223,7 +223,7 @@ export function HistoryPanel({
             ))}
           </ul>
 
-          <div className="mt-2 -ml-2.5 flex flex-wrap items-center gap-1">
+          <div className="mt-2 -ml-[10px] flex flex-wrap items-center gap-1">
             <Button
               type="button"
               onClick={async () => {

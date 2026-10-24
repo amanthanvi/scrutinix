@@ -32,7 +32,7 @@ export function AppHeader() {
           <Link
             href="/"
             aria-label="Scrutinix home"
-            className="-mx-1.5 flex min-h-11 items-center rounded-md px-1.5"
+            className="-mx-[6px] flex min-h-11 items-center rounded-md px-[6px]"
           >
             {wordmark}
           </Link>
@@ -40,7 +40,7 @@ export function AppHeader() {
 
         <nav
           aria-label="Primary"
-          className="-mr-2 flex flex-wrap items-center gap-0.5"
+          className="-mr-[8px] flex flex-wrap items-center gap-0.5"
         >
           {NAV.map(({ href, label }) => (
             <Link

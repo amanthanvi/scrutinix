@@ -102,7 +102,7 @@ export function SignalRow<N extends SignalName>({
       <details className="sx-disclosure">
         <summary
           aria-label={ariaLabel}
-          className="-mx-3 flex items-start gap-3.5 rounded-[3px] px-3 py-4 transition-colors hover:bg-[var(--sx-subtle)]"
+          className="-mx-[12px] flex items-start gap-3.5 rounded-[3px] px-[12px] py-4 transition-colors hover:bg-[var(--sx-subtle)]"
         >
           {summaryRow}
           <svg
