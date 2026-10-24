@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   smoke:
-    name: Doctor and smoke
+    name: Doctor, smoke, and drive
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -48,8 +48,14 @@ jobs:
       - name: Doctor
         run: npm run verify:doctor
 
+      - name: Skill checks
+        run: npm run verify:check
+
       - name: Smoke
         run: npm run verify:smoke
+
+      - name: Drive
+        run: npm run verify:drive
 
       - name: Cleanup
         if: always()

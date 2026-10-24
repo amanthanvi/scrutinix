@@ -6,12 +6,12 @@ The app is one centered column: scan form, verdict, signal rows, history. Method
 
 ## Baseline preconditions
 
-- Doctor reports `READY` on `http://127.0.0.1:3000` for a server `verify:launch` started.
-- That server has `SCRUTINIX_TEST_FIXTURES=1`. Live provider proofs are `INCONCLUSIVE` in this loop.
+- Doctor reports `READY` on the URL `verify:launch` recorded for this checkout (default `http://127.0.0.1:3000`).
+- That server has `SCRUTINIX_TEST_FIXTURES=1` and the published e2e share key from `scripts/run-e2e.mjs`. Live provider proofs are `INCONCLUSIVE` in this loop.
 - Prefer roles, accessible names, and the ids in the skill. Class selectors are a fallback.
 - Wait on the verdict region, history text, or IndexedDB rows. Do not sleep for a fixed time.
 - Each Playwright test gets a fresh browser context. IndexedDB and theme do not carry across tests.
-- The dev server allows 10 analyze requests per minute and 50 per day. `verify:smoke` uses 1. `verify:drive` uses 8. Running both in one minute uses 9.
+- The dev server allows 10 analyze requests per minute and 50 per day for each client. Every drive test presents its own client address (`isolateRateLimit` from `tests/e2e/helpers.ts`), so `verify:smoke` and `verify:drive` stay under it. A hand-driven browser does not.
 
 ## Proof and skip reporting
 
@@ -39,10 +39,10 @@ Walk this map top to bottom. `npm run verify:drive` covers every file. Finish wi
 ## Scanner
 
 - [input-validation](input-validation.md): Empty, hostile, private, and over-long URLs. Batch cap.
-- [single-scan](single-scan.md): One URL, Analyze, verdict, export JSON.
+- [single-scan](single-scan.md): One URL, Analyze, verdict, download JSON.
 - [verdict-and-signals](verdict-and-signals.md): Summary and Full rows, fixture verdicts, signal details.
-- [share-and-rescan](share-and-rescan.md): Share link, clipboard payload, re-scan cache hit.
-- [history](history.md): IndexedDB history, filter, export, clear, undo, legacy migration.
+- [share-and-rescan](share-and-rescan.md): Signed share link, verified and unverified views, re-scan cache hit.
+- [history](history.md): IndexedDB history (one row per link), filter, export, clear, undo, legacy migration.
 - [batch-scan](batch-scan.md): Up to 10 URLs, batch export, open a row.
 
 ## Journeys

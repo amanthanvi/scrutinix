@@ -46,11 +46,11 @@ Project-local operating notes for agents working in this repository. Keep this f
 - Build: `npm run build`
 - Lighthouse: `npm run lighthouse`
 - Security audit: `npm audit`
-- Verify the running app: `npm run verify:launch`, then `npm run verify:doctor`, `npm run verify:smoke` or `npm run verify:drive`, then `npm run verify:cleanup`
+- Verify the running app: `npm run verify:launch`, then `npm run verify:doctor`, `npm run verify:smoke` or `npm run verify:drive`, then `npm run verify:cleanup`. The skill's own tests: `npm run verify:check`
 
 ## Verification
 
-Drive the local scanner with `.agents/skills/verify-scrutinix/SKILL.md` (linked from `.cursor/skills/verify-scrutinix`). `verify:launch` starts `next dev` in tmux with `SCRUTINIX_TEST_FIXTURES=1`. Evidence stays in `/tmp/scrutinix-verify/evidence` after cleanup. Cleanup stops only the session recorded in `/tmp/scrutinix-verify/run.json` for this checkout. `verify:launch` snapshots `next-env.d.ts` and strips Next-managed blocks from this file. `verify:cleanup` restores that snapshot only when the file still matches what the run wrote. Otherwise it leaves the file and warns. Leave generated edits out of commits.
+Drive the local scanner with `.agents/skills/verify-scrutinix/SKILL.md` (linked from `.cursor/skills/verify-scrutinix`). `verify:launch` starts `next dev` in tmux with `SCRUTINIX_TEST_FIXTURES=1` and the published e2e share key (as `scripts/run-e2e.mjs` does), so shares are signed in this loop and never with a real key. Evidence stays in `/tmp/scrutinix-verify/evidence` after cleanup. `run.json` records the identity of what launch started (tmux session id and creation time, and each listener's pid, start time, executable, and cwd). Cleanup stops a process or session only when that identity still matches and it serves this checkout; it never stops anything by name or pattern. Diagnostics print only those identity fields, and log excerpts are redacted. `verify:launch` snapshots `next-env.d.ts` (which `next dev` rewrites for `.next/dev`); `verify:cleanup` restores that snapshot only when the file still matches what the run wrote. Otherwise it leaves the file and warns. Leave generated edits out of commits.
 
 The feature map at `.agents/skills/verify-scrutinix/references/features/README.md` is the regression sweep order. Feature pull requests need a Proof section: the exact commands, screenshot or trace paths that survive cleanup, the result of each command, and `INCONCLUSIVE` when a step could not run. Live provider calls are `INCONCLUSIVE` in this loop.
 

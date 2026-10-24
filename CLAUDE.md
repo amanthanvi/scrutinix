@@ -37,7 +37,8 @@ npm run verify:launch              # Fixture dev server in tmux
 npm run verify:doctor              # Read-only health check
 npm run verify:smoke               # One safe scan in Playwright
 npm run verify:drive               # Feature-map sweep
-npm run verify:cleanup             # Stop only what launch started
+npm run verify:cleanup             # Stop only what launch started (identity-checked)
+npm run verify:check               # The verify skill's own tests (needs tmux)
 ```
 
 ## Architecture

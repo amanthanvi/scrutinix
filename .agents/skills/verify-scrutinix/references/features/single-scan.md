@@ -5,13 +5,13 @@ Analyze one URL and read the verdict.
 ## Sub-features
 
 - submit: Analyze button or Enter
-- streaming: the box shows Cancel while a scan is in flight
+- streaming: the box shows Cancel while a scan is in flight, and Analyze is `aria-disabled`
 - verdict: region `Scan result: <verdict>` and meter `Threat score`
-- export: `scan.json` download
+- export: `scan.json` download (button `Download result (JSON)`)
 
 ## How to get to it (user POV)
 
-Open `/`. The Single tab is selected. Type a URL into the box whose name is `URL to analyze`. Click Analyze, or press Enter. The verdict replaces the empty column. Export JSON downloads the result. The URL also appears under History after the scan finishes.
+Open `/`. The Single tab is selected. Type a URL into the box whose name is `URL to analyze`. Click Analyze, or press Enter. The verdict band reads `Looks safe to open.` for a clean link, with the link's owner shown under it. `Download result (JSON)` saves the result. The URL also appears under History after the scan finishes.
 
 ## Driving it with Playwright
 
@@ -26,17 +26,17 @@ await expect(verdict).toBeVisible();
 
 Side effects:
 
-- The region contains `example.com`.
+- The region contains `Looks safe to open.` The link anatomy under it names `example.com`; the region itself does not repeat the URL.
 - The meter `aria-valuenow` is between 0 and 24 for this fixture.
 - IndexedDB `scrutinix-v2` / `scans` contains `https://example.com/`.
-- The Export JSON download contains that same URL. The file is saved as `scan.json` in the evidence directory.
+- The `Download result (JSON)` download contains that same URL. The file is saved as `scan.json` in the evidence directory.
 
 Screenshots: `smoke-home.png`, `smoke-safe.png`, `single-safe.png`.
 
 ## Gotchas
 
 - Fill the box inside `expect(...).toPass()`. A fill before hydration can be wiped.
-- The visible button text is `Analyze`. The accessible name is `Analyze URL`.
+- The visible button text is `Analyze`. The accessible name is `Analyze URL`. It is never disabled at rest: an empty submit shows `Paste a link to check.`
 - Fixture scans finish quickly. Cancel is `INCONCLUSIVE` in this loop because the button is not a stable target. Do not fail a drive for a missing Cancel control on `example.com`.
 - The first scan after launch compiles the analyze route and can take longer than later scans. The Playwright timeout is 180 seconds.
 - `example.com` is safe only because fixtures are on. Doctor does not prove that. This verdict does.
