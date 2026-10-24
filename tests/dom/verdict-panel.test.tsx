@@ -454,3 +454,61 @@ describe("VerdictBand", () => {
     expect(document.activeElement).toBe(verdict);
   });
 });
+
+describe("VerdictDetails reference", () => {
+  it("states the scan id once when checks failed", () => {
+    const signals = settledSignals();
+    signals.virusTotal = {
+      status: "error",
+      data: null,
+      error: "This check could not be completed.",
+      durationMs: 10,
+    };
+    signals.ssl = {
+      status: "error",
+      data: null,
+      error: "This check could not be completed.",
+      durationMs: 10,
+    };
+    render(
+      <VerdictDetails
+        result={buildResult(
+          "suspicious",
+          {},
+          { partialFailure: true, signals },
+        )}
+      />,
+    );
+
+    expect(screen.getAllByText(/Reference/)).toHaveLength(1);
+    expect(screen.getByText("Reference: suspicious-scan")).toBeTruthy();
+  });
+
+  it("gives a failed batch item its reference without a verdict", () => {
+    render(
+      <VerdictDetails
+        result={createErrorAnalysisResult({
+          url: "https://failed.example/",
+          scanId: "failed-scan",
+          startedAt: "2026-08-02T12:00:00.000Z",
+          message: "This URL could not be scanned.",
+        })}
+      />,
+    );
+
+    expect(screen.getByText("Reference: failed-scan")).toBeTruthy();
+  });
+
+  it("stays quiet when every check completed", () => {
+    render(
+      <VerdictDetails
+        result={buildResult("safe", {
+          reasons: ["Nothing flagged."],
+          hasPositiveEvidence: true,
+        })}
+      />,
+    );
+
+    expect(screen.queryByText(/Reference/)).toBeNull();
+  });
+});

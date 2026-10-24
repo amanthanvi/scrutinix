@@ -233,9 +233,11 @@ describe("threat feed provider", () => {
 
     const result = await runThreatFeedsProvider("https://example.com/");
 
-    expect(result.warnings).toContain(
-      "URLhaus host lookup failed: fetch failed",
-    );
+    const warnings = result.warnings.join("\n");
+    expect(warnings).not.toContain("Failed to fetch");
+    expect(warnings).not.toContain("fetch failed");
+    // A plain sentence: the scan's reference is shown once per result.
+    expect(result.warnings).toContain("URLhaus lookup failed.");
     expect(result.observations).not.toContain(URLHAUS_NO_LISTING_OBSERVATION);
   });
 

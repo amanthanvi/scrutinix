@@ -76,6 +76,49 @@ describe("runSslSignal", () => {
     expect(result.observations[0]).toContain("38376");
   });
 
+  it("does not return raw TLS exception text", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.spyOn(tls, "connect").mockImplementation(() => {
+      const socket = {
+        setTimeout: vi.fn(),
+        once: vi.fn((event: string, handler: (err?: Error) => void) => {
+          if (event === "error") {
+            queueMicrotask(() => {
+              handler(
+                new Error(
+                  "handshake failed for redis://default:s3cret-token@cache.internal ONNXRuntime",
+                ),
+              );
+            });
+          }
+        }),
+        destroy: vi.fn(),
+        end: vi.fn(),
+      };
+      return socket as unknown as tls.TLSSocket;
+    });
+
+    const result = await runSslSignal(
+      "https://15.58.86.110:38376/bin.sh",
+      undefined,
+      "scan-1234",
+    );
+    const observation = result.observations.join("\n");
+
+    expect(result.available).toBe(false);
+    expect(observation).toContain("The TLS probe failed unexpectedly.");
+    // The result states the scan's reference once; the row stays plain.
+    expect(observation).not.toContain("Reference");
+    expect(observation).not.toContain("s3cret-token");
+    expect(observation).not.toContain("redis://");
+    expect(observation).not.toContain("ONNXRuntime");
+
+    const logged = errorSpy.mock.calls.map((call) => String(call[0])).join("");
+    expect(logged).toContain('"correlationId":"scan-1234"');
+    expect(logged).toContain("ONNXRuntime");
+    expect(logged).not.toContain("redis://");
+  });
+
   it("blocks private literal IPs before opening a TLS socket", async () => {
     const connectSpy = vi.spyOn(tls, "connect");
 

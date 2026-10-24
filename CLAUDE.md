@@ -128,6 +128,13 @@ tests/
   (details rows, consensus notes, verdict reasons).
 - **Verdict engine**: confirmed sources can convict; unreachable hosts produce
   an honest `unknown`; exculpatory evidence never erases confirmed hits.
+- **Client errors**: only `PublicError` messages are shown as written;
+  other exception text is logged with URL redaction and never forwarded
+  (`lib/server/client-error.ts`). The reference is the scan's own id:
+  terminal errors say "… Reference: <scanId>." (`exposeClientError`),
+  failed checks keep a plain sentence (`checkFailureMessage`, logged under
+  the scan id), and `VerdictDetails` states the reference once for a failed
+  or partial result. The stream backstop names its route ("scan"/"batch").
 - **One encoding per fact**: threat score renders once; severity renders once
   per signal. Verdict text uses AA-safe `--sx-<verdict>-fg` tokens. A source
   that found nothing is `clear` (gray `--sx-clear`), never green; Unknown has

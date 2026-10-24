@@ -2,6 +2,7 @@ import { http, HttpResponse } from "msw";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { resetEnvForTests } from "@/lib/config/env";
+import { PublicError } from "@/lib/domain/public-error";
 import { decodeSharedSnapshot } from "@/lib/domain/signal-signature";
 import { classifyUrlLocally } from "@/lib/server/ml/local-classifier";
 import { verifySharePayload } from "@/lib/server/share-signing";
@@ -892,7 +893,9 @@ describe("analysis routes", () => {
         ...actual,
         runAnalysis: vi.fn<RunAnalysis>(async (target, options) => {
           if (target.normalizedUrl.includes("bad.example")) {
-            throw new Error("Synthetic batch failure.");
+            throw new Error(
+              "Synthetic batch failure. ONNXRuntime WRONGPASS s3cret-token redis://default:s3cret-token@cache.internal",
+            );
           }
 
           return actual.runAnalysis(target, options);
@@ -902,6 +905,7 @@ describe("analysis routes", () => {
 
     const { POST } = await import("@/app/api/analyze/batch/route");
     installHandlers();
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
     const response = await POST(
       new Request("http://localhost/api/analyze/batch", {
@@ -916,25 +920,214 @@ describe("analysis routes", () => {
     );
 
     const events = await parseNdjsonEvents(response);
+    const logged = errorSpy.mock.calls.map((call) => String(call[0])).join("");
+    errorSpy.mockRestore();
 
     expect(
       events.filter((event) => event.type === "url_complete"),
     ).toHaveLength(2);
     expect(events.at(-1)?.type).toBe("batch_complete");
-    expect(
-      events.find(
-        (event) =>
-          event.type === "url_complete" && event.url?.includes("bad.example"),
-      )?.result,
-    ).toMatchObject({
+    const failed = events.find(
+      (event) =>
+        event.type === "url_complete" && event.url?.includes("bad.example"),
+    )?.result;
+    expect(failed).toMatchObject({
       verdict: "error",
       metadata: {
         partialFailure: true,
       },
     });
+    const serialized = JSON.stringify(failed);
+    expect(serialized).toContain("This URL could not be scanned.");
+    // The rows stay plain; the result's own scan id is its one reference,
+    // and the server log line carries the same id.
+    expect(serialized).not.toContain("Reference");
+    const failedScanId = failed?.metadata?.scanId;
+    expect(failedScanId).toBeTruthy();
+    expect(logged).toContain(`"correlationId":"${failedScanId}"`);
+    expect(logged).not.toContain("bad.example");
+    expect(serialized).not.toContain("Synthetic batch failure");
+    expect(serialized).not.toContain("s3cret-token");
+    expect(serialized).not.toContain("ONNXRuntime");
+    expect(serialized).not.toContain("redis://");
 
     vi.doUnmock("@/lib/server/analyze");
     vi.resetModules();
+  });
+
+  it("returns specific validation errors for a bad URL", async () => {
+    const { POST } = await import("@/app/api/analyze/route");
+    const response = await POST(
+      new Request("http://localhost/api/analyze", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ url: "ftp://files.example/a" }),
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    const body = (await response.json()) as {
+      error?: { code?: string; message?: string };
+    };
+    expect(body.error?.code).toBe("invalid_url");
+    expect(body.error?.message).toBe(
+      "Only web links (http or https) can be checked.",
+    );
+  });
+
+  it("returns a specific batch-size error", async () => {
+    const { POST } = await import("@/app/api/analyze/batch/route");
+    const response = await POST(
+      new Request("http://localhost/api/analyze/batch", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ urls: [] }),
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    const body = (await response.json()) as {
+      error?: { code?: string; message?: string };
+    };
+    expect(body.error?.code).toBe("invalid_batch_size");
+    expect(body.error?.message).toContain("between 1 and");
+  });
+
+  it("does not stream internal exception text when a scan throws", async () => {
+    vi.resetModules();
+    const leak =
+      "ONNXRuntime failed WRONGPASS s3cret-token redis://default:s3cret-token@cache.internal for https://evil.example/phish";
+    vi.doMock("@/lib/server/analyze", async (importOriginal) => {
+      const actual =
+        await importOriginal<typeof import("@/lib/server/analyze")>();
+      return {
+        ...actual,
+        runAnalysis: vi.fn(async () => {
+          throw new Error(leak);
+        }),
+      };
+    });
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    try {
+      const { POST } = await import("@/app/api/analyze/route");
+      const response = await POST(
+        new Request("http://localhost/api/analyze", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ url: "https://example.com/" }),
+        }),
+      );
+      const text = await response.text();
+
+      expect(text).toContain("The scan failed unexpectedly.");
+      expect(text).toMatch(/Reference: [0-9a-f-]{36}\./);
+      expect(text).not.toContain("s3cret-token");
+      expect(text).not.toContain("ONNXRuntime");
+      expect(text).not.toContain("WRONGPASS");
+      expect(text).not.toContain("redis://");
+      expect(text).not.toContain("evil.example");
+
+      const logged = errorSpy.mock.calls
+        .map((call) => String(call[0]))
+        .join("\n");
+      expect(logged).toContain("ONNXRuntime");
+      expect(logged).toContain("WRONGPASS");
+      expect(logged).not.toContain("redis://");
+      expect(logged).not.toContain("https://evil.example/phish");
+    } finally {
+      errorSpy.mockRestore();
+      vi.doUnmock("@/lib/server/analyze");
+      vi.resetModules();
+    }
+  });
+
+  it("keeps a public provider message on the signal and hides internal throws", async () => {
+    vi.resetModules();
+    const leak =
+      "ONNXRuntime failed WRONGPASS s3cret-token redis://default:s3cret-token@cache.internal";
+    const provider = vi
+      .fn()
+      .mockRejectedValueOnce(
+        new PublicError(
+          "not_configured",
+          "VirusTotal API key is not configured.",
+        ),
+      )
+      .mockRejectedValueOnce(new Error(leak));
+    vi.doMock("@/lib/server/providers/virustotal", () => ({
+      runVirusTotalProvider: provider,
+    }));
+
+    try {
+      const { POST } = await import("@/app/api/analyze/route");
+      installHandlers();
+      const safeResponse = await POST(
+        new Request("http://localhost/api/analyze", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ url: "https://example.com/" }),
+        }),
+      );
+      const safeText = await safeResponse.text();
+      expect(safeText).toContain("VirusTotal API key is not configured.");
+      expect(safeText).not.toContain(leak);
+
+      vi.resetModules();
+      vi.doMock("@/lib/server/providers/virustotal", () => ({
+        runVirusTotalProvider: vi.fn(async () => {
+          throw new Error(leak);
+        }),
+      }));
+      const { POST: failingPost } = await import("@/app/api/analyze/route");
+      installHandlers();
+      const failingResponse = await failingPost(
+        new Request("http://localhost/api/analyze", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ url: "https://example.com/" }),
+        }),
+      );
+      const failingText = await failingResponse.text();
+      expect(failingText).toContain("This check could not be completed.");
+      // One reference per result: the row is plain and the scan is marked
+      // partial, so the verdict details state the scan id once.
+      expect(failingText).not.toContain("Reference");
+      expect(failingText).toContain('"partialFailure":true');
+      expect(failingText).not.toContain("s3cret-token");
+      expect(failingText).not.toContain("ONNXRuntime");
+      expect(failingText).not.toContain("redis://");
+    } finally {
+      vi.doUnmock("@/lib/server/providers/virustotal");
+      vi.resetModules();
+    }
+  });
+
+  it("hides abort reasons on batch_error", async () => {
+    const { POST } = await import("@/app/api/analyze/batch/route");
+    const controller = new AbortController();
+    controller.abort(
+      new Error(
+        "redis://default:s3cret-token@cache.internal WRONGPASS ONNXRuntime",
+      ),
+    );
+
+    const response = await POST(
+      new Request("http://localhost/api/analyze/batch", {
+        method: "POST",
+        signal: controller.signal,
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ urls: ["https://example.com/"] }),
+      }),
+    );
+    const text = await response.text();
+
+    expect(text).toContain("The batch failed unexpectedly.");
+    expect(text).toMatch(/Reference: [0-9a-f-]{36}\./);
+    expect(text).not.toContain("s3cret-token");
+    expect(text).not.toContain("WRONGPASS");
+    expect(text).not.toContain("ONNXRuntime");
+    expect(text).not.toContain("redis://");
   });
 });
 
@@ -963,6 +1156,7 @@ async function parseNdjsonEvents(response: Response) {
                     partialFailure?: boolean;
                     completedAt?: string;
                     checkedAt?: string;
+                    scanId?: string;
                   };
                 };
               },

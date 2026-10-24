@@ -4,6 +4,7 @@ import { useCallback, useMemo, useRef } from "react";
 
 import { readNdjsonStream } from "@/lib/client/ndjson";
 import { streamFailureApiError } from "@/lib/client/stream-error";
+import { PublicError } from "@/lib/domain/public-error";
 import { sanitizeApiErrorResponse } from "@/lib/domain/runtime-safety";
 import type { ApiError } from "@/lib/domain/types";
 
@@ -62,7 +63,10 @@ export function useNdjsonRequest(options: NdjsonRequestOptions) {
         }
 
         await readNdjsonStream(response, (event) => {
-          if (!isActive()) return;
+          // The first terminal event is the outcome. A later one (the stream
+          // backstop appends an error after a handler that already sent its
+          // own) must not overwrite it.
+          if (!isActive() || sawTerminalEvent) return;
           if (handlers.onEvent(event) === "terminal") {
             sawTerminalEvent = true;
           }
@@ -70,13 +74,18 @@ export function useNdjsonRequest(options: NdjsonRequestOptions) {
         if (isActive() && !sawTerminalEvent) {
           handlers.onError(
             streamFailureApiError(
-              new Error("The result stream ended before a terminal event."),
+              new PublicError(
+                "stream_truncated",
+                "The result stream ended before a terminal event.",
+              ),
               streamFailureMessage,
             ),
           );
         }
       } catch (error) {
-        if (!isActive()) return;
+        // A later read failure, including a truncated line after the terminal
+        // event, must not replace that event or its reference id.
+        if (!isActive() || sawTerminalEvent) return;
 
         if (
           controller.signal.aborted ||
