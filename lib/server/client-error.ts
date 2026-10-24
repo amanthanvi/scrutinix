@@ -1,3 +1,5 @@
+import { isIP } from "node:net";
+
 import {
   isPublicError,
   unexpectedClientMessage,
@@ -6,6 +8,19 @@ import { logError } from "@/lib/server/logger";
 
 // file:// stack frames stay readable. Every other scheme (https, redis, …) is a URL.
 const URL_IN_TEXT = /\b(?!file:\/\/)[a-z][a-z0-9+.-]*:\/\/[^\s"'<>\\]+/gi;
+
+// Candidates only: each match is kept unless node:net confirms it is an IP,
+// so times ("12:34:56") and stack positions (":120:7") stay readable. The
+// dotted tail comes first so ::ffff:198.51.100.7 is one address.
+const IPV6_CANDIDATE =
+  /(?<![0-9a-f:])(?:[0-9a-f]{0,4}:){2,7}(?:\d{1,3}(?:\.\d{1,3}){3}|[0-9a-f]{1,4})?(?![0-9a-f:])/gi;
+const IPV4_CANDIDATE = /(?<![\d.])\d{1,3}(?:\.\d{1,3}){3}(?![\d.])/g;
+
+function redactIpLiterals(value: string): string {
+  return value
+    .replace(IPV6_CANDIDATE, (match) => (isIP(match) === 6 ? "[ip]" : match))
+    .replace(IPV4_CANDIDATE, (match) => (isIP(match) === 4 ? "[ip]" : match));
+}
 
 export interface ClientErrorView {
   code: string;
@@ -30,8 +45,11 @@ export interface ClientErrorOptions {
 }
 
 /**
- * Replace scanned URLs, hostnames, and any scheme-bearing URL (Redis DSNs,
- * request URLs embedded in parser errors) before a string is logged.
+ * Replace scanned URLs, hostnames, any scheme-bearing URL (Redis DSNs,
+ * request URLs embedded in parser errors), and IP literals before a string
+ * is logged. A socket error names the scanned site's address
+ * ("connect ECONNREFUSED 93.184.215.14:443"), which says which site was
+ * scanned as surely as its hostname.
  */
 export function redactForLogs(value: string, secrets: readonly string[] = []) {
   let redacted = value;
@@ -47,7 +65,7 @@ export function redactForLogs(value: string, secrets: readonly string[] = []) {
     redacted = redacted.split(needle).join("[redacted]");
   }
 
-  return redacted.replace(URL_IN_TEXT, "[url]");
+  return redactIpLiterals(redacted.replace(URL_IN_TEXT, "[url]"));
 }
 
 /**

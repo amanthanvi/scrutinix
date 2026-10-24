@@ -24,6 +24,22 @@ describe("redactForLogs", () => {
     expect(redacted).toContain("ONNXRuntime");
     expect(redacted).toContain("WRONGPASS");
   });
+
+  it("strips IP literals, which name the scanned site as surely as its host", () => {
+    expect(
+      redactForLogs(
+        "connect ECONNREFUSED 93.184.215.14:443; also 2606:2800:21f:cb07:6820:80da:af6b:8b2c, [2001:db8::1]:443, ::ffff:198.51.100.7 and ::1",
+      ),
+    ).toBe(
+      "connect ECONNREFUSED [ip]:443; also [ip], [[ip]]:443, [ip] and [ip]",
+    );
+  });
+
+  it("keeps times, stack positions, and versions that aren't addresses", () => {
+    const text =
+      "at handler (/app/.next/server/chunks/route.js:120:7) at 12:34:56, next 16.3.8, code 999.1.1.1";
+    expect(redactForLogs(text)).toBe(text);
+  });
 });
 
 describe("exposeClientError", () => {
