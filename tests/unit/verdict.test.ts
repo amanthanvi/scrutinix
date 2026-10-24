@@ -1912,4 +1912,22 @@ describe("redirects over plain HTTP", () => {
     ).toBe(10);
     expect(scoreWithHop({ url: "", status: 301, location: "/b" })).toBe(0);
   });
+
+  it("doesn't count a response that doesn't redirect, whatever its Location says", () => {
+    expect(
+      scoreWithHop({ url: "http://site.com/a", status: 200, location: "/b" }),
+    ).toBe(0);
+    expect(
+      scoreWithHop({
+        url: "https://site.com/a",
+        status: 200,
+        location: "http://site.com/b",
+      }),
+    ).toBe(0);
+    for (const status of [302, 303, 307, 308]) {
+      expect(
+        scoreWithHop({ url: "http://site.com/a", status, location: "/b" }),
+      ).toBe(10);
+    }
+  });
 });

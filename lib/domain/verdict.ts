@@ -7,6 +7,7 @@ import {
   isElsewhereOnHost,
 } from "@/lib/domain/feed-copy";
 import { getRegistrableDomain } from "@/lib/domain/registrable-domain";
+import { redirectsOverHttp } from "@/lib/domain/redirects";
 import {
   feedMatchWeight,
   VT_CONVICTION_ENGINES,
@@ -679,20 +680,6 @@ function scoreRedirects(signals: SignalResults): ScoredItem[] {
   }
 
   return contributions;
-}
-
-/**
- * A hop whose redirect lands on plain HTTP. A relative Location ("/b") is
- * resolved against the hop it came from, so staying on HTTP counts the same
- * whether the server writes the full address or not.
- */
-function redirectsOverHttp(hop: { url: string; location?: string }): boolean {
-  if (!hop.location) return false;
-  try {
-    return new URL(hop.location, hop.url || undefined).protocol === "http:";
-  } catch {
-    return false;
-  }
 }
 
 function registrableDomainOf(url: string | undefined): string | null {

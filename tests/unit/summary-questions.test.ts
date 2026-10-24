@@ -1371,6 +1371,23 @@ describe("every scored finding", () => {
       "https://example.com/",
     );
     add(
+      "relative redirect that stays on plain HTTP",
+      (s) => {
+        s.redirectChain.data = chain([
+          ["http://example.com/a", 301, "/b"],
+          ["http://example.com/b", 200],
+        ]);
+      },
+      "http://example.com/a",
+    );
+    add(
+      "a 200 that carries a Location (no redirect)",
+      (s) => {
+        s.redirectChain.data = chain([["http://example.com/", 200, "/b"]]);
+      },
+      "http://example.com/",
+    );
+    add(
       "unfinished chain",
       (s) => {
         s.redirectChain.data = chain(

@@ -323,6 +323,7 @@ score band. No score or verdict changes.
 - [x] Review round: stated the shared-platform exception, the VirusTotal discount's no-date case, the model arithmetic, the meta-refresh and downloaded-HTML limits, "at least Malicious", and what Look-alike recognises; confidence now prints `CONFIDENCE_POLICY` (cut-offs, caps, bounds, full arithmetic in a disclosure). The test pins every printed number and both sides of each threshold (nine page/engine/provider mutations each fail it).
 - [x] Second review round: confidence copy states that a partial threat-feed answer is thin only when it found nothing and that a set-aside shared-platform listing earns no clean-feed credit; the rules text moved into `methodology.ts` and prints the engine's thresholds; thresholds are digits and each row's numbers are checked in order; each confidence step is checked against its own policy field. The reviewer's four escaping mutations now fail the test.
 - [x] Two engine fixes the review found: a multi-code Spamhaus answer reads as its strongest listing (phishing over spam), and a relative redirect on a plain-HTTP hop counts as staying on HTTP (10), like an absolute one.
+- [x] Whole-stack review: the HTTP-redirect sign counts only a redirect status (301, 302, 303, 307, 308), so a 200 that carries a Location (absolute or relative) never scores; the predicate (`lib/domain/redirects.ts`) is shared with the Summary, which now explains a relative redirect that stays on plain HTTP (the scorer-coverage walk covers both).
 
 ### P24 Resolve September dependency maintenance
 

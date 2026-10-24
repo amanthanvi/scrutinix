@@ -432,6 +432,16 @@ const SCENARIOS: Record<string, Scenario[]> = {
       }),
       points: 10,
     },
+    {
+      // A response that doesn't redirect isn't one, whatever its Location.
+      add: redirect({
+        totalHops: 0,
+        finalUrl: "http://site.com/a",
+        hops: [{ url: "http://site.com/a", status: 200, location: "/b" }],
+      }),
+      points: 0,
+      stated: false,
+    },
   ],
   "redirect-cross": [
     {

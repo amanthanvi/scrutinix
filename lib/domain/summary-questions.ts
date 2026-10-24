@@ -14,6 +14,7 @@ import {
 } from "@/lib/domain/feed-copy";
 import { PRIVATE_ADDRESSES_OMITTED } from "@/lib/domain/blocked-address";
 import { hostOf } from "@/lib/domain/link-anatomy";
+import { redirectsOverHttp } from "@/lib/domain/redirects";
 import {
   hasConfirmedReputationHit,
   VT_CONVICTION_ENGINES,
@@ -593,7 +594,7 @@ function answerDestination({
     route = "It opens this site directly, without redirects.";
   }
 
-  const downgraded = hops.some((hop) => hop.location?.startsWith("http://"));
+  const downgraded = hops.some(redirectsOverHttp);
   const content = data.content ?? null;
   const passwordHosts =
     content && content.passwordInputCount > 0
