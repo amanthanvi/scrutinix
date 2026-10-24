@@ -324,6 +324,24 @@ describe("a launch still being claimed", () => {
     expect(scannedUrls(fetchMock)).toEqual([other]);
   });
 
+  it("gives way to a switch to Batch and an edit there", async () => {
+    const fetchMock = stubScan(LINK);
+    const claim = holdClaim();
+    renderApp({ launch: launchOf("batch-edit-launch-id") });
+    await waitFor(() => expect(launchClaims.claimLaunch).toHaveBeenCalled());
+
+    const batchTab = screen.getByRole("tab", { name: /batch/i });
+    fireEvent.mouseDown(batchTab);
+    fireEvent.click(batchTab);
+    await waitFor(() =>
+      expect(batchTab.getAttribute("aria-selected")).toBe("true"),
+    );
+    await act(async () => claim.commit(true));
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 50)));
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(batchTab.getAttribute("aria-selected")).toBe("true");
+  });
+
   it("gives way to an edit of the field", async () => {
     const fetchMock = stubScan(LINK);
     const claim = holdClaim();

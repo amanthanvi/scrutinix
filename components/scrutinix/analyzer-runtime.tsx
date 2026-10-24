@@ -163,9 +163,19 @@ function useCreateAnalyzerRuntime(
   );
 
   // A share-target launch still being claimed (below) gives way to anything
-  // the person does meanwhile: editing the field, scanning, re-scanning, or
-  // opening a saved result.
+  // the person does meanwhile: editing the field, switching tabs, editing a
+  // batch, scanning, re-scanning, or opening a saved result.
   const launchWantedRef = useRef(true);
+
+  const chooseTab = useCallback((tab: Tab) => {
+    launchWantedRef.current = false;
+    setActiveTab(tab);
+  }, []);
+
+  const editBatchInput = useCallback((value: string) => {
+    launchWantedRef.current = false;
+    setBatchInput(value);
+  }, []);
 
   const updateSingleUrl = useCallback((value: string) => {
     launchWantedRef.current = false;
@@ -431,8 +441,8 @@ function useCreateAnalyzerRuntime(
     scored,
     selectedResult,
     selectHistoryEntry,
-    setActiveTab,
-    setBatchInput,
+    setActiveTab: chooseTab,
+    setBatchInput: editBatchInput,
     setFormError,
     setSelectedResult,
     setSingleUrl,
