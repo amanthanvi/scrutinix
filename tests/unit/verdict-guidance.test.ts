@@ -527,6 +527,30 @@ describe("look-alike hedging (presentation only)", () => {
     );
   });
 
+  it("never says nothing was flagged when a check found something", () => {
+    // One VirusTotal engine can leave a link Safe at 12: true minor evidence.
+    const minor = buildResult("safe", {
+      score: 12,
+      confidenceLabel: "moderate",
+      hasPositiveEvidence: true,
+    });
+    const lookAlike = { ...minor, impersonates: "paypal.com" };
+    expect(getUnderlyingVerdictNote(lookAlike)).toBe(
+      "On their own, the checks scored it Safe, 12 out of 100.",
+    );
+    expect(getVerdictGuidance(lookAlike).confidenceNote).toBe(
+      "The checks found nothing serious, but the name is misleading.",
+    );
+    // A shared snapshot carries no evidence either way.
+    expect(
+      getVerdictGuidance({
+        verdict: "safe",
+        threatInfo: null,
+        impersonates: "paypal.com",
+      }).confidenceNote,
+    ).toBe("The checks found nothing serious, but the name is misleading.");
+  });
+
   it("states a look-alike Safe's own verdict and score in the details only", () => {
     const safe = buildResult("safe", { score: 4, confidenceLabel: "high" });
     expect(

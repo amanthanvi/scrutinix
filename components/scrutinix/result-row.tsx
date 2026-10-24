@@ -2,7 +2,10 @@
 
 import { LinkAnatomyCompact } from "@/components/scrutinix/link-anatomy";
 import { verdictFg } from "@/components/shared/scrutinix-types";
-import { useLinkAnatomy } from "@/hooks/use-link-anatomy";
+import {
+  useLinkAnatomy,
+  type LinkAnatomyState,
+} from "@/hooks/use-link-anatomy";
 import type { LinkAnatomy } from "@/lib/domain/link-anatomy";
 import type { Verdict } from "@/lib/domain/types";
 import { isLookAlikeSafe, verdictWord } from "@/lib/domain/verdict-guidance";
@@ -28,21 +31,38 @@ export const ROW_LINK =
 /** The trailing item (time, Open) sits right on the phone's first line. */
 export const ROW_TRAILING = "ml-auto shrink-0 sm:ml-0";
 
-/** The anatomy of a row's link; null until the parser loads. */
-export function useRowAnatomy(url: string): LinkAnatomy | null {
-  return useLinkAnatomy(url).anatomy;
+/**
+ * The anatomy of a row's link (null until the parser loads), and whether
+ * that answer is final: a row cannot tell a Safe look-alike from a Safe
+ * link until it is.
+ */
+export function useRowAnatomy(url: string): LinkAnatomyState {
+  return useLinkAnatomy(url);
 }
 
 export function RowVerdict({
   verdict,
   impersonates,
+  anatomyReady = true,
   label,
 }: {
   verdict: Verdict | null;
   impersonates: string | null;
+  /**
+   * False while the link parser loads: a Safe row waits rather than flash
+   * a reassuring "Safe" that turns into "Look-alike".
+   */
+  anatomyReady?: boolean;
   /** Shown instead of a verdict while there is none ("Checking"). */
   label?: string;
 }) {
+  if (verdict === "safe" && !anatomyReady) {
+    return (
+      <span className="text-meta w-auto shrink-0 font-semibold text-[var(--sx-text-soft)] sm:w-[5.5rem]">
+        <span aria-hidden="true">—</span>
+      </span>
+    );
+  }
   const lookAlike = verdict
     ? isLookAlikeSafe({ verdict, impersonates })
     : false;

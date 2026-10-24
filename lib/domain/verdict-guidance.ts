@@ -108,9 +108,20 @@ export function shareHeadline(
 }
 
 /**
+ * Whether we may say no check flagged the link: only when the verdict
+ * engine scored nothing against it. A Safe verdict can still carry minor
+ * findings (one VirusTotal engine, a few structure points), and a shared
+ * snapshot carries no evidence to say either way.
+ */
+function nothingFlagged(result: Pick<GuidanceInput, "threatInfo">): boolean {
+  return Boolean(result.threatInfo && !result.threatInfo.hasPositiveEvidence);
+}
+
+/**
  * Where a Safe look-alike's own verdict and score live, since its band
  * shows "Look-alike" and no score: "No check flagged it: on their own, the
- * checks scored it Safe, 12 out of 100." Null for every other result.
+ * checks scored it Safe, 4 out of 100." It only says nothing was flagged
+ * when that is true. Null for every other result.
  */
 export function getUnderlyingVerdictNote(
   result: Pick<GuidanceInput, "verdict" | "impersonates" | "threatInfo">,
@@ -121,7 +132,10 @@ export function getUnderlyingVerdictNote(
   const score = result.threatInfo
     ? `, ${clampScore(result.threatInfo.score)} out of 100`
     : "";
-  return `No check flagged it: on their own, the checks scored it ${verdictLabel(result.verdict)}${score}.`;
+  const scored = `the checks scored it ${verdictLabel(result.verdict)}${score}.`;
+  return nothingFlagged(result)
+    ? `No check flagged it: on their own, ${scored}`
+    : `On their own, ${scored}`;
 }
 
 /**
@@ -193,7 +207,9 @@ function getInstruction(
           imperative: "Don't sign in or enter details here.",
           showScore: false,
           tone: "unknown",
-          confidenceNote: "No check flagged it, but the name is misleading.",
+          confidenceNote: nothingFlagged(result)
+            ? "No check flagged it, but the name is misleading."
+            : "The checks found nothing serious, but the name is misleading.",
         };
       }
       return {

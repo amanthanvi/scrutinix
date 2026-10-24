@@ -10,6 +10,14 @@ describe("RowVerdict", () => {
     expect(word.getAttribute("style")).toContain("var(--sx-unknown-fg)");
   });
 
+  it("holds a Safe row's word until it is known not to be a look-alike", () => {
+    render(
+      <RowVerdict verdict="safe" impersonates={null} anatomyReady={false} />,
+    );
+    expect(screen.queryByText("Safe")).toBeNull();
+    expect(screen.queryByText("Look-alike")).toBeNull();
+  });
+
   it("names every other result by its verdict", () => {
     render(
       <>

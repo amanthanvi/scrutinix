@@ -16,6 +16,7 @@ import {
   useRowAnatomy,
 } from "@/components/scrutinix/result-row";
 import { SignalGlyph } from "@/components/scrutinix/signal-strip";
+import { getLoadedLinkParser } from "@/hooks/use-link-anatomy";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
@@ -54,7 +55,7 @@ function HistoryRow({
   entry: HistoryEntry;
   onSelect: (entry: HistoryEntry) => void;
 }) {
-  const anatomy = useRowAnatomy(entry.url);
+  const { anatomy, ready: anatomyReady } = useRowAnatomy(entry.url);
   return (
     <li>
       <button
@@ -69,6 +70,7 @@ function HistoryRow({
         <RowVerdict
           verdict={entry.verdict}
           impersonates={anatomy?.impersonates ?? null}
+          anatomyReady={anatomyReady}
         />
         <RowLink url={entry.url} anatomy={anatomy} />
         <span
@@ -220,7 +222,10 @@ export function HistoryPanel({
             <Button
               type="button"
               onClick={() =>
-                downloadTextFile("scan-history.csv", resultsToCsv(entries))
+                downloadTextFile(
+                  "scan-history.csv",
+                  resultsToCsv(entries, getLoadedLinkParser()),
+                )
               }
               variant="ghost"
               size="sm"

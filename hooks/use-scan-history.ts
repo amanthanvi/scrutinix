@@ -14,6 +14,9 @@ import { toast } from "sonner";
 import { sanitizeHistoryEntry } from "@/lib/domain/runtime-safety";
 import type { AnalysisResult, HistoryEntry } from "@/lib/domain/types";
 import { normalizeUrlInput } from "@/lib/domain/url";
+import { getLoadedLinkParser } from "@/hooks/use-link-anatomy";
+import { splitLinkAnatomy } from "@/lib/domain/link-anatomy";
+import { verdictWord } from "@/lib/domain/verdict-guidance";
 
 interface HistoryDatabase extends DBSchema {
   scans: {
@@ -162,9 +165,19 @@ export function useScanHistory() {
           ? entry.threatInfo.summary
           : "";
       const verdict = typeof entry.verdict === "string" ? entry.verdict : "";
+      // Rows show "Look-alike" for a Safe look-alike: match what is shown.
+      const parse = getLoadedLinkParser();
+      const shown =
+        parse && verdict
+          ? verdictWord({
+              verdict: entry.verdict,
+              impersonates: splitLinkAnatomy(parse, url)?.impersonates ?? null,
+            })
+          : "";
       return (
         url.toLowerCase().includes(query) ||
         verdict.toLowerCase().includes(query) ||
+        shown.toLowerCase().includes(query) ||
         summary.toLowerCase().includes(query)
       );
     });

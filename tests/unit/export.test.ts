@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import { parse } from "tldts";
+
 import { resultsToCsv } from "@/lib/client/export";
 import {
   createPendingSignalResults,
@@ -55,5 +57,19 @@ describe("resultsToCsv", () => {
     const csv = resultsToCsv([buildResult('https://example.com/?q="x"')]);
 
     expect(csv).toContain('"https://example.com/?q=""x"""');
+  });
+
+  it("names the site a look-alike imitates, keeping the stored verdict", () => {
+    const csv = resultsToCsv(
+      [
+        buildResult("https://paypal.com.secure-login.xyz/verify"),
+        buildResult("https://example.com/"),
+      ],
+      parse,
+    );
+    const [header, lookAlike, plain] = csv.replace(/^\uFEFF/, "").split("\r\n");
+    expect(header).toContain('"Verdict","Look-alike of"');
+    expect(lookAlike).toContain('"safe","paypal.com"');
+    expect(plain).toContain('"safe",""');
   });
 });

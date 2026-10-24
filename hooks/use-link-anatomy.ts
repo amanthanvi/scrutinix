@@ -37,6 +37,15 @@ export function warmLinkParser(): void {
   preloadLinkParser().catch(() => {});
 }
 
+/**
+ * The parser if it has already loaded, else null. For synchronous work over
+ * many links (history filtering, CSV export) on screens whose rows have
+ * already loaded it.
+ */
+export function getLoadedLinkParser(): ParseHostname | null {
+  return loadedParse;
+}
+
 export interface LinkAnatomyState {
   /** Null until the parser loads, and for links that aren't http(s). */
   anatomy: LinkAnatomy | null;
