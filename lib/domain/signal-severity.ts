@@ -15,6 +15,13 @@ import type { SignalName, SignalPayloadMap } from "@/lib/domain/types";
  */
 export const YOUNG_DOMAIN_DAYS = 180;
 
+/**
+ * A domain younger than this is brand new: the verdict engine's strongest
+ * domain-age tier, the registration warning dot, and the Summary's
+ * "blocklists lag new sites" sentence share it.
+ */
+export const NEW_DOMAIN_DAYS = 30;
+
 export const severities = [
   "clear",
   "neutral",
@@ -92,7 +99,7 @@ function getBaseSeverity(
   if (name === "whois") {
     const d = data as { available?: boolean; ageDays: number | null };
     if (d.available === false) return "neutral";
-    if (d.ageDays !== null && d.ageDays < 30) return "suspicious";
+    if (d.ageDays !== null && d.ageDays < NEW_DOMAIN_DAYS) return "suspicious";
     return "clear";
   }
   if (name === "redirectChain") {

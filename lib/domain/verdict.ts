@@ -15,6 +15,7 @@ import {
 } from "@/lib/domain/reputation";
 import {
   getSignalSeverity,
+  NEW_DOMAIN_DAYS,
   YOUNG_DOMAIN_DAYS,
 } from "@/lib/domain/signal-severity";
 import type {
@@ -463,7 +464,7 @@ function scoreSsl(signals: SignalResults): ScoredItem[] {
   const whois = signals.whois;
   const domainAgeDays =
     whois.status === "success" && whois.data ? whois.data.ageDays : null;
-  if (validFrom && domainAgeDays !== null && domainAgeDays < 30) {
+  if (validFrom && domainAgeDays !== null && domainAgeDays < NEW_DOMAIN_DAYS) {
     const issuedAt = new Date(validFrom).getTime();
     const certAgeDays = Number.isNaN(issuedAt)
       ? null
@@ -656,7 +657,7 @@ function scoreWhois(signals: SignalResults): ScoredItem[] {
 
   const contributions: ScoredItem[] = [];
 
-  if (signal.data.ageDays !== null && signal.data.ageDays < 30) {
+  if (signal.data.ageDays !== null && signal.data.ageDays < NEW_DOMAIN_DAYS) {
     contributions.push({
       score: 15,
       category: "Domain Age",
