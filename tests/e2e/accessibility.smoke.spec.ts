@@ -50,8 +50,9 @@ test("result view accessibility @smoke", async ({ page }) => {
 });
 
 /**
- * No sideways scrolling on the home, a result, and the Full list with every
- * check's details open, at each default text size and width given.
+ * No sideways scrolling on the home, a result, the Full list with every
+ * check's details open, and a filtered history, at each default text size
+ * and width given.
  */
 async function expectReflow(
   page: Page,
@@ -63,6 +64,18 @@ async function expectReflow(
         document.documentElement.scrollWidth >
         document.documentElement.clientWidth,
     );
+  // Three saved scans; the first result below makes four, which brings up
+  // the history filter.
+  await gotoApp(page);
+  for (const [link, verdict] of [
+    ["https://malicious.scrutinix.test/", /^scan result: malicious$/i],
+    ["https://unreachable.scrutinix.test/", /^scan result: unknown$/i],
+    ["https://example.com/", /^scan result: safe$/i],
+  ] as const) {
+    await submitSingleScan(page, link);
+    await expect(page.getByLabel(verdict)).toBeVisible({ timeout: 15_000 });
+  }
+
   for (const [standard, width] of sizes) {
     const at = `${standard}px text at ${width}px`;
     await page.setViewportSize({ width, height: 700 });
@@ -82,6 +95,15 @@ async function expectReflow(
       for (const row of document.querySelectorAll("details")) row.open = true;
     });
     expect(await scrollsSideways(), `full details, ${at}`).toBe(false);
+
+    // A filter lengthens the export labels ("Export filtered history …").
+    await page
+      .getByRole("searchbox", { name: "Filter scan history" })
+      .fill("scrutinix");
+    await expect(
+      page.getByRole("button", { name: "Export filtered history JSON" }),
+    ).toBeVisible();
+    expect(await scrollsSideways(), `filtered history, ${at}`).toBe(false);
   }
 }
 

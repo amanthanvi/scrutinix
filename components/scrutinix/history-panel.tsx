@@ -237,6 +237,7 @@ export function HistoryPanel({
               }}
               variant="ghost"
               size="sm"
+              className="h-auto max-w-full py-1.5 whitespace-normal"
             >
               {historyQuery
                 ? "Export filtered history CSV"
@@ -253,6 +254,7 @@ export function HistoryPanel({
               }
               variant="ghost"
               size="sm"
+              className="h-auto max-w-full py-1.5 whitespace-normal"
             >
               {historyQuery
                 ? "Export filtered history JSON"
