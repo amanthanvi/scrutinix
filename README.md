@@ -56,12 +56,14 @@ and ML scoring in one place.
 **Android (Chrome):** open `https://www.scrutinix.net`, then use Chrome's menu
 → **Install app** (or **Add to Home screen** → **Install**). Scrutinix then
 appears in the system share sheet: in a chat, email, or browser, **Share →
-Scrutinix** opens the app and starts checking the first link in what you
-shared. Desktop browsers can install it too, but the share-sheet entry is an
-Android (and ChromeOS) feature; elsewhere use the bookmarklet below.
+Scrutinix** opens the app with the first link in what you shared filled in
+and taken apart; tap **Analyze** to check it. Desktop browsers can install it
+too, but the share-sheet entry is an Android (and ChromeOS) feature; elsewhere
+use the bookmarklet below.
 
 **iPhone and iPad (Shortcuts):** iOS has no web share target, so a Shortcut
-opens Scrutinix with the link filled in; tap **Analyze** to check it.
+you build once opens Scrutinix with the link filled in; tap **Analyze** to
+check it.
 
 1. Open **Shortcuts**, tap **+**, and name the shortcut **Check with
    Scrutinix**.
@@ -75,7 +77,6 @@ opens Scrutinix with the link filled in; tap **Analyze** to check it.
 6. Add **URL** and type `https://www.scrutinix.net/?url=`, then insert the
    **URL Encoded Text** variable right after the `=`.
 7. Add **Open URLs** (input: **URL**).
-8. Share it: **Share → Copy iCloud Link**, and add the link here.
 
 **Bookmarklet (any desktop browser):** save this as a bookmark's URL to open
 the page you're on in Scrutinix, ready to check:
@@ -84,9 +85,9 @@ the page you're on in Scrutinix, ready to check:
 javascript:location.href='https://www.scrutinix.net/?url='+encodeURIComponent(location.href)
 ```
 
-Any `https://www.scrutinix.net/?url=<encoded link>` link fills in the link and
-waits for you to tap **Analyze**; only Share → Scrutinix from the installed
-app starts the check on its own, so other sites and apps can't start scans in
+Every way of sending a link (Share → Scrutinix, the Shortcut, the bookmarklet,
+or any `https://www.scrutinix.net/?url=<encoded link>` link) fills it in and
+waits for you to tap **Analyze**, so no other site or app can start a scan in
 your browser.
 
 ## Stack
