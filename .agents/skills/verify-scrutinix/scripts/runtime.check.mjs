@@ -30,25 +30,59 @@ delete process.env.E2E_BASE_URL;
 const runtime = await import("./runtime.mjs");
 
 const failures = [];
+// Every line a check would print if it failed, kept for the final scan.
+const checkLines = [];
 
-function check(name, ok, detail = "") {
+// Finding 4 of round 4: a check's failure detail is a few selected fields.
+// Numbers, booleans, and null print as they are; any other value (a string,
+// an array, an object) prints only as its kind and size. So captured
+// subprocess output, run.json, and run tokens never reach the terminal or a
+// CI log, whatever a caller passes.
+function printable(value) {
+  if (
+    value === null ||
+    typeof value === "boolean" ||
+    (typeof value === "number" && Number.isFinite(value))
+  ) {
+    return String(value);
+  }
+  if (typeof value === "string") return `<string, ${value.length} chars>`;
+  if (Array.isArray(value)) return `<array, ${value.length} items>`;
+  return `<${typeof value}>`;
+}
+
+function formatDetail(fields) {
+  if (fields === undefined) return "";
+  if (!fields || typeof fields !== "object" || Array.isArray(fields)) {
+    return `detail=${printable(fields)}`;
+  }
+  return Object.entries(fields)
+    .map(
+      ([key, value]) =>
+        `${/^[A-Za-z]\w{0,39}$/.test(key) ? key : "?"}=${printable(value)}`,
+    )
+    .join(" ");
+}
+
+function check(name, ok, fields) {
+  const detail = formatDetail(fields);
+  const line = detail ? `${name}: ${detail}` : name;
+  checkLines.push(line);
   if (ok) {
     process.stdout.write(`ok ${name}\n`);
     return;
   }
-  failures.push(detail ? `${name}: ${detail}` : name);
-  process.stdout.write(`not ok ${name}${detail ? `: ${detail}` : ""}\n`);
+  failures.push(line);
+  process.stdout.write(`not ok ${line}\n`);
 }
 
 function assertPrivate(dir) {
   const stat = lstatSync(dir);
   const mode = stat.mode & 0o777;
-  check(`${dir} mode 0700`, mode === 0o700, `mode 0${mode.toString(8)}`);
-  check(
-    `${path.basename(dir)} owner`,
-    stat.uid === process.getuid(),
-    `uid ${stat.uid}`,
-  );
+  check(`${dir} mode 0700`, mode === 0o700, { mode: Number(mode.toString(8)) });
+  check(`${path.basename(dir)} owner`, stat.uid === process.getuid(), {
+    uid: stat.uid,
+  });
 }
 
 function envFor(dir, extra = {}) {
@@ -87,8 +121,11 @@ function runCli(script, args = [], env = process.env) {
   });
 }
 
+// A CLI result's whole text, for assertions only. A check's detail takes
+// cli(result), the exit status, never the text.
 const output = (result) =>
   `${result.status}\n${result.stdout}\n${result.stderr}`;
+const cli = (result) => ({ status: result.status });
 
 // Whether a child this check spawned has exited, read from its handle.
 const exited = (child) => child.exitCode !== null || child.signalCode !== null;
@@ -155,7 +192,7 @@ for (const script of ["launch.mjs", "doctor.mjs", "smoke.mjs"]) {
           refused.stderr,
         ) &&
         !output(refused).includes("TypeError"),
-      output(refused),
+      cli(refused),
     );
   }
   // Errors never echo the input: it can carry credentials.
@@ -171,7 +208,7 @@ for (const script of ["launch.mjs", "doctor.mjs", "smoke.mjs"]) {
       refused.status === 2 &&
         !output(refused).includes("SYNTH-cred-123") &&
         !output(refused).includes("user:"),
-      output(refused),
+      cli(refused),
     );
   }
 }
@@ -180,7 +217,7 @@ for (const script of ["launch.mjs", "doctor.mjs", "cleanup.mjs"]) {
   check(
     `${script} refuses an argument it does not take without echoing it`,
     unknown.status === 2 && !output(unknown).includes("SYNTH-arg-793"),
-    output(unknown),
+    cli(unknown),
   );
 }
 const parsedPort = runtime.parseCliArgs(["--json", "--port=3420"], {
@@ -189,7 +226,7 @@ const parsedPort = runtime.parseCliArgs(["--json", "--port=3420"], {
 check(
   "--port=<n> and flags are parsed",
   parsedPort.ok && parsedPort.port === 3420 && parsedPort.flags.has("--json"),
-  JSON.stringify(parsedPort),
+  { ok: parsedPort.ok, port: parsedPort.port ?? null },
 );
 const parsedRest = runtime.parseCliArgs(
   ["--drive", "-g", "batch scan", "--port", "3421"],
@@ -201,7 +238,11 @@ check(
     parsedRest.port === 3421 &&
     parsedRest.flags.has("--drive") &&
     JSON.stringify(parsedRest.rest) === '["-g","batch scan"]',
-  JSON.stringify(parsedRest),
+  {
+    ok: parsedRest.ok,
+    port: parsedRest.port ?? null,
+    rest: parsedRest.rest?.length ?? null,
+  },
 );
 const unusedPort = await freePort();
 const fromEnv = await runCli("doctor.mjs", ["--port", String(unusedPort)], {
@@ -213,7 +254,7 @@ check(
   fromEnv.status === 2 &&
     fromEnv.stdout.includes("NOT_READY unreachable") &&
     !output(fromEnv).includes("SYNTH-env-792"),
-  output(fromEnv),
+  cli(fromEnv),
 );
 
 // The real npm entry point. npm echoes a script's arguments in its banner
@@ -263,7 +304,7 @@ for (const [script, args] of [
       viaNpm.stderr.includes("--") &&
       !output(viaNpm).includes("SYNTH-npm-794") &&
       !output(viaNpm).includes("u:"),
-    output(viaNpm),
+    cli(viaNpm),
   );
 }
 check(
@@ -280,7 +321,7 @@ check(
   npmPlain.status !== 0 &&
     output(npmPlain).includes(`doctor.mjs --port ${unusedPort}`) &&
     npmPlain.stdout.includes("NOT_READY unreachable"),
-  output(npmPlain),
+  cli(npmPlain),
 );
 const hint = runtime.foreignNextStopHint(3000);
 check(
@@ -290,7 +331,7 @@ check(
     hint.includes("kill <pid>") &&
     !hint.includes("cmdline") &&
     hint.includes("Do not kill by name"),
-  hint,
+  { length: hint.length },
 );
 
 // ---- Private state directory ------------------------------------------------
@@ -316,7 +357,6 @@ symlinkSync(target, linked);
 check(
   "reject symlink state dir",
   runtime.privateDirProblem(linked).includes("real directory"),
-  runtime.privateDirProblem(linked),
 );
 
 const loose = path.join(scratch, "loose");
@@ -327,7 +367,6 @@ mkdirSync(underLoose, { mode: 0o700 });
 check(
   "reject a state dir under a group-writable, non-sticky directory",
   runtime.privateDirProblem(underLoose).includes("not sticky"),
-  runtime.privateDirProblem(underLoose),
 );
 
 // Finding 5 of round 3: the path is resolved component by component. A
@@ -349,19 +388,16 @@ const throughLink = path.join(swappable, "link", "state");
 check(
   "reject a state dir reached through a symlink in a swappable directory",
   runtime.privateDirProblem(throughLink).includes(`${swappable} is writable`),
-  runtime.privateDirProblem(throughLink),
 );
 check(
   "reject a state dir whose symlink target passes through a swappable directory",
   runtime
     .privateDirProblem(path.join(scratch, "via-swappable", "state"))
     .includes(`${swappable} is writable`),
-  runtime.privateDirProblem(path.join(scratch, "via-swappable", "state")),
 );
 check(
   "accept a state dir reached through a symlink in a private directory",
   runtime.privateDirProblem(path.join(scratch, "safe-link", "state")) === "",
-  runtime.privateDirProblem(path.join(scratch, "safe-link", "state")),
 );
 let createdUnderSwappable = true;
 try {
@@ -391,7 +427,6 @@ symlinkSync(elsewhere, path.join(symlinkedRun, "run.json"));
 check(
   "reject a symlinked run.json",
   runtime.loadState(symlinkedRun).problem.includes("symlink"),
-  runtime.loadState(symlinkedRun).problem,
 );
 const writableRun = privateDir("writable-run");
 writeFileSync(path.join(writableRun, "run.json"), JSON.stringify(runRecord()));
@@ -401,7 +436,6 @@ check(
   runtime
     .loadState(writableRun)
     .problem.includes("writable by group or others"),
-  runtime.loadState(writableRun).problem,
 );
 
 // ---- Processes this check starts --------------------------------------------
@@ -491,6 +525,9 @@ for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) {
     process.exit(1);
   });
 }
+// A check that throws ends the same way: teardown is synchronous (handle
+// kills and lifeline closes), so it runs on exit too.
+process.on("exit", teardown);
 
 // A process that only waits, in `cwd`. Like every stand-in it holds a
 // lifeline (finding 6 of round 4): it exits when the check closes it, or
@@ -586,6 +623,9 @@ async function supervise(dir, port, mode, name, extra = {}) {
       onSpawn: (child) => {
         entry.child = child;
       },
+      // If the check is SIGKILLed, the app exits on its lifeline, and the
+      // supervisor goes 10 seconds later rather than launch's 2 minutes.
+      lingerMs: 10_000,
       ...extra,
       lock,
     });
@@ -604,7 +644,7 @@ const self = runtime.processIdentity(process.pid);
 check(
   "own identity has start time, executable, cwd",
   Boolean(self?.startTime && self.executable && self.cwd),
-  JSON.stringify(self),
+  { pid: self?.pid ?? null },
 );
 check(
   "identity of a missing pid is null",
@@ -617,7 +657,6 @@ check(
   /^pid \d+, started .+, executable .+, cwd .+$/.test(
     runtime.describeProcess(self),
   ),
-  runtime.describeProcess(self),
 );
 
 const listenProbe = net.createServer();
@@ -633,14 +672,14 @@ check(
       (listener) =>
         listener.pid === process.pid && listener.address === "127.0.0.1",
     ),
-  JSON.stringify(runtime.portListeners(probePort)),
+  { listeners: runtime.portListeners(probePort).length },
 );
 const details = runtime.portDetails(probePort);
 check(
   "port details are identity fields, not a command line",
   details.includes(`pid ${process.pid}, started `) &&
     !details.includes("runtime.check.mjs"),
-  details,
+  { length: details.length },
 );
 listenProbe.close();
 
@@ -683,7 +722,7 @@ check(
     unsafeCleanup.stderr.includes("Nothing was stopped") &&
     unsafeSocket.connections.count === 0 &&
     !exited(victim),
-  `${output(unsafeCleanup)}\nconnections ${unsafeSocket.connections.count}`,
+  { ...cli(unsafeCleanup), connections: unsafeSocket.connections.count },
 );
 unsafeSocket.close();
 
@@ -694,7 +733,7 @@ check(
   symlinkCleanup.status === 2 &&
     symlinkSocket.connections.count === 0 &&
     !exited(victim),
-  `${output(symlinkCleanup)}\nconnections ${symlinkSocket.connections.count}`,
+  { ...cli(symlinkCleanup), connections: symlinkSocket.connections.count },
 );
 symlinkSocket.close();
 
@@ -705,7 +744,7 @@ const looseCleanup = await runCli("cleanup.mjs", [], envFor(underLoose));
 check(
   "cleanup refuses a state dir under a swappable parent",
   looseCleanup.status === 2 && looseCleanup.stderr.includes("not sticky"),
-  output(looseCleanup),
+  cli(looseCleanup),
 );
 
 const swapSocket = await forgedSocket(throughLink);
@@ -718,7 +757,7 @@ check(
   swapCleanup.status === 2 &&
     swapCleanup.stderr.includes("not sticky") &&
     swapSocket.connections.count === 0,
-  `${output(swapCleanup)}\nconnections ${swapSocket.connections.count}`,
+  { ...cli(swapCleanup), connections: swapSocket.connections.count },
 );
 swapSocket.close();
 
@@ -738,7 +777,7 @@ check(
     forgedCleanup.stderr.includes("did not prove") &&
     forgedCleanup.stderr.includes("Never signal a pid read from run.json") &&
     !exited(victim),
-  `${output(forgedCleanup)}\nconnections ${forged.connections.count}`,
+  { ...cli(forgedCleanup), connections: forged.connections.count },
 );
 const forgedDoctor = await runtime.runOwnership(3000, {
   dir: forgedDir,
@@ -746,7 +785,7 @@ const forgedDoctor = await runtime.runOwnership(3000, {
 check(
   "a forged supervisor never makes doctor report owned",
   forgedDoctor.owned === false && forgedDoctor.reason.includes("did not prove"),
-  JSON.stringify(forgedDoctor),
+  { owned: forgedDoctor.owned },
 );
 forged.close();
 
@@ -770,7 +809,7 @@ check(
     legacyCleanup.stderr.includes("tmux version") &&
     legacyCleanup.stderr.includes(`recorded pids ${victim.pid}`) &&
     !exited(victim),
-  output(legacyCleanup),
+  cli(legacyCleanup),
 );
 
 // ---- Findings 2 to 4: a run stops its own process group, nothing else --------
@@ -781,11 +820,9 @@ const strangerB = await stranger(portB, "stranger-b");
 const outsider = await sleeper("/tmp", "outsider");
 const runDir = privateDir("run");
 const run = await supervise(runDir, portA, "html", "app-a");
-check(
-  "supervisor answers at start",
-  Boolean(run.status),
-  JSON.stringify(run.state),
-);
+check("supervisor answers at start", Boolean(run.status), {
+  answered: Boolean(run.status),
+});
 const status = (
   await runtime.supervisorRequest(run.state, "status", { dir: runDir })
 ).body;
@@ -795,7 +832,7 @@ check(
   runtime.processGroup(supervisorPid) === supervisorPid &&
     runtime.processGroup(run.pids.app.pid) === supervisorPid &&
     runtime.processGroup(run.pids.grandchild.pid) === supervisorPid,
-  JSON.stringify({ supervisorPid, app: run.pids.app.pid }),
+  { supervisorPid, app: run.pids.app.pid },
 );
 check(
   "status names the app's listener on 127.0.0.1 as its own",
@@ -803,7 +840,10 @@ check(
     (listener) =>
       listener.pid === run.pids.app.pid && listener.address === "127.0.0.1",
   ) && status.listeners.foreign.length === 0,
-  JSON.stringify(status),
+  {
+    own: status?.listeners.own.length ?? null,
+    foreign: status?.listeners.foreign.length ?? null,
+  },
 );
 check(
   "run.json and the socket are private",
@@ -825,7 +865,7 @@ check(
   doctorOwn.status === 0 &&
     doctorOwn.stdout.includes("doctor: READY") &&
     doctorOwn.stdout.includes(`owned by run ${run.state.runId}`),
-  output(doctorOwn),
+  cli(doctorOwn),
 );
 // Finding 3 of round 3: smoke and drive capture Playwright's output. A
 // stand-in Playwright prints a canary to stdout and stderr and reports one
@@ -889,7 +929,7 @@ check(
       "drive: failed: drive.spec.ts › drive › shares a signed link",
     ) &&
     driveRun.stderr.includes(`drive: log ${driveLog}`),
-  output(driveRun),
+  cli(driveRun),
 );
 check(
   "Playwright's output is kept in a 0600 log",
@@ -910,7 +950,7 @@ const emptyPlaywright = standInPlaywright(
 process.exit(0);
 `,
 );
-for (const [label, cli, message] of [
+for (const [label, runner, message] of [
   [
     "no report",
     silentPlaywright,
@@ -923,14 +963,14 @@ for (const [label, cli, message] of [
   ],
 ]) {
   const empty = await runSuiteWith(
-    cli,
+    runner,
     ["--port", String(portA)],
     envFor(runDir),
   );
   check(
     `smoke fails when Playwright exits 0 with ${label}`,
     empty.status === 1 && empty.stderr.includes(message),
-    output(empty),
+    cli(empty),
   );
 }
 
@@ -964,7 +1004,7 @@ check(
   hooked.status !== 0 &&
     !existsSync(hookMarker) &&
     readFileSync(smokeLog, "utf8").includes("No tests found"),
-  output(hooked),
+  cli(hooked),
 );
 check(
   "smoke.mjs reads no runner from the environment",
@@ -1058,7 +1098,7 @@ check(
     foreignReport.owned === false &&
     foreignReport.code === "foreign-server" &&
     doctorForeign.stdout.includes(`serves http://127.0.0.1:${portA}`),
-  output(doctorForeign),
+  cli(doctorForeign),
 );
 const wrongToken = await runtime.supervisorRequest(
   { ...run.state, token: token("b") },
@@ -1072,7 +1112,7 @@ check(
     running(run.pids.app) &&
     running(run.pids.grandchild) &&
     !exited(run.child),
-  JSON.stringify(wrongToken),
+  { proven: wrongToken.proven },
 );
 
 const runCleanup = await runCli("cleanup.mjs", [], envFor(runDir));
@@ -1089,7 +1129,7 @@ check(
     !running(run.pids.app) &&
     !running(run.pids.grandchild) &&
     exited(run.child),
-  output(runCleanup),
+  cli(runCleanup),
 );
 check(
   "cleanup leaves a same-checkout server, its child, and an outside process running",
@@ -1111,7 +1151,7 @@ const againCleanup = await runCli("cleanup.mjs", [], envFor(runDir));
 check(
   "a second cleanup has nothing to stop",
   againCleanup.status === 0 && againCleanup.stdout.includes("already stopped"),
-  output(againCleanup),
+  cli(againCleanup),
 );
 
 // Finding 3: another process from this checkout wins the port. The run does
@@ -1130,7 +1170,7 @@ check(
     takenOwnership.body?.listeners.foreign.some(
       (listener) => listener.pid === strangerC.pids.app.pid,
     ),
-  JSON.stringify(takenOwnership),
+  { owned: takenOwnership.owned },
 );
 const takenDoctor = await runCli(
   "doctor.mjs",
@@ -1140,7 +1180,7 @@ const takenDoctor = await runCli(
 check(
   "doctor is not READY when a stranger holds the run's port",
   takenDoctor.status === 2 && takenDoctor.stdout.includes("foreign-server"),
-  output(takenDoctor),
+  cli(takenDoctor),
 );
 const takenCleanup = await runCli("cleanup.mjs", [], envFor(takenDir));
 await waitUntil(() => !running(taken.pids.app));
@@ -1154,7 +1194,7 @@ check(
     takenCleanup.stderr.includes(
       `port ${portC} still answers (pid ${strangerC.pids.app.pid}, started`,
     ),
-  output(takenCleanup),
+  cli(takenCleanup),
 );
 
 // Finding 4: when the supervisor is gone, nothing is re-found by identity.
@@ -1174,7 +1214,7 @@ check(
     orphanCleanup.stderr.includes(`port ${portD} is still open`) &&
     running(orphan.pids.app) &&
     running(orphan.pids.grandchild),
-  output(orphanCleanup),
+  cli(orphanCleanup),
 );
 check(
   "the orphans exit when the check closes their lifelines",
@@ -1207,7 +1247,7 @@ check(
     exited(escape.child) &&
     !running(escape.pids.app) &&
     running(escape.pids.escaped),
-  output(escapeCleanup),
+  cli(escapeCleanup),
 );
 check(
   "the escaped grandchild exits through its lifeline and the port frees",
@@ -1257,7 +1297,7 @@ check(
     lingerCleanup.stderr.includes("cleanup is incomplete") &&
     lingerCleanup.stderr.includes("supervisor.sock still answers") &&
     runtime.readState(lingerDir)?.token === lingerState.token,
-  output(lingerCleanup),
+  cli(lingerCleanup),
 );
 lingering.close();
 
@@ -1299,11 +1339,11 @@ check(
     raceState?.runId === raceWinner?.state.runId &&
     raceStatus.proven === true &&
     !existsSync(runtime.lockPath(raceDir)),
-  JSON.stringify({
+  {
     spawns: raceSpawns(),
-    loser: String(raceLoser?.message ?? "none"),
+    lockRefused: raceLoser instanceof runtime.StateLockedError,
     proven: raceStatus.proven,
-  }),
+  },
 );
 if (raceState?.token) await runtime.stopRun(raceState, { dir: raceDir });
 
@@ -1337,7 +1377,7 @@ for (const script of ["launch.mjs", "cleanup.mjs"]) {
       staleSocket.connections.count === 0 &&
       readFileSync(runtime.lockPath(staleDir), "utf8") === staleLock &&
       runtime.readState(staleDir)?.runId === "abcdef012345",
-    `${output(refused)}\nconnections ${staleSocket.connections.count}`,
+    { ...cli(refused), connections: staleSocket.connections.count },
   );
   staleSocket.close();
 }
@@ -1360,7 +1400,7 @@ check(
   "startSupervisor refuses to write run.json without the lock",
   lockless.includes("needs the lock") &&
     !existsSync(path.join(scratch, "lockless", "run.json")),
-  lockless,
+  { refused: lockless.includes("needs the lock") },
 );
 
 // The supervisor's spawner can end it through the handle it holds (this
@@ -1399,7 +1439,7 @@ check(
   foreignCleanup.status === 0 &&
     foreignCleanup.stdout.includes("Leaving that server running") &&
     foreignSocket.connections.count === 0,
-  output(foreignCleanup),
+  cli(foreignCleanup),
 );
 foreignSocket.close();
 
@@ -1437,7 +1477,7 @@ check(
   foreignNext.includes(`pid ${holder.pid}`) &&
     foreignNext.includes("another next dev") &&
     !foreignNext.includes(holderScript),
-  foreignNext,
+  { length: foreignNext.length },
 );
 
 // Finding 6 of round 4: the sleepers and the fake next end through their
@@ -1454,7 +1494,7 @@ await waitUntil(() => exited(victim) && exited(outsider) && exited(holder));
 check(
   "the sleepers and the fake next hold lifelines and exit when they close",
   helpersHeld && exited(victim) && exited(outsider) && exited(holder),
-  `held ${helpersHeld}`,
+  { held: helpersHeld },
 );
 
 for (const { dir, state, child } of supervised) {
@@ -1464,10 +1504,7 @@ teardown();
 check(
   "every stand-in this check started has exited",
   (await release(standIns)) && standIns.length > 0,
-  standIns
-    .filter(running)
-    .map((entry) => `${entry.name}/${entry.role}`)
-    .join(", "),
+  { running: standIns.filter(running).length },
 );
 lifeline.close();
 // Finding 1 of round 3: the check never signals a process group it saved.
@@ -1500,7 +1537,7 @@ const offersRecordedPid = skillDocs.filter((file) =>
 check(
   "no doc or script offers a recorded supervisor pid as a manual stop",
   offersRecordedPid.length === 0 && skillDocs.length > 5,
-  `${offersRecordedPid.length} file(s)`,
+  { files: offersRecordedPid.length },
 );
 
 // ---- Launch failures ---------------------------------------------------------
@@ -1643,7 +1680,7 @@ check(
     !`${capture.stdout}${capture.stderr}`.includes("SYNTH-cmd-29") &&
     (lstatSync(captureLog).mode & 0o777) === 0o600 &&
     readFileSync(captureLog, "utf8").includes("accessToken=SYNTH-cmd-29"),
-  `${capture.status}\n${capture.stdout}\n${capture.stderr}`,
+  { status: capture.status },
 );
 
 // ---- Share key --------------------------------------------------------------
@@ -1662,7 +1699,7 @@ const launchKey = readFileSync(
 check(
   "launch uses the published e2e share key",
   Boolean(e2eKey) && launchKey === e2eKey,
-  `${launchKey} vs ${e2eKey}`,
+  { found: Boolean(e2eKey), same: launchKey === e2eKey },
 );
 
 // ---- next-env.d.ts ----------------------------------------------------------
@@ -1683,7 +1720,7 @@ check(
   "restore snapshot",
   restored.action === "restored" &&
     readFileSync(decl, "utf8") === "user edit\n",
-  restored.warning,
+  { restored: restored.action === "restored" },
 );
 
 writeFileSync(decl, "next wrote this\n");
@@ -1699,7 +1736,7 @@ check(
     left.warning.includes("Leaving it unchanged") &&
     backupPath.startsWith(evidenceDir) &&
     readFileSync(backupPath, "utf8") === "next wrote this\n",
-  left.warning,
+  { left: left.action === "left" },
 );
 
 const gitRoot = path.join(scratch, "restart-repo");
@@ -1713,7 +1750,9 @@ const originalDeclaration = "committed original\n";
 writeFileSync(path.join(gitRoot, "next-env.d.ts"), originalDeclaration);
 git(["add", "next-env.d.ts"]);
 const committed = git(["commit", "-m", "original"]);
-check("restart repo committed", committed.status === 0, committed.stderr);
+check("restart repo committed", committed.status === 0, {
+  status: committed.status,
+});
 const firstSnap = runtime.snapshotNextEnv(gitRoot);
 check(
   "restart first snapshot",
@@ -1725,20 +1764,23 @@ const keptSnap = runtime.snapshotNextEnv(gitRoot);
 check(
   "restart keeps snapshot",
   keptSnap.kept === true && keptSnap.snapshot === originalDeclaration,
-  String(keptSnap.snapshot),
+  { kept: keptSnap.kept === true },
 );
 const restartRestore = runtime.restoreNextEnvSnapshot(gitRoot);
 const restartStatus = git(["status", "--porcelain"]);
 check(
   "restart git status clean",
   restartRestore.action === "restored" && restartStatus.stdout.trim() === "",
-  restartStatus.stdout,
+  {
+    status: restartStatus.status,
+    changed: restartStatus.stdout.split("\n").filter(Boolean).length,
+  },
 );
 const consumed = runtime.snapshotNextEnv(gitRoot);
 check(
   "cleanup consumed snapshot",
   consumed.kept !== true && consumed.snapshot === originalDeclaration,
-  String(consumed.snapshot),
+  { kept: consumed.kept === true },
 );
 writeFileSync(path.join(gitRoot, "next-env.d.ts"), "rewritten again\n");
 const dropped = runtime.snapshotNextEnv(gitRoot);
@@ -1748,7 +1790,7 @@ check(
     dropped.kept !== true &&
     dropped.snapshot === "rewritten again\n" &&
     String(dropped.warning).includes("Dropping the old snapshot"),
-  String(dropped.warning),
+  { dropped: dropped.dropped === true },
 );
 writeFileSync(path.join(gitRoot, "next-env.d.ts"), originalDeclaration);
 
@@ -1777,7 +1819,7 @@ check(
     typeof unfinishedBackup === "string" &&
     unfinishedBackup.includes("next-env-") &&
     readFileSync(unfinishedBackup.trim(), "utf8") === "unfinished snapshot\n",
-  output(unfinished),
+  cli(unfinished),
 );
 
 check(
@@ -1835,7 +1877,48 @@ for (const name of readdirSync(scratch)) {
 check(
   "no supervisor is left answering in the scratch directory",
   leftRuns.length === 0,
-  `${leftRuns.join(", ")}: stop with VERIFY_STATE_DIR=${scratch}/<dir> npm run verify:cleanup`,
+  { left: leftRuns.length },
+);
+if (leftRuns.length) {
+  process.stderr.write(
+    `runtime.check: kept ${scratch}. Stop each run there with VERIFY_STATE_DIR=${scratch}/<dir> npm run verify:cleanup\n`,
+  );
+}
+
+// Finding 4 of round 4. A seeded run state, and text that carries its token
+// and a canary, print only as kinds and sizes.
+const seededState = runRecord({ token: "c".repeat(64), runId: "SYNTH-seeded" });
+const seededDetail = formatDetail({
+  state: seededState,
+  text: `token=${seededState.token} SYNTH-detail-canary`,
+  tokens: [seededState.token],
+  status: 1,
+  proven: false,
+});
+check(
+  "a check's detail prints no string, object, or run token",
+  !seededDetail.includes(seededState.token) &&
+    !seededDetail.includes("SYNTH-") &&
+    seededDetail ===
+      `state=<object> text=<string, ${70 + "SYNTH-detail-canary".length + 1} chars> tokens=<array, 1 items> status=1 proven=false` &&
+    formatDetail(JSON.stringify(seededState)).startsWith("detail=<string,"),
+  { length: seededDetail.length },
+);
+// And no line any check in this run would have printed holds a token this
+// run used or a synthetic canary.
+const runTokens = [
+  token("a"),
+  token("b"),
+  ...supervised.map((entry) => entry.state?.token).filter(Boolean),
+];
+const leakingLines = checkLines.filter(
+  (line) =>
+    line.includes("SYNTH-") || runTokens.some((value) => line.includes(value)),
+);
+check(
+  "no check line holds a run token or a canary",
+  leakingLines.length === 0 && runTokens.length > 2,
+  { lines: leakingLines.length },
 );
 chmodSync(loose, 0o700);
 if (!leftRuns.length) rmSync(scratch, { recursive: true, force: true });
