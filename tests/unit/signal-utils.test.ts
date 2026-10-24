@@ -60,6 +60,36 @@ describe("getSignalDetailEntries", () => {
     ]);
   });
 
+  it("lists the VirusTotal engines that flagged the link first", () => {
+    // VT returns engines alphabetically; an unsorted five could hide every
+    // engine that flagged the link behind harmless ones.
+    const results = [
+      ...[
+        "Acronis",
+        "Avira",
+        "BitDefender",
+        "CRDF",
+        "Emsisoft",
+        "Fortinet",
+      ].map((engine) => ({ engine, category: "harmless", result: "clean" })),
+      { engine: "Sophos", category: "suspicious", result: "suspicious" },
+      { engine: "Webroot", category: "malicious", result: "phishing" },
+      { engine: "Kaspersky", category: "malicious", result: "malware" },
+    ];
+    const entries = getSignalDetailEntries(
+      "virusTotal",
+      buildVirusTotal({ malicious: 2, suspicious: 1, results }),
+    );
+
+    expect(entries.map((entry) => entry.label)).toEqual([
+      "Webroot",
+      "Kaspersky",
+      "Sophos",
+      "Acronis",
+      "Avira",
+    ]);
+  });
+
   it("keeps a plain multi-hop chain expandable without notes or content", () => {
     const entries = getSignalDetailEntries(
       "redirectChain",

@@ -106,18 +106,6 @@ export const virusTotalDataSchema = z.object({
   permalink: tolerantString(""),
   /** ISO timestamp of the VT analysis this verdict is based on. */
   lastAnalysisDate: z.string().nullable().optional().catch(undefined),
-  /** Registrable-domain reputation from VT's /domains endpoint. */
-  domain: z
-    .object({
-      malicious: finiteNumber(0),
-      suspicious: finiteNumber(0),
-      harmless: finiteNumber(0),
-      reputation: finiteNumber(0),
-      categories: stringArray,
-    })
-    .nullable()
-    .optional()
-    .catch(undefined),
 });
 
 export type VirusTotalData = z.infer<typeof virusTotalDataSchema>;

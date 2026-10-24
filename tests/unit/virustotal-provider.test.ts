@@ -84,6 +84,41 @@ describe("runVirusTotalProvider", () => {
     expect(analysisCalls).toBe(2);
   });
 
+  it("drops engines that found nothing from a fresh analysis, as from a report", async () => {
+    const target = "https://fresh.example/z";
+    const urlId = Buffer.from(target).toString("base64url");
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL): Promise<Response> => {
+        const u = typeof input === "string" ? input : input.toString();
+        if (u.includes(`/urls/${urlId}`)) {
+          return new Response(null, { status: 404 });
+        }
+        if (u === "https://www.virustotal.com/api/v3/urls") {
+          return Response.json({ data: { id: "analysis-fresh" } });
+        }
+        if (u.includes("/analyses/analysis-fresh")) {
+          const analysis = completedAnalysisJson();
+          analysis.data.attributes.results = {
+            Alpha: { category: "undetected", result: "unrated" },
+            Bravo: { category: "malicious", result: "phishing" },
+            Charlie: { category: "harmless", result: "clean" },
+          } as never;
+          return Response.json(analysis);
+        }
+        return new Response("unexpected", { status: 500 });
+      }),
+    );
+
+    const result = await runVirusTotalProvider(target);
+
+    expect(result.results.map((entry) => entry.engine)).toEqual([
+      "Bravo",
+      "Charlie",
+    ]);
+  });
+
   it("polls until analysis completes within the expanded attempt budget", async () => {
     const target = "https://slow.example/x";
     const urlId = Buffer.from(target).toString("base64url");
@@ -177,7 +212,7 @@ describe("runVirusTotalProvider", () => {
     expect(analysisPolls).toHaveLength(8);
   });
 
-  it("preserves the URL report without spending quota on domain enrichment", async () => {
+  it("reads the URL report in one request, with no domain lookup", async () => {
     const target = "https://evil.example/path";
     const lastAnalysisUnix = 1_750_000_000;
 
@@ -210,6 +245,5 @@ describe("runVirusTotalProvider", () => {
     expect(result.lastAnalysisDate).toBe(
       new Date(lastAnalysisUnix * 1000).toISOString(),
     );
-    expect(result.domain).toBeUndefined();
   });
 });

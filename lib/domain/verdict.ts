@@ -289,7 +289,7 @@ function scoreVirusTotal(signals: SignalResults): ScoredItem[] {
     return [];
   }
 
-  const { malicious, suspicious, domain } = signal.data;
+  const { malicious, suspicious } = signal.data;
   const contributions: ScoredItem[] = [];
 
   if (malicious > 0) {
@@ -322,23 +322,6 @@ function scoreVirusTotal(signals: SignalResults): ScoredItem[] {
         text: countOf(suspicious, "VirusTotal engine"),
         kind: "source",
         group: "virusTotal",
-      },
-    });
-  }
-
-  if (domain && domain.malicious >= 3) {
-    contributions.push({
-      score: 15,
-      category: "Reputation",
-      reason: `VirusTotal flags this domain beyond this URL (${countOf(domain.malicious, "engine")} mark the domain malicious).`,
-      quality: "medium",
-      // A finding about the domain, not this link: a warning sign (like a
-      // feed listing elsewhere on the host), in its own group so it never
-      // hides a URL-level VirusTotal detection.
-      subject: {
-        text: "a VirusTotal warning about this link's domain",
-        kind: "sign",
-        group: "virusTotal-domain",
       },
     });
   }
