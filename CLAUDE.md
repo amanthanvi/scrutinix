@@ -170,13 +170,29 @@ tests/
   not trust) and dates the leaf certificate it read ("This certificate was
   issued 2 hours ago"), never "first". Hosting is "network AS… , registered
   in NL", never "located/hosted in". Listing dates, certificate age, and
-  hosting are evidence only, never scored; nothing here changes a verdict
-  or score, and the questions read signals only (not `scoredSignals`), so
-  a weak scored hit under Safe never reads as a "threat report". A plain
+  hosting add no score contribution (the one existing certificate-age rule,
+  a days-old certificate on a brand-new domain, predates them, and the
+  HTTPS why names it); nothing here changes a verdict or score, and the
+  questions read signals only (not `scoredSignals`), so a weak scored hit
+  under Safe never reads as a "threat report". Every scored finding is
+  named by its question: `tests/unit/summary-questions.test.ts` walks
+  every scorer branch via `getScoredFindings`, and the thresholds it names
+  are shared from `signal-severity.ts`. The link pattern model and
+  structure checks are each described from their own label (agreement
+  only when the labels match; the combined reading is its own sentence).
+  A redirect chain that stopped partway keeps the hops it saw and leaves
+  the destination unconfirmed; "couldn't reach" means nothing answered.
+  A finished result's ages count from its check time (`evidenceTimeOf`:
+  `checkedAt`, else `completedAt`), never from when it is reopened. A plain
   HTTP link that moves to HTTPS says so and still gives the certificate. A
   name with no public address says so ("We found no address", or "only
   private or reserved addresses"), never "points nowhere". A question is pending
-  (quiet placeholder, same space) until every check it cites lands. The
+  until every check it cites lands; its placeholder holds room shaped like
+  a typical clean answer (`PLACEHOLDER_SHAPE`, invisible generated content,
+  never text), so later headings hold still in the common case. Question
+  text wraps anywhere (long hosts break, never truncate), and the sources
+  dot is drawn (`.sx-source::before`), so a copy reads "VirusTotal, Safe
+  Browsing". The
   owner and look-alike are stated by the anatomy, never by a question; the
   anatomy's own facts (certificate, young domain, "Ends at") step aside
   once the evidence below states them. Legacy records, Error results (all
