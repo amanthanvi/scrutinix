@@ -38,12 +38,14 @@ npm run icons                      # Regenerate favicons/app icons from lib/bran
 ```
 app/
   layout.tsx              # Root layout (ThemeProvider + lazy Sonner; system sans/mono, no page web fonts)
-  page.tsx                # Single-column home: header, headline, ScanForm, ResultsSection, history; ?shared= metadata
+  page.tsx                # Single-column home: header, headline, ScanForm, ResultsSection, history; ?shared= metadata;
+                          #   ?url= prefill + launch cookie; a shared link opens recipient-first
   scrutinix.css           # CSS-only motion/utility layer (sx-* classes)
   globals.css             # Tailwind v4 + semantic --sx-* theme tokens
   api/analyze/            # POST NDJSON stream (single + batch routes)
   opengraph-image.tsx     # Default OG card (lib/og/cards.tsx, bundled Geist)
   og/result/route.tsx     # Per-result share image for ?shared= links (payload-capped)
+  share/route.ts          # Web Share Target (POST /share): first link -> /?url=; launch cookie only for Sec-Fetch-Site: none
 proxy.ts                  # Rate limiting (scan tier for /api/analyze, image tier for /og/result) + CSP nonces
 
 components/
@@ -97,6 +99,7 @@ lib/
     impersonated-brands.ts # Shared brand list (look-alike ccTLD runs, structure-risk scoring)
     registrable-domain.ts # Server wrapper over link-anatomy's registrableDomainOf
     copy.ts               # countOf / formatList / capitalize / formatAge for user-facing copy
+    share-launch.ts       # Share-target link extraction, Sec-Fetch-Site gate, ?url= + launch-cookie resolution
   og/                     # Share-card renderers (cards.tsx) and bundled-Geist loader (fonts.ts)
   server/                 # Orchestrator, providers, signals, cache, local ONNX ML
     share-metadata.ts     # ?shared= verify + validate → SharedView, page metadata, image cap
@@ -288,6 +291,29 @@ tests/
   in"); the origin prefix's country is never a stand-in. Full-view rows come from `getSignalDetailEntries` (one
   fact per row, explicit `now`); TXT values are counted and named by
   kind, never dumped.
+
+- **Links from outside**: `/?url=` prefills the Single field (normalized
+  on the server, focused) and never scans; an invalid or unscannable
+  value prefills nothing, silently. The installed app's share target
+  (`share_target` in `public/site.webmanifest` → `POST /share`) takes the
+  first http(s) link from `url`, `text`, then `title`
+  (`extractSharedLink`) and redirects to `/?url=`. Only a share-sheet
+  launch auto-scans: `isShareTargetLaunch` (POST and `Sec-Fetch-Site:
+none`) lets the route set the 60-second `sx-share-launch` cookie, and
+  the page scans only when it equals `?url=` (`resolveLaunch`), spending
+  it as the scan starts. Never gate on the header at the page itself: a
+  link tapped in another app is a browser-initiated GET that also carries
+  `none`. `?shared=` outranks `?url=`. No service worker (not needed to
+  install), and the site never mentions installing; the README documents
+  Android, the iOS Shortcut, and the bookmarklet.
+- **Recipient-first shared view**: when the page opens on a shared link
+  (verified, unverified, or expired), `app/page.tsx` renders the results
+  section first (band, anatomy, strip when verified) and the form under
+  "Check another link", with an `sr-only` h1; the order holds for the
+  visit, so a fresh scan replaces the band in place. Once any result
+  replaces what the page opened on, `clearLaunchParams` drops `shared`,
+  `sig`, and `url` from the address. `resolveSharedView` returns null for
+  a link `normalizeUrlInput` rejects (private/local hosts), signed or not.
 - **UI danger is not a verdict**: form/stream errors and destructive
   confirms use `--sx-danger-fg` / `--sx-danger-border`, never
   `--sx-malicious-*`.

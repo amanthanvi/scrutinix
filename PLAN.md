@@ -21,7 +21,7 @@ state plus the landed analysis-hardening and review-remediation work.
 ## Current Snapshot
 
 - Date: 2026-10-06
-- Execution status: `P21-P27 complete; P28 canonical redesign implemented, verified locally, and documented (DESIGN.md); P29 layer 0 (public errors) implemented and verified locally; P29.2a evidence data (layer 2, part A) implemented and verified locally; P29.2b Summary questions (layer 2, part B) implemented and verified locally`
+- Execution status: `P21-P27 complete; P28 canonical redesign implemented, verified locally, and documented (DESIGN.md); P29 layer 0 (public errors) implemented and verified locally; P29.2a evidence data (layer 2, part A) implemented and verified locally; P29.2b Summary questions (layer 2, part B) implemented and verified locally; P29.5 sharing implemented and verified locally`
 - Platform:
   - Next.js `16.3.4`
   - React `19.2.x`
@@ -290,6 +290,17 @@ score band. No score or verdict changes.
 - [x] "Expecting a particular site?" (`lib/domain/expected-site.ts`): one optional field compares a domain, link, or brand name with the registered domain, in the browser; a match never says "safe", an unrecognised name admits it. Security review: brand names are never confirmed (no hyphen/digit stripping, no TLD-agnostic match), and a domain's name is read from the anatomy's own private-suffix-aware registered domain.
 - [x] Review round: a name is never confirmed or denied ("not Microsoft" on live.com was false); typing the domain a look-alike spells out answers "No. The link only spells out paypal.com." so the owner is said once; screen readers hear each captioned part with its caption; a fragment route ("#/login") shows in the page part (display only; scans and cache keys never see it).
 - [x] Verified: unit (expected-site), DOM (paste flow, focus on open), e2e (paste → scan hand-over) and axe on the pasted state in both themes.
+
+### P29.5 Sharing (2026-10-24, layer 5 of the distinctiveness stack)
+
+- [x] Web Share Target: `share_target` in `public/site.webmanifest` posts `title`/`text`/`url` (urlencoded) to `POST /share` (`app/share/route.ts`), which takes the first http(s) link (`url`, then `text`, then `title`; Android puts it in `text`), normalizes it centrally, and answers `303` to a relative `/?url=<link>`. No service worker: Chrome stopped requiring one for installing from the menu in 108 (Android) and 112 (desktop).
+- [x] Auto-scan only for a share-sheet launch: the route checks POST + `Sec-Fetch-Site: none` (`isShareTargetLaunch`) and sets a 60-second `SameSite=Strict` `sx-share-launch` cookie bound to the exact link; the page scans only when it matches `?url=` and spends it as the scan starts. Cross-site/same-site posts, links from other apps (browser-initiated GETs, which also carry `none`), and a missing header only prefill. Verified in Chromium 153 with a throwaway echo-server probe: a browser-initiated POST is `none` before and after the 303; a cross-site form and a cross-site link are `cross-site` before and after it.
+- [x] `/?url=` prefills the Single field (server-normalized), focuses it, and never scans; invalid or unscannable values prefill nothing, silently.
+- [x] Recipient-first shared view: band, anatomy, and (verified) strip first, then "Check another link" over the form; `sr-only` h1; order fixed for the visit, so a fresh scan replaces the band in place.
+- [x] From #62's review: `resolveSharedView` rejects links `normalizeUrlInput` refuses (private/local hosts), signed or not; once a result replaces what the page opened on, `shared`, `sig`, and `url` leave the address (`history.replaceState`).
+- [x] README "Check links from your phone" (Android install + Share, iOS Shortcut build steps for the owner to publish, bookmarklet); SPEC non-goals, `?url=` and share-target contracts, FR-24, abuse case; privacy "Sharing to Scrutinix"; CLAUDE.md, DESIGN.md, AGENTS.md self-correction entry. The site never mentions installing.
+- [x] Verified (`E2E_PORT=3111`): format, lint, typecheck clean; unit 44 files / 506 tests, integration 4 / 48, DOM 13 / 79, e2e 37 passed (axe on the reordered shared view in both themes), build green. A mutated gate (any POST accepted) fails the cross-site e2e test.
+- [ ] Owner: build and publish the iOS Shortcut from the README steps and add its iCloud link; confirm Share → Scrutinix on a real Android device after deploy.
 
 ### P24 Resolve September dependency maintenance
 
