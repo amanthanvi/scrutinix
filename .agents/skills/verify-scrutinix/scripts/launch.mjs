@@ -8,33 +8,27 @@ import {
   baseUrlParts,
   canonicalPath,
   checkHealth,
-  checkoutListeners,
   ensureDirs,
   evidenceDir,
   foreignNextStopHint,
-  foreignRunLive,
   formatForeignNext,
   launchableBaseUrl,
+  legacyPids,
+  legacyState,
+  loadState,
   logTail,
-  nodePathExport,
-  ownedSession,
   parseCliBaseUrl,
-  readState,
   recordNextEnvWritten,
   redactSecrets,
-  rememberRun,
   repoRoot,
   runCommand,
-  sessions,
-  shellQuote,
+  sameCheckout,
   snapshotNextEnv,
-  startTmuxSession,
+  startSupervisor,
   stateDir,
-  stopRecordedProcess,
-  stopRecordedSession,
+  stopRun,
+  supervisorRequest,
   tcpOpen,
-  tmuxAvailable,
-  tmuxSessionIdentity,
 } from "./runtime.mjs";
 
 // The published, test-only share key, exactly as scripts/run-e2e.mjs passes
@@ -56,12 +50,14 @@ Usage:
   npm run verify:launch
   npm run verify:launch -- --base-url http://127.0.0.1:3417
 
-The base URL must be http://127.0.0.1:<port> (default port 3000). doctor,
-smoke, and cleanup reuse the URL recorded for this checkout.
+The base URL must be http://127.0.0.1:<port> (default port 3000), with no
+user name, password, path, query, or fragment. doctor, smoke, and cleanup
+reuse the URL recorded for this checkout.
 
-A READY instance this skill already owns for this checkout is reused.
-Cleanup will not stop a server this skill did not start, including one
-recorded for a different checkout.
+launch starts a detached supervisor that runs next dev in its own process
+group and answers on a private socket. A READY instance this checkout's
+supervisor serves is reused. Cleanup asks that supervisor to stop its own
+group, and never stops anything else.
 Set VERIFY_SKIP_BROWSER_INSTALL=1 to skip Playwright Chromium install.
 `;
 
@@ -88,17 +84,29 @@ if (!parsedBaseUrl.ok) {
 const baseUrl = parsedBaseUrl.baseUrl;
 if (!launchableBaseUrl(baseUrl)) {
   process.stderr.write(
-    `launch: refusing ${baseUrl}. Use http://127.0.0.1:<port> with a port from 1024 to 65535.\n`,
+    `launch: refusing ${new URL(baseUrl).origin}. Use http://127.0.0.1:<port> with a port from 1024 to 65535.\n`,
   );
   process.exit(2);
 }
 const { port } = baseUrlParts(baseUrl);
 
-ensureDirs();
-
-function remember(started, extra = {}) {
-  rememberRun(started, { ...extra, baseUrl });
+try {
+  ensureDirs();
+} catch (error) {
+  process.stderr.write(
+    `launch: ${error instanceof Error ? error.message : String(error)}\n`,
+  );
+  process.exit(2);
 }
+
+const loaded = loadState();
+if (loaded.problem) {
+  process.stderr.write(
+    `launch: refusing to read ${stateDir}: ${loaded.problem}\n`,
+  );
+  process.exit(2);
+}
+const state = loaded.state;
 
 function existsStamp(relativePath) {
   const file = path.join(repoRoot, relativePath);
@@ -133,58 +141,59 @@ function failWithLog(reason, logPath) {
     "launch: last lines of the log, with secrets redacted:\n",
   );
   process.stderr.write(`${logTail(logPath)}\n`);
+  process.stderr.write(
+    "launch: run npm run verify:cleanup before launching again.\n",
+  );
 }
 
 const require = createRequire(import.meta.url);
-const initial = await checkHealth(baseUrl);
-const listening = await tcpOpen(port);
-const owned = ownedSession();
-const state = readState();
 
-if (initial.ok && owned) {
-  process.stdout.write(`${initial.lines.join("\n")}\n`);
-  process.stdout.write(
-    `launch: REUSED existing READY instance for ${canonicalPath(repoRoot)}\n`,
-  );
-  remember([]);
-  process.exit(0);
-}
-
-if (foreignRunLive(state, port)) {
-  process.stdout.write(`${initial.lines.join("\n")}\n`);
+if (legacyState(state)) {
+  const pids = legacyPids(state);
   process.stderr.write(
-    `launch: run.json in ${stateDir} belongs to ${state?.repoRoot || "another checkout"}, and that run is still live. Refusing to reuse or stop it from ${canonicalPath(repoRoot)}. Set VERIFY_STATE_DIR to use a separate state directory.\n`,
+    `launch: run.json in ${stateDir} was written by the tmux version of this skill. This version does not stop what that version started${pids.length ? ` (recorded pids ${pids.join(", ")})` : ""}. Check those yourself; launch replaces the record.\n`,
   );
-  refuseForeignNext();
-  process.exit(2);
+} else if (state?.token) {
+  const live = await supervisorRequest(state, "status");
+  if (!sameCheckout(state)) {
+    if (!live.gone) {
+      process.stderr.write(
+        `launch: run.json in ${stateDir} belongs to ${state.repoRoot || "another checkout"}, and its supervisor still answers. Refusing to reuse or stop it from ${canonicalPath(repoRoot)}. Set VERIFY_STATE_DIR to use a separate state directory.\n`,
+      );
+      process.exit(2);
+    }
+  } else if (live.proven) {
+    const initial = await checkHealth(baseUrl);
+    if (initial.ok) {
+      process.stdout.write(`${initial.lines.join("\n")}\n`);
+      process.stdout.write(
+        `launch: REUSED existing READY instance for ${canonicalPath(repoRoot)}\n`,
+      );
+      process.exit(0);
+    }
+    process.stdout.write(
+      "launch: restarting the run this checkout's supervisor owns\n",
+    );
+    const stopped = await stopRun(state);
+    process.stdout.write(`launch: ${stopped.message}\n`);
+    if (stopped.action === "refused") process.exit(2);
+    await waitFor(async () => !(await tcpOpen(port)), 15_000);
+  } else if (!live.gone) {
+    process.stderr.write(
+      `launch: refusing to replace run ${state.runId}: ${live.problem}\n`,
+    );
+    process.exit(2);
+  }
 }
 
-if (
-  (listening ||
-    initial.code === "foreign-server" ||
-    initial.code === "foreign-next") &&
-  !owned
-) {
+if (await tcpOpen(port)) {
+  const initial = await checkHealth(baseUrl);
   process.stdout.write(`${initial.lines.join("\n")}\n`);
   if (!refuseForeignNext()) {
     process.stderr.write(
       `launch: port ${port} is already taken by a process this skill did not start. Refusing to start a second server.\n`,
     );
   }
-  process.exit(2);
-}
-
-if (!tmuxAvailable()) {
-  process.stderr.write(
-    "launch: tmux is required so cleanup can stop the session this skill started\n",
-  );
-  process.exit(1);
-}
-
-if (!owned && tmuxSessionIdentity(sessions.next)) {
-  process.stderr.write(
-    `launch: a tmux session named ${sessions.next} exists, and run.json does not record it as this launch. Refusing to reuse or stop it.\n`,
-  );
   process.exit(2);
 }
 
@@ -222,56 +231,67 @@ process.stdout.write(
     : "launch: snapshotted next-env.d.ts\n",
 );
 
-if (owned) {
-  process.stdout.write("launch: restarting the Next session this skill owns\n");
-  const results = [
-    stopRecordedSession(owned),
-    ...(Array.isArray(state?.listeners) ? state.listeners : []).map(
-      (listener) => stopRecordedProcess(listener),
-    ),
-  ];
-  for (const result of results) {
-    process.stdout.write(`launch: ${result.message}\n`);
-  }
-  await waitFor(async () => !(await tcpOpen(port)), 15_000);
-}
-
-const logPath = path.join(stateDir, `${sessions.next}.log`);
-process.stdout.write("launch: starting Next.js dev session\n");
-const nextScript = `#!/usr/bin/env bash
-set -euo pipefail
-${nodePathExport()}
-cd ${shellQuote(repoRoot)}
-export SCRUTINIX_TEST_FIXTURES=1
-export SHARE_SIGNING_SECRET=${shellQuote(E2E_SHARE_SIGNING_SECRET)}
-export SHARE_SIGNING_SECRET_PREVIOUS=
-export NEXT_TELEMETRY_DISABLED=1
-export UPSTASH_REDIS_REST_URL=
-export UPSTASH_REDIS_REST_TOKEN=
-export KV_REST_API_URL=
-export KV_REST_API_TOKEN=
-exec npm run dev -- --hostname 127.0.0.1 --port ${port}
-`;
-// startTmuxSession records the session identity in run.json as soon as tmux
-// creates it, so a failed boot is still cleaned up.
-const { session } = startTmuxSession(sessions.next, nextScript);
-remember([session]);
-
-const sessionAlive = () => {
-  const current = tmuxSessionIdentity(sessions.next);
-  return current !== null && current.id === session.id;
+// next dev, the npm run dev script, run directly so the supervisor's child is
+// the server itself.
+const nextBin = require.resolve("next/dist/bin/next");
+const appEnv = {
+  ...process.env,
+  SCRUTINIX_TEST_FIXTURES: "1",
+  SHARE_SIGNING_SECRET: E2E_SHARE_SIGNING_SECRET,
+  SHARE_SIGNING_SECRET_PREVIOUS: "",
+  NEXT_TELEMETRY_DISABLED: "1",
+  UPSTASH_REDIS_REST_URL: "",
+  UPSTASH_REDIS_REST_TOKEN: "",
+  KV_REST_API_URL: "",
+  KV_REST_API_TOKEN: "",
 };
 
-const up = await waitFor(() => {
-  if (!sessionAlive()) return "dead";
-  return tcpOpen(port).then((open) => (open ? "ready" : ""));
+process.stdout.write("launch: starting the supervisor and next dev\n");
+let started;
+try {
+  started = await startSupervisor({
+    command: process.execPath,
+    args: [nextBin, "dev", "--hostname", "127.0.0.1", "--port", String(port)],
+    env: appEnv,
+    port,
+    baseUrl,
+    record: { fixtureMode: true },
+  });
+} catch (error) {
+  process.stderr.write(
+    `launch: ${error instanceof Error ? error.message : String(error)}\n`,
+  );
+  process.exit(2);
+}
+const { state: run } = started;
+if (!started.status) {
+  failWithLog("the supervisor did not answer", run.supervisorLog);
+  process.exit(1);
+}
+process.stdout.write(
+  `launch: run ${run.runId}, supervisor pid ${run.supervisorPid}, next dev pid ${started.status.app.pid}\n`,
+);
+
+// Ready means a process in the supervisor's group holds 127.0.0.1:<port>.
+const up = await waitFor(async () => {
+  const reply = await supervisorRequest(run, "status");
+  if (!reply.proven) return "dead";
+  if (reply.body.app.exit) return "exited";
+  const { own, foreign } = reply.body.listeners;
+  if (foreign.length) return "taken";
+  return own.some((listener) => listener.address === "127.0.0.1")
+    ? "ready"
+    : "";
 }, 180_000);
 
 if (up !== "ready") {
-  failWithLog(
-    `Next session ${up === "dead" ? "exited" : "timed out"}`,
-    logPath,
-  );
+  const reasons = {
+    dead: "the supervisor stopped answering",
+    exited: "next dev exited",
+    taken: `another process took port ${port}`,
+    "": "next dev timed out",
+  };
+  failWithLog(reasons[up] ?? "next dev failed", run.appLog);
   await captureSettledNextEnv();
   process.exit(1);
 }
@@ -284,8 +304,9 @@ while (
   report.code !== "foreign-next" &&
   Date.now() < deadline
 ) {
-  if (!sessionAlive()) {
-    failWithLog("Next session exited", logPath);
+  const reply = await supervisorRequest(run, "status");
+  if (!reply.proven || reply.body.app.exit) {
+    failWithLog("next dev exited", run.appLog);
     await captureSettledNextEnv();
     process.exit(1);
   }
@@ -293,13 +314,10 @@ while (
   report = await checkHealth(baseUrl);
 }
 
-// Record the exact listener processes serving this checkout, so cleanup can
-// stop them after re-reading the same identity.
-remember([session], { listeners: checkoutListeners(port) });
 await captureSettledNextEnv();
 process.stdout.write(`${report.lines.join("\n")}\n`);
 if (!report.ok) {
-  failWithLog(`instance is NOT_READY (${report.code})`, logPath);
+  failWithLog(`instance is NOT_READY (${report.code})`, run.appLog);
   process.exit(2);
 }
 process.stdout.write(`launch: READY ${baseUrl}\n`);

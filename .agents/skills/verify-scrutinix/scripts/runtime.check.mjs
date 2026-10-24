@@ -11,16 +11,19 @@ import {
   writeFileSync,
 } from "node:fs";
 import net from "node:net";
-import { tmpdir } from "node:os";
 import path from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
-const scratch = mkdtempSync(path.join(tmpdir(), "sx-verify-check-"));
+// Under /tmp, not os.tmpdir(): Unix socket paths are limited to ~104 bytes,
+// and macOS's per-user temp directory is long.
+const scratch = mkdtempSync("/tmp/sxv-");
 const stateDir = path.join(scratch, "state");
 const evidenceDir = path.join(stateDir, "evidence");
 process.env.VERIFY_STATE_DIR = stateDir;
 process.env.VERIFY_EVIDENCE_DIR = evidenceDir;
+delete process.env.E2E_BASE_URL;
 
 const runtime = await import("./runtime.mjs");
 
@@ -46,121 +49,161 @@ function assertPrivate(dir) {
   );
 }
 
-const noSsDir = path.join(scratch, "no-ss");
-mkdirSync(noSsDir);
-const noSsNext = path.join(scratch, "next");
-const noSsPortFile = path.join(scratch, "no-ss-port");
-writeFileSync(
-  noSsNext,
-  `const net = require("net");
-const fs = require("fs");
-const server = net.createServer();
-server.listen(0, "127.0.0.1", () => {
-  fs.writeFileSync(process.argv[2], String(server.address().port));
-});
-setInterval(() => {}, 1000);
-`,
-);
-const noSsProbe = path.join(scratch, "no-ss-probe.mjs");
-writeFileSync(
-  noSsProbe,
-  `import { spawn } from "node:child_process";
-import { readFileSync } from "node:fs";
-import { formatForeignNext } from ${JSON.stringify(path.join(scriptDir, "runtime.mjs"))};
-const child = spawn(process.execPath, [process.argv[2], process.argv[3]], {
-  stdio: "ignore",
-});
-const deadline = Date.now() + 2000;
-let listenPort = 0;
-while (Date.now() < deadline) {
-  try {
-    listenPort = Number(readFileSync(process.argv[3], "utf8"));
-    if (listenPort > 0) break;
-  } catch {
-    await new Promise((resolve) => setTimeout(resolve, 20));
-  }
+function envFor(dir, extra = {}) {
+  return {
+    ...process.env,
+    VERIFY_STATE_DIR: dir,
+    VERIFY_EVIDENCE_DIR: path.join(dir, "evidence"),
+    ...extra,
+  };
 }
-const hint = formatForeignNext(listenPort);
-child.kill("SIGTERM");
-if (!hint.includes("another next dev") || !hint.includes("pid " + child.pid)) {
-  process.stderr.write(hint + "\\n");
-  process.exit(1);
-}
-process.stdout.write(hint + "\\n");
-`,
-);
-const noSs = spawnSync(process.execPath, [noSsProbe, noSsNext, noSsPortFile], {
-  encoding: "utf8",
-  env: { ...process.env, PATH: noSsDir },
-});
-check(
-  "listener pids without ss",
-  noSs.status === 0 &&
-    noSs.stdout.includes("another next dev") &&
-    noSs.stdout.includes("pid ") &&
-    noSs.stderr.includes("ENOENT") === false,
-  `status ${noSs.status} stdout ${noSs.stdout} stderr ${noSs.stderr}`,
-);
 
-function runCli(script, args) {
-  return spawnSync(process.execPath, [path.join(scriptDir, script), ...args], {
-    encoding: "utf8",
-    env: process.env,
+// CLI runs are asynchronous so servers in this process (the forged socket)
+// keep answering while the child runs.
+function runCli(script, args = [], env = process.env) {
+  return new Promise((resolve) => {
+    const child = spawn(
+      process.execPath,
+      [path.join(scriptDir, script), ...args],
+      {
+        env,
+        stdio: ["ignore", "pipe", "pipe"],
+      },
+    );
+    let stdout = "";
+    let stderr = "";
+    child.stdout.setEncoding("utf8").on("data", (chunk) => (stdout += chunk));
+    child.stderr.setEncoding("utf8").on("data", (chunk) => (stderr += chunk));
+    child.once("close", (status) => resolve({ status, stdout, stderr }));
   });
 }
 
+const output = (result) =>
+  `${result.status}\n${result.stdout}\n${result.stderr}`;
+
+function alive(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function waitUntil(predicate, timeoutMs = 5_000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (await predicate()) return true;
+    await delay(50);
+  }
+  return Boolean(await predicate());
+}
+
+async function freePort() {
+  const server = net.createServer();
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const { port } = server.address();
+  await new Promise((resolve) => server.close(resolve));
+  return port;
+}
+
+function privateDir(name) {
+  const dir = path.join(scratch, name);
+  mkdirSync(dir, { mode: 0o700 });
+  mkdirSync(path.join(dir, "evidence"), { mode: 0o700 });
+  return dir;
+}
+
+const checkout = runtime.canonicalPath(runtime.repoRoot);
+const token = (fill) => fill.repeat(64);
+
+// ---- Base URLs --------------------------------------------------------------
+
 for (const script of ["launch.mjs", "doctor.mjs"]) {
-  const invalid = runCli(script, ["--base-url", "not a url"]);
+  const invalid = await runCli(script, ["--base-url", "not a url"]);
   check(
     `${script} rejects invalid base url`,
     invalid.status === 2 &&
       invalid.stderr.includes("not a valid URL") &&
-      !`${invalid.stdout}${invalid.stderr}`.includes("TypeError"),
-    `status ${invalid.status} ${invalid.stderr}`,
+      !output(invalid).includes("TypeError"),
+    output(invalid),
   );
-  const empty = runCli(script, ["--base-url", ""]);
+  const empty = await runCli(script, ["--base-url", ""]);
   check(
     `${script} rejects empty base url`,
     empty.status === 2 && empty.stderr.includes("needs a URL"),
-    `status ${empty.status} ${empty.stderr}`,
+    output(empty),
   );
-  const missing = runCli(script, ["--base-url"]);
+  const missing = await runCli(script, ["--base-url"]);
   check(
     `${script} rejects missing base url`,
     missing.status === 2 && missing.stderr.includes("needs a URL"),
-    `status ${missing.status} ${missing.stderr}`,
+    output(missing),
   );
-  const equalsEmpty = runCli(script, ["--base-url="]);
+  const equalsEmpty = await runCli(script, ["--base-url="]);
   check(
     `${script} rejects empty equals base url`,
     equalsEmpty.status === 2 && equalsEmpty.stderr.includes("needs a URL"),
-    `status ${equalsEmpty.status} ${equalsEmpty.stderr}`,
+    output(equalsEmpty),
   );
-  const equalsInvalid = runCli(script, ["--base-url=not-a-url"]);
+  const equalsInvalid = await runCli(script, ["--base-url=not-a-url"]);
   check(
     `${script} rejects invalid equals base url`,
     equalsInvalid.status === 2 &&
       equalsInvalid.stderr.includes("not a valid URL") &&
-      !`${equalsInvalid.stdout}${equalsInvalid.stderr}`.includes("TypeError"),
-    `status ${equalsInvalid.status} ${equalsInvalid.stderr}`,
+      !output(equalsInvalid).includes("TypeError"),
+    output(equalsInvalid),
   );
+  // Errors never echo the input: it can carry credentials.
+  for (const [label, raw, secret] of [
+    [
+      "credentials",
+      "http://user:SYNTH-cred-123@127.0.0.1:3000",
+      "SYNTH-cred-123",
+    ],
+    ["malformed", "http://[bad token=SYNTH-tok-456", "SYNTH-tok-456"],
+    ["query", "http://127.0.0.1:3000/?token=SYNTH-q-789", "SYNTH-q-789"],
+    ["fragment", "http://127.0.0.1:3000/#SYNTH-frag-790", "SYNTH-frag-790"],
+    ["path", "http://127.0.0.1:3000/SYNTH-path-791", "SYNTH-path-791"],
+  ]) {
+    const refused = await runCli(script, [`--base-url=${raw}`]);
+    check(
+      `${script} rejects a ${label} base url without echoing it`,
+      refused.status === 2 &&
+        !output(refused).includes(secret) &&
+        !output(refused).includes("user:"),
+      output(refused),
+    );
+  }
 }
-const equalsParsed = runtime.parseCliBaseUrl([
-  "node",
-  "launch.mjs",
-  "--base-url=http://127.0.0.1:3000",
-]);
+const fromEnv = await runCli("doctor.mjs", [], {
+  ...process.env,
+  E2E_BASE_URL: "http://u:SYNTH-env-792@127.0.0.1:3000",
+});
+check(
+  "doctor rejects a credentialed E2E_BASE_URL without echoing it",
+  fromEnv.status === 2 &&
+    fromEnv.stderr.includes("E2E_BASE_URL") &&
+    !output(fromEnv).includes("SYNTH-env-792"),
+  output(fromEnv),
+);
+const equalsParsed = runtime.parseCliBaseUrl(
+  ["node", "launch.mjs", "--base-url=http://127.0.0.1:3000"],
+  {},
+);
 check(
   "equals base url is parsed",
   equalsParsed.ok === true && equalsParsed.baseUrl === "http://127.0.0.1:3000",
   equalsParsed.baseUrl,
 );
-const equalsOther = runCli("launch.mjs", ["--base-url=http://example.com"]);
+const equalsOther = await runCli("launch.mjs", [
+  "--base-url=http://example.com",
+]);
 check(
   "equals base url does not fall back",
   equalsOther.status === 2 &&
     equalsOther.stderr.includes("refusing http://example.com"),
-  equalsOther.stderr,
+  output(equalsOther),
 );
 const hint = runtime.foreignNextStopHint(3000);
 check(
@@ -172,6 +215,8 @@ check(
     hint.includes("Do not kill by name"),
   hint,
 );
+
+// ---- Private state directory ------------------------------------------------
 
 runtime.ensureDirs();
 assertPrivate(stateDir);
@@ -191,88 +236,141 @@ const linked = path.join(scratch, "linked");
 const target = path.join(scratch, "link-target");
 mkdirSync(target, { mode: 0o700 });
 symlinkSync(target, linked);
-const symlinkCheck = spawnSync(
-  process.execPath,
-  [
-    "--input-type=module",
-    "-e",
-    `import { ensureDirs } from ${JSON.stringify(path.join(scriptDir, "runtime.mjs"))};
-try {
-  ensureDirs();
-  process.exit(2);
-} catch (error) {
-  const message = error instanceof Error ? error.message : String(error);
-  process.exit(message.includes("real directory") ? 0 : 3);
-}`,
-  ],
-  {
-    encoding: "utf8",
-    env: {
-      ...process.env,
-      VERIFY_STATE_DIR: linked,
-      VERIFY_EVIDENCE_DIR: path.join(linked, "evidence"),
-    },
-  },
-);
 check(
   "reject symlink state dir",
-  symlinkCheck.status === 0,
-  symlinkCheck.stderr || symlinkCheck.stdout || `status ${symlinkCheck.status}`,
+  runtime.privateDirProblem(linked).includes("real directory"),
+  runtime.privateDirProblem(linked),
 );
 
-// ---- Process and session identity -----------------------------------------
+const loose = path.join(scratch, "loose");
+mkdirSync(loose);
+chmodSync(loose, 0o777);
+const underLoose = path.join(loose, "st");
+mkdirSync(underLoose, { mode: 0o700 });
+check(
+  "reject a state dir under a group-writable, non-sticky directory",
+  runtime.privateDirProblem(underLoose).includes("not sticky"),
+  runtime.privateDirProblem(underLoose),
+);
 
-const { bin, prefix } = runtime.tmuxCommand();
-const tmux = (args) =>
-  spawnSync(bin, [...prefix, ...args], { encoding: "utf8" });
-const checkout = runtime.canonicalPath(runtime.repoRoot);
+const runRecord = (extra = {}) => ({
+  version: 2,
+  runId: "abcdef012345",
+  token: token("a"),
+  repoRoot: checkout,
+  baseUrl: "http://127.0.0.1:3000",
+  port: 3000,
+  ...extra,
+});
 
-function runCleanup(dir) {
-  return spawnSync(process.execPath, [path.join(scriptDir, "cleanup.mjs")], {
-    encoding: "utf8",
-    env: {
-      ...process.env,
-      VERIFY_STATE_DIR: dir,
-      VERIFY_EVIDENCE_DIR: path.join(dir, "evidence"),
-    },
-  });
-}
+const symlinkedRun = privateDir("symlinked-run");
+const elsewhere = path.join(scratch, "elsewhere.json");
+writeFileSync(elsewhere, JSON.stringify(runRecord()), { mode: 0o600 });
+symlinkSync(elsewhere, path.join(symlinkedRun, "run.json"));
+check(
+  "reject a symlinked run.json",
+  runtime.loadState(symlinkedRun).problem.includes("symlink"),
+  runtime.loadState(symlinkedRun).problem,
+);
+const writableRun = privateDir("writable-run");
+writeFileSync(path.join(writableRun, "run.json"), JSON.stringify(runRecord()));
+chmodSync(path.join(writableRun, "run.json"), 0o666);
+check(
+  "reject a run.json others can write",
+  runtime
+    .loadState(writableRun)
+    .problem.includes("writable by group or others"),
+  runtime.loadState(writableRun).problem,
+);
 
-function stateDirWith(name, state) {
-  const dir = path.join(scratch, name);
-  mkdirSync(dir, { mode: 0o700 });
-  mkdirSync(path.join(dir, "evidence"), { mode: 0o700 });
-  writeFileSync(
-    path.join(dir, "run.json"),
-    `${JSON.stringify({ baseUrl: "http://127.0.0.1:3000", ...state }, null, 2)}\n`,
-  );
-  return dir;
-}
+// ---- Processes this check starts --------------------------------------------
 
-// A long-lived child this check starts and later stops by its exact handle.
 const children = [];
-async function startChild(cwd) {
-  const child = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], {
-    cwd,
-    stdio: "ignore",
-  });
+function track(child) {
   children.push(child);
-  const deadline = Date.now() + 5_000;
-  while (Date.now() < deadline) {
-    const identity = runtime.processIdentity(child.pid);
-    if (identity?.cwd) return { child, identity };
-    await new Promise((resolve) => setTimeout(resolve, 50));
-  }
-  return { child, identity: runtime.processIdentity(child.pid) };
+  return child;
 }
 
-function alive(pid) {
+function sleeper(cwd) {
+  return track(
+    spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], {
+      cwd,
+      stdio: "ignore",
+    }),
+  );
+}
+
+// A stand-in app: optionally serves the three pages doctor reads, and starts
+// a grandchild so a stop is seen to reach the whole group.
+const fakeApp = path.join(scratch, "fake-app.cjs");
+writeFileSync(
+  fakeApp,
+  `const http = require("http");
+const fs = require("fs");
+const { spawn } = require("child_process");
+const [port, mode, pidFile] = process.argv.slice(2);
+const pages = {
+  "/": "<main>URL to analyze</main>",
+  "/about": "<h1>How a scan becomes a verdict.</h1>",
+  "/privacy": '<header><a aria-current="page" href="/privacy">Privacy</a></header><main id="main-content"><h1>Privacy</h1></main>',
+};
+const grandchild = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], { stdio: "ignore" });
+const ready = () => fs.writeFileSync(pidFile, JSON.stringify({ app: process.pid, grandchild: grandchild.pid }));
+if (mode === "html") {
+  http
+    .createServer((req, res) => {
+      const body = pages[req.url];
+      res.writeHead(body ? 200 : 404, { "content-type": "text/html" });
+      res.end(body || "not found");
+    })
+    .listen(Number(port), "127.0.0.1", ready);
+} else {
+  ready();
+}
+setInterval(() => {}, 1000);
+`,
+);
+
+async function readPids(file) {
+  await waitUntil(() => existsSync(file));
   try {
-    process.kill(pid, 0);
-    return true;
+    return JSON.parse(readFileSync(file, "utf8"));
   } catch {
-    return false;
+    return { app: 0, grandchild: 0 };
   }
+}
+
+// A server started by this check, not by any supervisor: same executable and
+// same cwd (this checkout) as the app. The old design would have owned it.
+async function stranger(port, name) {
+  const pidFile = path.join(scratch, `${name}.json`);
+  const child = track(
+    spawn(process.execPath, [fakeApp, String(port), "html", pidFile], {
+      cwd: runtime.repoRoot,
+      stdio: "ignore",
+    }),
+  );
+  const pids = await readPids(pidFile);
+  await waitUntil(() => runtime.tcpOpen(port));
+  return { child, pids };
+}
+
+const supervised = [];
+async function supervise(dir, port, mode, name, extra = {}) {
+  const pidFile = path.join(scratch, `${name}.json`);
+  const started = await runtime.startSupervisor({
+    command: process.execPath,
+    args: [fakeApp, String(port), mode, pidFile],
+    env: process.env,
+    port,
+    baseUrl: `http://127.0.0.1:${port}`,
+    dir,
+    ...extra,
+  });
+  supervised.push({ dir, state: started.state });
+  const pids = await readPids(pidFile);
+  if (mode === "html") await waitUntil(() => runtime.tcpOpen(port));
+  return { ...started, pids };
 }
 
 const self = runtime.processIdentity(process.pid);
@@ -301,9 +399,14 @@ await new Promise((resolve) => {
 });
 const probePort = listenProbe.address().port;
 check(
-  "listener pids find this process",
-  runtime.listenerPids(probePort).includes(process.pid),
-  runtime.listenerPids(probePort).join(","),
+  "port listeners find this process on 127.0.0.1",
+  runtime
+    .portListeners(probePort)
+    .some(
+      (listener) =>
+        listener.pid === process.pid && listener.address === "127.0.0.1",
+    ),
+  JSON.stringify(runtime.portListeners(probePort)),
 );
 const details = runtime.portDetails(probePort);
 check(
@@ -314,216 +417,355 @@ check(
 );
 listenProbe.close();
 
-// Reused pid: the recorded start time is not the running process's.
-const { child: reusedChild, identity: reusedIdentity } = await startChild(
-  runtime.repoRoot,
+// ---- Finding 1: nothing in an unsafe state directory is acted on -------------
+
+// A socket in the state directory that records every connection. Cleanup
+// must not connect to it unless the directory and run.json pass every check.
+async function forgedSocket(dir) {
+  const connections = { count: 0 };
+  const server = net.createServer((connection) => {
+    connections.count += 1;
+    connection.on("error", () => {});
+    connection.end(
+      `${JSON.stringify({ body: { ok: true, runId: "abcdef012345", supervisorPid: 1, leftover: 0 }, proof: "0".repeat(64) })}\n`,
+    );
+  });
+  await new Promise((resolve) =>
+    server.listen(runtime.socketPath(dir), resolve),
+  );
+  return { connections, close: () => server.close() };
+}
+
+const victim = sleeper(runtime.repoRoot);
+await waitUntil(() => runtime.processIdentity(victim.pid)?.cwd);
+const victimIdentity = runtime.processIdentity(victim.pid);
+
+const unsafeDir = privateDir("unsafe");
+writeFileSync(
+  path.join(unsafeDir, "run.json"),
+  JSON.stringify(runRecord({ listeners: [victimIdentity] })),
+  { mode: 0o600 },
 );
+const unsafeSocket = await forgedSocket(unsafeDir);
+chmodSync(unsafeDir, 0o755);
+const unsafeCleanup = await runCli("cleanup.mjs", [], envFor(unsafeDir));
 check(
-  "child serves this checkout",
-  runtime.canonicalPath(reusedIdentity?.cwd ?? "") === checkout,
-  JSON.stringify(reusedIdentity),
+  "cleanup refuses a 0755 state dir before reading it, and the process survives",
+  unsafeCleanup.status === 2 &&
+    unsafeCleanup.stderr.includes("refusing to read") &&
+    unsafeCleanup.stderr.includes("Nothing was stopped") &&
+    unsafeSocket.connections.count === 0 &&
+    alive(victim.pid),
+  `${output(unsafeCleanup)}\nconnections ${unsafeSocket.connections.count}`,
 );
-const reusedRecord = {
-  ...reusedIdentity,
-  startTime: "Thu Jan  1 00:00:00 1970",
-};
+unsafeSocket.close();
+
+const symlinkSocket = await forgedSocket(symlinkedRun);
+const symlinkCleanup = await runCli("cleanup.mjs", [], envFor(symlinkedRun));
 check(
-  "identityProblem names a reused pid",
-  runtime
-    .identityProblem(reusedRecord, reusedIdentity)
-    .includes("the pid was reused"),
+  "cleanup refuses a symlinked run.json and contacts nothing",
+  symlinkCleanup.status === 2 &&
+    symlinkSocket.connections.count === 0 &&
+    alive(victim.pid),
+  `${output(symlinkCleanup)}\nconnections ${symlinkSocket.connections.count}`,
 );
-check(
-  "identityProblem names a different executable",
-  runtime
-    .identityProblem(
-      { ...reusedIdentity, executable: "/usr/bin/some-other-binary" },
-      reusedIdentity,
-    )
-    .includes("runs "),
-);
-check(
-  "identityProblem refuses a record without its fields",
-  runtime.identityProblem({ pid: reusedIdentity.pid }, reusedIdentity) !== "",
-);
-const reusedPidDir = stateDirWith("reused-pid", {
-  repoRoot: checkout,
-  sessions: [],
-  listeners: [reusedRecord],
+symlinkSocket.close();
+
+writeFileSync(path.join(underLoose, "run.json"), JSON.stringify(runRecord()), {
+  mode: 0o600,
 });
-const reusedPidCleanup = runCleanup(reusedPidDir);
+const looseCleanup = await runCli("cleanup.mjs", [], envFor(underLoose));
 check(
-  "cleanup refuses a reused pid and leaves it running",
-  reusedPidCleanup.status === 1 &&
-    reusedPidCleanup.stderr.includes("the pid was reused") &&
-    alive(reusedChild.pid),
-  `${reusedPidCleanup.status} ${reusedPidCleanup.stdout}\n${reusedPidCleanup.stderr}`,
-);
-const legacyPidDir = stateDirWith("legacy-pid", {
-  repoRoot: checkout,
-  sessions: [],
-  pids: [reusedChild.pid],
-});
-const legacyPidCleanup = runCleanup(legacyPidDir);
-check(
-  "cleanup refuses a bare recorded pid",
-  legacyPidCleanup.status === 1 &&
-    legacyPidCleanup.stderr.includes("no recorded process identity") &&
-    alive(reusedChild.pid),
-  `${legacyPidCleanup.stdout}\n${legacyPidCleanup.stderr}`,
-);
-const matched = runtime.stopRecordedProcess(reusedIdentity);
-await new Promise((resolve) => setTimeout(resolve, 300));
-check(
-  "an exact identity match is stopped",
-  matched.action === "stopped" && !alive(reusedChild.pid),
-  matched.message,
+  "cleanup refuses a state dir under a swappable parent",
+  looseCleanup.status === 2 && looseCleanup.stderr.includes("not sticky"),
+  output(looseCleanup),
 );
 
-// Another checkout: the record is accurate, but the process serves a
-// different directory, so this checkout's cleanup must not stop it.
-const otherCheckout = path.join(scratch, "other-checkout");
-mkdirSync(otherCheckout);
-const { child: otherChild, identity: otherIdentity } =
-  await startChild(otherCheckout);
-const otherDir = stateDirWith("other-checkout-state", {
-  repoRoot: checkout,
-  sessions: [],
-  listeners: [otherIdentity],
+// The same forged socket in a safe directory is reached, and then refused
+// because it cannot prove the run token. This is the positive control for
+// the zero-connection checks above.
+const forgedDir = privateDir("forged");
+writeFileSync(path.join(forgedDir, "run.json"), JSON.stringify(runRecord()), {
+  mode: 0o600,
 });
-const otherCleanup = runCleanup(otherDir);
+const forged = await forgedSocket(forgedDir);
+const forgedCleanup = await runCli("cleanup.mjs", [], envFor(forgedDir));
 check(
-  "cleanup refuses a process serving another checkout",
-  otherCleanup.status === 1 &&
-    otherCleanup.stderr.includes("not this checkout") &&
-    alive(otherChild.pid),
-  `${otherCleanup.stdout}\n${otherCleanup.stderr}`,
+  "cleanup refuses a socket that cannot prove the run token",
+  forgedCleanup.status === 1 &&
+    forged.connections.count === 1 &&
+    forgedCleanup.stderr.includes("did not prove") &&
+    alive(victim.pid),
+  `${output(forgedCleanup)}\nconnections ${forged.connections.count}`,
 );
+const forgedDoctor = await runtime.runOwnership("http://127.0.0.1:3000", {
+  dir: forgedDir,
+});
 check(
-  "stopRecordedProcess refuses another checkout",
-  runtime.stopRecordedProcess(otherIdentity).action === "refused" &&
-    alive(otherChild.pid),
+  "a forged supervisor never makes doctor report owned",
+  forgedDoctor.owned === false && forgedDoctor.reason.includes("did not prove"),
+  JSON.stringify(forgedDoctor),
+);
+forged.close();
+
+// A run.json from the tmux version: its identities are reported, never used.
+const legacyDir = privateDir("legacy");
+writeFileSync(
+  path.join(legacyDir, "run.json"),
+  JSON.stringify({
+    repoRoot: checkout,
+    baseUrl: "http://127.0.0.1:3000",
+    sessions: [{ name: "scrutinix-verify-next-x", id: "$0", created: "1" }],
+    listeners: [victimIdentity],
+    pids: [victim.pid],
+  }),
+  { mode: 0o600 },
+);
+const legacyCleanup = await runCli("cleanup.mjs", [], envFor(legacyDir));
+check(
+  "cleanup leaves a tmux-era run.json's processes running",
+  legacyCleanup.status === 1 &&
+    legacyCleanup.stderr.includes("tmux version") &&
+    legacyCleanup.stderr.includes(`recorded pids ${victim.pid}`) &&
+    alive(victim.pid),
+  output(legacyCleanup),
 );
 
-// The session this launch started is recorded by identity, not name.
-const sessionName = `scrutinix-verify-check-${process.pid}`;
-const started = runtime.startTmuxSession(
-  sessionName,
-  "#!/usr/bin/env bash\nsleep 30\n",
+// ---- Findings 2 to 4: a run stops its own process group, nothing else --------
+
+const portA = await freePort();
+const portB = await freePort();
+const strangerB = await stranger(portB, "stranger-b");
+const outsider = sleeper("/tmp");
+const runDir = privateDir("run");
+const run = await supervise(runDir, portA, "html", "app-a");
+check(
+  "supervisor answers at start",
+  Boolean(run.status),
+  JSON.stringify(run.state),
 );
-const recorded = runtime.readState();
-const recordedSession = recorded?.sessions?.find(
-  (entry) => entry?.name === sessionName,
+const status = (
+  await runtime.supervisorRequest(run.state, "status", { dir: runDir })
+).body;
+const supervisorPid = run.state.supervisorPid;
+check(
+  "supervisor leads its own process group, with the app and grandchild in it",
+  runtime.processGroup(supervisorPid) === supervisorPid &&
+    runtime.processGroup(run.pids.app) === supervisorPid &&
+    runtime.processGroup(run.pids.grandchild) === supervisorPid,
+  JSON.stringify({ supervisorPid, pids: run.pids }),
 );
 check(
-  "session identity recorded at start",
-  Boolean(
-    recordedSession?.id?.startsWith("$") &&
-    recordedSession.created &&
-    recordedSession.pane?.pid > 0 &&
-    recordedSession.pane.startTime &&
-    runtime.canonicalPath(recordedSession.pane.cwd) === checkout,
-  ),
-  JSON.stringify(recordedSession),
+  "status names the app's listener on 127.0.0.1 as its own",
+  status?.listeners.own.some(
+    (listener) =>
+      listener.pid === run.pids.app && listener.address === "127.0.0.1",
+  ) && status.listeners.foreign.length === 0,
+  JSON.stringify(status),
 );
 check(
-  "repoRoot recorded at start",
-  recorded?.repoRoot === checkout,
-  String(recorded?.repoRoot),
+  "run.json and the socket are private",
+  (lstatSync(path.join(runDir, "run.json")).mode & 0o777) === 0o600 &&
+    (lstatSync(runtime.socketPath(runDir)).mode & 0o777) === 0o600,
 );
-check("log path returned", Boolean(started.logPath));
 check(
-  "recorded session matches itself",
-  runtime.sessionProblem(recordedSession).problem === "",
+  "the stranger is outside the run's group",
+  runtime.processGroup(strangerB.pids.app) !== supervisorPid,
 );
 
-// Reused session name: ours ended, and someone else made one with the same
-// name. tmux also prefix-matches names, so a longer name must not count.
-tmux(["kill-session", "-t", recordedSession.id]);
-const impostor = tmux([
-  "new-session",
-  "-d",
-  "-P",
-  "-F",
-  "#{session_id}",
-  "-s",
-  sessionName,
-  "--",
-  "sleep",
-  "30",
-]);
-const impostorId = impostor.stdout.trim();
-check("impostor session started", impostor.status === 0, impostor.stderr);
-const reusedNameDir = stateDirWith("reused-name", {
-  repoRoot: checkout,
-  sessions: [recordedSession],
-  listeners: [],
+const doctorOwn = await runCli(
+  "doctor.mjs",
+  ["--base-url", `http://127.0.0.1:${portA}`],
+  envFor(runDir),
+);
+check(
+  "doctor is READY and owned on the run's own port",
+  doctorOwn.status === 0 &&
+    doctorOwn.stdout.includes("doctor: READY") &&
+    doctorOwn.stdout.includes(`owned by run ${run.state.runId}`),
+  output(doctorOwn),
+);
+const doctorForeign = await runCli(
+  "doctor.mjs",
+  ["--base-url", `http://127.0.0.1:${portB}`, "--json"],
+  envFor(runDir),
+);
+let foreignReport = {};
+try {
+  foreignReport = JSON.parse(doctorForeign.stdout);
+} catch {
+  foreignReport = {};
+}
+check(
+  "doctor does not own a healthy server on another port, even from this checkout",
+  doctorForeign.status === 2 &&
+    foreignReport.owned === false &&
+    foreignReport.code === "foreign-server" &&
+    doctorForeign.stdout.includes(`serves http://127.0.0.1:${portA}`),
+  output(doctorForeign),
+);
+const viaLocalhost = await runtime.runOwnership(`http://localhost:${portA}`, {
+  dir: runDir,
 });
-const reusedNameCleanup = runCleanup(reusedNameDir);
-const impostorAlive = runtime.tmuxSessionIdentity(sessionName);
 check(
-  "cleanup refuses a reused session name and leaves it running",
-  reusedNameCleanup.status === 1 &&
-    reusedNameCleanup.stderr.includes("the name was reused") &&
-    impostorAlive?.id === impostorId,
-  `${reusedNameCleanup.stdout}\n${reusedNameCleanup.stderr}`,
+  "ownership needs the 127.0.0.1 origin the run was given",
+  viaLocalhost.owned === false,
+  JSON.stringify(viaLocalhost),
 );
-const nameOnlyDir = stateDirWith("name-only", {
-  repoRoot: checkout,
-  sessions: [sessionName],
-  listeners: [],
+
+const wrongToken = await runtime.supervisorRequest(
+  { ...run.state, token: token("b") },
+  "stop",
+  { dir: runDir },
+);
+await delay(300);
+check(
+  "a stop without the run token is refused and stops nothing",
+  wrongToken.proven === false &&
+    alive(run.pids.app) &&
+    alive(run.pids.grandchild) &&
+    alive(supervisorPid),
+  JSON.stringify(wrongToken),
+);
+
+const runCleanup = await runCli("cleanup.mjs", [], envFor(runDir));
+await waitUntil(
+  () =>
+    !alive(run.pids.app) &&
+    !alive(run.pids.grandchild) &&
+    !alive(supervisorPid),
+);
+check(
+  "cleanup stops the app, its grandchild, and the supervisor",
+  runCleanup.status === 0 &&
+    runCleanup.stdout.includes(`stopped run ${run.state.runId}`) &&
+    !alive(run.pids.app) &&
+    !alive(run.pids.grandchild) &&
+    !alive(supervisorPid),
+  output(runCleanup),
+);
+check(
+  "cleanup leaves a same-checkout server, its child, and an outside process running",
+  alive(strangerB.pids.app) &&
+    alive(strangerB.pids.grandchild) &&
+    alive(outsider.pid) &&
+    alive(victim.pid),
+);
+check(
+  "the run's port is free and its socket and token are gone",
+  !(await runtime.tcpOpen(portA)) &&
+    !existsSync(runtime.socketPath(runDir)) &&
+    runtime.readState(runDir)?.token === undefined,
+);
+const againCleanup = await runCli("cleanup.mjs", [], envFor(runDir));
+check(
+  "a second cleanup has nothing to stop",
+  againCleanup.status === 0 && againCleanup.stdout.includes("already stopped"),
+  output(againCleanup),
+);
+
+// Finding 3: another process from this checkout wins the port. The run does
+// not own it, doctor does not report it, and cleanup leaves it running.
+const portC = await freePort();
+const strangerC = await stranger(portC, "stranger-c");
+const takenDir = privateDir("taken");
+const taken = await supervise(takenDir, portC, "silent", "app-c");
+const takenOwnership = await runtime.runOwnership(`http://127.0.0.1:${portC}`, {
+  dir: takenDir,
 });
-const nameOnlyCleanup = runCleanup(nameOnlyDir);
 check(
-  "cleanup refuses a session recorded by name only",
-  nameOnlyCleanup.status === 1 &&
-    nameOnlyCleanup.stderr.includes("a session name is not ownership") &&
-    runtime.tmuxSessionIdentity(sessionName)?.id === impostorId,
-  `${nameOnlyCleanup.stdout}\n${nameOnlyCleanup.stderr}`,
+  "a same-checkout listener that is not in the run's group is not owned",
+  takenOwnership.owned === false &&
+    takenOwnership.reason.includes("outside this run") &&
+    takenOwnership.body?.listeners.foreign.some(
+      (listener) => listener.pid === strangerC.pids.app,
+    ),
+  JSON.stringify(takenOwnership),
+);
+const takenDoctor = await runCli(
+  "doctor.mjs",
+  ["--base-url", `http://127.0.0.1:${portC}`],
+  envFor(takenDir),
 );
 check(
-  "a name prefix is not a session",
-  runtime.tmuxSessionIdentity(sessionName.slice(0, -2)) === null,
+  "doctor is not READY when a stranger holds the run's port",
+  takenDoctor.status === 2 && takenDoctor.stdout.includes("foreign-server"),
+  output(takenDoctor),
 );
-tmux(["kill-session", "-t", impostorId]);
+const takenCleanup = await runCli("cleanup.mjs", [], envFor(takenDir));
+await waitUntil(() => !alive(taken.pids.app));
+check(
+  "cleanup stops only the run's app and reports the stranger on the port",
+  takenCleanup.status === 1 &&
+    !alive(taken.pids.app) &&
+    !alive(taken.state.supervisorPid) &&
+    alive(strangerC.pids.app) &&
+    takenCleanup.stderr.includes(`port ${portC} is still open`) &&
+    takenCleanup.stderr.includes(`pid ${strangerC.pids.app}, started`),
+  output(takenCleanup),
+);
+
+// Finding 4: when the supervisor is gone, nothing is re-found by identity.
+// The orphaned app keeps running and is reported.
+const portD = await freePort();
+const orphanDir = privateDir("orphan");
+const orphan = await supervise(orphanDir, portD, "html", "app-d");
+process.kill(orphan.state.supervisorPid, "SIGKILL");
+await waitUntil(() => !alive(orphan.state.supervisorPid));
+const orphanCleanup = await runCli("cleanup.mjs", [], envFor(orphanDir));
+check(
+  "cleanup never signals a pid itself when the supervisor is gone",
+  orphanCleanup.status === 1 &&
+    orphanCleanup.stdout.includes("already gone") &&
+    orphanCleanup.stderr.includes(`port ${portD} is still open`) &&
+    alive(orphan.pids.app) &&
+    alive(orphan.pids.grandchild),
+  output(orphanCleanup),
+);
+for (const pid of [orphan.pids.app, orphan.pids.grandchild]) {
+  if (alive(pid)) process.kill(pid, "SIGKILL");
+}
+
+// `kill <supervisor pid>` is the manual stop: the group goes with it.
+const portE = await freePort();
+const signalDir = privateDir("signal");
+const signalled = await supervise(signalDir, portE, "html", "app-e");
+process.kill(signalled.state.supervisorPid, "SIGTERM");
+await waitUntil(
+  () =>
+    !alive(signalled.state.supervisorPid) &&
+    !alive(signalled.pids.app) &&
+    !alive(signalled.pids.grandchild),
+);
+check(
+  "SIGTERM to the supervisor stops its group and removes its socket",
+  !alive(signalled.state.supervisorPid) &&
+    !alive(signalled.pids.app) &&
+    !alive(signalled.pids.grandchild) &&
+    !existsSync(runtime.socketPath(signalDir)),
+);
 
 // A run.json for another checkout is left alone entirely.
-const foreignName = `scrutinix-verify-check-foreign-${process.pid}`;
-const foreignCreated = tmux([
-  "new-session",
-  "-d",
-  "-P",
-  "-F",
-  "#{session_id}",
-  "-s",
-  foreignName,
-  "--",
-  "sleep",
-  "30",
-]);
-const foreignId = foreignCreated.stdout.trim();
-check(
-  "foreign session started",
-  foreignCreated.status === 0,
-  foreignCreated.stderr,
+const otherCheckout = path.join(scratch, "other-checkout");
+mkdirSync(otherCheckout);
+const foreignDir = privateDir("foreign");
+writeFileSync(
+  path.join(foreignDir, "run.json"),
+  JSON.stringify(runRecord({ repoRoot: otherCheckout })),
+  { mode: 0o600 },
 );
-const foreignDir = stateDirWith("foreign", {
-  repoRoot: otherCheckout,
-  sessions: [{ name: foreignName, id: foreignId }],
-  listeners: [otherIdentity],
-});
-const foreignCleanup = runCleanup(foreignDir);
+const foreignSocket = await forgedSocket(foreignDir);
+const foreignCleanup = await runCli("cleanup.mjs", [], envFor(foreignDir));
 check(
-  "cleanup leaves another checkout running",
+  "cleanup leaves another checkout's run alone",
   foreignCleanup.status === 0 &&
     foreignCleanup.stdout.includes("Leaving that server running") &&
-    runtime.tmuxSessionIdentity(foreignName)?.id === foreignId &&
-    alive(otherChild.pid),
-  `${foreignCleanup.stdout}\n${foreignCleanup.stderr}`,
+    foreignSocket.connections.count === 0,
+  output(foreignCleanup),
 );
-tmux(["kill-session", "-t", foreignId]);
+foreignSocket.close();
 
-// Another checkout's run is live when a listener serves its directory.
+// Another next dev on a port is named by pid and cwd, never stopped.
 const holderScript = path.join(scratch, "next");
 const holderPortFile = path.join(scratch, "holder-port");
 writeFileSync(
@@ -537,23 +779,14 @@ server.listen(0, "127.0.0.1", () => {
 setInterval(() => {}, 1000);
 `,
 );
-const holder = spawn(process.execPath, [holderScript, "dev"], {
-  cwd: otherCheckout,
-  stdio: "ignore",
-});
-children.push(holder);
-const holderPort = await new Promise((resolve) => {
-  const deadline = Date.now() + 2_000;
-  const tick = () => {
-    try {
-      resolve(Number(readFileSync(holderPortFile, "utf8")));
-    } catch {
-      if (Date.now() > deadline) resolve(0);
-      else setTimeout(tick, 20);
-    }
-  };
-  tick();
-});
+const holder = track(
+  spawn(process.execPath, [holderScript, "dev"], {
+    cwd: otherCheckout,
+    stdio: "ignore",
+  }),
+);
+await waitUntil(() => existsSync(holderPortFile));
+const holderPort = Number(readFileSync(holderPortFile, "utf8"));
 const foreignNext = runtime.formatForeignNext(holderPort);
 check(
   "foreign next listener",
@@ -562,27 +795,18 @@ check(
     !foreignNext.includes(holderScript),
   foreignNext,
 );
-check(
-  "foreign run is live while its listener serves that checkout",
-  runtime.foreignRunLive(
-    { repoRoot: otherCheckout, sessions: [] },
-    holderPort,
-  ) &&
-    !runtime.foreignRunLive(
-      { repoRoot: path.join(scratch, "nobody"), sessions: [] },
-      holderPort,
-    ),
-);
-check(
-  "this checkout's listeners exclude another checkout",
-  runtime.checkoutListeners(holderPort).length === 0 &&
-    runtime.checkoutListeners(holderPort, otherCheckout).length === 1,
-);
 
+for (const { dir, state } of supervised) {
+  if (alive(state.supervisorPid)) await runtime.stopRun(state, { dir });
+}
 for (const child of children) child.kill("SIGTERM");
+for (const pids of [strangerB.pids, strangerC.pids]) {
+  if (alive(pids.grandchild)) process.kill(pids.grandchild, "SIGTERM");
+}
 
-// ---- Redaction ------------------------------------------------------------
+// ---- Redaction --------------------------------------------------------------
 
+// Every value is synthetic.
 const leaked = [
   "SHARE_SIGNING_SECRET=abc123def456",
   'export VIRUSTOTAL_API_KEY="vt-key-value"',
@@ -594,6 +818,20 @@ const leaked = [
   "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.c2lnbmF0dXJlLXZhbHVl",
   "bare Zk3Jq9XbT2mLw8RvN5cYp4Hs7Ag1Ed6U+/Qo==",
   "hex 9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+  '{"SHARE_SIGNING_SECRET_PREVIOUS": "synth-prev-one"}',
+  '{"accessToken":"synth-camel-two","refreshToken": "synth-camel-three"}',
+  "clientSecret=synth-camel-four",
+  '"password": "synth-esc\\"aped-five tail"',
+  '{\\"token\\": \\"synth-json-in-string-six\\"}',
+  "?%74oken=synth-urlenc-seven&%73ecret=synth-urlenc-eight",
+  "PRIVATE_KEY=-----BEGIN PRIVATE KEY-----\nMIIsynthpemlinenine\n-----END PRIVATE KEY-----",
+  "API_TOKEN=synth-multi-ten-a\\\n  synth-multi-ten-b",
+  "token: |\n  synth-yaml-eleven\n  synth-yaml-twelve",
+  "SECRET_VALUE=\n  synth-indented-thirteen",
+  "Cookie: session=synth-cookie-fourteen; theme=dark",
+  "run --auth-token synth-flag-fifteen",
+  "x-api-key: synth-header-sixteen",
+  "upstashRestToken = 'synth-single-seventeen'",
 ].join("\n");
 const redacted = runtime.redactSecrets(leaked);
 for (const secret of [
@@ -608,15 +846,34 @@ for (const secret of [
   "eyJhbGciOiJIUzI1NiJ9",
   "Zk3Jq9XbT2mLw8RvN5cYp4Hs7Ag1Ed6U",
   "9f86d081884c7d659a2feaa0c55ad015",
+  "synth-prev-one",
+  "synth-camel-two",
+  "synth-camel-three",
+  "synth-camel-four",
+  "synth-esc",
+  "aped-five",
+  "synth-json-in-string-six",
+  "synth-urlenc-seven",
+  "synth-urlenc-eight",
+  "MIIsynthpemlinenine",
+  "synth-multi-ten-a",
+  "synth-multi-ten-b",
+  "synth-yaml-eleven",
+  "synth-yaml-twelve",
+  "synth-indented-thirteen",
+  "synth-cookie-fourteen",
+  "synth-flag-fifteen",
+  "synth-header-sixteen",
+  "synth-single-seventeen",
 ]) {
   check(
-    `redacts ${secret.slice(0, 12)}…`,
+    `redacts ${secret.slice(0, 16)}…`,
     !redacted.includes(secret),
     redacted,
   );
 }
 const benign =
-  "▲ Next.js 16.3.8\n- Local: http://127.0.0.1:3000\n✓ Ready in 1.2s\nGET / 200 in 85ms\n/Users/me/GitRepos/scrutinix2/t3-c2a46879/node_modules/next/dist/server/lib/start-server.js";
+  "▲ Next.js 16.3.8\n- Local: http://127.0.0.1:3000\n- Network: http://127.0.0.1:3000\n✓ Ready in 1.2s\nGET / 200 in 85ms\nGET /about 200 in 12ms (compile: 3ms, render: 9ms)\n/Users/me/GitRepos/scrutinix2/t3-c2a46879/node_modules/next/dist/server/lib/start-server.js\nauthor: someone, signals: 8";
 check(
   "redaction keeps ordinary log lines and paths",
   runtime.redactSecrets(benign) === benign,
@@ -635,8 +892,29 @@ check(
     !tail.includes("secret-token"),
   tail.slice(-80),
 );
+// Finding 6: a key and its value split by the cut. Slicing the last 4000
+// characters first would start the excerpt with the bare value.
+const boundarySecret = "SYNTH-boundary-secret-eighteen";
+const afterKey = `${boundarySecret}"\n`;
+const boundaryFile = path.join(scratch, "boundary.log");
+writeFileSync(
+  boundaryFile,
+  `start\npassword="${afterKey}${"z".repeat(4000 - afterKey.length)}`,
+);
+const boundaryOneLine = path.join(scratch, "boundary-one-line.log");
+writeFileSync(
+  boundaryOneLine,
+  `password="${boundarySecret}"${" pad".repeat(1000 - boundarySecret.length / 4)}`,
+);
+check(
+  "logTail redacts before it cuts, so a split pair keeps its value hidden",
+  !runtime.logTail(boundaryFile).includes(boundarySecret) &&
+    !runtime.logTail(boundaryOneLine).includes(boundarySecret) &&
+    runtime.logTail(boundaryFile).length <= 4000,
+  runtime.logTail(boundaryFile).slice(0, 80),
+);
 
-// ---- Share key ------------------------------------------------------------
+// ---- Share key --------------------------------------------------------------
 
 // launch must pass exactly the published key scripts/run-e2e.mjs passes:
 // lib/config/env.ts accepts no other key in fixture mode.
@@ -655,6 +933,8 @@ check(
   `${launchKey} vs ${e2eKey}`,
 );
 
+// ---- next-env.d.ts ----------------------------------------------------------
+
 const declRoot = path.join(scratch, "decl");
 mkdirSync(declRoot);
 const decl = path.join(declRoot, "next-env.d.ts");
@@ -662,6 +942,10 @@ writeFileSync(decl, "user edit\n");
 runtime.snapshotNextEnv(declRoot);
 writeFileSync(decl, "next wrote this\n");
 check("recorded written", runtime.recordNextEnvWritten(declRoot));
+check(
+  "next-env record is private",
+  (lstatSync(path.join(stateDir, "next-env.json")).mode & 0o777) === 0o600,
+);
 const restored = runtime.restoreNextEnvSnapshot(declRoot);
 check(
   "restore snapshot",
@@ -736,33 +1020,20 @@ check(
 );
 writeFileSync(path.join(gitRoot, "next-env.d.ts"), originalDeclaration);
 
-const unfinishedDir = path.join(scratch, "unfinished");
-const unfinishedEvidence = path.join(unfinishedDir, "evidence");
-mkdirSync(unfinishedDir, { mode: 0o700 });
-mkdirSync(unfinishedEvidence, { mode: 0o700 });
+const unfinishedDir = privateDir("unfinished");
 writeFileSync(
   path.join(unfinishedDir, "next-env.json"),
   `${JSON.stringify({
     checkouts: {
-      [runtime.canonicalPath(runtime.repoRoot)]: {
+      [checkout]: {
         missing: false,
         snapshot: "unfinished snapshot\n",
       },
     },
   })}\n`,
+  { mode: 0o600 },
 );
-const unfinished = spawnSync(
-  process.execPath,
-  [path.join(scriptDir, "cleanup.mjs")],
-  {
-    encoding: "utf8",
-    env: {
-      ...process.env,
-      VERIFY_STATE_DIR: unfinishedDir,
-      VERIFY_EVIDENCE_DIR: unfinishedEvidence,
-    },
-  },
-);
+const unfinished = await runCli("cleanup.mjs", [], envFor(unfinishedDir));
 const unfinishedBackup = (unfinished.stderr || "").split(
   "Snapshot saved to ",
 )[1];
@@ -774,7 +1045,7 @@ check(
     typeof unfinishedBackup === "string" &&
     unfinishedBackup.includes("next-env-") &&
     readFileSync(unfinishedBackup.trim(), "utf8") === "unfinished snapshot\n",
-  `${unfinished.stdout}\n${unfinished.stderr}`,
+  output(unfinished),
 );
 
 check(
@@ -811,6 +1082,7 @@ check(
   ),
 );
 
+chmodSync(loose, 0o700);
 rmSync(scratch, { recursive: true, force: true });
 
 if (failures.length) {

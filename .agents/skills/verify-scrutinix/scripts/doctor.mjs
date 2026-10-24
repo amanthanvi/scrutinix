@@ -15,8 +15,11 @@ READY (exit 0) means all of the following:
   - GET /about is 200 and the HTML contains "How a scan becomes a verdict."
   - GET /privacy is 200 and the HTML has <main id="main-content">, an <h1>, and
     the header link href="/privacy" with aria-current="page" (structure, not copy)
-  - run.json repoRoot is this checkout, and the tmux session it records still
-    matches by id, creation time, and pane process
+  - run.json, in a private state directory, is this checkout's run, and the
+    run's supervisor proves the run token over its socket
+  - the base URL is the 127.0.0.1 port that run was given, a process in the
+    supervisor's process group holds 127.0.0.1:<port>, and no process outside
+    that group listens on the port (checked before and after the requests)
 
 Anything else prints NOT_READY and exits 2.
 
@@ -29,7 +32,7 @@ Codes:
   foreign-next        another next dev holds the port and this skill did not start it
 
 Listeners are printed as pid, start time, executable, and cwd, never as a
-command line. The base URL defaults to the one verify:launch recorded for this
+command line. A cwd that matches this checkout is never ownership. The base URL defaults to the one verify:launch recorded for this
 checkout. A healthy foreign server is not worth driving. When the holder is
 next dev, doctor names the pid and cwd. Stop that pid yourself. See SKILL.md,
 "Another next dev". Live provider mode is not

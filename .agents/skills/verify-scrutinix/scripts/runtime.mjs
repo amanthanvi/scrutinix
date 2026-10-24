@@ -1,20 +1,32 @@
-import { execFileSync, spawnSync } from "node:child_process";
-import { createHash } from "node:crypto";
+import { execFileSync, spawn, spawnSync } from "node:child_process";
+import {
+  createHmac,
+  randomBytes,
+  randomUUID,
+  timingSafeEqual,
+} from "node:crypto";
 import {
   chmodSync,
+  closeSync,
+  constants,
   existsSync,
+  fstatSync,
   lstatSync,
   mkdirSync,
+  openSync,
   readdirSync,
   readFileSync,
   readlinkSync,
   realpathSync,
+  renameSync,
   rmSync,
+  statSync,
   unlinkSync,
   writeFileSync,
 } from "node:fs";
 import net from "node:net";
 import path from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
@@ -26,17 +38,10 @@ export const evidenceDir =
   process.env.VERIFY_EVIDENCE_DIR || path.join(stateDir, "evidence");
 export const stateFile = path.join(stateDir, "run.json");
 export const defaultBaseUrl = "http://127.0.0.1:3000";
+export const supervisorScript = path.join(scriptDir, "supervisor.mjs");
+export const stateVersion = 2;
 
-// One session name per checkout, so two checkouts never ask tmux for the same
-// name. The name is still not ownership: cleanup checks the recorded identity.
-const checkoutKey = createHash("sha256")
-  .update(canonicalPath(repoRoot))
-  .digest("hex")
-  .slice(0, 10);
-
-export const sessions = {
-  next: `scrutinix-verify-next-${checkoutKey}`,
-};
+const uid = typeof process.getuid === "function" ? process.getuid() : null;
 
 const homeMarker = "URL to analyze";
 const aboutMarker = "How a scan becomes a verdict.";
@@ -54,20 +59,110 @@ export function privacyPageRendered(html) {
   );
 }
 
+// ---- Redaction --------------------------------------------------------------
+
 // Log excerpts carry whatever npm or the dev server printed, so every excerpt
-// passes through here before it reaches a terminal or a CI log.
+// passes through redactSecrets before it reaches a terminal or a CI log.
+// Diagnostics otherwise print selected fields only (pid, start time,
+// executable, cwd), never a command line or an environment.
+
+// Key words that mark a value as secret. Strong words match anywhere in the
+// key (accessToken, X_API_KEY, clientSecret); weak words only as a whole word
+// of the key, so "author" or "signal" stay readable.
+const strongSecretWords =
+  /token|secret|passw|apikey|accesskey|privatekey|credential|cookie|signature|bearer/;
+const weakSecretWords = new Set([
+  "auth",
+  "authorization",
+  "key",
+  "keys",
+  "pass",
+  "pwd",
+  "sig",
+  "session",
+  "dsn",
+  "private",
+]);
+
+function decodeKey(raw) {
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return raw;
+  }
+}
+
+export function secretKey(raw) {
+  const key = decodeKey(String(raw));
+  const words = key
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean);
+  if (strongSecretWords.test(words.join(""))) return true;
+  return words.some((word) => weakSecretWords.has(word));
+}
+
+function envKey(raw) {
+  return /^[A-Z][A-Z0-9_]+$/.test(decodeKey(String(raw)));
+}
+
+// A key, optionally quoted (or \"escaped\" inside a JSON string), a ":" or
+// "=", and a value. Percent-encoded keys (%74oken) are decoded before the
+// secret test.
+const keyChars = String.raw`(?:[A-Za-z0-9_.-]|%[0-9A-Fa-f]{2})+`;
+const keyQuote = String.raw`(?:\\?["'])?`;
+const pairValue = [
+  String.raw`"(?:[^"\\]|\\[\s\S])*"`, // "double", escape-aware
+  String.raw`'(?:[^'\\]|\\[\s\S])*'`, // 'single', escape-aware
+  String.raw`\\"(?:[^"\\]|\\(?!")[\s\S])*\\"`, // \"escaped\" in a JSON string
+  String.raw`[|>][-+]?[ \t]*(?:\r?\n[ \t]+[^\r\n]*)+`, // YAML block scalar
+  String.raw`(?=\r?\n[ \t])(?:\r?\n[ \t]+[^\r\n]*)+`, // empty, then indented lines
+  String.raw`(?:\\\r?\n[ \t]*|[^\s&,;}\])])+`, // unquoted, with "\" continuations
+].join("|");
+const pairPattern = new RegExp(
+  String.raw`(?<![A-Za-z0-9_%\\])(${keyQuote}(${keyChars})${keyQuote}[ \t]*[:=][ \t]*)(${pairValue})`,
+  "g",
+);
+
+function maskValue(value) {
+  for (const quote of ['\\"', '"', "'"]) {
+    if (value.startsWith(quote) && value.length >= quote.length * 2) {
+      return `${quote}[redacted]${quote}`;
+    }
+  }
+  return "[redacted]";
+}
+
+function redactPairs(text) {
+  return text.replace(pairPattern, (match, head, key, value) => {
+    if (value.startsWith("[redacted")) return match;
+    if (secretKey(key) || (head.includes("=") && envKey(key))) {
+      return `${head}${maskValue(value)}`;
+    }
+    // Not a secret key, but its value can still hold one ("msg": "token=…").
+    return `${head}${redactPairs(value)}`;
+  });
+}
+
 const redactions = [
+  // PEM blocks, including an unterminated one at the end of the text
+  [
+    /-----BEGIN [A-Z0-9 ]+-----[\s\S]*?(?:-----END [A-Z0-9 ]+-----|$)/g,
+    "[redacted PEM block]",
+  ],
   // Credentials in URLs: scheme://user:password@host
   [/\b([a-z][a-z0-9+.-]*:\/\/)[^\s/?#@]+@/gi, "$1[redacted]@"],
   // Authorization schemes followed by a token
   [/\b(Bearer|Basic|Token)\s+[\w.~+/=-]{6,}/gi, "$1 [redacted]"],
-  // Env-like assignments: NAME=value, export NAME="value"
-  [/\b([A-Z][A-Z0-9_]+)=("[^"]*"|'[^']*'|\S*)/g, "$1=[redacted]"],
-  // Secret-named keys in any case: api_key=..., "token": "...", sig=...
+  // Flags: --token VALUE, --password VALUE
   [
-    /\b((?:[\w-]*[_-])?(?:token|secret|password|passwd|pwd|api[_-]?key|apikey|auth|authorization|credentials?|cookie|sig|signature)s?)(["']?\s*[:=]\s*)("[^"]*"|'[^']*'|[^\s&,;]+)/gi,
-    "$1$2[redacted]",
+    /(\s--?[\w-]*(?:token|secret|password|passwd|api-?key)[\w-]*[ \t]+)(?!-)(\S+)/gi,
+    "$1[redacted]",
   ],
+];
+
+const tokenShapes = [
   // Well-known token shapes and JWTs
   [
     /\b(?:gh[pousr]_\w{20,}|github_pat_\w{20,}|sk-[\w-]{16,}|xox[abposr]-[\w-]{10,}|AKIA[0-9A-Z]{16}|eyJ[\w-]{8,}\.[\w-]{8,}\.[\w-]{8,})/g,
@@ -98,19 +193,52 @@ export function redactSecrets(text) {
   for (const [pattern, replacement] of redactions) {
     next = next.replace(pattern, replacement);
   }
+  next = redactPairs(next);
+  // Header lines whose name is secret-like: the rest of the line is the value
+  // (Cookie: a=1; sid=…). A block scalar already redacted is left as it is.
+  next = next.replace(
+    /^([ \t]*[\w-]*(?:authorization|cookie|token|secret|api-key|password)[\w-]*[ \t]*:[ \t]*)(?!\[redacted\]$)(\S.*)$/gim,
+    "$1[redacted]",
+  );
+  for (const [pattern, replacement] of tokenShapes) {
+    next = next.replace(pattern, replacement);
+  }
   return next.replace(opaqueRun, (run) =>
     opaqueToken(run) ? "[redacted]" : run,
   );
 }
 
-export function logTail(file, bytes = 4000) {
+const logReadLimit = 32 * 1024 * 1024;
+
+// The last whole lines of a log, at most `chars` characters. The whole file is
+// redacted first, so a secret split by the cut can never show its value.
+export function logTail(file, chars = 4000) {
+  let text = "";
   try {
     if (!existsSync(file)) return "";
-    return redactSecrets(readFileSync(file, "utf8").slice(-bytes));
+    if (statSync(file).size > logReadLimit) {
+      return `[log larger than ${logReadLimit} bytes. Not excerpted.]`;
+    }
+    text = readFileSync(file, "utf8");
   } catch {
     return "";
   }
+  const lines = redactSecrets(text).replace(/\s+$/, "").split("\n");
+  const kept = [];
+  let length = 0;
+  for (let index = lines.length - 1; index >= 0; index -= 1) {
+    const line = lines[index] ?? "";
+    if (length + line.length + 1 > chars) {
+      if (!kept.length) kept.unshift(line.slice(-chars));
+      break;
+    }
+    kept.unshift(line);
+    length += line.length + 1;
+  }
+  return kept.join("\n");
 }
+
+// ---- Paths and the private state directory ----------------------------------
 
 export function canonicalPath(value) {
   const resolved = path.resolve(String(value));
@@ -128,29 +256,85 @@ export function sameCheckout(state) {
   return canonicalPath(state.repoRoot) === canonicalPath(repoRoot);
 }
 
-function assertPrivateDir(dir) {
-  const stat = lstatSync(dir);
-  const mode = stat.mode & 0o777;
+function trustedOwner(owner) {
+  return uid === null || owner === uid || owner === 0;
+}
+
+// Nobody else may be able to swap the directory out: every symlink on the
+// given path, and every real ancestor, belongs to root or this user, and an
+// ancestor writable by others must be sticky (/tmp).
+function ancestorProblem(dir) {
+  let current = path.resolve(dir);
+  for (;;) {
+    const parent = path.dirname(current);
+    if (parent === current) break;
+    current = parent;
+    let stat;
+    try {
+      stat = lstatSync(current);
+    } catch {
+      continue;
+    }
+    if (stat.isSymbolicLink() && !trustedOwner(stat.uid)) {
+      return `${current} is a symlink owned by uid ${stat.uid}`;
+    }
+  }
+  current = canonicalPath(path.dirname(path.resolve(dir)));
+  for (;;) {
+    let stat;
+    try {
+      stat = statSync(current);
+    } catch {
+      return `${current} cannot be read`;
+    }
+    if (!trustedOwner(stat.uid)) {
+      return `${current} is owned by uid ${stat.uid}`;
+    }
+    if ((stat.mode & 0o022) !== 0 && (stat.mode & 0o1000) === 0) {
+      return `${current} is writable by group or others and is not sticky`;
+    }
+    const parent = path.dirname(current);
+    if (parent === current) return "";
+    current = parent;
+  }
+}
+
+// Why `dir` is not safe to read actionable state from, or "" when it is: a
+// real directory, owned by this user, mode 0700, under safe ancestors.
+export function privateDirProblem(dir) {
+  let stat;
+  try {
+    stat = lstatSync(dir);
+  } catch {
+    return `${dir} does not exist`;
+  }
   if (stat.isSymbolicLink() || !stat.isDirectory()) {
-    throw new Error(
-      `verify: ${dir} must be a real directory owned by this user with mode 0700`,
-    );
+    return `${dir} must be a real directory owned by this user with mode 0700`;
   }
-  const uid = typeof process.getuid === "function" ? process.getuid() : null;
   if (uid !== null && stat.uid !== uid) {
-    throw new Error(
-      `verify: ${dir} is owned by uid ${stat.uid}, expected ${uid}. Refusing to write scripts there.`,
-    );
+    return `${dir} is owned by uid ${stat.uid}, expected ${uid}`;
   }
+  const mode = stat.mode & 0o777;
   if ((mode & 0o077) !== 0) {
-    throw new Error(
-      `verify: ${dir} is group or world accessible (mode 0${mode.toString(8)}). Refusing to write scripts there.`,
+    return `${dir} is group or world accessible (mode 0${mode.toString(8)})`;
+  }
+  return ancestorProblem(dir);
+}
+
+export class UnsafeStateError extends Error {}
+
+function assertPrivateDir(dir) {
+  const problem = privateDirProblem(dir);
+  if (problem) {
+    throw new UnsafeStateError(
+      `verify: ${problem}. Refusing to use it for verify state.`,
     );
   }
 }
 
-export function ensureDirs() {
-  for (const dir of [stateDir, evidenceDir]) {
+// Create (0700) or validate the state and evidence directories for writing.
+export function ensureDirs(dirs = [stateDir, evidenceDir]) {
+  for (const dir of dirs) {
     if (!existsSync(dir)) {
       mkdirSync(dir, { recursive: true, mode: 0o700 });
       chmodSync(dir, 0o700);
@@ -159,36 +343,199 @@ export function ensureDirs() {
   }
 }
 
-export function readState() {
-  if (!existsSync(stateFile)) return null;
+// Read a state file only when it is a regular file owned by this user that
+// nobody else can write, and never through a symlink. null when missing.
+export function readPrivateFile(file) {
+  let fd;
   try {
-    return JSON.parse(readFileSync(stateFile, "utf8"));
-  } catch {
-    return null;
+    fd = openSync(file, constants.O_RDONLY | constants.O_NOFOLLOW);
+  } catch (error) {
+    if (error?.code === "ENOENT") return null;
+    if (error?.code === "ELOOP" || error?.code === "EMLINK") {
+      throw new UnsafeStateError(`verify: ${file} is a symlink. Refusing it.`);
+    }
+    throw error;
+  }
+  try {
+    const stat = fstatSync(fd);
+    if (!stat.isFile()) {
+      throw new UnsafeStateError(`verify: ${file} is not a regular file.`);
+    }
+    if (uid !== null && stat.uid !== uid) {
+      throw new UnsafeStateError(
+        `verify: ${file} is owned by uid ${stat.uid}, expected ${uid}.`,
+      );
+    }
+    if ((stat.mode & 0o022) !== 0) {
+      throw new UnsafeStateError(
+        `verify: ${file} is writable by group or others (mode 0${(stat.mode & 0o777).toString(8)}).`,
+      );
+    }
+    return readFileSync(fd, "utf8");
+  } finally {
+    closeSync(fd);
   }
 }
 
-export function writeState(state) {
-  ensureDirs();
-  writeFileSync(stateFile, `${JSON.stringify(state, null, 2)}\n`);
+// Write a state file atomically with mode 0600, after validating its directory.
+export function writePrivateFile(file, content) {
+  ensureDirs([path.dirname(file)]);
+  const temp = `${file}.${process.pid}.${randomBytes(4).toString("hex")}.tmp`;
+  const fd = openSync(
+    temp,
+    constants.O_WRONLY |
+      constants.O_CREAT |
+      constants.O_EXCL |
+      constants.O_NOFOLLOW,
+    0o600,
+  );
+  try {
+    writeFileSync(fd, content);
+  } finally {
+    closeSync(fd);
+  }
+  renameSync(temp, file);
 }
 
-// --base-url, then E2E_BASE_URL, then the URL this checkout last launched on.
+// The recorded run, read only after the state directory and run.json pass
+// every check. `problem` explains a refusal; nothing in an unsafe directory is
+// parsed, let alone acted on.
+export function loadState(dir = stateDir) {
+  if (!existsSync(dir)) return { state: null, problem: "", missingDir: true };
+  const problem = privateDirProblem(dir);
+  if (problem) return { state: null, problem };
+  let text;
+  try {
+    text = readPrivateFile(path.join(dir, "run.json"));
+  } catch (error) {
+    return {
+      state: null,
+      problem: error instanceof Error ? error.message : String(error),
+    };
+  }
+  if (text === null) return { state: null, problem: "" };
+  try {
+    const state = JSON.parse(text);
+    if (!state || typeof state !== "object" || Array.isArray(state)) {
+      return { state: null, problem: "run.json is not a JSON object" };
+    }
+    return { state, problem: "" };
+  } catch {
+    return { state: null, problem: "run.json is not valid JSON" };
+  }
+}
+
+export function readState(dir = stateDir) {
+  return loadState(dir).state;
+}
+
+export function writeState(state, dir = stateDir) {
+  writePrivateFile(
+    path.join(dir, "run.json"),
+    `${JSON.stringify(state, null, 2)}\n`,
+  );
+}
+
+// A run.json from the tmux version of this skill: it recorded sessions and
+// listener identities, which this version never signals.
+export function legacyState(state) {
+  return (
+    Boolean(state) &&
+    state.version !== stateVersion &&
+    (Array.isArray(state.sessions) ||
+      Array.isArray(state.listeners) ||
+      Array.isArray(state.pids))
+  );
+}
+
+export function legacyPids(state) {
+  const pids = [];
+  for (const entry of [
+    ...(Array.isArray(state?.listeners) ? state.listeners : []),
+    ...(Array.isArray(state?.pids) ? state.pids : []),
+    ...(Array.isArray(state?.sessions)
+      ? state.sessions.map((session) => session?.pane)
+      : []),
+  ]) {
+    const pid = typeof entry === "object" && entry ? entry.pid : entry;
+    if (validPid(pid)) pids.push(pid);
+  }
+  return [...new Set(pids)];
+}
+
+// ---- Base URLs --------------------------------------------------------------
+
+// A base URL is an origin: no user name or password, path, query, or
+// fragment. Errors never echo the input, which can carry credentials.
+export function baseUrlProblem(raw) {
+  let url;
+  try {
+    url = new URL(String(raw));
+  } catch {
+    return "is not a valid URL. Use http://127.0.0.1:<port>";
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    return "must use http or https";
+  }
+  if (url.username || url.password || String(raw).includes("@")) {
+    return "must not contain a user name or password";
+  }
+  if (url.search || url.hash || /[?#]/.test(String(raw))) {
+    return "must not contain a query string or fragment";
+  }
+  if (url.pathname !== "/") return "must not contain a path";
+  return "";
+}
+
 export function preferredBaseUrl() {
-  if (process.env.E2E_BASE_URL) return process.env.E2E_BASE_URL;
   const state = readState();
   if (
+    state &&
+    !legacyState(state) &&
     sameCheckout(state) &&
     typeof state.baseUrl === "string" &&
-    state.baseUrl
+    !baseUrlProblem(state.baseUrl)
   ) {
-    return state.baseUrl;
+    return new URL(state.baseUrl).origin;
   }
   return defaultBaseUrl;
 }
 
+// --base-url, then E2E_BASE_URL, then the URL this checkout last launched on.
+export function parseCliBaseUrl(argv = process.argv, env = process.env) {
+  const index = argv.findIndex(
+    (arg) => arg === "--base-url" || arg.startsWith("--base-url="),
+  );
+  let raw;
+  let source = "--base-url";
+  if (index !== -1) {
+    const token = argv[index] ?? "";
+    raw = token.startsWith("--base-url=")
+      ? token.slice("--base-url=".length)
+      : argv[index + 1];
+    if (typeof raw !== "string" || raw.trim() === "") {
+      return {
+        ok: false,
+        baseUrl: "",
+        message: "--base-url needs a URL, such as http://127.0.0.1:3000",
+      };
+    }
+  } else if (env.E2E_BASE_URL) {
+    raw = env.E2E_BASE_URL;
+    source = "E2E_BASE_URL";
+  } else {
+    return { ok: true, baseUrl: preferredBaseUrl(), message: "" };
+  }
+  const problem = baseUrlProblem(raw);
+  if (problem) {
+    return { ok: false, baseUrl: "", message: `${source} ${problem}` };
+  }
+  return { ok: true, baseUrl: new URL(raw).origin, message: "" };
+}
+
 // launch serves plain http on 127.0.0.1 only, on an explicit port.
 export function launchableBaseUrl(baseUrl) {
+  if (baseUrlProblem(baseUrl)) return false;
   const url = new URL(baseUrl);
   const port = Number(url.port);
   return (
@@ -209,36 +556,6 @@ export function baseUrlParts(baseUrl) {
   };
 }
 
-export function parseCliBaseUrl(argv = process.argv) {
-  const index = argv.findIndex(
-    (arg) => arg === "--base-url" || arg.startsWith("--base-url="),
-  );
-  if (index === -1) {
-    return { ok: true, baseUrl: preferredBaseUrl(), message: "" };
-  }
-  const token = argv[index] ?? "";
-  const raw = token.startsWith("--base-url=")
-    ? token.slice("--base-url=".length)
-    : argv[index + 1];
-  if (typeof raw !== "string" || raw.trim() === "") {
-    return {
-      ok: false,
-      baseUrl: "",
-      message: "--base-url needs a URL, such as http://127.0.0.1:3000",
-    };
-  }
-  try {
-    new URL(raw);
-  } catch {
-    return {
-      ok: false,
-      baseUrl: "",
-      message: `--base-url ${JSON.stringify(raw)} is not a valid URL. Use http://127.0.0.1:<port>`,
-    };
-  }
-  return { ok: true, baseUrl: raw, message: "" };
-}
-
 export function foreignNextStopHint(port) {
   return `find the listener pid with lsof -nP -iTCP:${port} -sTCP:LISTEN -t, or ss -ltnp 'sport = :${port}' on Linux. Check its start time and executable with ps -o pid=,lstart=,comm= -p <pid> and its working directory with lsof -a -p <pid> -d cwd -Fn (readlink /proc/<pid>/cwd on Linux). Stop that exact pid with kill <pid> only when all three are the server you mean. Do not kill by name or pattern.`;
 }
@@ -257,48 +574,43 @@ export function tcpOpen(port, host = "127.0.0.1", timeoutMs = 400) {
   });
 }
 
+// A fetch failure is reported as a code, never as the error message: undici
+// messages can repeat the URL.
 async function fetchText(url, timeoutMs) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const response = await fetch(url, {
       signal: controller.signal,
-      redirect: "follow",
+      redirect: "manual",
       headers: { Accept: "text/html" },
     });
     const text = await response.text();
     return { status: response.status, text, error: "" };
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
     const aborted = error instanceof Error && error.name === "AbortError";
-    return { status: 0, text: "", error: aborted ? "timeout" : message };
+    const code = error?.cause?.code;
+    return {
+      status: 0,
+      text: "",
+      error: aborted
+        ? "timeout"
+        : typeof code === "string" && /^[A-Z_]+$/.test(code)
+          ? code
+          : "request failed",
+    };
   } finally {
     clearTimeout(timer);
   }
 }
 
-function listenInodes(port) {
-  const inodes = new Set();
-  for (const file of ["/proc/net/tcp", "/proc/net/tcp6"]) {
-    if (!existsSync(file)) continue;
-    const lines = readFileSync(file, "utf8").split("\n").slice(1);
-    for (const line of lines) {
-      const parts = line.trim().split(/\s+/);
-      if (parts.length < 10) continue;
-      const local = parts[1];
-      const state = parts[3];
-      const inode = parts[9];
-      const portHex = local?.split(":")[1];
-      if (!portHex || state !== "0A" || !inode) continue;
-      if (Number.parseInt(portHex, 16) === port) inodes.add(inode);
-    }
-  }
-  return inodes;
-}
+// ---- Processes and listeners ------------------------------------------------
 
 function validPid(pid) {
   return Number.isInteger(pid) && pid > 0;
 }
+
+const onLinux = existsSync("/proc/self/stat");
 
 // ps and lsof resolve from the system directories first, so neither an empty
 // PATH nor a shadowing binary earlier on PATH changes what identity reads.
@@ -332,15 +644,70 @@ function safeReadlink(file) {
   }
 }
 
-function listenerPidsFromProc(port) {
-  const inodes = listenInodes(port);
-  if (!inodes.size) return [];
-  const pids = new Set();
+// Fields after the ")" that closes comm in /proc/<pid>/stat: state, ppid,
+// pgrp, session, ... The comm field can hold spaces, so count from the last ")".
+function procStat(pid) {
+  try {
+    const stat = readFileSync(`/proc/${pid}/stat`, "utf8");
+    return stat.slice(stat.lastIndexOf(")") + 2).split(" ");
+  } catch {
+    return null;
+  }
+}
+
+function hexAddress(hex) {
+  if (hex.length === 8) {
+    return (hex.match(/../g) ?? [])
+      .reverse()
+      .map((byte) => Number.parseInt(byte, 16))
+      .join(".");
+  }
+  // IPv6: four little-endian 32-bit words.
+  const bytes = (hex.match(/.{8}/g) ?? []).flatMap((word) =>
+    (word.match(/../g) ?? []).reverse(),
+  );
+  if (bytes.slice(0, 10).every((byte) => byte === "00")) {
+    if (bytes[10] === "FF" && bytes[11] === "FF") {
+      return `::ffff:${bytes
+        .slice(12)
+        .map((byte) => Number.parseInt(byte, 16))
+        .join(".")}`;
+    }
+  }
+  return `[${bytes.join("").toLowerCase()}]`;
+}
+
+function procListenSockets(port) {
+  const sockets = new Map();
+  for (const file of ["/proc/net/tcp", "/proc/net/tcp6"]) {
+    let lines = [];
+    try {
+      lines = readFileSync(file, "utf8").split("\n").slice(1);
+    } catch {
+      continue;
+    }
+    for (const line of lines) {
+      const parts = line.trim().split(/\s+/);
+      if (parts.length < 10) continue;
+      const [addressHex, portHex] = (parts[1] ?? "").split(":");
+      if (!addressHex || !portHex || parts[3] !== "0A" || !parts[9]) continue;
+      if (Number.parseInt(portHex, 16) !== port) continue;
+      sockets.set(parts[9], hexAddress(addressHex));
+    }
+  }
+  return sockets;
+}
+
+function procListeners(port) {
+  const sockets = procListenSockets(port);
+  if (!sockets.size) return [];
+  const found = [];
+  const attributed = new Set();
   let dirents = [];
   try {
     dirents = readdirSync("/proc");
   } catch {
-    return [];
+    dirents = [];
   }
   for (const dirent of dirents) {
     if (!/^\d+$/.test(dirent)) continue;
@@ -350,58 +717,119 @@ function listenerPidsFromProc(port) {
     } catch {
       continue;
     }
+    const seen = new Set();
     for (const fd of fds) {
       const target = safeReadlink(`/proc/${dirent}/fd/${fd}`);
-      if (target.startsWith("socket:[") && inodes.has(target.slice(8, -1))) {
-        pids.add(Number(dirent));
-      }
+      if (!target.startsWith("socket:[")) continue;
+      const inode = target.slice(8, -1);
+      if (!sockets.has(inode) || seen.has(inode)) continue;
+      seen.add(inode);
+      attributed.add(inode);
+      found.push({ pid: Number(dirent), address: sockets.get(inode) });
     }
   }
-  return [...pids];
+  // A socket no readable process holds (another user's) still counts.
+  for (const [inode, address] of sockets) {
+    if (!attributed.has(inode)) found.push({ pid: null, address });
+  }
+  return found;
 }
 
-export function parseListenerPids(details) {
-  const pids = new Set();
-  for (const match of String(details).matchAll(/\bpid(?:=|\s+)(\d+)/g)) {
-    const pid = Number(match[1]);
-    if (validPid(pid)) pids.add(pid);
-  }
-  return [...pids];
-}
-
-// ss on Linux, /proc when ss is missing, lsof everywhere else (macOS).
-export function listenerPids(port) {
-  const fromSs = probe("ss", ["-ltnp", `sport = :${port}`]);
-  if (fromSs !== null && parseListenerPids(fromSs).length) {
-    return parseListenerPids(fromSs);
-  }
-  if (existsSync("/proc/net/tcp")) return listenerPidsFromProc(port);
-  const fromLsof = probe(systemTool("lsof"), [
+function lsofListeners(port) {
+  const listing = probe(systemTool("lsof"), [
     "-nP",
     `-iTCP:${port}`,
     "-sTCP:LISTEN",
-    "-t",
+    "-Fpn",
   ]);
-  if (!fromLsof) return [];
-  return [...new Set(fromLsof.split("\n").map(Number).filter(validPid))];
+  if (!listing) return [];
+  const found = [];
+  let pid = null;
+  for (const line of listing.split("\n")) {
+    if (line.startsWith("p")) pid = Number(line.slice(1));
+    if (line.startsWith("n") && validPid(pid)) {
+      const name = line.slice(1);
+      const host = name.slice(0, name.lastIndexOf(":"));
+      found.push({ pid, address: host.replace(/^\[(.*)\]$/, "$1") });
+    }
+  }
+  return found;
 }
 
-// The identity cleanup compares before it signals a pid: the pid, when that
-// process started, its executable, and the directory it serves. A reused pid
-// has a different start time; another checkout's server has a different cwd.
-// None of these is a command line, so diagnostics may print them.
+// Every listening socket on the port, with the pid that holds it (null when
+// no process this user can read holds it) and its local address.
+export function portListeners(port) {
+  return onLinux ? procListeners(port) : lsofListeners(port);
+}
+
+export function listenerPids(port) {
+  return [
+    ...new Set(
+      portListeners(port)
+        .map((listener) => listener.pid)
+        .filter(validPid),
+    ),
+  ];
+}
+
+export function processGroup(pid) {
+  if (!validPid(pid)) return null;
+  if (onLinux) {
+    const fields = procStat(pid);
+    const pgid = Number(fields?.[2]);
+    return validPid(pgid) ? pgid : null;
+  }
+  const pgid = Number(
+    probe(systemTool("ps"), ["-o", "pgid=", "-p", String(pid)])?.trim(),
+  );
+  return validPid(pgid) ? pgid : null;
+}
+
+// Live (not zombie) members of a process group.
+export function processGroupMembers(pgid) {
+  const members = [];
+  if (onLinux) {
+    let dirents = [];
+    try {
+      dirents = readdirSync("/proc");
+    } catch {
+      return members;
+    }
+    for (const dirent of dirents) {
+      if (!/^\d+$/.test(dirent)) continue;
+      const fields = procStat(dirent);
+      if (!fields || fields[0] === "Z") continue;
+      if (Number(fields[2]) === pgid) members.push(Number(dirent));
+    }
+    return members;
+  }
+  // ps runs as a child of the caller, so it is in the caller's group. Its
+  // own pid is left out.
+  const listed = spawnSync(systemTool("ps"), ["-A", "-o", "pid=,pgid=,stat="], {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "ignore"],
+    env: { ...process.env, LC_ALL: "C" },
+  });
+  if (listed.status !== 0) return members;
+  for (const line of listed.stdout.split("\n")) {
+    const [pid, group, stat] = line.trim().split(/\s+/);
+    if (Number(pid) === listed.pid) continue;
+    if (Number(group) === pgid && !String(stat).startsWith("Z")) {
+      members.push(Number(pid));
+    }
+  }
+  return members;
+}
+
+// Selected identity fields for diagnostics: the pid, when that process
+// started, its executable, and the directory it serves. None of these is a
+// command line or an environment, so diagnostics may print them.
 export function processIdentity(pid) {
   if (!validPid(pid)) return null;
-  if (existsSync("/proc/self/stat")) {
-    let stat = "";
-    try {
-      stat = readFileSync(`/proc/${pid}/stat`, "utf8");
-    } catch {
-      return null;
-    }
-    // Field 22 is starttime in clock ticks since boot. The comm field can
-    // hold spaces, so count from the last ")".
-    const fields = stat.slice(stat.lastIndexOf(")") + 2).split(" ");
+  if (onLinux) {
+    const fields = procStat(pid);
+    if (!fields) return null;
+    // Field 22 is starttime in clock ticks since boot.
     const ticks = fields[19] ?? "";
     return {
       pid,
@@ -445,81 +873,6 @@ export function describeProcess(identity) {
   return `pid ${identity.pid}, started ${identity.startTime || "unknown"}, executable ${identity.executable || "unknown"}, cwd ${identity.cwd || "unknown"}`;
 }
 
-// Why a recorded process is no longer the one this checkout started, or ""
-// when every field still matches. `fields` lets the tmux pane skip the
-// executable: its bash wrapper execs npm, which changes the binary but not
-// the pid, start time, or cwd.
-export function identityProblem(
-  recorded,
-  current,
-  { root = repoRoot, fields = ["startTime", "executable", "cwd"] } = {},
-) {
-  if (!recorded || typeof recorded !== "object" || !validPid(recorded.pid)) {
-    return "no recorded process identity (pid, start time, executable, cwd)";
-  }
-  const pid = recorded.pid;
-  for (const field of fields) {
-    if (typeof recorded[field] !== "string" || recorded[field] === "") {
-      return `pid ${pid} was recorded without its ${field}`;
-    }
-  }
-  if (!current) return `pid ${pid} is no longer running`;
-  if (current.pid !== pid) return `pid ${current.pid} is not pid ${pid}`;
-  if (
-    fields.includes("startTime") &&
-    current.startTime !== recorded.startTime
-  ) {
-    return `pid ${pid} started ${current.startTime || "at an unknown time"}, not ${recorded.startTime}, so the pid was reused`;
-  }
-  if (
-    fields.includes("executable") &&
-    current.executable !== recorded.executable
-  ) {
-    return `pid ${pid} runs ${current.executable || "an unknown executable"}, not ${recorded.executable}`;
-  }
-  if (fields.includes("cwd")) {
-    const checkout = canonicalPath(root);
-    if (
-      !current.cwd ||
-      canonicalPath(current.cwd) !== canonicalPath(recorded.cwd)
-    ) {
-      return `pid ${pid} serves ${current.cwd || "an unknown directory"}, not ${recorded.cwd}`;
-    }
-    if (canonicalPath(recorded.cwd) !== checkout) {
-      return `pid ${pid} serves ${recorded.cwd}, which is not this checkout (${checkout})`;
-    }
-  }
-  return "";
-}
-
-// Signal one recorded process only when its identity still matches.
-export function stopRecordedProcess(recorded, { root = repoRoot } = {}) {
-  const pid =
-    recorded && typeof recorded === "object" ? recorded.pid : recorded;
-  if (!validPid(pid)) {
-    return {
-      action: "refused",
-      message: `refused ${JSON.stringify(recorded)}: not a pid`,
-    };
-  }
-  const current = processIdentity(pid);
-  if (!current)
-    return { action: "gone", message: `pid ${pid} was already gone` };
-  const problem = identityProblem(recorded, current, { root });
-  if (problem) {
-    return {
-      action: "refused",
-      message: `refused to stop pid ${pid}: ${problem}`,
-    };
-  }
-  try {
-    process.kill(pid, "SIGTERM");
-  } catch {
-    return { action: "gone", message: `pid ${pid} was already gone` };
-  }
-  return { action: "stopped", message: `sent SIGTERM to pid ${pid}` };
-}
-
 export function portDetails(port) {
   return listenerPids(port)
     .map((pid) => {
@@ -539,7 +892,7 @@ export function isNextDevCommand(command) {
 // can carry tokens.
 function commandLine(pid) {
   if (!validPid(pid)) return "";
-  if (existsSync("/proc/self/cmdline")) {
+  if (onLinux) {
     try {
       return readFileSync(`/proc/${pid}/cmdline`, "utf8")
         .replaceAll("\0", " ")
@@ -553,17 +906,18 @@ function commandLine(pid) {
   );
 }
 
-export function foreignNextListeners(port) {
+export function foreignNextListeners(port, exclude = []) {
   const found = [];
   for (const pid of listenerPids(port)) {
+    if (exclude.includes(pid)) continue;
     if (!isNextDevCommand(commandLine(pid))) continue;
     found.push({ pid, cwd: processIdentity(pid)?.cwd ?? "" });
   }
   return found;
 }
 
-export function formatForeignNext(port) {
-  const holders = foreignNextListeners(port);
+export function formatForeignNext(port, exclude = []) {
+  const holders = foreignNextListeners(port, exclude);
   if (!holders.length) return "";
   const detail = holders
     .map((holder) => {
@@ -574,184 +928,368 @@ export function formatForeignNext(port) {
   return `another next dev holds port ${port} (${detail}). This skill did not start it and will not stop it.`;
 }
 
-// Listeners on the port that serve this checkout, with their identity.
-export function checkoutListeners(port, root = repoRoot) {
-  const checkout = canonicalPath(root);
-  return listenerPids(port)
-    .map((pid) => processIdentity(pid))
-    .filter(
-      (identity) =>
-        identity !== null &&
-        identity.cwd !== "" &&
-        canonicalPath(identity.cwd) === checkout,
-    );
+// ---- Supervisor -------------------------------------------------------------
+
+// launch starts one detached supervisor per run. It is a session and process
+// group leader (setsid), and the app it spawns stays in that group, so the
+// group holds exactly what this run started. Only processes in that session
+// can join the group, and its id cannot be reused while the supervisor lives.
+// Stopping asks the supervisor; it signals its own group and nothing else.
+// Requests and replies are authenticated with the run token from run.json.
+
+export function socketPath(dir = stateDir) {
+  return path.join(dir, "supervisor.sock");
 }
 
-// A tmux session is identified by its server-assigned id, its creation time,
-// and its pane process. A name is not ownership: anyone can create a session
-// with the same name after ours ends.
-// Fields are joined with ":", which tmux forbids in session names. Older tmux
-// (3.3) rewrites a tab in -F output as "_", so a tab separator is unsafe.
-export function tmuxSessionIdentity(name) {
-  const { bin, prefix } = tmuxCommand();
-  const listed = spawnSync(
-    bin,
-    [
-      ...prefix,
-      "list-sessions",
-      "-F",
-      "#{session_name}:#{session_id}:#{session_created}:#{pane_pid}",
-    ],
-    { encoding: "utf8" },
-  );
-  if (listed.status !== 0) return null;
-  for (const line of listed.stdout.split("\n")) {
-    const [sessionName, id, created, panePid] = line.split(":");
-    if (sessionName === name && id && created) {
-      return { name, id, created, panePid: Number(panePid) };
+export function runToken() {
+  return randomBytes(32).toString("hex");
+}
+
+export function hmac(token, message) {
+  return createHmac("sha256", String(token)).update(message).digest("hex");
+}
+
+export function sameDigest(left, right) {
+  const a = Buffer.from(String(left), "utf8");
+  const b = Buffer.from(String(right), "utf8");
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
+export function clientAuth(token, op, nonce) {
+  return hmac(token, `client\n${op}\n${nonce}`);
+}
+
+export function serverProof(token, nonce, body) {
+  return hmac(token, `server\n${nonce}\n${JSON.stringify(body)}`);
+}
+
+function validToken(token) {
+  return typeof token === "string" && /^[0-9a-f]{64}$/.test(token);
+}
+
+// One request to the supervisor in `dir`. The socket path comes from the
+// validated directory, never from run.json. Resolves to
+//   { gone: true }                   nothing is listening on the socket
+//   { proven: false, problem }       the peer did not prove the run token
+//   { proven: true, body }           the run's supervisor answered
+export function supervisorRequest(
+  state,
+  op,
+  { dir = stateDir, timeoutMs = 5_000 } = {},
+) {
+  return new Promise((resolve) => {
+    if (!validToken(state?.token)) {
+      resolve({ proven: false, problem: "run.json has no run token" });
+      return;
     }
-  }
-  return null;
+    const file = socketPath(dir);
+    let stat;
+    try {
+      stat = lstatSync(file);
+    } catch {
+      resolve({ gone: true });
+      return;
+    }
+    if (!stat.isSocket() || (uid !== null && stat.uid !== uid)) {
+      resolve({
+        proven: false,
+        problem: `${file} is not a socket owned by this user`,
+      });
+      return;
+    }
+    const nonce = randomUUID();
+    const socket = net.createConnection(file);
+    let buffer = "";
+    let settled = false;
+    const finish = (result) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      socket.destroy();
+      resolve(result);
+    };
+    const timer = setTimeout(
+      () => finish({ proven: false, problem: "the supervisor did not answer" }),
+      timeoutMs,
+    );
+    socket.setEncoding("utf8");
+    socket.once("error", (error) => {
+      if (error?.code === "ECONNREFUSED" || error?.code === "ENOENT") {
+        finish({ gone: true });
+      } else {
+        finish({ proven: false, problem: "the supervisor socket failed" });
+      }
+    });
+    socket.once("connect", () => {
+      socket.write(
+        `${JSON.stringify({ op, nonce, auth: clientAuth(state.token, op, nonce) })}\n`,
+      );
+    });
+    socket.on("data", (chunk) => {
+      buffer += chunk;
+      if (buffer.length > 1_000_000) {
+        finish({ proven: false, problem: "the supervisor reply is too long" });
+        return;
+      }
+      const end = buffer.indexOf("\n");
+      if (end === -1) return;
+      let reply;
+      try {
+        reply = JSON.parse(buffer.slice(0, end));
+      } catch {
+        finish({ proven: false, problem: "the supervisor reply is not JSON" });
+        return;
+      }
+      const body = reply?.body;
+      if (
+        !body ||
+        typeof body !== "object" ||
+        typeof reply.proof !== "string" ||
+        !sameDigest(reply.proof, serverProof(state.token, nonce, body))
+      ) {
+        finish({
+          proven: false,
+          problem: "the socket did not prove it is this run's supervisor",
+        });
+        return;
+      }
+      if (body.runId !== state.runId) {
+        finish({
+          proven: false,
+          problem: "the supervisor answered for a different run",
+        });
+        return;
+      }
+      finish({ proven: true, body });
+    });
+    socket.once("end", () =>
+      finish({ proven: false, problem: "the supervisor closed the socket" }),
+    );
+  });
 }
 
-const paneFields = ["startTime", "cwd"];
-
-// Why a recorded session is not the one this checkout started, "" when it
-// still is. `gone` is set when no session of that name exists.
-export function sessionProblem(recorded, { root = repoRoot } = {}) {
-  if (!recorded || typeof recorded !== "object") {
+// Whether the run recorded in `dir` serves `baseUrl` right now: its supervisor
+// proves the run token, the URL is the 127.0.0.1 port this run was given, a
+// process in the supervisor's group holds 127.0.0.1:<port>, and no process
+// outside the group listens on that port. A cwd match is never enough.
+export async function runOwnership(baseUrl, { dir = stateDir } = {}) {
+  const { state, problem } = loadState(dir);
+  if (problem) return { owned: false, reason: problem };
+  if (!state) return { owned: false, reason: "no run.json" };
+  if (legacyState(state)) {
     return {
-      gone: false,
-      problem: `${JSON.stringify(recorded)} was recorded by name only, and a session name is not ownership`,
+      owned: false,
+      reason: "run.json was written by the tmux version of this skill",
     };
   }
-  const current = tmuxSessionIdentity(recorded.name);
-  if (!current) return { gone: true, problem: "" };
-  // A tmux server that restarts numbers sessions from $0 again, and creation
-  // time has one-second resolution, so the pane pid is part of the identity.
-  const recordedPanePid = recorded.pane?.pid;
+  if (!sameCheckout(state)) {
+    return {
+      owned: false,
+      reason: `run.json belongs to ${state.repoRoot || "another checkout"}`,
+    };
+  }
+  let url;
+  try {
+    url = new URL(baseUrl);
+  } catch {
+    return { owned: false, reason: "the base URL is not valid" };
+  }
+  const port = Number(url.port);
   if (
-    current.id !== recorded.id ||
-    current.created !== recorded.created ||
-    current.panePid !== recordedPanePid
+    url.protocol !== "http:" ||
+    url.hostname !== "127.0.0.1" ||
+    port !== state.port
   ) {
     return {
-      gone: false,
-      problem: `tmux session ${recorded.name} is now ${current.id} created ${current.created} with pane pid ${current.panePid}, not ${recorded.id} created ${recorded.created} with pane pid ${recordedPanePid ?? "unknown"}, so the name was reused`,
+      owned: false,
+      reason: `this run serves http://127.0.0.1:${state.port}, not ${url.origin}`,
     };
   }
-  const pane = processIdentity(current.panePid);
-  const paneIssue = identityProblem(recorded.pane, pane, {
-    root,
-    fields: paneFields,
-  });
-  if (paneIssue) {
+  const reply = await supervisorRequest(state, "status", { dir });
+  if (reply.gone) {
+    return { owned: false, reason: "this run's supervisor is not running" };
+  }
+  if (!reply.proven) return { owned: false, reason: reply.problem };
+  const body = reply.body;
+  if (body.stopping) return { owned: false, reason: "the run is stopping" };
+  if (body.port !== port) {
     return {
-      gone: false,
-      problem: `tmux session ${recorded.name} pane: ${paneIssue}`,
+      owned: false,
+      reason: `the supervisor serves port ${body.port}, not ${port}`,
     };
   }
-  return { gone: false, problem: "", current };
+  const own = Array.isArray(body.listeners?.own) ? body.listeners.own : [];
+  const foreign = Array.isArray(body.listeners?.foreign)
+    ? body.listeners.foreign
+    : [];
+  if (foreign.length) {
+    return {
+      owned: false,
+      reason: `a process outside this run also listens on port ${port}`,
+      body,
+    };
+  }
+  if (!own.some((listener) => listener.address === "127.0.0.1")) {
+    return {
+      owned: false,
+      reason: `no process this run started holds 127.0.0.1:${port}`,
+      body,
+    };
+  }
+  return { owned: true, reason: "", body };
 }
 
-// Kill one recorded tmux session, by its id, only when it is still ours.
-export function stopRecordedSession(recorded, { root = repoRoot } = {}) {
-  const label =
-    recorded && typeof recorded === "object" ? recorded.name : recorded;
-  const { gone, problem, current } = sessionProblem(recorded, { root });
-  if (gone) {
+// Start a supervisor for `command` and record the run. The token reaches the
+// supervisor over a pipe, never argv or the environment.
+export async function startSupervisor({
+  command,
+  args = [],
+  env = process.env,
+  port,
+  baseUrl,
+  root = repoRoot,
+  dir = stateDir,
+  logName = "next.log",
+  lingerMs = 120_000,
+  record = {},
+}) {
+  ensureDirs([dir]);
+  const socket = socketPath(dir);
+  if (Buffer.byteLength(socket) > 100) {
+    throw new UnsafeStateError(
+      `verify: ${socket} is too long for a Unix socket. Set VERIFY_STATE_DIR to a shorter path.`,
+    );
+  }
+  if (existsSync(socket)) {
+    const stat = lstatSync(socket);
+    if (!stat.isSocket()) {
+      throw new UnsafeStateError(`verify: ${socket} is not a socket`);
+    }
+    if (await socketAnswers(socket)) {
+      throw new UnsafeStateError(
+        `verify: a supervisor already listens on ${socket}`,
+      );
+    }
+    unlinkSync(socket);
+  }
+  const token = runToken();
+  const runId = randomBytes(6).toString("hex");
+  const appLog = path.join(dir, logName);
+  const supervisorLog = path.join(dir, "supervisor.log");
+  const logFd = openSync(
+    supervisorLog,
+    constants.O_WRONLY |
+      constants.O_CREAT |
+      constants.O_TRUNC |
+      constants.O_NOFOLLOW,
+    0o600,
+  );
+  let child;
+  try {
+    child = spawn(process.execPath, [supervisorScript], {
+      cwd: root,
+      detached: true,
+      stdio: ["pipe", logFd, logFd],
+      env: process.env,
+    });
+  } finally {
+    closeSync(logFd);
+  }
+  child.stdin.end(
+    JSON.stringify({
+      token,
+      runId,
+      root,
+      port,
+      command,
+      args,
+      env,
+      appLog,
+      socket,
+      lingerMs,
+    }),
+  );
+  child.unref();
+  const state = {
+    version: stateVersion,
+    runId,
+    token,
+    repoRoot: canonicalPath(root),
+    baseUrl,
+    port,
+    supervisorPid: child.pid,
+    appLog,
+    supervisorLog,
+    evidenceDir,
+    startedAt: new Date().toISOString(),
+    ...record,
+  };
+  // Recorded before the app is up, so a failed boot is still cleaned up.
+  writeState(state, dir);
+  const deadline = Date.now() + 10_000;
+  while (Date.now() < deadline) {
+    const reply = await supervisorRequest(state, "status", { dir });
+    if (reply.proven) return { state, status: reply.body };
+    if (child.exitCode !== null || child.signalCode !== null) break;
+    await delay(100);
+  }
+  return { state, status: null };
+}
+
+function socketAnswers(file) {
+  return new Promise((resolve) => {
+    const socket = net.createConnection(file);
+    const finish = (value) => {
+      socket.destroy();
+      resolve(value);
+    };
+    socket.once("connect", () => finish(true));
+    socket.once("error", () => finish(false));
+    setTimeout(() => finish(false), 1_000).unref();
+  });
+}
+
+// Ask this run's supervisor to stop its process group and wait for it to go.
+export async function stopRun(state, { dir = stateDir } = {}) {
+  const reply = await supervisorRequest(state, "stop", {
+    dir,
+    timeoutMs: 30_000,
+  });
+  if (reply.gone) {
     return {
       action: "gone",
-      message: `tmux session ${label} was already gone`,
+      message: `the supervisor for run ${state.runId} was already gone`,
     };
   }
-  if (problem) {
+  if (!reply.proven) {
     return {
       action: "refused",
-      message: `refused to stop tmux session ${label}: ${problem}`,
+      message: `refused to stop run ${state.runId}: ${reply.problem}`,
     };
   }
-  const { bin, prefix } = tmuxCommand();
-  const killed = spawnSync(bin, [...prefix, "kill-session", "-t", current.id], {
-    encoding: "utf8",
-  });
-  return killed.status === 0
-    ? {
-        action: "stopped",
-        message: `stopped tmux session ${label} (${current.id})`,
-      }
-    : { action: "failed", message: `failed to stop tmux session ${label}` };
+  const leftover = Number(reply.body.leftover) || 0;
+  return {
+    action: "stopped",
+    message: `stopped run ${state.runId}: supervisor pid ${reply.body.supervisorPid} signalled its own process group${leftover ? `; ${leftover} member${leftover === 1 ? "" : "s"} ignored SIGTERM and got SIGKILL` : ""}`,
+  };
 }
 
-function recordedSession(state, name) {
-  const list = Array.isArray(state?.sessions) ? state.sessions : [];
-  return (
-    list.find(
-      (entry) => entry && typeof entry === "object" && entry.name === name,
-    ) ?? null
-  );
-}
-
-export function ownedSession(state = readState()) {
-  if (!sameCheckout(state)) return null;
-  const recorded = recordedSession(state, sessions.next);
-  if (!recorded) return null;
-  const { gone, problem } = sessionProblem(recorded);
-  return gone || problem ? null : recorded;
-}
-
-export function ownsInstance() {
-  return ownedSession() !== null;
-}
-
-// Another checkout's run is live when its recorded session still matches, or
-// a listener on the port serves that checkout's directory.
-export function foreignRunLive(state, port) {
-  if (!state || sameCheckout(state) || typeof state.repoRoot !== "string") {
-    return false;
-  }
-  const sessionsList = Array.isArray(state.sessions) ? state.sessions : [];
-  const liveSession = sessionsList.some((entry) => {
-    const { gone, problem } = sessionProblem(entry, { root: state.repoRoot });
-    return !gone && !problem;
-  });
-  return liveSession || checkoutListeners(port, state.repoRoot).length > 0;
-}
-
-export function rememberRun(started, extra = {}) {
-  const previous = readState();
-  const base = previous && sameCheckout(previous) ? previous : null;
-  const byName = new Map();
-  for (const entry of [
-    ...(Array.isArray(base?.sessions) ? base.sessions : []),
-    ...started,
-  ]) {
-    if (entry && typeof entry === "object" && typeof entry.name === "string") {
-      byName.set(entry.name, entry);
-    }
-  }
-  writeState({
-    baseUrl: extra.baseUrl || base?.baseUrl || defaultBaseUrl,
-    evidenceDir,
-    repoRoot: canonicalPath(repoRoot),
-    sessions: [...byName.values()],
-    listeners:
-      extra.listeners ?? (Array.isArray(base?.listeners) ? base.listeners : []),
-    fixtureMode: true,
-    reused: extra.reused ?? started.length === 0,
-    startedAt: base?.startedAt || new Date().toISOString(),
-  });
-}
+// ---- next-env.d.ts snapshot -------------------------------------------------
 
 function nextEnvRecordPath() {
   return path.join(stateDir, "next-env.json");
 }
 
 function readNextEnvStore() {
-  const file = nextEnvRecordPath();
-  if (!existsSync(file)) return {};
+  let text = null;
   try {
-    const parsed = JSON.parse(readFileSync(file, "utf8"));
+    text = readPrivateFile(nextEnvRecordPath());
+  } catch {
+    return {};
+  }
+  if (text === null) return {};
+  try {
+    const parsed = JSON.parse(text);
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
       return {};
     }
@@ -776,8 +1314,7 @@ function readNextEnvStore() {
 }
 
 function writeNextEnvStore(checkouts) {
-  ensureDirs();
-  writeFileSync(nextEnvRecordPath(), `${JSON.stringify({ checkouts })}\n`);
+  writePrivateFile(nextEnvRecordPath(), `${JSON.stringify({ checkouts })}\n`);
 }
 
 function readNextEnvRecord(root = repoRoot) {
@@ -823,7 +1360,7 @@ function saveSnapshotCopy(record) {
     evidenceDir,
     `next-env-${Date.now().toString(36)}.snapshot`,
   );
-  writeFileSync(dest, String(record.snapshot ?? ""));
+  writeFileSync(dest, String(record.snapshot ?? ""), { mode: 0o600 });
   return dest;
 }
 
@@ -928,30 +1465,53 @@ export function restoreNextEnvSnapshot(root = repoRoot) {
   return { action: "restored", warning: "" };
 }
 
-export async function checkHealth(baseUrl = defaultBaseUrl) {
+// ---- Doctor -----------------------------------------------------------------
+
+function describeOwnership(ownership) {
+  if (!ownership.owned) return `doctor: not owned (${ownership.reason})`;
+  const own = ownership.body.listeners.own
+    .map((listener) => `pid ${listener.pid}`)
+    .join(", ");
+  return `doctor: owned by run ${ownership.body.runId} (supervisor pid ${ownership.body.supervisorPid}; listener ${own} in its process group)`;
+}
+
+export async function checkHealth(baseUrl = defaultBaseUrl, { dir } = {}) {
   const lines = [];
   const { port, loopback } = baseUrlParts(baseUrl);
-  const owned = ownsInstance();
-  const nextHint = loopback && !owned ? formatForeignNext(port) : "";
+  // Ownership is checked before and after the page probes, so a listener
+  // that changes in between is not counted as this run's.
+  const before = await runOwnership(baseUrl, { dir });
+  // The run's own listeners are never "another next dev", even when a
+  // stranger on the same port keeps the run from being owned.
+  const ownPids = Array.isArray(before.body?.listeners?.own)
+    ? before.body.listeners.own.map((listener) => listener.pid)
+    : [];
+  const nextHint =
+    loopback && !before.owned ? formatForeignNext(port, ownPids) : "";
   const timeoutMs = nextHint ? 1_500 : 8_000;
   const [home, about, privacy] = await Promise.all([
     fetchText(new URL("/", baseUrl).href, timeoutMs),
     fetchText(new URL("/about", baseUrl).href, timeoutMs),
     fetchText(new URL("/privacy", baseUrl).href, timeoutMs),
   ]);
+  const after = before.owned ? await runOwnership(baseUrl, { dir }) : before;
+  const ownership =
+    before.owned &&
+    after.owned &&
+    after.body.supervisorPid === before.body.supervisorPid
+      ? after
+      : after.owned
+        ? { owned: false, reason: "the run changed during the probe" }
+        : after;
+  const owned = ownership.owned;
   const homeOk = home.status === 200 && home.text.includes(homeMarker);
   const aboutOk = about.status === 200 && about.text.includes(aboutMarker);
   const privacyOk = privacy.status === 200 && privacyPageRendered(privacy.text);
-  const state = readState();
-  if (state && !sameCheckout(state)) {
-    lines.push(
-      `doctor: run.json repo is ${state.repoRoot || "missing"}, this checkout is ${canonicalPath(repoRoot)}`,
-    );
-  }
   if (nextHint) lines.push(`doctor: ${nextHint}`);
 
   if (home.status === 0 && about.status === 0 && privacy.status === 0) {
     lines.push(`doctor: home unreachable (${home.error || "no response"})`);
+    lines.push(describeOwnership(ownership));
     lines.push(
       nextHint
         ? "doctor: NOT_READY foreign-next"
@@ -974,6 +1534,7 @@ export async function checkHealth(baseUrl = defaultBaseUrl) {
   lines.push(
     `doctor: privacy ${privacy.status || "down"}${privacyOk ? " page-present" : " page-missing"}`,
   );
+  lines.push(describeOwnership(ownership));
   lines.push(
     owned
       ? "doctor: fixture-mode recorded by verify:launch"
@@ -1015,76 +1576,6 @@ export async function checkHealth(baseUrl = defaultBaseUrl) {
 
   lines.push("doctor: NOT_READY privacy-unhealthy");
   return { ok: false, code: "privacy-unhealthy", lines, owned };
-}
-
-export function tmuxCommand() {
-  const conf = "/exec-daemon/tmux.portal.conf";
-  return { bin: "tmux", prefix: existsSync(conf) ? ["-f", conf] : [] };
-}
-
-export function tmuxAvailable() {
-  const found = spawnSync("tmux", ["-V"], { encoding: "utf8" });
-  return found.status === 0;
-}
-
-export function startTmuxSession(name, scriptBody) {
-  const { bin, prefix } = tmuxCommand();
-  ensureDirs();
-  const scriptPath = path.join(stateDir, `${name}.sh`);
-  writeFileSync(scriptPath, scriptBody, { mode: 0o755 });
-  const logPath = path.join(stateDir, `${name}.log`);
-  const wrapped = `#!/usr/bin/env bash
-set -euo pipefail
-cd ${shellQuote(repoRoot)}
-exec bash ${shellQuote(scriptPath)} > ${shellQuote(logPath)} 2>&1
-`;
-  const wrappedPath = path.join(stateDir, `${name}.wrap.sh`);
-  writeFileSync(wrappedPath, wrapped, { mode: 0o755 });
-  const created = spawnSync(
-    bin,
-    [
-      ...prefix,
-      "new-session",
-      "-d",
-      "-P",
-      "-F",
-      "#{session_id}:#{session_created}:#{pane_pid}",
-      "-s",
-      name,
-      "-c",
-      repoRoot,
-      "--",
-      "bash",
-      wrappedPath,
-    ],
-    { encoding: "utf8" },
-  );
-  if (created.status !== 0) {
-    throw new Error(
-      created.stderr || created.stdout || `tmux new-session ${name} failed`,
-    );
-  }
-  // -P prints the identity of the session this call created, so the record
-  // can never describe a same-named session someone else made.
-  const [id = "", createdAt = "", panePid = ""] = created.stdout
-    .trim()
-    .split(":");
-  const session = {
-    name,
-    id,
-    created: createdAt,
-    pane: processIdentity(Number(panePid)),
-  };
-  rememberRun([session], { reused: false });
-  return { logPath, session };
-}
-
-export function shellQuote(value) {
-  return `'${String(value).replaceAll("'", `'\\''`)}'`;
-}
-
-export function nodePathExport() {
-  return `export PATH=${shellQuote(path.dirname(process.execPath))}:$PATH`;
 }
 
 export function runCommand(

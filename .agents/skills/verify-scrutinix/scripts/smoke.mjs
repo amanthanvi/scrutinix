@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 
 import {
   evidenceDir,
-  preferredBaseUrl,
+  parseCliBaseUrl,
   repoRoot,
   skillDir,
 } from "./runtime.mjs";
@@ -42,7 +42,14 @@ const config = path.join(skillDir, "playwright.config.mjs");
 const require = createRequire(import.meta.url);
 const cli = require.resolve("@playwright/test/cli");
 
-const baseUrl = preferredBaseUrl();
+// E2E_BASE_URL, then the URL this checkout last launched on. Extra arguments
+// belong to Playwright, so --base-url is not read here.
+const parsedBaseUrl = parseCliBaseUrl(["node", "smoke.mjs"]);
+if (!parsedBaseUrl.ok) {
+  process.stderr.write(`smoke: ${parsedBaseUrl.message}\n`);
+  process.exit(2);
+}
+const baseUrl = parsedBaseUrl.baseUrl;
 const doctor = spawnSync(
   process.execPath,
   [path.join(scriptDir, "doctor.mjs"), "--base-url", baseUrl],

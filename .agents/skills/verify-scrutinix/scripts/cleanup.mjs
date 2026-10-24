@@ -3,33 +3,39 @@ import { setTimeout as delay } from "node:timers/promises";
 
 import {
   baseUrlParts,
+  baseUrlProblem,
   canonicalPath,
   defaultBaseUrl,
   evidenceDir,
   hasNextEnvRecord,
-  readState,
+  legacyPids,
+  legacyState,
+  loadState,
+  portDetails,
   repoRoot,
   restoreNextEnvSnapshot,
   sameCheckout,
-  stopRecordedProcess,
-  stopRecordedSession,
+  stateDir,
+  stopRun,
   tcpOpen,
   writeState,
 } from "./runtime.mjs";
 
 const help = `verify-scrutinix cleanup
 
-Stop only what verify:launch recorded in run.json for this checkout. Each
-recorded tmux session and listener is re-read first and stopped only when its
-identity still matches what launch recorded:
-  - tmux session: session id, creation time, and pane process (pid, start
-    time, cwd). The session name alone is never enough.
-  - listener: pid, start time, executable, and cwd, which must be this
-    checkout.
-Anything that differs (a reused pid, a reused session name, a process serving
-another checkout) is left running, and cleanup says why. Nothing is stopped
-by name or pattern. A run.json whose repoRoot is a different checkout is left
-alone.
+Stop only what verify:launch started for this checkout. Before reading
+anything, cleanup checks the state directory: a real directory owned by this
+user with mode 0700, under ancestors nobody else can swap out, holding a
+run.json that is a regular file (not a symlink) nobody else can write. If any
+check fails, cleanup stops nothing and exits 2.
+
+Then it asks the run's supervisor, over the private socket and with the run
+token, to stop. The supervisor signals its own process group: next dev and
+whatever next dev started. Cleanup itself never signals a pid, never looks
+processes up by name, pattern, cwd, or tmux session, and leaves anything else
+running. When the supervisor is gone and the recorded port is still open,
+cleanup names the listener (pid, start time, executable, cwd) and exits 1.
+A run.json for a different checkout is left alone.
 
 Evidence under the evidence directory is left in place. next-env.d.ts is
 restored to the pre-launch snapshot only when it still matches what this run
@@ -48,14 +54,34 @@ if (process.argv.includes("--help") || process.argv.includes("-h")) {
   process.exit(0);
 }
 
-const state = readState();
-if (!state) {
-  if (hasNextEnvRecord()) {
-    const declaration = restoreNextEnvSnapshot();
-    if (declaration.warning) {
-      process.stderr.write(`${declaration.warning}\n`);
-    }
+// Validate first. Nothing in an unsafe directory is parsed or acted on.
+const { state, problem, missingDir } = loadState();
+if (problem) {
+  process.stderr.write(
+    `cleanup: refusing to read ${stateDir}: ${problem}. Nothing was stopped.\n`,
+  );
+  process.exit(2);
+}
+if (missingDir) {
+  process.stdout.write(
+    `cleanup: no state directory at ${stateDir}. Nothing recorded by verify:launch was stopped.\n`,
+  );
+  process.exit(0);
+}
+
+function restoreDeclaration() {
+  const declaration = restoreNextEnvSnapshot();
+  if (declaration.action === "restored") {
+    process.stdout.write(
+      "cleanup: restored next-env.d.ts to the pre-launch snapshot.\n",
+    );
+  } else if (declaration.warning) {
+    process.stderr.write(`${declaration.warning}\n`);
   }
+}
+
+if (!state) {
+  if (hasNextEnvRecord()) restoreDeclaration();
   process.stdout.write(
     "cleanup: no run.json. Nothing recorded by verify:launch was stopped.\n",
   );
@@ -71,68 +97,47 @@ if (!sameCheckout(state)) {
   process.exit(0);
 }
 
-const recordedSessions = Array.isArray(state.sessions) ? state.sessions : [];
-// Older launches wrote bare pids. They carry no identity, so they are refused.
-const recordedListeners = [
-  ...(Array.isArray(state.listeners) ? state.listeners : []),
-  ...(Array.isArray(state.pids) ? state.pids : []),
-];
-let refused = 0;
+let leftRunning = 0;
 
-function report(result) {
-  if (result.action === "refused" || result.action === "failed") {
-    refused += 1;
-    process.stderr.write(`cleanup: ${result.message}\n`);
-    return;
-  }
-  process.stdout.write(`cleanup: ${result.message}\n`);
-}
-
-for (const session of recordedSessions) {
-  report(stopRecordedSession(session));
-}
-
-if (recordedSessions.length) await delay(1_000);
-
-for (const listener of recordedListeners) {
-  report(stopRecordedProcess(listener));
-}
-
-await delay(500);
-const { port } = baseUrlParts(
-  typeof state.baseUrl === "string" && state.baseUrl
-    ? state.baseUrl
-    : defaultBaseUrl,
-);
-const stillOpen = await tcpOpen(port);
-// Refused entries are dropped too: they no longer describe anything this
-// checkout started, so a later cleanup must not treat them as owned.
-writeState({
-  ...state,
-  repoRoot: canonicalPath(repoRoot),
-  sessions: [],
-  listeners: [],
-  pids: [],
-  stoppedAt: new Date().toISOString(),
-});
-const declaration = restoreNextEnvSnapshot();
-if (declaration.action === "restored") {
-  process.stdout.write(
-    "cleanup: restored next-env.d.ts to the pre-launch snapshot.\n",
+if (legacyState(state)) {
+  const pids = legacyPids(state);
+  leftRunning += 1;
+  process.stderr.write(
+    `cleanup: run.json was written by the tmux version of this skill${pids.length ? ` (recorded pids ${pids.join(", ")})` : ""}. This version stops only what its own supervisor started, so those were left running. Check them yourself before stopping anything.\n`,
   );
-} else if (declaration.warning) {
-  process.stderr.write(`${declaration.warning}\n`);
+} else if (state.token) {
+  const result = await stopRun(state);
+  if (result.action === "refused") {
+    leftRunning += 1;
+    process.stderr.write(`cleanup: ${result.message}\n`);
+  } else {
+    process.stdout.write(`cleanup: ${result.message}\n`);
+  }
+} else {
+  process.stdout.write("cleanup: this run was already stopped.\n");
 }
+
+await delay(300);
+const recordedUrl =
+  typeof state.baseUrl === "string" && !baseUrlProblem(state.baseUrl)
+    ? state.baseUrl
+    : defaultBaseUrl;
+const { port } = baseUrlParts(recordedUrl);
+const stillOpen = await tcpOpen(port);
+
+// The token is dropped with the run: the supervisor is gone or refused, and
+// a later cleanup must not treat this record as a live run.
+if (!legacyState(state) && leftRunning === 0) {
+  const { token: _token, ...rest } = state;
+  writeState({ ...rest, stoppedAt: new Date().toISOString() });
+}
+restoreDeclaration();
 
 process.stdout.write(`cleanup: evidence directory ${evidenceDir}\n`);
-if (refused) {
-  process.stderr.write(
-    `cleanup: left ${refused} recorded process${refused === 1 ? "" : "es"} running because the identity no longer matches this launch. Check them yourself before stopping anything.\n`,
-  );
-}
 if (stillOpen) {
-  process.stdout.write(
-    `cleanup: port ${port} is still open. This skill stops only processes whose recorded identity still matches.\n`,
+  const owners = portDetails(port);
+  process.stderr.write(
+    `cleanup: port ${port} is still open, and this skill did not stop its listener. It stops only its own supervisor's process group.${owners ? `\n${owners}` : ""}\n`,
   );
 }
-process.exit(refused ? 1 : 0);
+process.exit(leftRunning || stillOpen ? 1 : 0);
