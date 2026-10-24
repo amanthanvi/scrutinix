@@ -6,6 +6,7 @@ import { registrableDomainOf } from "@/lib/domain/link-anatomy";
 import { classifyConsensus } from "@/lib/domain/ml-consensus";
 import { sanitizeHistoryEntry } from "@/lib/domain/runtime-safety";
 import {
+  evidenceTimeOf,
   getSummaryQuestions,
   questionCiting,
   questionSources,
@@ -287,6 +288,24 @@ describe("the fixed mapping", () => {
   });
 });
 
+describe("the clock ages count from", () => {
+  it("is the result's check time, then its completion time", () => {
+    expect(
+      evidenceTimeOf({
+        checkedAt: "2026-10-01T00:00:00.000Z",
+        completedAt: "2026-10-06T00:00:00.000Z",
+      }),
+    ).toBe(Date.parse("2026-10-01T00:00:00.000Z"));
+    // In-memory records may lack checkedAt; a garbled one falls through.
+    for (const checkedAt of [undefined, "", "not a date"]) {
+      expect(
+        evidenceTimeOf({ checkedAt, completedAt: "2026-10-06T00:00:00.000Z" }),
+      ).toBe(Date.parse("2026-10-06T00:00:00.000Z"));
+    }
+    expect(evidenceTimeOf({})).toBeUndefined();
+  });
+});
+
 describe("pending questions", () => {
   it("are all pending before any check lands", () => {
     const questions = ask(createPendingSignalResults());
@@ -364,7 +383,7 @@ describe("disagreement sentences", () => {
     // The listing's age is stated once, in the answer.
     expect(reported.answer).toContain("(listed 6 hours ago)");
     expect(reported.disagreement).not.toMatch(/hour|listed/);
-    // Reopened later, the age counts from now, like the Full row.
+    // The age counts from the time it is given (a result's check time).
     expect(
       byId(ask(signals, { now: NOW + 3 * 24 * HOUR }), "reported").answer,
     ).toContain("(listed 3 days ago)");

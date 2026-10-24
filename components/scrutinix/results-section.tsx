@@ -37,6 +37,7 @@ import {
 } from "@/lib/domain/types";
 import { isLegacySignalRecord } from "@/lib/domain/signal-signature";
 import {
+  evidenceTimeOf,
   getSummaryQuestions,
   questionCiting,
 } from "@/lib/domain/summary-questions";
@@ -270,6 +271,8 @@ export function ResultsSection() {
       ? getSummaryQuestions({
           url: linkUrl,
           signals,
+          // A finished result's ages count from its own check time.
+          now: active ? evidenceTimeOf(active.metadata) : undefined,
           registeredDomainOf: parse
             ? (host) => registrableDomainOf(parse, host)
             : null,

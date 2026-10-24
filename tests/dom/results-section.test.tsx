@@ -645,6 +645,54 @@ describe("ResultsSection", () => {
     ).toBeNull();
   });
 
+  it("keeps a reopened result's ages on its own check time", async () => {
+    const checkedAt = Date.parse("2026-10-06T09:00:00.000Z");
+    const signals = cleanSignals();
+    signals.ssl.data!.validFrom = new Date(
+      checkedAt - 2 * 60 * 60 * 1000,
+    ).toISOString();
+    // The server counts domain age when it checks; it never moves after.
+    signals.whois.data!.ageDays = 3;
+    signals.threatFeeds.data!.matches = [
+      {
+        feed: "urlhaus",
+        matchedUrl: "https://example.com/",
+        detail: "lists this link as active malware distribution",
+        confidence: "high",
+        matchType: "url",
+        listedAt: new Date(checkedAt - 6 * 60 * 60 * 1000).toISOString(),
+      },
+    ];
+    const result = resultFrom("aged", signals, "https://example.com/");
+    result.metadata.completedAt = new Date(checkedAt).toISOString();
+    result.metadata.checkedAt = new Date(checkedAt).toISOString();
+
+    // Reopened from history 30 days later.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(checkedAt + 30 * 24 * 60 * 60 * 1000);
+    try {
+      renderApp(<OpenStored result={result} />);
+      fireEvent.click(screen.getByRole("button", { name: "open stored" }));
+      const questions = await screen.findByRole("list", { name: "Questions" });
+      const text = (id: string) =>
+        questions.querySelector(`[data-question="${id}"]`)?.textContent ?? "";
+
+      expect(text("https")).toContain(
+        "This certificate was issued 2 hours ago.",
+      );
+      expect(text("concern")).toContain(
+        "Its domain was registered 3 days ago.",
+      );
+      expect(text("reported")).toContain("(listed 6 hours ago)");
+      // The pairing the engine scored still reads as it did.
+      expect(text("https")).toContain(
+        "A brand-new certificate on a brand-new domain",
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("states each driving fact once on the default Summary view", async () => {
     for (const [host, fact, pattern] of [
       [

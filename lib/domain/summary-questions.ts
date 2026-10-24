@@ -117,8 +117,10 @@ export interface SummaryQuestionInput {
   url: string;
   signals: SignalResults;
   /**
-   * Anchors "issued 2 hours ago" and "listed 6 hours ago", as the Full
-   * rows do. Tests pass a fixed time.
+   * Anchors "issued 2 hours ago" and "listed 6 hours ago". For a finished
+   * result, pass its check time (`evidenceTimeOf`) so every age counts
+   * from the same moment as the domain age the server stored; while a scan
+   * streams, now. Tests pass a fixed time.
    */
   now?: number;
   /**
@@ -136,6 +138,24 @@ interface Answer {
 interface Context extends SummaryQuestionInput {
   now: number;
   lists: ListReading[];
+}
+
+/**
+ * When a result's evidence was gathered: `checkedAt` (a cache hit keeps
+ * the original scan's), else `completedAt`. A reopened result's ages count
+ * from here, never from when it is reopened, so a certificate "issued 2
+ * hours ago" stays beside the domain "registered 3 days ago" it was
+ * checked with.
+ */
+export function evidenceTimeOf(metadata: {
+  checkedAt?: string;
+  completedAt?: string;
+}): number | undefined {
+  for (const value of [metadata.checkedAt, metadata.completedAt]) {
+    const time = value ? Date.parse(value) : Number.NaN;
+    if (Number.isFinite(time)) return time;
+  }
+  return undefined;
 }
 
 export function getSummaryQuestions(
