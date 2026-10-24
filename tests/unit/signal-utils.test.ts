@@ -10,12 +10,19 @@ import {
   severityColor,
 } from "@/components/shared/scrutinix-types";
 import {
+  describeHostingNetwork,
+  describeTxtRecords,
   getSignalDetailEntries,
   getSignalFinding,
   getSignalSummary,
+  shortenFingerprint,
 } from "@/components/shared/signal-utils";
+import { formatElapsed } from "@/lib/domain/copy";
+import { dnsDataSchema } from "@/lib/domain/schemas";
 import type {
+  DNSData,
   RedirectData,
+  SSLData,
   ThreatFeedsData,
   VirusTotalData,
 } from "@/lib/domain/types";
@@ -82,6 +89,7 @@ describe("getSignalDetailEntries", () => {
     );
 
     expect(entries.map((entry) => entry.label)).toEqual([
+      "Engine results",
       "Webroot",
       "Kaspersky",
       "Sophos",
@@ -97,6 +105,266 @@ describe("getSignalDetailEntries", () => {
     );
 
     expect(entries.length).toBeGreaterThan(0);
+  });
+});
+
+const NOW = Date.parse("2026-10-24T12:00:00.000Z");
+const HOUR = 1000 * 60 * 60;
+
+function buildDns(overrides: Partial<DNSData>): DNSData {
+  return {
+    subjectType: "hostname",
+    addresses: ["93.184.216.34"],
+    cnames: [],
+    mx: [],
+    txt: [],
+    nameservers: [],
+    reverseHostnames: [],
+    anomalies: [],
+    observations: [],
+    ...overrides,
+  };
+}
+
+function buildSsl(overrides: Partial<SSLData>): SSLData {
+  return {
+    protocol: "TLSv1.3",
+    available: true,
+    validationState: "trusted",
+    authorized: true,
+    authorizationError: null,
+    issuer: "Example CA",
+    subject: "example.com",
+    validFrom: "2026-10-01T00:00:00.000Z",
+    validTo: "2026-12-23T12:00:00.000Z",
+    daysRemaining: 90,
+    selfSigned: false,
+    fingerprint256:
+      "5E:2A:9C:41:0B:7D:E3:88:12:F4:6A:C0:39:D5:7E:21:AB:04:CF:93:60:1E:B8:4D:72:E9:0A:35:C6:5B:F1:8D",
+    observations: [],
+    ...overrides,
+  };
+}
+
+const rowsOf = (entries: { label: string; value: string }[]) =>
+  Object.fromEntries(entries.map((entry) => [entry.label, entry.value]));
+
+describe("evidence rows", () => {
+  it("states the DNS hosting network as a registration, never a location", () => {
+    const rows = rowsOf(
+      getSignalDetailEntries(
+        "dns",
+        buildDns({
+          cnames: ["edge.example-cdn.net"],
+          nameservers: ["ns1.example.com", "ns2.example.com"],
+          txt: [
+            "v=spf1 include:_spf.example.com -all",
+            "google-site-verification=abc",
+            "MS=ms12345678",
+            "some-vendor-domain-verification=xyz",
+            "opaque token",
+          ],
+          hosting: {
+            ip: "93.184.216.34",
+            asn: 64500,
+            asName: "EXAMPLE-NET",
+            prefix: "93.184.216.0/24",
+            registeredCountry: "NL",
+          },
+        }),
+        NOW,
+      ),
+    );
+
+    expect(rows).toMatchObject({
+      Network: "AS64500 EXAMPLE-NET, registered in NL",
+      CNAME: "edge.example-cdn.net",
+      Nameservers: "ns1.example.com, ns2.example.com",
+      "TXT records":
+        "5 records: SPF, Google site verification, Microsoft 365 verification, domain verification, and 1 other",
+    });
+    expect(JSON.stringify(rows)).not.toMatch(/located|abc|xyz|opaque/);
+  });
+
+  it("omits empty DNS rows and words the hosting edge cases", () => {
+    const labels = getSignalDetailEntries("dns", buildDns({}), NOW).map(
+      (entry) => entry.label,
+    );
+    expect(labels).toEqual(["A records", "MX records"]);
+
+    const hosting = {
+      ip: "93.184.216.34",
+      asn: 64500,
+      asName: null,
+      prefix: null,
+      registeredCountry: null,
+    };
+    expect(describeHostingNetwork(hosting, 1)).toBe("AS64500");
+    expect(describeHostingNetwork(hosting, 3)).toBe(
+      "AS64500 (for 93.184.216.34)",
+    );
+    expect(describeHostingNetwork({ ...hosting, asn: null }, 1)).toBe(
+      "No network routes this address publicly",
+    );
+  });
+
+  it("counts TXT records without naming unknown kinds", () => {
+    expect(describeTxtRecords(["opaque", "another"])).toBe("2 records");
+    expect(describeTxtRecords(["v=spf1 -all"])).toBe("1 record: SPF");
+  });
+
+  it("adds certificate facts, self-signed only when true", () => {
+    const rows = rowsOf(getSignalDetailEntries("ssl", buildSsl({}), NOW));
+    expect(rows).toMatchObject({
+      "Expires in": "60 days",
+      "TLS version": "TLS 1.3",
+      "SHA-256": "5E:2A:9C:41…C6:5B:F1:8D",
+    });
+    expect(rows).not.toHaveProperty("Self-signed");
+
+    const selfSigned = rowsOf(
+      getSignalDetailEntries(
+        "ssl",
+        buildSsl({
+          selfSigned: true,
+          protocol: "unknown",
+          validTo: "2026-10-21T12:00:00.000Z",
+        }),
+        NOW,
+      ),
+    );
+    expect(selfSigned).toMatchObject({
+      "Self-signed": "Yes",
+      Expired: "3 days ago",
+    });
+    expect(selfSigned).not.toHaveProperty("TLS version");
+    expect(shortenFingerprint("fixture")).toBe("fixture");
+  });
+
+  it("names iframes and password receivers only when present", () => {
+    const content = {
+      title: null,
+      crossOriginFormHosts: ["collect.example"],
+      crossOriginPasswordFormHosts: ["collect.example"],
+      passwordInputCount: 1,
+      iframeCount: 3,
+      hiddenIframeCount: 1,
+      obfuscationHints: [],
+      metaRefreshTarget: null,
+    };
+    const rows = rowsOf(
+      getSignalDetailEntries(
+        "redirectChain",
+        buildRedirectData({ content }),
+        NOW,
+      ),
+    );
+    expect(rows).toMatchObject({
+      "Password form": "Sends the password to collect.example",
+      Iframes: "3 iframes, 1 hidden",
+    });
+
+    const quiet = rowsOf(
+      getSignalDetailEntries(
+        "redirectChain",
+        buildRedirectData({
+          content: {
+            ...content,
+            crossOriginPasswordFormHosts: [],
+            iframeCount: 0,
+            hiddenIframeCount: 0,
+          },
+        }),
+        NOW,
+      ),
+    );
+    expect(quiet).not.toHaveProperty("Password form");
+    expect(quiet).not.toHaveProperty("Iframes");
+  });
+
+  it("puts each feed's listing time right after its match", () => {
+    const entries = getSignalDetailEntries(
+      "threatFeeds",
+      {
+        checkedAt: "",
+        matches: [
+          {
+            feed: "urlhaus",
+            matchedUrl: "https://evil.example/",
+            detail: "lists this link as a malware download",
+            confidence: "high",
+            matchType: "url",
+            listedAt: new Date(NOW - 6 * HOUR).toISOString(),
+          },
+          {
+            feed: "openphish",
+            matchedUrl: "https://evil.example/",
+            detail: "lists this link as phishing",
+            confidence: "high",
+            matchType: "url",
+          },
+        ],
+        observations: [],
+        warnings: [],
+      },
+      NOW,
+    );
+
+    expect(entries).toEqual([
+      { label: "URLhaus", value: "Lists this link as a malware download." },
+      { label: "Listed", value: "6 hours ago" },
+      { label: "OpenPhish", value: "Lists this link as phishing." },
+    ]);
+  });
+
+  it("adds one VirusTotal breakdown row", () => {
+    const entries = getSignalDetailEntries(
+      "virusTotal",
+      buildVirusTotal({ malicious: 7, suspicious: 2 }),
+      NOW,
+    );
+    expect(entries[0]).toEqual({
+      label: "Engine results",
+      value: "7 malicious, 2 suspicious, 60 harmless, 10 undetected",
+    });
+    expect(
+      getSignalDetailEntries(
+        "virusTotal",
+        buildVirusTotal({ harmless: 0, undetected: 0 }),
+        NOW,
+      ),
+    ).toEqual([]);
+  });
+});
+
+describe("dns hosting schema", () => {
+  it("loads results saved before hosting existed and drops a malformed one", () => {
+    const legacy = buildDns({});
+    expect(dnsDataSchema.parse(legacy)).not.toHaveProperty("hosting");
+    expect(dnsDataSchema.parse({ ...legacy, hosting: "AS1" }).hosting).toBe(
+      undefined,
+    );
+    expect(
+      dnsDataSchema.parse({ ...legacy, hosting: { ip: "1.1.1.1", asn: -4 } })
+        .hosting,
+    ).toEqual({
+      ip: "1.1.1.1",
+      asn: null,
+      asName: null,
+      prefix: null,
+      registeredCountry: null,
+    });
+  });
+});
+
+describe("formatElapsed", () => {
+  it("words hours, then days and months", () => {
+    expect(formatElapsed(-5 * HOUR)).toBe("less than an hour");
+    expect(formatElapsed(59 * 60 * 1000)).toBe("less than an hour");
+    expect(formatElapsed(HOUR)).toBe("1 hour");
+    expect(formatElapsed(47 * HOUR)).toBe("47 hours");
+    expect(formatElapsed(48 * HOUR)).toBe("2 days");
+    expect(formatElapsed(90 * 24 * HOUR)).toBe("about 3 months");
   });
 });
 

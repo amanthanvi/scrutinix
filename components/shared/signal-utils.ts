@@ -1,4 +1,10 @@
-import { capitalize, countOf, formatAge, formatList } from "@/lib/domain/copy";
+import {
+  capitalize,
+  countOf,
+  formatAge,
+  formatElapsed,
+  formatList,
+} from "@/lib/domain/copy";
 import {
   describeFeedFinding,
   describeFeedMatch,
@@ -11,6 +17,7 @@ import {
 import type {
   DNSData,
   GoogleSafeBrowsingData,
+  HostingNetwork,
   MLSignalData,
   RedirectData,
   SignalName,
@@ -215,19 +222,32 @@ export function rankVirusTotalResults<T extends { category: string }>(
   return [...results].sort((a, b) => rank(a.category) - rank(b.category));
 }
 
+/**
+ * The expanded evidence for one check: one plain fact per row. `now`
+ * anchors relative times ("listed 6 hours ago") so tests stay
+ * deterministic.
+ */
 export function getSignalDetailEntries(
   name: SignalName,
   data: SignalPayloadMap[SignalName],
+  now: number = Date.now(),
 ): DetailEntry[] {
   switch (name) {
     case "virusTotal": {
       const d = data as VirusTotalData;
-      const entries: DetailEntry[] = rankVirusTotalResults(d.results ?? [])
-        .slice(0, 5)
-        .map((r) => ({
-          label: r.engine,
-          value: r.result ?? r.category,
-        }));
+      const entries: DetailEntry[] = [];
+      const breakdown = describeEngineBreakdown(d);
+      if (breakdown) {
+        entries.push({ label: "Engine results", value: breakdown });
+      }
+      entries.push(
+        ...rankVirusTotalResults(d.results ?? [])
+          .slice(0, 5)
+          .map((r) => ({
+            label: r.engine,
+            value: r.result ?? r.category,
+          })),
+      );
       if (d.lastAnalysisDate) {
         entries.push({
           label: "Last analyzed",
@@ -272,10 +292,21 @@ export function getSignalDetailEntries(
     }
     case "threatFeeds": {
       const d = data as ThreatFeedsData;
-      const entries: DetailEntry[] = (d.matches ?? []).map((m) => ({
-        label: feedDisplayName(m.feed),
-        value: describeFeedFinding(m),
-      }));
+      const entries: DetailEntry[] = (d.matches ?? []).flatMap((m) => {
+        const listedAt = m.listedAt ? Date.parse(m.listedAt) : Number.NaN;
+        return [
+          { label: feedDisplayName(m.feed), value: describeFeedFinding(m) },
+          // The row right after its feed, so each date names one listing.
+          ...(Number.isFinite(listedAt)
+            ? [
+                {
+                  label: "Listed",
+                  value: `${formatElapsed(now - listedAt)} ago`,
+                },
+              ]
+            : []),
+        ];
+      });
       if (d.observations?.length) {
         entries.push({
           label: "Notes",
@@ -309,11 +340,30 @@ export function getSignalDetailEntries(
             : "Unknown",
         },
       ];
-      const certAgeDays = getCertificateAgeDays(d.validFrom);
+      const expiry = describeCertificateExpiry(d, now);
+      if (expiry) {
+        entries.push(expiry);
+      }
+      const certAgeDays = getCertificateAgeDays(d.validFrom, now);
       if (certAgeDays !== null) {
         entries.push({
           label: "Certificate age",
           value: countOf(certAgeDays, "day"),
+        });
+      }
+      if (d.protocol && /^TLSv\d/.test(d.protocol)) {
+        entries.push({
+          label: "TLS version",
+          value: d.protocol.replace(/^TLSv/, "TLS "),
+        });
+      }
+      if (d.selfSigned) {
+        entries.push({ label: "Self-signed", value: "Yes" });
+      }
+      if (d.fingerprint256) {
+        entries.push({
+          label: "SHA-256",
+          value: shortenFingerprint(d.fingerprint256),
         });
       }
       if (d.observations?.length) {
@@ -352,8 +402,26 @@ export function getSignalDetailEntries(
       const d = data as DNSData;
       const entries: DetailEntry[] = [
         { label: "A records", value: d.addresses?.join(", ") || "None" },
-        { label: "MX records", value: d.mx?.join(", ") || "None" },
       ];
+      if (d.hosting) {
+        entries.push({
+          label: "Network",
+          value: describeHostingNetwork(d.hosting, d.addresses?.length ?? 0),
+        });
+      }
+      if (d.cnames?.length) {
+        entries.push({ label: "CNAME", value: d.cnames.join(", ") });
+      }
+      entries.push({ label: "MX records", value: d.mx?.join(", ") || "None" });
+      if (d.nameservers?.length) {
+        entries.push({ label: "Nameservers", value: d.nameservers.join(", ") });
+      }
+      if (d.txt?.length) {
+        entries.push({
+          label: "TXT records",
+          value: describeTxtRecords(d.txt),
+        });
+      }
       if (d.reverseHostnames?.length) {
         entries.push({
           label: "Reverse DNS",
@@ -398,6 +466,26 @@ export function getSignalDetailEntries(
             value: `${countOf(d.content.passwordInputCount, "password input")} on the final page`,
           });
         }
+        if (d.content.crossOriginPasswordFormHosts?.length) {
+          entries.push({
+            label: "Password form",
+            value: `Sends the password to ${formatList(d.content.crossOriginPasswordFormHosts)}`,
+          });
+        }
+        if (d.content.iframeCount > 0 || d.content.hiddenIframeCount > 0) {
+          // Hidden iframes are a subset of all iframes.
+          const total = Math.max(
+            d.content.iframeCount,
+            d.content.hiddenIframeCount,
+          );
+          entries.push({
+            label: "Iframes",
+            value:
+              d.content.hiddenIframeCount > 0
+                ? `${countOf(total, "iframe")}, ${d.content.hiddenIframeCount} hidden`
+                : countOf(total, "iframe"),
+          });
+        }
         if (d.content.obfuscationHints.length) {
           entries.push({
             label: "Obfuscation hints",
@@ -424,16 +512,129 @@ export function getSignalDetailEntries(
   }
 }
 
+const DAY_MS = 1000 * 60 * 60 * 24;
+
 /** Whole days since the certificate's validFrom; null when unknown/invalid. */
-export function getCertificateAgeDays(validFrom: string | null): number | null {
+export function getCertificateAgeDays(
+  validFrom: string | null,
+  now: number = Date.now(),
+): number | null {
   if (!validFrom) {
     return null;
   }
 
   const issued = new Date(validFrom).getTime();
-  if (Number.isNaN(issued) || issued > Date.now()) {
+  if (Number.isNaN(issued) || issued > now) {
     return null;
   }
 
-  return Math.floor((Date.now() - issued) / (1000 * 60 * 60 * 24));
+  return Math.floor((now - issued) / DAY_MS);
+}
+
+/** "7 malicious, 2 suspicious, 40 harmless, 21 undetected"; null with no engine counts. */
+function describeEngineBreakdown(d: VirusTotalData): string | null {
+  const counts = [d.malicious, d.suspicious, d.harmless, d.undetected] as const;
+  if (counts.every((count) => !count)) {
+    return null;
+  }
+
+  const [malicious, suspicious, harmless, undetected] = counts;
+  return `${malicious} malicious, ${suspicious} suspicious, ${harmless} harmless, ${undetected} undetected`;
+}
+
+/**
+ * Days until expiry, from `validTo` against `now` so a saved result does
+ * not repeat the scan day's count; the stored `daysRemaining` otherwise.
+ */
+function describeCertificateExpiry(
+  d: SSLData,
+  now: number,
+): DetailEntry | null {
+  const validTo = d.validTo ? Date.parse(d.validTo) : Number.NaN;
+  const days = Number.isFinite(validTo)
+    ? Math.round((validTo - now) / DAY_MS)
+    : d.daysRemaining;
+  if (days === null) {
+    return null;
+  }
+
+  if (days < 0) {
+    return { label: "Expired", value: `${countOf(-days, "day")} ago` };
+  }
+
+  return {
+    label: "Expires in",
+    value: days === 0 ? "less than a day" : countOf(days, "day"),
+  };
+}
+
+/** "AB:CD:EF:01…6E:7F:80:91": enough to compare, short enough to read. */
+export function shortenFingerprint(fingerprint: string): string {
+  const pairs = fingerprint.split(":");
+  const isHexPairs =
+    pairs.length > 8 && pairs.every((pair) => /^[0-9a-f]{2}$/i.test(pair));
+  return isHexPairs
+    ? `${pairs.slice(0, 4).join(":")}…${pairs.slice(-4).join(":")}`.toUpperCase()
+    : fingerprint;
+}
+
+/**
+ * "AS64500 EXAMPLE-NET, registered in NL". The country is the network's
+ * registration, never where the server is. The address is named only when
+ * the hostname resolved to more than one.
+ */
+export function describeHostingNetwork(
+  hosting: HostingNetwork,
+  addressCount: number,
+): string {
+  const forAddress = addressCount > 1 ? ` (for ${hosting.ip})` : "";
+  if (hosting.asn === null) {
+    return `No network routes this address publicly${forAddress}`;
+  }
+
+  const network = hosting.asName
+    ? `AS${hosting.asn} ${hosting.asName}`
+    : `AS${hosting.asn}`;
+  const country = hosting.registeredCountry
+    ? `, registered in ${hosting.registeredCountry}`
+    : "";
+  return `${network}${country}${forAddress}`;
+}
+
+const TXT_KINDS: ReadonlyArray<[RegExp, string]> = [
+  [/^v=spf1(\s|$)/i, "SPF"],
+  [/^v=DMARC1(;|\s|$)/i, "DMARC"],
+  [/^google-site-verification=/i, "Google site verification"],
+  [/^MS=ms\d+/i, "Microsoft 365 verification"],
+  [/^facebook-domain-verification=/i, "Facebook domain verification"],
+  [/^apple-domain-verification=/i, "Apple domain verification"],
+  [/^atlassian-domain-verification=/i, "Atlassian domain verification"],
+  [/^docusign=/i, "DocuSign domain verification"],
+  [/verification[=:]/i, "domain verification"],
+];
+
+/**
+ * "3 records: SPF, Google site verification, and 1 other". Names the kinds
+ * it recognises and counts the rest; raw TXT values are never shown.
+ */
+export function describeTxtRecords(records: readonly string[]): string {
+  const kinds = new Set<string>();
+  let other = 0;
+
+  for (const record of records) {
+    const kind = TXT_KINDS.find(([pattern]) => pattern.test(record.trim()));
+    if (kind) {
+      kinds.add(kind[1]);
+    } else {
+      other += 1;
+    }
+  }
+
+  const total = countOf(records.length, "record");
+  if (kinds.size === 0) {
+    return total;
+  }
+
+  const parts = [...kinds, ...(other > 0 ? [countOf(other, "other")] : [])];
+  return `${total}: ${formatList(parts)}`;
 }
