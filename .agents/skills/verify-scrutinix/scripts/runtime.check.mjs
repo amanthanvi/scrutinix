@@ -115,93 +115,146 @@ function privateDir(name) {
 const checkout = runtime.canonicalPath(runtime.repoRoot);
 const token = (fill) => fill.repeat(64);
 
-// ---- Base URLs --------------------------------------------------------------
+// ---- Ports ------------------------------------------------------------------
 
-for (const script of ["launch.mjs", "doctor.mjs"]) {
-  const invalid = await runCli(script, ["--base-url", "not a url"]);
-  check(
-    `${script} rejects invalid base url`,
-    invalid.status === 2 &&
-      invalid.stderr.includes("not a valid URL") &&
-      !output(invalid).includes("TypeError"),
-    output(invalid),
-  );
-  const empty = await runCli(script, ["--base-url", ""]);
-  check(
-    `${script} rejects empty base url`,
-    empty.status === 2 && empty.stderr.includes("needs a URL"),
-    output(empty),
-  );
-  const missing = await runCli(script, ["--base-url"]);
-  check(
-    `${script} rejects missing base url`,
-    missing.status === 2 && missing.stderr.includes("needs a URL"),
-    output(missing),
-  );
-  const equalsEmpty = await runCli(script, ["--base-url="]);
-  check(
-    `${script} rejects empty equals base url`,
-    equalsEmpty.status === 2 && equalsEmpty.stderr.includes("needs a URL"),
-    output(equalsEmpty),
-  );
-  const equalsInvalid = await runCli(script, ["--base-url=not-a-url"]);
-  check(
-    `${script} rejects invalid equals base url`,
-    equalsInvalid.status === 2 &&
-      equalsInvalid.stderr.includes("not a valid URL") &&
-      !output(equalsInvalid).includes("TypeError"),
-    output(equalsInvalid),
-  );
-  // Errors never echo the input: it can carry credentials.
-  for (const [label, raw, secret] of [
-    [
-      "credentials",
-      "http://user:SYNTH-cred-123@127.0.0.1:3000",
-      "SYNTH-cred-123",
-    ],
-    ["malformed", "http://[bad token=SYNTH-tok-456", "SYNTH-tok-456"],
-    ["query", "http://127.0.0.1:3000/?token=SYNTH-q-789", "SYNTH-q-789"],
-    ["fragment", "http://127.0.0.1:3000/#SYNTH-frag-790", "SYNTH-frag-790"],
-    ["path", "http://127.0.0.1:3000/SYNTH-path-791", "SYNTH-path-791"],
+// Finding 7 of round 3: every command takes --port <n>, never a URL, and
+// refuses anything else without repeating it.
+for (const script of ["launch.mjs", "doctor.mjs", "smoke.mjs"]) {
+  for (const args of [
+    ["--port", "not-a-port"],
+    ["--port", ""],
+    ["--port"],
+    ["--port="],
+    ["--port=80"],
+    ["--port=65536"],
+    ["--port=3000abc"],
+    ["--port=+3000"],
+    ["--port=3e3"],
+    ["--port", " 3000"],
+    ["--port=3420", "--port=3421"],
   ]) {
-    const refused = await runCli(script, [`--base-url=${raw}`]);
+    const refused = await runCli(script, args);
     check(
-      `${script} rejects a ${label} base url without echoing it`,
+      `${script} refuses ${JSON.stringify(args)}`,
       refused.status === 2 &&
-        !output(refused).includes(secret) &&
+        /--port (needs an integer|was given more than once)/.test(
+          refused.stderr,
+        ) &&
+        !output(refused).includes("TypeError"),
+      output(refused),
+    );
+  }
+  // Errors never echo the input: it can carry credentials.
+  for (const args of [
+    ["--base-url", "http://user:SYNTH-cred-123@127.0.0.1:3000"],
+    ["--base-url=http://user:SYNTH-cred-123@127.0.0.1:3000"],
+    ["--port", "http://user:SYNTH-cred-123@127.0.0.1:3000"],
+    ["--port=http://user:SYNTH-cred-123@127.0.0.1:3000"],
+  ]) {
+    const refused = await runCli(script, args);
+    check(
+      `${script} refuses ${args[0].slice(0, 10)} with credentials without echoing them`,
+      refused.status === 2 &&
+        !output(refused).includes("SYNTH-cred-123") &&
         !output(refused).includes("user:"),
       output(refused),
     );
   }
 }
-const fromEnv = await runCli("doctor.mjs", [], {
+for (const script of ["launch.mjs", "doctor.mjs", "cleanup.mjs"]) {
+  const unknown = await runCli(script, ["--token=SYNTH-arg-793"]);
+  check(
+    `${script} refuses an argument it does not take without echoing it`,
+    unknown.status === 2 && !output(unknown).includes("SYNTH-arg-793"),
+    output(unknown),
+  );
+}
+const parsedPort = runtime.parseCliArgs(["--json", "--port=3420"], {
+  flags: ["--json"],
+});
+check(
+  "--port=<n> and flags are parsed",
+  parsedPort.ok && parsedPort.port === 3420 && parsedPort.flags.has("--json"),
+  JSON.stringify(parsedPort),
+);
+const parsedRest = runtime.parseCliArgs(
+  ["--drive", "-g", "batch scan", "--port", "3421"],
+  { flags: ["--drive"], rest: true },
+);
+check(
+  "smoke passes other arguments on to Playwright",
+  parsedRest.ok &&
+    parsedRest.port === 3421 &&
+    parsedRest.flags.has("--drive") &&
+    JSON.stringify(parsedRest.rest) === '["-g","batch scan"]',
+  JSON.stringify(parsedRest),
+);
+const unusedPort = await freePort();
+const fromEnv = await runCli("doctor.mjs", ["--port", String(unusedPort)], {
   ...process.env,
   E2E_BASE_URL: "http://u:SYNTH-env-792@127.0.0.1:3000",
 });
 check(
-  "doctor rejects a credentialed E2E_BASE_URL without echoing it",
+  "doctor ignores E2E_BASE_URL and probes 127.0.0.1:<port>",
   fromEnv.status === 2 &&
-    fromEnv.stderr.includes("E2E_BASE_URL") &&
+    fromEnv.stdout.includes("NOT_READY unreachable") &&
     !output(fromEnv).includes("SYNTH-env-792"),
   output(fromEnv),
 );
-const equalsParsed = runtime.parseCliBaseUrl(
-  ["node", "launch.mjs", "--base-url=http://127.0.0.1:3000"],
-  {},
-);
-check(
-  "equals base url is parsed",
-  equalsParsed.ok === true && equalsParsed.baseUrl === "http://127.0.0.1:3000",
-  equalsParsed.baseUrl,
-);
-const equalsOther = await runCli("launch.mjs", [
-  "--base-url=http://example.com",
+
+// The real npm entry point. npm echoes a script's arguments in its banner
+// and error footer unless it runs with --silent, which SKILL.md documents.
+function runNpm(args, env = process.env) {
+  const npmCli = process.env.npm_execpath;
+  const [command, prefix] =
+    npmCli && /\.c?js$/.test(npmCli)
+      ? [process.execPath, [npmCli]]
+      : ["npm", []];
+  return new Promise((resolve) => {
+    const child = spawn(command, [...prefix, ...args], {
+      cwd: runtime.repoRoot,
+      env,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    children.push(child);
+    let stdout = "";
+    let stderr = "";
+    child.stdout.setEncoding("utf8").on("data", (chunk) => (stdout += chunk));
+    child.stderr.setEncoding("utf8").on("data", (chunk) => (stderr += chunk));
+    child.once("error", () => resolve({ status: null, stdout, stderr }));
+    child.once("close", (status) => resolve({ status, stdout, stderr }));
+  });
+}
+for (const [script, args] of [
+  ["verify:doctor", ["--port", "http://u:SYNTH-npm-794@127.0.0.1:3139"]],
+  ["verify:doctor", ["--port=http://u:SYNTH-npm-794@127.0.0.1:3139"]],
+  ["verify:doctor", ["--base-url", "http://u:SYNTH-npm-794@127.0.0.1:3139"]],
+  ["verify:launch", ["--base-url=http://u:SYNTH-npm-794@127.0.0.1:3139"]],
+  ["verify:drive", ["--base-url=http://u:SYNTH-npm-794@127.0.0.1:3139"]],
+]) {
+  const viaNpm = await runNpm(["--silent", "run", script, "--", ...args]);
+  check(
+    `npm --silent run ${script} refuses ${args[0].slice(0, 10)} and prints no credential`,
+    viaNpm.status === 2 &&
+      viaNpm.stderr.includes("--") &&
+      !output(viaNpm).includes("SYNTH-npm-794") &&
+      !output(viaNpm).includes("u:"),
+    output(viaNpm),
+  );
+}
+const npmPlain = await runNpm([
+  "run",
+  "verify:doctor",
+  "--",
+  "--port",
+  String(unusedPort),
 ]);
 check(
-  "equals base url does not fall back",
-  equalsOther.status === 2 &&
-    equalsOther.stderr.includes("refusing http://example.com"),
-  output(equalsOther),
+  "npm run verify:doctor -- --port <n> shows only the port in npm's banner",
+  npmPlain.status !== 0 &&
+    output(npmPlain).includes(`doctor.mjs --port ${unusedPort}`) &&
+    npmPlain.stdout.includes("NOT_READY unreachable"),
+  output(npmPlain),
 );
 const hint = runtime.foreignNextStopHint(3000);
 check(
@@ -589,7 +642,7 @@ check(
     !exited(victim),
   `${output(forgedCleanup)}\nconnections ${forged.connections.count}`,
 );
-const forgedDoctor = await runtime.runOwnership("http://127.0.0.1:3000", {
+const forgedDoctor = await runtime.runOwnership(3000, {
   dir: forgedDir,
 });
 check(
@@ -666,7 +719,7 @@ check(
 
 const doctorOwn = await runCli(
   "doctor.mjs",
-  ["--base-url", `http://127.0.0.1:${portA}`],
+  ["--port", String(portA)],
   envFor(runDir),
 );
 check(
@@ -678,7 +731,7 @@ check(
 );
 const doctorForeign = await runCli(
   "doctor.mjs",
-  ["--base-url", `http://127.0.0.1:${portB}`, "--json"],
+  ["--port", String(portB), "--json"],
   envFor(runDir),
 );
 let foreignReport = {};
@@ -695,15 +748,6 @@ check(
     doctorForeign.stdout.includes(`serves http://127.0.0.1:${portA}`),
   output(doctorForeign),
 );
-const viaLocalhost = await runtime.runOwnership(`http://localhost:${portA}`, {
-  dir: runDir,
-});
-check(
-  "ownership needs the 127.0.0.1 origin the run was given",
-  viaLocalhost.owned === false,
-  JSON.stringify(viaLocalhost),
-);
-
 const wrongToken = await runtime.supervisorRequest(
   { ...run.state, token: token("b") },
   "stop",
@@ -761,7 +805,7 @@ const portC = await freePort();
 const strangerC = await stranger(portC, "stranger-c");
 const takenDir = privateDir("taken");
 const taken = await supervise(takenDir, portC, "silent", "app-c");
-const takenOwnership = await runtime.runOwnership(`http://127.0.0.1:${portC}`, {
+const takenOwnership = await runtime.runOwnership(portC, {
   dir: takenDir,
 });
 check(
@@ -775,7 +819,7 @@ check(
 );
 const takenDoctor = await runCli(
   "doctor.mjs",
-  ["--base-url", `http://127.0.0.1:${portC}`],
+  ["--port", String(portC)],
   envFor(takenDir),
 );
 check(

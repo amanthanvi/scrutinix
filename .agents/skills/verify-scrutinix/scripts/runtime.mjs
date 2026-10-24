@@ -37,7 +37,7 @@ export const stateDir = process.env.VERIFY_STATE_DIR || "/tmp/scrutinix-verify";
 export const evidenceDir =
   process.env.VERIFY_EVIDENCE_DIR || path.join(stateDir, "evidence");
 export const stateFile = path.join(stateDir, "run.json");
-export const defaultBaseUrl = "http://127.0.0.1:3000";
+export const defaultPort = 3000;
 export const supervisorScript = path.join(scriptDir, "supervisor.mjs");
 export const stateVersion = 2;
 
@@ -463,97 +463,76 @@ export function legacyPids(state) {
   return [...new Set(pids)];
 }
 
-// ---- Base URLs --------------------------------------------------------------
+// ---- Ports ------------------------------------------------------------------
 
-// A base URL is an origin: no user name or password, path, query, or
-// fragment. Errors never echo the input, which can carry credentials.
-export function baseUrlProblem(raw) {
-  let url;
-  try {
-    url = new URL(String(raw));
-  } catch {
-    return "is not a valid URL. Use http://127.0.0.1:<port>";
-  }
-  if (url.protocol !== "http:" && url.protocol !== "https:") {
-    return "must use http or https";
-  }
-  if (url.username || url.password || String(raw).includes("@")) {
-    return "must not contain a user name or password";
-  }
-  if (url.search || url.hash || /[?#]/.test(String(raw))) {
-    return "must not contain a query string or fragment";
-  }
-  if (url.pathname !== "/") return "must not contain a path";
-  return "";
+// Every command serves or probes http://127.0.0.1:<port> and takes only the
+// port, an integer. No argument is a URL, so none can carry a user name,
+// password, or token, and npm's script banner (which echoes the arguments)
+// never shows one. Errors never echo the input.
+
+export function validPort(port) {
+  return Number.isInteger(port) && port >= 1024 && port <= 65535;
 }
 
-export function preferredBaseUrl() {
+export function baseUrlFor(port) {
+  return `http://127.0.0.1:${port}`;
+}
+
+// The port this checkout last launched on, else the default.
+export function preferredPort() {
   const state = readState();
   if (
     state &&
     !legacyState(state) &&
     sameCheckout(state) &&
-    typeof state.baseUrl === "string" &&
-    !baseUrlProblem(state.baseUrl)
+    validPort(state.port)
   ) {
-    return new URL(state.baseUrl).origin;
+    return state.port;
   }
-  return defaultBaseUrl;
+  return defaultPort;
 }
 
-// --base-url, then E2E_BASE_URL, then the URL this checkout last launched on.
-export function parseCliBaseUrl(argv = process.argv, env = process.env) {
-  const index = argv.findIndex(
-    (arg) => arg === "--base-url" || arg.startsWith("--base-url="),
-  );
-  let raw;
-  let source = "--base-url";
-  if (index !== -1) {
-    const token = argv[index] ?? "";
-    raw = token.startsWith("--base-url=")
-      ? token.slice("--base-url=".length)
-      : argv[index + 1];
-    if (typeof raw !== "string" || raw.trim() === "") {
-      return {
-        ok: false,
-        baseUrl: "",
-        message: "--base-url needs a URL, such as http://127.0.0.1:3000",
-      };
+// Reads --port <n> or --port=<n>, and the boolean `flags` this command
+// takes. With `rest`, other arguments are returned for the caller to pass
+// on (smoke passes them to Playwright); without it, they are refused.
+export function parseCliArgs(
+  argv = process.argv.slice(2),
+  { flags = [], rest = false } = {},
+) {
+  const fail = (message) => ({ ok: false, message });
+  let raw = null;
+  const set = new Set();
+  const others = [];
+  for (let index = 0; index < argv.length; index += 1) {
+    const arg = argv[index] ?? "";
+    if (arg === "--base-url" || arg.startsWith("--base-url=")) {
+      return fail(
+        "--base-url is not supported. Use --port <n>; the base URL is always http://127.0.0.1:<port>",
+      );
     }
-  } else if (env.E2E_BASE_URL) {
-    raw = env.E2E_BASE_URL;
-    source = "E2E_BASE_URL";
-  } else {
-    return { ok: true, baseUrl: preferredBaseUrl(), message: "" };
+    if (arg === "--port" || arg.startsWith("--port=")) {
+      if (raw !== null) return fail("--port was given more than once");
+      raw = arg === "--port" ? (argv[(index += 1)] ?? "") : arg.slice(7);
+      continue;
+    }
+    if (flags.includes(arg)) {
+      set.add(arg);
+      continue;
+    }
+    if (rest) {
+      others.push(arg);
+      continue;
+    }
+    return fail("got an argument it does not take. See --help");
   }
-  const problem = baseUrlProblem(raw);
-  if (problem) {
-    return { ok: false, baseUrl: "", message: `${source} ${problem}` };
+  if (raw === null) {
+    return { ok: true, port: preferredPort(), flags: set, rest: others };
   }
-  return { ok: true, baseUrl: new URL(raw).origin, message: "" };
-}
-
-// launch serves plain http on 127.0.0.1 only, on an explicit port.
-export function launchableBaseUrl(baseUrl) {
-  if (baseUrlProblem(baseUrl)) return false;
-  const url = new URL(baseUrl);
-  const port = Number(url.port);
-  return (
-    url.protocol === "http:" &&
-    url.hostname === "127.0.0.1" &&
-    Number.isInteger(port) &&
-    port >= 1024 &&
-    port <= 65535
-  );
-}
-
-export function baseUrlParts(baseUrl) {
-  const url = new URL(baseUrl);
-  return {
-    url,
-    port: Number(url.port || (url.protocol === "https:" ? 443 : 80)),
-    loopback: url.hostname === "127.0.0.1" || url.hostname === "localhost",
-  };
+  const port = /^[0-9]{1,5}$/.test(raw) ? Number(raw) : NaN;
+  if (!validPort(port)) {
+    return fail("--port needs an integer from 1024 to 65535");
+  }
+  return { ok: true, port, flags: set, rest: others };
 }
 
 export function foreignNextStopHint(port) {
@@ -1068,11 +1047,11 @@ export function supervisorRequest(
   });
 }
 
-// Whether the run recorded in `dir` serves `baseUrl` right now: its supervisor
-// proves the run token, the URL is the 127.0.0.1 port this run was given, a
+// Whether the run recorded in `dir` serves 127.0.0.1:<port> right now: its
+// supervisor proves the run token, the port is the one this run was given, a
 // process in the supervisor's group holds 127.0.0.1:<port>, and no process
 // outside the group listens on that port. A cwd match is never enough.
-export async function runOwnership(baseUrl, { dir = stateDir } = {}) {
+export async function runOwnership(port, { dir = stateDir } = {}) {
   const { state, problem } = loadState(dir);
   if (problem) return { owned: false, reason: problem };
   if (!state) return { owned: false, reason: "no run.json" };
@@ -1088,21 +1067,10 @@ export async function runOwnership(baseUrl, { dir = stateDir } = {}) {
       reason: `run.json belongs to ${state.repoRoot || "another checkout"}`,
     };
   }
-  let url;
-  try {
-    url = new URL(baseUrl);
-  } catch {
-    return { owned: false, reason: "the base URL is not valid" };
-  }
-  const port = Number(url.port);
-  if (
-    url.protocol !== "http:" ||
-    url.hostname !== "127.0.0.1" ||
-    port !== state.port
-  ) {
+  if (port !== state.port) {
     return {
       owned: false,
-      reason: `this run serves http://127.0.0.1:${state.port}, not ${url.origin}`,
+      reason: `this run serves ${baseUrlFor(state.port)}, not ${baseUrlFor(port)}`,
     };
   }
   const reply = await supervisorRequest(state, "status", { dir });
@@ -1146,7 +1114,6 @@ export async function startSupervisor({
   args = [],
   env = process.env,
   port,
-  baseUrl,
   root = repoRoot,
   dir = stateDir,
   logName = "next.log",
@@ -1182,7 +1149,7 @@ export async function startSupervisor({
     runId,
     token,
     repoRoot: canonicalPath(root),
-    baseUrl,
+    baseUrl: baseUrlFor(port),
     port,
     supervisorPid: null,
     appLog,
@@ -1481,26 +1448,25 @@ function describeOwnership(ownership) {
   return `doctor: owned by run ${ownership.body.runId} (supervisor pid ${ownership.body.supervisorPid}; listener ${own} in its process group)`;
 }
 
-export async function checkHealth(baseUrl = defaultBaseUrl, { dir } = {}) {
+export async function checkHealth(port = defaultPort, { dir } = {}) {
   const lines = [];
-  const { port, loopback } = baseUrlParts(baseUrl);
+  const baseUrl = baseUrlFor(port);
   // Ownership is checked before and after the page probes, so a listener
   // that changes in between is not counted as this run's.
-  const before = await runOwnership(baseUrl, { dir });
+  const before = await runOwnership(port, { dir });
   // The run's own listeners are never "another next dev", even when a
   // stranger on the same port keeps the run from being owned.
   const ownPids = Array.isArray(before.body?.listeners?.own)
     ? before.body.listeners.own.map((listener) => listener.pid)
     : [];
-  const nextHint =
-    loopback && !before.owned ? formatForeignNext(port, ownPids) : "";
+  const nextHint = before.owned ? "" : formatForeignNext(port, ownPids);
   const timeoutMs = nextHint ? 1_500 : 8_000;
   const [home, about, privacy] = await Promise.all([
     fetchText(new URL("/", baseUrl).href, timeoutMs),
     fetchText(new URL("/about", baseUrl).href, timeoutMs),
     fetchText(new URL("/privacy", baseUrl).href, timeoutMs),
   ]);
-  const after = before.owned ? await runOwnership(baseUrl, { dir }) : before;
+  const after = before.owned ? await runOwnership(port, { dir }) : before;
   const ownership =
     before.owned &&
     after.owned &&
@@ -1547,14 +1513,12 @@ export async function checkHealth(baseUrl = defaultBaseUrl, { dir } = {}) {
       : "doctor: fixture-mode unknown (verify:launch does not own this server)",
   );
 
-  if (loopback) {
-    const owners = portDetails(port);
-    lines.push(
-      owners
-        ? `doctor: port ${port}\n${owners}`
-        : `doctor: port ${port} owner-unknown`,
-    );
-  }
+  const owners = portDetails(port);
+  lines.push(
+    owners
+      ? `doctor: port ${port}\n${owners}`
+      : `doctor: port ${port} owner-unknown`,
+  );
 
   if (homeOk && aboutOk && privacyOk && owned) {
     lines.push("doctor: READY");

@@ -5,19 +5,18 @@ import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 
 import {
-  baseUrlParts,
+  baseUrlFor,
   canonicalPath,
   checkHealth,
   ensureDirs,
   evidenceDir,
   foreignNextStopHint,
   formatForeignNext,
-  launchableBaseUrl,
   legacyPids,
   legacyState,
   loadState,
   logTail,
-  parseCliBaseUrl,
+  parseCliArgs,
   recordNextEnvWritten,
   redactSecrets,
   repoRoot,
@@ -46,13 +45,14 @@ and with the published e2e share key (the same one npm run test:e2e uses), so
 Share produces signed links that open as verified results.
 
 Usage:
-  node .agents/skills/verify-scrutinix/scripts/launch.mjs [--base-url URL]
+  node .agents/skills/verify-scrutinix/scripts/launch.mjs [--port <n>]
   npm run verify:launch
-  npm run verify:launch -- --base-url http://127.0.0.1:3417
+  npm run verify:launch -- --port 3417
 
-The base URL must be http://127.0.0.1:<port> (default port 3000), with no
-user name, password, path, query, or fragment. doctor, smoke, and cleanup
-reuse the URL recorded for this checkout.
+The server is always http://127.0.0.1:<port>. --port is an integer from 1024
+to 65535 (default: the port this checkout last launched on, else 3000). Any
+other argument, including --base-url, exits 2 without repeating it. doctor,
+smoke, and cleanup reuse the port recorded for this checkout.
 
 launch starts a detached supervisor that runs next dev in its own process
 group and answers on a private socket. A READY instance this checkout's
@@ -76,19 +76,13 @@ async function waitFor(predicate, timeoutMs) {
   return "";
 }
 
-const parsedBaseUrl = parseCliBaseUrl();
-if (!parsedBaseUrl.ok) {
-  process.stderr.write(`launch: ${parsedBaseUrl.message}\n`);
+const args = parseCliArgs();
+if (!args.ok) {
+  process.stderr.write(`launch: ${args.message}\n`);
   process.exit(2);
 }
-const baseUrl = parsedBaseUrl.baseUrl;
-if (!launchableBaseUrl(baseUrl)) {
-  process.stderr.write(
-    `launch: refusing ${new URL(baseUrl).origin}. Use http://127.0.0.1:<port> with a port from 1024 to 65535.\n`,
-  );
-  process.exit(2);
-}
-const { port } = baseUrlParts(baseUrl);
+const { port } = args;
+const baseUrl = baseUrlFor(port);
 
 try {
   ensureDirs();
@@ -163,7 +157,7 @@ if (legacyState(state)) {
       process.exit(2);
     }
   } else if (live.proven) {
-    const initial = await checkHealth(baseUrl);
+    const initial = await checkHealth(port);
     if (initial.ok) {
       process.stdout.write(`${initial.lines.join("\n")}\n`);
       process.stdout.write(
@@ -187,7 +181,7 @@ if (legacyState(state)) {
 }
 
 if (await tcpOpen(port)) {
-  const initial = await checkHealth(baseUrl);
+  const initial = await checkHealth(port);
   process.stdout.write(`${initial.lines.join("\n")}\n`);
   if (!refuseForeignNext()) {
     process.stderr.write(
@@ -254,7 +248,6 @@ try {
     args: [nextBin, "dev", "--hostname", "127.0.0.1", "--port", String(port)],
     env: appEnv,
     port,
-    baseUrl,
     record: { fixtureMode: true },
   });
 } catch (error) {
@@ -297,7 +290,7 @@ if (up !== "ready") {
 }
 
 const deadline = Date.now() + 180_000;
-let report = await checkHealth(baseUrl);
+let report = await checkHealth(port);
 while (
   !report.ok &&
   report.code !== "foreign-server" &&
@@ -311,7 +304,7 @@ while (
     process.exit(1);
   }
   await delay(1_000);
-  report = await checkHealth(baseUrl);
+  report = await checkHealth(port);
 }
 
 await captureSettledNextEnv();

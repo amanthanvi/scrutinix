@@ -5,8 +5,9 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
+  baseUrlFor,
   evidenceDir,
-  parseCliBaseUrl,
+  parseCliArgs,
   repoRoot,
   skillDir,
 } from "./runtime.mjs";
@@ -19,15 +20,18 @@ Run doctor, then a Playwright spec against the server verify:launch started.
 The browser does not open when doctor exits 2.
 
 Usage:
-  node .agents/skills/verify-scrutinix/scripts/smoke.mjs
+  node .agents/skills/verify-scrutinix/scripts/smoke.mjs [--port <n>]
   node .agents/skills/verify-scrutinix/scripts/smoke.mjs --drive
   node .agents/skills/verify-scrutinix/scripts/smoke.mjs --drive -g "batch scan"
   npm run verify:smoke
   npm run verify:drive
+  npm run verify:drive -- --port 3417 -g "batch scan"
 
 --drive runs scripts/drive.spec.ts (the feature map).
 Without --drive, scripts/smoke.spec.ts runs one safe scan.
-Extra arguments are passed to Playwright.
+--port is an integer from 1024 to 65535 (default: the port this checkout
+last launched on, else 3000); --base-url exits 2. Other arguments are passed
+to Playwright.
 `;
 
 if (process.argv.includes("--help") || process.argv.includes("-h")) {
@@ -35,24 +39,22 @@ if (process.argv.includes("--help") || process.argv.includes("-h")) {
   process.exit(0);
 }
 
-const drive = process.argv.includes("--drive");
-const extra = process.argv.slice(2).filter((arg) => arg !== "--drive");
+const args = parseCliArgs(undefined, { flags: ["--drive"], rest: true });
+if (!args.ok) {
+  process.stderr.write(`smoke: ${args.message}\n`);
+  process.exit(2);
+}
+const drive = args.flags.has("--drive");
+const extra = args.rest;
 const spec = path.join(scriptDir, drive ? "drive.spec.ts" : "smoke.spec.ts");
 const config = path.join(skillDir, "playwright.config.mjs");
 const require = createRequire(import.meta.url);
 const cli = require.resolve("@playwright/test/cli");
 
-// E2E_BASE_URL, then the URL this checkout last launched on. Extra arguments
-// belong to Playwright, so --base-url is not read here.
-const parsedBaseUrl = parseCliBaseUrl(["node", "smoke.mjs"]);
-if (!parsedBaseUrl.ok) {
-  process.stderr.write(`smoke: ${parsedBaseUrl.message}\n`);
-  process.exit(2);
-}
-const baseUrl = parsedBaseUrl.baseUrl;
+const baseUrl = baseUrlFor(args.port);
 const doctor = spawnSync(
   process.execPath,
-  [path.join(scriptDir, "doctor.mjs"), "--base-url", baseUrl],
+  [path.join(scriptDir, "doctor.mjs"), "--port", String(args.port)],
   { cwd: repoRoot, stdio: "inherit" },
 );
 if (doctor.status !== 0) {

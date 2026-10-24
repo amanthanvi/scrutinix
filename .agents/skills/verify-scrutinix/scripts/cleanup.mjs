@@ -2,10 +2,8 @@
 import { setTimeout as delay } from "node:timers/promises";
 
 import {
-  baseUrlParts,
-  baseUrlProblem,
   canonicalPath,
-  defaultBaseUrl,
+  defaultPort,
   evidenceDir,
   hasNextEnvRecord,
   legacyPids,
@@ -18,6 +16,7 @@ import {
   stateDir,
   stopRun,
   tcpOpen,
+  validPort,
   writeState,
 } from "./runtime.mjs";
 
@@ -47,11 +46,19 @@ run.json is missing.
 Usage:
   node .agents/skills/verify-scrutinix/scripts/cleanup.mjs
   npm run verify:cleanup
+
+cleanup takes no arguments: the port and run come from run.json.
 `;
 
 if (process.argv.includes("--help") || process.argv.includes("-h")) {
   process.stdout.write(help);
   process.exit(0);
+}
+if (process.argv.length > 2) {
+  process.stderr.write(
+    "cleanup: takes no arguments. The run and its port come from run.json.\n",
+  );
+  process.exit(2);
 }
 
 // Validate first. Nothing in an unsafe directory is parsed or acted on.
@@ -118,11 +125,7 @@ if (legacyState(state)) {
 }
 
 await delay(300);
-const recordedUrl =
-  typeof state.baseUrl === "string" && !baseUrlProblem(state.baseUrl)
-    ? state.baseUrl
-    : defaultBaseUrl;
-const { port } = baseUrlParts(recordedUrl);
+const port = validPort(state.port) ? state.port : defaultPort;
 const stillOpen = await tcpOpen(port);
 
 // The token is dropped with the run: the supervisor is gone or refused, and
