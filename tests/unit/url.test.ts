@@ -43,6 +43,33 @@ describe("normalizeUrlInput", () => {
     expect(isBlockedNetworkAddress("fe80::1%25eth0")).toBe(true);
   });
 
+  it("measures the length limit on the normalized link it returns", () => {
+    const tooLong = "That link is too long to check (over 2,048 characters).";
+    // 420 characters as typed; percent-encoded, 2,420.
+    const accented = normalizeUrlInput(
+      `https://example.com/${"é".repeat(400)}`,
+    );
+    expect(accented.ok ? null : accented.error).toBe(tooLong);
+    // A missing scheme counts too: "https://" pushes 2,041 typed past 2,048.
+    const bare = normalizeUrlInput(`example.com/${"a".repeat(2_029)}`);
+    expect(bare.ok ? null : bare.error).toBe(tooLong);
+    // Exactly 2,048 once normalized is fine, and stays the same link.
+    const fits = normalizeUrlInput(`https://example.com/${"é".repeat(338)}`);
+    expect(fits.ok && fits.value.normalizedUrl.length).toBe(2_048);
+    expect(
+      fits.ok && normalizeUrlInput(fits.value.normalizedUrl),
+    ).toMatchObject({
+      ok: true,
+      value: { normalizedUrl: fits.ok && fits.value.normalizedUrl },
+    });
+    // Over the limit as typed is still refused before parsing, even when
+    // normalizing would drop the excess (a fragment).
+    const fragment = normalizeUrlInput(
+      `https://example.com/#${"a".repeat(2_048)}`,
+    );
+    expect(fragment.ok ? null : fragment.error).toBe(tooLong);
+  });
+
   it("rejects unsupported protocols", () => {
     const result = normalizeUrlInput("ftp://example.com");
 

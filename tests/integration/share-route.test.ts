@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 import { GET, POST } from "@/app/share/route";
-import { SHARE_LAUNCH_COOKIE } from "@/lib/domain/share-launch";
+import { SHARE_LAUNCH_COOKIE, resolvePrefill } from "@/lib/domain/share-launch";
+import { normalizeUrlInput } from "@/lib/domain/url";
+import { parseScanRequest } from "@/lib/server/scan-request";
 import { redeemLaunchGrant } from "@/lib/server/share-launch-grant";
 
 const ORIGIN = "https://www.scrutinix.net";
@@ -230,6 +232,71 @@ describe("GET /share", () => {
 });
 
 const CHUNK = 1024;
+
+describe("a Unicode link, from the share sheet to the scan", () => {
+  /** The link the page prefills: `/share`'s location, as `searchParams` decodes it. */
+  function prefillAfter(response: Response): string | null {
+    return resolvePrefill(
+      new URL(response.headers.get("location")!, ORIGIN).searchParams.get(
+        "url",
+      ),
+    );
+  }
+
+  /** The analyze routes' own validation of a scan request for `url`. */
+  function scanRequest(url: string) {
+    return parseScanRequest(
+      new Request(`${ORIGIN}/api/analyze`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ url }),
+      }),
+      "single",
+    );
+  }
+
+  it("is judged by its normalized length at every boundary, so none disagrees", async () => {
+    // 420 characters as typed, 2,420 percent-encoded. Measured as typed, it
+    // passed /share, which redirected with the encoded link the page then
+    // refused: no prefill and no scan, and nothing said why.
+    const long = `https://example.com/${"é".repeat(400)}`;
+    expect(long).toHaveLength(420);
+    const typed = normalizeUrlInput(long);
+    expect(typed.ok).toBe(false);
+    expect(typed.ok ? null : typed.error).toBe(
+      "That link is too long to check (over 2,048 characters).",
+    );
+    const shared = await POST(shareRequest({ url: long }, { site: "none" }));
+    expect(shared.headers.get("location")).toBe("/");
+    expect(launchCookie(shared)).toBeNull();
+    expect(resolvePrefill(long)).toBeNull();
+    const refused = await scanRequest(long);
+    expect(refused.ok).toBe(false);
+    if (!refused.ok) {
+      expect(refused.response.status).toBe(400);
+      expect(await refused.response.json()).toMatchObject({
+        error: {
+          code: "invalid_url",
+          message: typed.ok ? null : typed.error,
+        },
+      });
+    }
+
+    // 338 encode to exactly 2,048 characters: accepted at every boundary,
+    // and the page prefills, grants, and scans the very link /share took.
+    const fits = `https://example.com/${"é".repeat(338)}`;
+    const launched = await POST(shareRequest({ url: fits }, { site: "none" }));
+    const prefill = prefillAfter(launched);
+    expect(prefill).toHaveLength(2_048);
+    expect(normalizeUrlInput(fits)).toMatchObject({
+      ok: true,
+      value: { normalizedUrl: prefill },
+    });
+    expect(await redeemLaunchGrant(grantIn(launched), prefill!)).toBe(true);
+    const accepted = await scanRequest(prefill!);
+    expect(accepted.ok && accepted.targets[0]!.normalizedUrl).toBe(prefill);
+  });
+});
 
 /** A body handed over 1 KiB at a time, counting what the reader pulled. */
 function chunkedBody(text: string) {
