@@ -807,6 +807,60 @@ function buildLimitations(signals: SignalResults) {
   return [...new Set(limitations)];
 }
 
+/**
+ * Every number in the confidence figure. /about prints these directly
+ * (`lib/domain/methodology.ts`), so the page states the engine's own
+ * arithmetic. Adjustments are magnitudes; `calculateConfidence` applies
+ * their signs.
+ */
+export const CONFIDENCE_POLICY = {
+  start: 0.18,
+  /** Per check that returned something to go on (`countDataRichSignals`). */
+  perDataRichCheck: 0.06,
+  /** Per check that finished with little to go on. */
+  perThinCheck: 0.02,
+  /** Per check that didn't apply (skipped). */
+  perSkippedCheck: 0.01,
+  /** Subtracted per check that failed. */
+  perFailedCheck: 0.08,
+  /** Subtracted per limitation noted with the result, up to the maximum. */
+  perLimitation: 0.02,
+  maxLimitations: 0.12,
+  safe: {
+    /** Per major list (VirusTotal, Google Safe Browsing, threat feeds) that answered clean. */
+    perCleanList: 0.14,
+    /** Subtracted per major list that didn't answer, or answered only in part. */
+    perMissingList: 0.1,
+    /** Subtracted when no major list answered clean. */
+    noCleanList: 0.15,
+  },
+  risky: {
+    perFlaggingList: 0.16,
+    /** Subtracted per major list that answered clean, up to the maximum. */
+    perCleanList: 0.04,
+    maxCleanLists: 0.12,
+    /** Subtracted per major list that didn't answer, or answered only in part. */
+    perMissingList: 0.05,
+    /** Two or more kinds of medium- or high-quality finding. */
+    corroborated: 0.08,
+  },
+  /** Times the model agreement share below. */
+  modelAgreement: 0.08,
+  modelAgreementShare: { agree: 1, oneMember: 0.55, disagree: 0.45 },
+  caps: {
+    safeOneListMissing: 0.79,
+    safeListsMissing: 0.69,
+    /** Safe on a VirusTotal analysis older than `VT_STALE_ANALYSIS_DAYS`. */
+    safeStaleVirusTotal: 0.85,
+    unknown: 0.4,
+  },
+  floor: 0.15,
+  safeCeiling: 0.97,
+  riskyCeiling: 0.99,
+  /** The words: High from `high`, Moderate from `moderate`, else Low. */
+  labels: { high: 0.85, moderate: 0.5 },
+} as const;
+
 function calculateConfidence({
   signals,
   verdict,
@@ -841,30 +895,40 @@ function calculateConfidence({
   // clean-verdict math, then cap hard below.
   const effectiveVerdict = verdict === "unknown" ? "safe" : verdict;
 
-  let confidence = 0.18;
-  confidence += dataRichSignals * 0.06;
-  confidence += Math.max(0, successfulSignals - dataRichSignals) * 0.02;
-  confidence += skippedSignals * 0.01;
-  confidence -= failedSignals * 0.08;
-  confidence -= Math.min(0.12, limitations.length * 0.02);
+  const policy = CONFIDENCE_POLICY;
+  let confidence: number = policy.start;
+  confidence += dataRichSignals * policy.perDataRichCheck;
+  confidence +=
+    Math.max(0, successfulSignals - dataRichSignals) * policy.perThinCheck;
+  confidence += skippedSignals * policy.perSkippedCheck;
+  confidence -= failedSignals * policy.perFailedCheck;
+  confidence -= Math.min(
+    policy.maxLimitations,
+    limitations.length * policy.perLimitation,
+  );
 
   if (effectiveVerdict === "safe") {
-    confidence += cleanHighConfidenceSources * 0.14;
-    confidence -= unavailableHighConfidenceSources.length * 0.1;
+    confidence += cleanHighConfidenceSources * policy.safe.perCleanList;
+    confidence -=
+      unavailableHighConfidenceSources.length * policy.safe.perMissingList;
   } else {
-    confidence += positiveHighConfidenceSources * 0.16;
-    confidence -= Math.min(0.12, cleanHighConfidenceSources * 0.04);
-    confidence -= unavailableHighConfidenceSources.length * 0.05;
+    confidence += positiveHighConfidenceSources * policy.risky.perFlaggingList;
+    confidence -= Math.min(
+      policy.risky.maxCleanLists,
+      cleanHighConfidenceSources * policy.risky.perCleanList,
+    );
+    confidence -=
+      unavailableHighConfidenceSources.length * policy.risky.perMissingList;
   }
 
-  confidence += modelAgreement * 0.08;
+  confidence += modelAgreement * policy.modelAgreement;
 
   if (effectiveVerdict !== "safe" && corroboratedRiskCategories >= 2) {
-    confidence += 0.08;
+    confidence += policy.risky.corroborated;
   }
 
   if (effectiveVerdict === "safe" && cleanHighConfidenceSources === 0) {
-    confidence -= 0.15;
+    confidence -= policy.safe.noCleanList;
   }
 
   if (
@@ -873,7 +937,9 @@ function calculateConfidence({
   ) {
     confidence = Math.min(
       confidence,
-      unavailableHighConfidenceSources.length >= 2 ? 0.69 : 0.79,
+      unavailableHighConfidenceSources.length >= 2
+        ? policy.caps.safeListsMissing
+        : policy.caps.safeOneListMissing,
     );
   }
 
@@ -883,18 +949,22 @@ function calculateConfidence({
     vtAgeDays !== null &&
     vtAgeDays > VT_STALE_ANALYSIS_DAYS
   ) {
-    confidence = Math.min(confidence, 0.85);
+    confidence = Math.min(confidence, policy.caps.safeStaleVirusTotal);
   }
 
   if (verdict === "unknown") {
-    confidence = Math.min(confidence, 0.4);
+    confidence = Math.min(confidence, policy.caps.unknown);
   }
 
   if (verdict === "error") {
-    confidence = 0.15;
+    confidence = policy.floor;
   }
 
-  return clamp(confidence, 0.15, effectiveVerdict === "safe" ? 0.97 : 0.99);
+  return clamp(
+    confidence,
+    policy.floor,
+    effectiveVerdict === "safe" ? policy.safeCeiling : policy.riskyCeiling,
+  );
 }
 
 function buildRecommendations(
@@ -1264,13 +1334,14 @@ function getModelAgreement(signals: SignalResults) {
     return 0;
   }
 
+  const share = CONFIDENCE_POLICY.modelAgreementShare;
   if (!signal.data.transformerModel) {
-    return 0.55;
+    return share.oneMember;
   }
 
   return signal.data.transformerModel.label === signal.data.lexicalModel?.label
-    ? 1
-    : 0.45;
+    ? share.agree
+    : share.disagree;
 }
 
 function countDataRichSignals(signals: SignalResults) {
@@ -1316,11 +1387,11 @@ function countDataRichSignals(signals: SignalResults) {
 export function scoreToConfidenceLabel(
   confidence: number,
 ): ThreatInfo["confidenceLabel"] {
-  if (confidence >= 0.85) {
+  if (confidence >= CONFIDENCE_POLICY.labels.high) {
     return "high";
   }
 
-  if (confidence >= 0.5) {
+  if (confidence >= CONFIDENCE_POLICY.labels.moderate) {
     return "moderate";
   }
 
