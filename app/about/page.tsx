@@ -44,7 +44,7 @@ const cellLegend = (
 
 const DT = "font-medium text-[var(--sx-text)]";
 const DD = "text-[var(--sx-text-muted)]";
-const TERMS = `${LIST_MEASURE} text-body grid gap-x-6 gap-y-3 sm:grid-cols-[10rem_minmax(0,1fr)]`;
+const TERMS = `${LIST_MEASURE} text-body grid grid-cols-[minmax(0,1fr)] gap-x-6 gap-y-3 wrap-break-word sm:grid-cols-[10rem_minmax(0,1fr)]`;
 const BULLETS = `${PROSE_MEASURE} text-body flex list-disc flex-col gap-2.5 pl-5 text-[var(--sx-text-muted)] marker:text-[var(--sx-text-soft)]`;
 
 function ScoringTableView({ table }: { table: ScoringTable }) {
