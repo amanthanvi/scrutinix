@@ -56,6 +56,7 @@ components/
     app-footer.tsx        # One-line footer
     scan-form.tsx         # Single/Batch tabs + inputs (id="scan-console")
     input-panels.tsx      # URL input + Paste + Analyze; batch textarea and exports
+    input-anatomy.tsx     # The typed link taken apart before a scan (captions) + "Expecting a particular site?"
     results-section.tsx   # Band → anatomy → strip → Summary questions / Full rows → details → actions; focus + live region
     verdict-panel.tsx     # VerdictBand (Checking/result/snapshot, one element tree) + VerdictDetails
     link-anatomy.tsx      # Registered domain emphasised, look-alike sentence, segment-keyed facts, full-link toggle
@@ -90,6 +91,7 @@ lib/
     signal-severity.ts    # Per-signal severity ("clear" = found nothing; scored => warning)
     signal-signature.ts   # Eight-cell signature, legacy-record check, share snapshot encode/decode
     link-anatomy.ts       # Isomorphic URL anatomy + look-alike detection (tldts passed in)
+    expected-site.ts      # "Were you expecting…?": compare an expected domain or brand with the link's registered domain
     impersonated-brands.ts # Shared brand list (look-alike ccTLD runs, structure-risk scoring)
     registrable-domain.ts # Server wrapper over link-anatomy's registrableDomainOf
     copy.ts               # countOf / formatList / capitalize / formatAge for user-facing copy

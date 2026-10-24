@@ -284,6 +284,12 @@ score band. No score or verdict changes.
 - [x] First-load JS for `/` (`.next/diagnostics/route-bundle-stats.json`, base `sx/2-evidence` 33d66b8 vs this branch): 769,884 → 782,645 B uncompressed (+12,761, +1.7%); 233,306 → 237,405 B gzip (+4,099, +1.8%), all question copy (no verdict engine or tldts in the eager chunks). Lazy-loading it after scan start is an option for layer 4's budget.
 - [x] Verified (`E2E_PORT=3112`): format, lint, typecheck clean; unit 44 files / 563 tests, integration 3 / 44, DOM 11 / 74, e2e 29 passed (axe clean on Summary and Full in both themes), build green. Summary checked by eye on the flagged, clean, look-alike, and unreachable fixtures at 1280px and 390px in light and dark.
 
+### P29.3 Anatomy on paste (2026-10-24, layer 3 of the distinctiveness stack)
+
+- [x] The typed link is taken apart under the form before any scan (`components/scrutinix/input-anatomy.tsx`): each part captioned (P09 copy), a look-alike stated once, and the breakdown steps aside once that link's scan or result is on screen.
+- [x] "Expecting a particular site?" (`lib/domain/expected-site.ts`): one optional field compares a domain, link, or brand name with the registered domain, in the browser; a match never says "safe", an unrecognised name admits it.
+- [x] Verified: unit (expected-site), DOM (paste flow, focus on open), e2e (paste → scan hand-over) and axe on the pasted state in both themes.
+
 ### P24 Resolve September dependency maintenance
 
 - [x] Merge the green minor-and-patch dependency group, including the Next.js `16.3.3` security update.
