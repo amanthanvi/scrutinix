@@ -2,6 +2,7 @@ import { ImageResponse } from "next/og";
 
 import { CARD_SIZE, ResultCard } from "@/lib/og/cards";
 import { loadOgFonts } from "@/lib/og/fonts";
+import { sharedSnapshotRemainingMs } from "@/lib/domain/signal-signature";
 import {
   SHARE_IMAGE_MAX_PAYLOAD,
   describeSharedSnapshot,
@@ -21,14 +22,22 @@ import {
 export async function GET(request: Request) {
   const params = new URL(request.url).searchParams;
   const payload = normalizeSharedPayload(params.get("shared"));
+  const now = Date.now();
   const card =
     payload && payload.length <= SHARE_IMAGE_MAX_PAYLOAD
-      ? describeSharedSnapshot(payload, params.get("sig"), Date.now())
+      ? describeSharedSnapshot(payload, params.get("sig"), now)
       : null;
 
   if (!card) {
     return Response.redirect(new URL("/opengraph-image", request.url), 302);
   }
+
+  // Never cached past the snapshot's own three days, so no browser or CDN
+  // serves the verdict after the page itself stops showing it.
+  const maxAge = Math.min(
+    3600,
+    Math.floor(sharedSnapshotRemainingMs(card.snapshot.capturedAt, now) / 1000),
+  );
 
   return new ImageResponse(
     <ResultCard
@@ -47,7 +56,10 @@ export async function GET(request: Request) {
         // Short and revalidating, never immutable: after a leaked key is
         // revoked, images already drawn for forged links must age out
         // within the hour. No stale-while-revalidate for the same reason.
-        "Cache-Control": "public, max-age=3600, s-maxage=3600",
+        "Cache-Control":
+          maxAge >= 1
+            ? `public, max-age=${maxAge}, s-maxage=${maxAge}`
+            : "no-store",
       },
     },
   );
