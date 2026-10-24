@@ -123,6 +123,37 @@ test("a look-alike subdomain is named plainly and shown as Look-alike", async ({
   ).toBeVisible();
 });
 
+test("a pasted link is taken apart before any scan, then hands over to the result", async ({
+  page,
+}) => {
+  await gotoApp(page);
+  const input = page.getByRole("textbox", { name: /url to analyze/i });
+  await input.fill("https://paypal.com.secure-login.xyz/verify");
+
+  const pasted = page.getByRole("region", { name: "The link, taken apart" });
+  await expect(pasted).toBeVisible();
+  await expect(pasted).toContainText("Registered domain");
+  await expect(pasted).toContainText(
+    "This link belongs to secure-login.xyz, not paypal.com.",
+  );
+
+  await pasted
+    .getByRole("button", { name: "Expecting a particular site?" })
+    .click();
+  await page
+    .getByRole("textbox", { name: "Which site were you expecting?" })
+    .fill("paypal.com");
+  await expect(pasted).toContainText(
+    "This link belongs to secure-login.xyz, not paypal.com.",
+  );
+
+  // Scanning the same link: the result's own anatomy takes over, so the
+  // owner is stated once.
+  await page.getByRole("button", { name: /analyze url/i }).click();
+  await expect(page.getByLabel(/^scan result: look-alike$/i)).toBeVisible();
+  await expect(pasted).toHaveCount(0);
+});
+
 test("a phone-width history row keeps a look-alike's real owner visible", async ({
   page,
 }) => {
