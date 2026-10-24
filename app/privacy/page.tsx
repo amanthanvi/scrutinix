@@ -28,7 +28,7 @@ const sections = [
   },
   {
     title: "Cached results",
-    body: "When every check completes, we keep the result for 15 minutes so a repeat check is fast. If any check failed or the scan was stopped, we keep nothing, so checking again asks every service afresh. When the shared cache is on, it deletes the result after those 15 minutes. A copy in the server's memory is never reused after 15 minutes, but it can stay in memory until the same link is checked again, newer results crowd it out, or the server restarts.",
+    body: "When every check completes, we keep the result for 15 minutes so a repeat check is fast. If any check failed or the scan was stopped, we don't keep the result, so checking again runs every check again. Some checks reuse reference data they downloaded recently: the OpenPhish list for up to 15 minutes, and the names of networks for up to a day. When the shared cache is on, it deletes the result after those 15 minutes. A copy in the server's memory is never reused after 15 minutes, but it can stay in memory until the same link is checked again, newer results crowd it out, or the server restarts.",
   },
   {
     title: "Logging",
