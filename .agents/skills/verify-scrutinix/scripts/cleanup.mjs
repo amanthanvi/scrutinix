@@ -2,32 +2,41 @@
 import { setTimeout as delay } from "node:timers/promises";
 
 import {
+  baseUrlParts,
   canonicalPath,
-  cmdline,
+  defaultBaseUrl,
   evidenceDir,
   hasNextEnvRecord,
-  killTmuxSession,
   readState,
   repoRoot,
   restoreNextEnvSnapshot,
-  restoreTrackedDevFiles,
   sameCheckout,
-  sessionExists,
+  stopRecordedProcess,
+  stopRecordedSession,
   tcpOpen,
   writeState,
 } from "./runtime.mjs";
 
 const help = `verify-scrutinix cleanup
 
-Stop only the tmux session and listener pids recorded in
-/tmp/scrutinix-verify/run.json for this checkout. A run.json whose repoRoot
-is a different checkout is left running. Evidence under
-/tmp/scrutinix-verify/evidence is left in place. next-env.d.ts is restored
-to the pre-launch snapshot only when it still matches what this run wrote.
-Otherwise it is left unchanged, the snapshot bytes are saved under the
+Stop only what verify:launch recorded in run.json for this checkout. Each
+recorded tmux session and listener is re-read first and stopped only when its
+identity still matches what launch recorded:
+  - tmux session: session id, creation time, and pane process (pid, start
+    time, cwd). The session name alone is never enough.
+  - listener: pid, start time, executable, and cwd, which must be this
+    checkout.
+Anything that differs (a reused pid, a reused session name, a process serving
+another checkout) is left running, and cleanup says why. Nothing is stopped
+by name or pattern. A run.json whose repoRoot is a different checkout is left
+alone.
+
+Evidence under the evidence directory is left in place. next-env.d.ts is
+restored to the pre-launch snapshot only when it still matches what this run
+wrote. Otherwise it is left unchanged, the snapshot bytes are saved under the
 evidence directory, and that path is printed. An unfinished snapshot, one
 taken before the run recorded what it wrote, is dropped too, including when
-run.json is missing. Next.js agent-rule blocks are removed from AGENTS.md.
+run.json is missing.
 
 Usage:
   node .agents/skills/verify-scrutinix/scripts/cleanup.mjs
@@ -41,7 +50,6 @@ if (process.argv.includes("--help") || process.argv.includes("-h")) {
 
 const state = readState();
 if (!state) {
-  restoreTrackedDevFiles();
   if (hasNextEnvRecord()) {
     const declaration = restoreNextEnvSnapshot();
     if (declaration.warning) {
@@ -56,7 +64,6 @@ if (!state) {
 }
 
 if (!sameCheckout(state)) {
-  restoreTrackedDevFiles();
   process.stdout.write(
     `cleanup: run.json belongs to ${state.repoRoot || "another checkout"}. Leaving that server running. This checkout is ${canonicalPath(repoRoot)}.\n`,
   );
@@ -64,53 +71,50 @@ if (!sameCheckout(state)) {
   process.exit(0);
 }
 
-const sessions = Array.isArray(state.sessions) ? state.sessions : [];
-const pids = Array.isArray(state.pids) ? state.pids : [];
+const recordedSessions = Array.isArray(state.sessions) ? state.sessions : [];
+// Older launches wrote bare pids. They carry no identity, so they are refused.
+const recordedListeners = [
+  ...(Array.isArray(state.listeners) ? state.listeners : []),
+  ...(Array.isArray(state.pids) ? state.pids : []),
+];
+let refused = 0;
 
-for (const name of sessions) {
-  if (typeof name !== "string" || !sessionExists(name)) continue;
-  const killed = killTmuxSession(name);
-  process.stdout.write(
-    killed
-      ? `cleanup: stopped tmux session ${name}\n`
-      : `cleanup: failed to stop tmux session ${name}\n`,
-  );
+function report(result) {
+  if (result.action === "refused" || result.action === "failed") {
+    refused += 1;
+    process.stderr.write(`cleanup: ${result.message}\n`);
+    return;
+  }
+  process.stdout.write(`cleanup: ${result.message}\n`);
 }
 
-await delay(1_000);
+for (const session of recordedSessions) {
+  report(stopRecordedSession(session));
+}
 
-for (const pid of pids) {
-  if (!Number.isInteger(pid) || pid <= 0) continue;
-  const command = cmdline(pid);
-  if (!command) continue;
-  const ownedCommand =
-    command.includes(repoRoot) ||
-    command.includes("next") ||
-    command.includes("scrutinix-verify");
-  if (!ownedCommand) {
-    process.stdout.write(
-      `cleanup: leaving pid ${pid} alone (command does not match this launch)\n`,
-    );
-    continue;
-  }
-  try {
-    process.kill(pid, "SIGTERM");
-    process.stdout.write(`cleanup: sent SIGTERM to pid ${pid}\n`);
-  } catch {
-    process.stdout.write(`cleanup: pid ${pid} was already gone\n`);
-  }
+if (recordedSessions.length) await delay(1_000);
+
+for (const listener of recordedListeners) {
+  report(stopRecordedProcess(listener));
 }
 
 await delay(500);
-const stillOpen = await tcpOpen(3000);
+const { port } = baseUrlParts(
+  typeof state.baseUrl === "string" && state.baseUrl
+    ? state.baseUrl
+    : defaultBaseUrl,
+);
+const stillOpen = await tcpOpen(port);
+// Refused entries are dropped too: they no longer describe anything this
+// checkout started, so a later cleanup must not treat them as owned.
 writeState({
   ...state,
   repoRoot: canonicalPath(repoRoot),
   sessions: [],
+  listeners: [],
   pids: [],
   stoppedAt: new Date().toISOString(),
 });
-restoreTrackedDevFiles();
 const declaration = restoreNextEnvSnapshot();
 if (declaration.action === "restored") {
   process.stdout.write(
@@ -121,8 +125,14 @@ if (declaration.action === "restored") {
 }
 
 process.stdout.write(`cleanup: evidence directory ${evidenceDir}\n`);
-if (stillOpen) {
-  process.stdout.write(
-    "cleanup: port 3000 is still open. This skill did not kill any process it does not have recorded.\n",
+if (refused) {
+  process.stderr.write(
+    `cleanup: left ${refused} recorded process${refused === 1 ? "" : "es"} running because the identity no longer matches this launch. Check them yourself before stopping anything.\n`,
   );
 }
+if (stillOpen) {
+  process.stdout.write(
+    `cleanup: port ${port} is still open. This skill stops only processes whose recorded identity still matches.\n`,
+  );
+}
+process.exit(refused ? 1 : 0);

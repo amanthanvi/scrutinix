@@ -50,7 +50,8 @@
     "verify:doctor": "node .agents/skills/verify-scrutinix/scripts/doctor.mjs",
     "verify:smoke": "node .agents/skills/verify-scrutinix/scripts/smoke.mjs",
     "verify:drive": "node .agents/skills/verify-scrutinix/scripts/smoke.mjs --drive",
-    "verify:cleanup": "node .agents/skills/verify-scrutinix/scripts/cleanup.mjs"
+    "verify:cleanup": "node .agents/skills/verify-scrutinix/scripts/cleanup.mjs",
+    "verify:check": "node .agents/skills/verify-scrutinix/scripts/runtime.check.mjs"
   },
   "dependencies": {
     "@huggingface/transformers": "^4.3.1",

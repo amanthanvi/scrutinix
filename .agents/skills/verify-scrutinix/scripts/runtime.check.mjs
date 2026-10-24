@@ -1,4 +1,4 @@
-import { execFileSync, spawn, spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import {
   chmodSync,
   existsSync,
@@ -45,89 +45,6 @@ function assertPrivate(dir) {
     `uid ${stat.uid}`,
   );
 }
-
-const spaced = runtime.parseListenerPids("users:(('node',pid 4321,fd=9))");
-check("pid space", spaced.length === 1 && spaced[0] === 4321, spaced.join(","));
-check(
-  "empty repo root is not a listener match",
-  runtime.commandIncludesCheckout("node /tmp/next dev", "") === false &&
-    runtime.commandIncludesCheckout("node /tmp/next dev", undefined) === false,
-);
-check(
-  "repo root matches its checkout",
-  runtime.commandIncludesCheckout(
-    "node /tmp/scrutinix-clean/node_modules/next dev",
-    "/tmp/scrutinix-clean",
-  ),
-);
-
-const server = net.createServer();
-await new Promise((resolve) => {
-  server.listen(0, "127.0.0.1", resolve);
-});
-const address = server.address();
-const port = typeof address === "object" && address ? address.port : 0;
-let ssOutput = "";
-let ssMissing = false;
-try {
-  ssOutput = execFileSync("ss", ["-ltnp", `sport = :${port}`], {
-    encoding: "utf8",
-  });
-} catch (error) {
-  if (error && error.code === "ENOENT") ssMissing = true;
-  else ssOutput = error instanceof Error ? error.message : String(error);
-}
-if (ssMissing) {
-  const fromProc = runtime.listenerPids(port);
-  check(
-    "ss missing, /proc pid",
-    fromProc.includes(process.pid),
-    fromProc.join(","),
-  );
-} else {
-  const parsed = runtime.parseListenerPids(ssOutput);
-  check(
-    "real ss uses pid=",
-    ssOutput.includes("pid="),
-    ssOutput.trim().slice(0, 500),
-  );
-  check(
-    "real ss pid parsed",
-    parsed.includes(process.pid),
-    `pids ${parsed.join(",")} output ${ssOutput.trim()}`,
-  );
-}
-
-const awk = spawnSync(
-  "awk",
-  [
-    "-v",
-    `port=${port}`,
-    `function fromhex(s,    i, c, n, d) {
-  n = 0
-  for (i = 1; i <= length(s); i++) {
-    c = tolower(substr(s, i, 1))
-    d = index("0123456789abcdef", c)
-    if (d == 0) return -1
-    n = n * 16 + (d - 1)
-  }
-  return n
-}
-NR > 1 && $4 == "0A" {
-  split($2, a, ":")
-  if (fromhex(a[2]) == port) print $10
-}`,
-    "/proc/net/tcp",
-    "/proc/net/tcp6",
-  ],
-  { encoding: "utf8" },
-);
-check(
-  "portable awk finds listener inode",
-  awk.status === 0 && /^\d+$/m.test(awk.stdout.trim()),
-  `${awk.stdout}${awk.stderr}`,
-);
-server.close();
 
 const noSsDir = path.join(scratch, "no-ss");
 mkdirSync(noSsDir);
@@ -247,10 +164,12 @@ check(
 );
 const hint = runtime.foreignNextStopHint(3000);
 check(
-  "stop hint works without ss",
-  hint.includes("/proc/net/tcp") &&
-    hint.includes("/proc/<pid>/fd") &&
-    hint.includes("kill <pid>"),
+  "stop hint names exact-pid checks and never a command line",
+  hint.includes("lsof -nP -iTCP:3000") &&
+    hint.includes("lstart") &&
+    hint.includes("kill <pid>") &&
+    !hint.includes("cmdline") &&
+    hint.includes("Do not kill by name"),
   hint,
 );
 
@@ -301,72 +220,440 @@ check(
   symlinkCheck.stderr || symlinkCheck.stdout || `status ${symlinkCheck.status}`,
 );
 
-const sessionName = "scrutinix-verify-check-record";
+// ---- Process and session identity -----------------------------------------
+
+const { bin, prefix } = runtime.tmuxCommand();
+const tmux = (args) =>
+  spawnSync(bin, [...prefix, ...args], { encoding: "utf8" });
+const checkout = runtime.canonicalPath(runtime.repoRoot);
+
+function runCleanup(dir) {
+  return spawnSync(process.execPath, [path.join(scriptDir, "cleanup.mjs")], {
+    encoding: "utf8",
+    env: {
+      ...process.env,
+      VERIFY_STATE_DIR: dir,
+      VERIFY_EVIDENCE_DIR: path.join(dir, "evidence"),
+    },
+  });
+}
+
+function stateDirWith(name, state) {
+  const dir = path.join(scratch, name);
+  mkdirSync(dir, { mode: 0o700 });
+  mkdirSync(path.join(dir, "evidence"), { mode: 0o700 });
+  writeFileSync(
+    path.join(dir, "run.json"),
+    `${JSON.stringify({ baseUrl: "http://127.0.0.1:3000", ...state }, null, 2)}\n`,
+  );
+  return dir;
+}
+
+// A long-lived child this check starts and later stops by its exact handle.
+const children = [];
+async function startChild(cwd) {
+  const child = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], {
+    cwd,
+    stdio: "ignore",
+  });
+  children.push(child);
+  const deadline = Date.now() + 5_000;
+  while (Date.now() < deadline) {
+    const identity = runtime.processIdentity(child.pid);
+    if (identity?.cwd) return { child, identity };
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  return { child, identity: runtime.processIdentity(child.pid) };
+}
+
+function alive(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+const self = runtime.processIdentity(process.pid);
+check(
+  "own identity has start time, executable, cwd",
+  Boolean(self?.startTime && self.executable && self.cwd),
+  JSON.stringify(self),
+);
+check(
+  "identity of a missing pid is null",
+  runtime.processIdentity(2 ** 22 + 12345) === null &&
+    runtime.processIdentity(0) === null &&
+    runtime.processIdentity(-1) === null,
+);
+check(
+  "describeProcess prints selected fields only",
+  /^pid \d+, started .+, executable .+, cwd .+$/.test(
+    runtime.describeProcess(self),
+  ),
+  runtime.describeProcess(self),
+);
+
+const listenProbe = net.createServer();
+await new Promise((resolve) => {
+  listenProbe.listen(0, "127.0.0.1", resolve);
+});
+const probePort = listenProbe.address().port;
+check(
+  "listener pids find this process",
+  runtime.listenerPids(probePort).includes(process.pid),
+  runtime.listenerPids(probePort).join(","),
+);
+const details = runtime.portDetails(probePort);
+check(
+  "port details are identity fields, not a command line",
+  details.includes(`pid ${process.pid}, started `) &&
+    !details.includes("runtime.check.mjs"),
+  details,
+);
+listenProbe.close();
+
+// Reused pid: the recorded start time is not the running process's.
+const { child: reusedChild, identity: reusedIdentity } = await startChild(
+  runtime.repoRoot,
+);
+check(
+  "child serves this checkout",
+  runtime.canonicalPath(reusedIdentity?.cwd ?? "") === checkout,
+  JSON.stringify(reusedIdentity),
+);
+const reusedRecord = {
+  ...reusedIdentity,
+  startTime: "Thu Jan  1 00:00:00 1970",
+};
+check(
+  "identityProblem names a reused pid",
+  runtime
+    .identityProblem(reusedRecord, reusedIdentity)
+    .includes("the pid was reused"),
+);
+check(
+  "identityProblem names a different executable",
+  runtime
+    .identityProblem(
+      { ...reusedIdentity, executable: "/usr/bin/some-other-binary" },
+      reusedIdentity,
+    )
+    .includes("runs "),
+);
+check(
+  "identityProblem refuses a record without its fields",
+  runtime.identityProblem({ pid: reusedIdentity.pid }, reusedIdentity) !== "",
+);
+const reusedPidDir = stateDirWith("reused-pid", {
+  repoRoot: checkout,
+  sessions: [],
+  listeners: [reusedRecord],
+});
+const reusedPidCleanup = runCleanup(reusedPidDir);
+check(
+  "cleanup refuses a reused pid and leaves it running",
+  reusedPidCleanup.status === 1 &&
+    reusedPidCleanup.stderr.includes("the pid was reused") &&
+    alive(reusedChild.pid),
+  `${reusedPidCleanup.status} ${reusedPidCleanup.stdout}\n${reusedPidCleanup.stderr}`,
+);
+const legacyPidDir = stateDirWith("legacy-pid", {
+  repoRoot: checkout,
+  sessions: [],
+  pids: [reusedChild.pid],
+});
+const legacyPidCleanup = runCleanup(legacyPidDir);
+check(
+  "cleanup refuses a bare recorded pid",
+  legacyPidCleanup.status === 1 &&
+    legacyPidCleanup.stderr.includes("no recorded process identity") &&
+    alive(reusedChild.pid),
+  `${legacyPidCleanup.stdout}\n${legacyPidCleanup.stderr}`,
+);
+const matched = runtime.stopRecordedProcess(reusedIdentity);
+await new Promise((resolve) => setTimeout(resolve, 300));
+check(
+  "an exact identity match is stopped",
+  matched.action === "stopped" && !alive(reusedChild.pid),
+  matched.message,
+);
+
+// Another checkout: the record is accurate, but the process serves a
+// different directory, so this checkout's cleanup must not stop it.
+const otherCheckout = path.join(scratch, "other-checkout");
+mkdirSync(otherCheckout);
+const { child: otherChild, identity: otherIdentity } =
+  await startChild(otherCheckout);
+const otherDir = stateDirWith("other-checkout-state", {
+  repoRoot: checkout,
+  sessions: [],
+  listeners: [otherIdentity],
+});
+const otherCleanup = runCleanup(otherDir);
+check(
+  "cleanup refuses a process serving another checkout",
+  otherCleanup.status === 1 &&
+    otherCleanup.stderr.includes("not this checkout") &&
+    alive(otherChild.pid),
+  `${otherCleanup.stdout}\n${otherCleanup.stderr}`,
+);
+check(
+  "stopRecordedProcess refuses another checkout",
+  runtime.stopRecordedProcess(otherIdentity).action === "refused" &&
+    alive(otherChild.pid),
+);
+
+// The session this launch started is recorded by identity, not name.
+const sessionName = `scrutinix-verify-check-${process.pid}`;
 const started = runtime.startTmuxSession(
   sessionName,
   "#!/usr/bin/env bash\nsleep 30\n",
 );
 const recorded = runtime.readState();
-check("session recorded at start", recorded?.sessions?.includes(sessionName));
+const recordedSession = recorded?.sessions?.find(
+  (entry) => entry?.name === sessionName,
+);
+check(
+  "session identity recorded at start",
+  Boolean(
+    recordedSession?.id?.startsWith("$") &&
+    recordedSession.created &&
+    recordedSession.pane?.pid > 0 &&
+    recordedSession.pane.startTime &&
+    runtime.canonicalPath(recordedSession.pane.cwd) === checkout,
+  ),
+  JSON.stringify(recordedSession),
+);
 check(
   "repoRoot recorded at start",
-  recorded?.repoRoot === runtime.canonicalPath(runtime.repoRoot),
+  recorded?.repoRoot === checkout,
   String(recorded?.repoRoot),
 );
 check("log path returned", Boolean(started.logPath));
-runtime.killTmuxSession(sessionName);
+check(
+  "recorded session matches itself",
+  runtime.sessionProblem(recordedSession).problem === "",
+);
 
-const { bin, prefix } = runtime.tmuxCommand();
-const foreignName = "scrutinix-verify-check-foreign";
-const foreignDir = path.join(scratch, "foreign");
-mkdirSync(foreignDir, { mode: 0o700 });
-writeFileSync(
-  path.join(foreignDir, "run.json"),
-  `${JSON.stringify(
-    {
-      repoRoot: "/tmp/other-scrutinix-checkout",
-      sessions: [foreignName],
-      pids: [process.pid],
-    },
-    null,
-    2,
-  )}\n`,
+// Reused session name: ours ended, and someone else made one with the same
+// name. tmux also prefix-matches names, so a longer name must not count.
+tmux(["kill-session", "-t", recordedSession.id]);
+const impostor = tmux([
+  "new-session",
+  "-d",
+  "-P",
+  "-F",
+  "#{session_id}",
+  "-s",
+  sessionName,
+  "--",
+  "sleep",
+  "30",
+]);
+const impostorId = impostor.stdout.trim();
+check("impostor session started", impostor.status === 0, impostor.stderr);
+const reusedNameDir = stateDirWith("reused-name", {
+  repoRoot: checkout,
+  sessions: [recordedSession],
+  listeners: [],
+});
+const reusedNameCleanup = runCleanup(reusedNameDir);
+const impostorAlive = runtime.tmuxSessionIdentity(sessionName);
+check(
+  "cleanup refuses a reused session name and leaves it running",
+  reusedNameCleanup.status === 1 &&
+    reusedNameCleanup.stderr.includes("the name was reused") &&
+    impostorAlive?.id === impostorId,
+  `${reusedNameCleanup.stdout}\n${reusedNameCleanup.stderr}`,
 );
-const created = spawnSync(
-  bin,
-  [...prefix, "new-session", "-d", "-s", foreignName, "--", "sleep", "30"],
-  { encoding: "utf8" },
+const nameOnlyDir = stateDirWith("name-only", {
+  repoRoot: checkout,
+  sessions: [sessionName],
+  listeners: [],
+});
+const nameOnlyCleanup = runCleanup(nameOnlyDir);
+check(
+  "cleanup refuses a session recorded by name only",
+  nameOnlyCleanup.status === 1 &&
+    nameOnlyCleanup.stderr.includes("a session name is not ownership") &&
+    runtime.tmuxSessionIdentity(sessionName)?.id === impostorId,
+  `${nameOnlyCleanup.stdout}\n${nameOnlyCleanup.stderr}`,
 );
+check(
+  "a name prefix is not a session",
+  runtime.tmuxSessionIdentity(sessionName.slice(0, -2)) === null,
+);
+tmux(["kill-session", "-t", impostorId]);
+
+// A run.json for another checkout is left alone entirely.
+const foreignName = `scrutinix-verify-check-foreign-${process.pid}`;
+const foreignCreated = tmux([
+  "new-session",
+  "-d",
+  "-P",
+  "-F",
+  "#{session_id}",
+  "-s",
+  foreignName,
+  "--",
+  "sleep",
+  "30",
+]);
+const foreignId = foreignCreated.stdout.trim();
 check(
   "foreign session started",
-  created.status === 0,
-  created.stderr || created.stdout,
+  foreignCreated.status === 0,
+  foreignCreated.stderr,
 );
-const cleanup = spawnSync(
-  process.execPath,
-  [path.join(scriptDir, "cleanup.mjs")],
-  {
-    encoding: "utf8",
-    env: {
-      ...process.env,
-      VERIFY_STATE_DIR: foreignDir,
-      VERIFY_EVIDENCE_DIR: path.join(foreignDir, "evidence"),
-    },
-  },
-);
-const stillThere = spawnSync(
-  bin,
-  [...prefix, "has-session", "-t", foreignName],
-  { encoding: "utf8" },
-);
+const foreignDir = stateDirWith("foreign", {
+  repoRoot: otherCheckout,
+  sessions: [{ name: foreignName, id: foreignId }],
+  listeners: [otherIdentity],
+});
+const foreignCleanup = runCleanup(foreignDir);
 check(
   "cleanup leaves another checkout running",
-  cleanup.status === 0 && stillThere.status === 0,
-  `${cleanup.stdout}\n${cleanup.stderr}`,
+  foreignCleanup.status === 0 &&
+    foreignCleanup.stdout.includes("Leaving that server running") &&
+    runtime.tmuxSessionIdentity(foreignName)?.id === foreignId &&
+    alive(otherChild.pid),
+  `${foreignCleanup.stdout}\n${foreignCleanup.stderr}`,
 );
-spawnSync(bin, [...prefix, "kill-session", "-t", foreignName], {
-  encoding: "utf8",
+tmux(["kill-session", "-t", foreignId]);
+
+// Another checkout's run is live when a listener serves its directory.
+const holderScript = path.join(scratch, "next");
+const holderPortFile = path.join(scratch, "holder-port");
+writeFileSync(
+  holderScript,
+  `const net = require("net");
+const fs = require("fs");
+const server = net.createServer();
+server.listen(0, "127.0.0.1", () => {
+  fs.writeFileSync(${JSON.stringify(holderPortFile)}, String(server.address().port));
 });
+setInterval(() => {}, 1000);
+`,
+);
+const holder = spawn(process.execPath, [holderScript, "dev"], {
+  cwd: otherCheckout,
+  stdio: "ignore",
+});
+children.push(holder);
+const holderPort = await new Promise((resolve) => {
+  const deadline = Date.now() + 2_000;
+  const tick = () => {
+    try {
+      resolve(Number(readFileSync(holderPortFile, "utf8")));
+    } catch {
+      if (Date.now() > deadline) resolve(0);
+      else setTimeout(tick, 20);
+    }
+  };
+  tick();
+});
+const foreignNext = runtime.formatForeignNext(holderPort);
+check(
+  "foreign next listener",
+  foreignNext.includes(`pid ${holder.pid}`) &&
+    foreignNext.includes("another next dev") &&
+    !foreignNext.includes(holderScript),
+  foreignNext,
+);
+check(
+  "foreign run is live while its listener serves that checkout",
+  runtime.foreignRunLive(
+    { repoRoot: otherCheckout, sessions: [] },
+    holderPort,
+  ) &&
+    !runtime.foreignRunLive(
+      { repoRoot: path.join(scratch, "nobody"), sessions: [] },
+      holderPort,
+    ),
+);
+check(
+  "this checkout's listeners exclude another checkout",
+  runtime.checkoutListeners(holderPort).length === 0 &&
+    runtime.checkoutListeners(holderPort, otherCheckout).length === 1,
+);
+
+for (const child of children) child.kill("SIGTERM");
+
+// ---- Redaction ------------------------------------------------------------
+
+const leaked = [
+  "SHARE_SIGNING_SECRET=abc123def456",
+  'export VIRUSTOTAL_API_KEY="vt-key-value"',
+  "redis https://default:hunter2pass@eu1.upstash.io/db",
+  "Authorization: Bearer abcdefghijklmnop",
+  "?url=x&token=tok_9f8e7d6c&sig=AbCdEf123",
+  '"apiKey": "k-123456"',
+  "ghp_abcdefghijklmnopqrstuvwxyz0123456789",
+  "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.c2lnbmF0dXJlLXZhbHVl",
+  "bare Zk3Jq9XbT2mLw8RvN5cYp4Hs7Ag1Ed6U+/Qo==",
+  "hex 9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+].join("\n");
+const redacted = runtime.redactSecrets(leaked);
+for (const secret of [
+  "abc123def456",
+  "vt-key-value",
+  "hunter2pass",
+  "abcdefghijklmnop",
+  "tok_9f8e7d6c",
+  "AbCdEf123",
+  "k-123456",
+  "ghp_abcdefghijklmnopqrstuvwxyz0123456789",
+  "eyJhbGciOiJIUzI1NiJ9",
+  "Zk3Jq9XbT2mLw8RvN5cYp4Hs7Ag1Ed6U",
+  "9f86d081884c7d659a2feaa0c55ad015",
+]) {
+  check(
+    `redacts ${secret.slice(0, 12)}…`,
+    !redacted.includes(secret),
+    redacted,
+  );
+}
+const benign =
+  "▲ Next.js 16.3.8\n- Local: http://127.0.0.1:3000\n✓ Ready in 1.2s\nGET / 200 in 85ms\n/Users/me/GitRepos/scrutinix2/t3-c2a46879/node_modules/next/dist/server/lib/start-server.js";
+check(
+  "redaction keeps ordinary log lines and paths",
+  runtime.redactSecrets(benign) === benign,
+  runtime.redactSecrets(benign),
+);
+const tailFile = path.join(scratch, "tail.log");
+writeFileSync(
+  tailFile,
+  `${"x".repeat(5000)}\nUPSTASH_REDIS_REST_TOKEN=secret-token\n`,
+);
+const tail = runtime.logTail(tailFile);
+check(
+  "logTail is short and redacted",
+  tail.length <= 4000 &&
+    tail.includes("UPSTASH_REDIS_REST_TOKEN=[redacted]") &&
+    !tail.includes("secret-token"),
+  tail.slice(-80),
+);
+
+// ---- Share key ------------------------------------------------------------
+
+// launch must pass exactly the published key scripts/run-e2e.mjs passes:
+// lib/config/env.ts accepts no other key in fixture mode.
+const keyPattern = /"(e2e-only-share-signing-key-[^"]+)"/;
+const e2eKey = readFileSync(
+  path.join(runtime.repoRoot, "scripts/run-e2e.mjs"),
+  "utf8",
+).match(keyPattern)?.[1];
+const launchKey = readFileSync(
+  path.join(scriptDir, "launch.mjs"),
+  "utf8",
+).match(keyPattern)?.[1];
+check(
+  "launch uses the published e2e share key",
+  Boolean(e2eKey) && launchKey === e2eKey,
+  `${launchKey} vs ${e2eKey}`,
+);
 
 const declRoot = path.join(scratch, "decl");
 mkdirSync(declRoot);
@@ -501,43 +788,6 @@ check(
   "not a next command",
   !runtime.isNextDevCommand("node /tmp/runtime.check.mjs"),
 );
-
-const holderScript = path.join(scratch, "next");
-const holderPortFile = path.join(scratch, "holder-port");
-writeFileSync(
-  holderScript,
-  `const net = require("net");
-const fs = require("fs");
-const server = net.createServer();
-server.listen(0, "127.0.0.1", () => {
-  fs.writeFileSync(${JSON.stringify(holderPortFile)}, String(server.address().port));
-});
-setInterval(() => {}, 1000);
-`,
-);
-const holder = spawn(process.execPath, [holderScript, "dev"], {
-  stdio: "ignore",
-});
-const holderPort = await new Promise((resolve) => {
-  const deadline = Date.now() + 2_000;
-  const tick = () => {
-    try {
-      resolve(Number(readFileSync(holderPortFile, "utf8")));
-    } catch {
-      if (Date.now() > deadline) resolve(0);
-      else setTimeout(tick, 20);
-    }
-  };
-  tick();
-});
-const foreignNext = runtime.formatForeignNext(holderPort);
-check(
-  "foreign next listener",
-  foreignNext.includes(`pid ${holder.pid}`) &&
-    foreignNext.includes("another next dev"),
-  foreignNext,
-);
-holder.kill("SIGTERM");
 
 const privacyShell = (heading, current) =>
   `<header><nav aria-label="Primary"><a href="/about">About</a><a ${current ? 'aria-current="page" ' : ""}href="/privacy" class="x">Privacy</a></nav></header><main id="main-content" class="mx-auto"><h1 class="text-xl">${heading}</h1></main>`;

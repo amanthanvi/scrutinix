@@ -4,7 +4,12 @@ import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { defaultBaseUrl, evidenceDir, repoRoot, skillDir } from "./runtime.mjs";
+import {
+  evidenceDir,
+  preferredBaseUrl,
+  repoRoot,
+  skillDir,
+} from "./runtime.mjs";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 
@@ -37,9 +42,10 @@ const config = path.join(skillDir, "playwright.config.mjs");
 const require = createRequire(import.meta.url);
 const cli = require.resolve("@playwright/test/cli");
 
+const baseUrl = preferredBaseUrl();
 const doctor = spawnSync(
   process.execPath,
-  [path.join(scriptDir, "doctor.mjs"), "--base-url", defaultBaseUrl],
+  [path.join(scriptDir, "doctor.mjs"), "--base-url", baseUrl],
   { cwd: repoRoot, stdio: "inherit" },
 );
 if (doctor.status !== 0) {
@@ -49,7 +55,7 @@ if (doctor.status !== 0) {
 
 const env = {
   ...process.env,
-  E2E_BASE_URL: defaultBaseUrl,
+  E2E_BASE_URL: baseUrl,
   VERIFY_EVIDENCE_DIR: evidenceDir,
   VERIFY_SUITE: drive ? "drive" : "smoke",
 };
