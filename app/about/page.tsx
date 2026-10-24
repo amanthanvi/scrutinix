@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { Fragment } from "react";
 
 import {
   LIST_MEASURE,
@@ -12,15 +13,13 @@ import { SignalCell, cellNames } from "@/components/scrutinix/signal-cell";
 import { capitalize } from "@/lib/domain/copy";
 import {
   CONFIDENCE,
-  CONVICTS_AT,
-  DISCOUNTS_OFF_AT,
+  RULES,
   SCORE_BANDS,
   SCORING_TABLES,
   type ScoringTable,
 } from "@/lib/domain/methodology";
 import { severityWords } from "@/lib/domain/signal-signature";
 import { signalLabels, signalNames } from "@/lib/domain/types";
-import { LOOK_ALIKE_WORD } from "@/lib/domain/verdict-guidance";
 
 export const metadata: Metadata = {
   title: "About Scrutinix",
@@ -168,38 +167,12 @@ export default function AboutPage() {
       <section id="rules" className="flex scroll-mt-6 flex-col gap-4">
         <SectionHeading>The rules</SectionHeading>
         <dl className={TERMS}>
-          <dt className={DT}>Convicts on its own</dt>
-          <dd className={DD}>
-            Any single finding worth {CONVICTS_AT} or more makes a link at least
-            Malicious by itself: a Google Safe Browsing listing, an exact-link
-            listing on URLhaus or OpenPhish, a ThreatFox listing of the link or
-            its site at 75% confidence or more, or five or more VirusTotal
-            engines.
-          </dd>
-          <dt className={DT}>Can&apos;t erase a hit</dt>
-          <dd className={DD}>
-            Only the two discounts subtract, and both switch off when any single
-            finding is worth {DISCOUNTS_OFF_AT} or more. The domain-age discount
-            also switches off when any list or VirusTotal engine flagged the
-            link.
-          </dd>
-          <dt className={DT}>Unknown</dt>
-          <dd className={DD}>
-            A total that would read Safe becomes Unknown when the site
-            didn&apos;t answer at all: no web response and no secure connection.
-            We couldn&apos;t look at it, so we don&apos;t clear it. A higher
-            total stands, because lists can rightly flag a site that&apos;s
-            offline.
-          </dd>
-          <dt className={DT}>{LOOK_ALIKE_WORD}</dt>
-          <dd className={DD}>
-            When we recognise another site&apos;s address in a Safe link&apos;s
-            subdomain or login name, as in paypal.com.secure-login.xyz, the
-            result reads {LOOK_ALIKE_WORD} instead. The score doesn&apos;t
-            change, and the details still show it. We look for addresses with
-            common endings such as .com or .co.uk, not every possible name, and
-            never in the page part of a link.
-          </dd>
+          {RULES.map((rule) => (
+            <Fragment key={rule.term}>
+              <dt className={DT}>{rule.term}</dt>
+              <dd className={DD}>{rule.text}</dd>
+            </Fragment>
+          ))}
         </dl>
       </section>
 
@@ -266,11 +239,7 @@ export default function AboutPage() {
               ))}
             </tbody>
           </table>
-          <p className={`${PROSE} text-meta mt-3`}>
-            The major lists are VirusTotal, Google Safe Browsing, and the threat
-            feeds. &ldquo;Otherwise&rdquo; means any verdict but Safe and
-            Unknown; Unknown is worked out like Safe, then capped.
-          </p>
+          <p className={`${PROSE} text-meta mt-3`}>{CONFIDENCE.footnote}</p>
         </details>
         <p className={PROSE}>
           Any check that didn&apos;t finish is named next to the verdict.

@@ -1,7 +1,12 @@
 import { formatList } from "@/lib/domain/copy";
-import { VT_STALE_ANALYSIS_DAYS } from "@/lib/domain/reputation";
+import {
+  THREATFOX_HIGH_CONFIDENCE,
+  VT_CONVICTION_ENGINES,
+  VT_STALE_ANALYSIS_DAYS,
+} from "@/lib/domain/reputation";
 import type { Verdict } from "@/lib/domain/types";
 import { CONFIDENCE_POLICY } from "@/lib/domain/verdict";
+import { LOOK_ALIKE_WORD } from "@/lib/domain/verdict-guidance";
 
 /**
  * The scoring method as /about states it: every weight, threshold, and rule
@@ -88,8 +93,7 @@ export const SCORING_TABLES: readonly ScoringTable[] = [
       },
       {
         id: "threatfox-high",
-        finding:
-          "ThreatFox lists the link or its site, at 75% confidence or more",
+        finding: `ThreatFox lists the link or its site, at ${THREATFOX_HIGH_CONFIDENCE}% confidence or more`,
         points: "55",
         convicts: true,
       },
@@ -133,12 +137,12 @@ export const SCORING_TABLES: readonly ScoringTable[] = [
       },
       {
         id: "vt-malicious-few",
-        finding: "One to four VirusTotal engines call it malicious",
+        finding: `1 to ${VT_CONVICTION_ENGINES - 1} VirusTotal engines call it malicious`,
         points: "12, 22, 32, or 42",
       },
       {
         id: "vt-malicious-many",
-        finding: "Five or more VirusTotal engines call it malicious",
+        finding: `${VT_CONVICTION_ENGINES} or more VirusTotal engines call it malicious`,
         points: "55, plus 5 for each further engine, up to 85",
         convicts: true,
       },
@@ -231,7 +235,7 @@ export const SCORING_TABLES: readonly ScoringTable[] = [
       },
       {
         id: "page-obfuscation",
-        finding: "The final page hides its code (two or more signs)",
+        finding: "The final page hides its code (2 or more signs)",
         points: "10",
         weak: "hidden page code",
       },
@@ -273,6 +277,26 @@ export const SCORING_TABLES: readonly ScoringTable[] = [
   },
 ];
 
+/** The rules beside the tables: what convicts, what can't erase a hit. */
+export const RULES: ReadonlyArray<{ term: string; text: string }> = [
+  {
+    term: "Convicts on its own",
+    text: `Any single finding worth ${CONVICTS_AT} or more makes a link at least Malicious by itself: a Google Safe Browsing listing, an exact-link listing on URLhaus or OpenPhish, a ThreatFox listing of the link or its site at ${THREATFOX_HIGH_CONFIDENCE}% confidence or more, or ${VT_CONVICTION_ENGINES} or more VirusTotal engines.`,
+  },
+  {
+    term: "Can't erase a hit",
+    text: `Only the two discounts subtract, and both switch off when any single finding is worth ${DISCOUNTS_OFF_AT} or more. The domain-age discount also switches off when any list or VirusTotal engine flagged the link.`,
+  },
+  {
+    term: "Unknown",
+    text: "A total that would read Safe becomes Unknown when the site didn't answer at all: no web response and no secure connection. We couldn't look at it, so we don't clear it. A higher total stands, because lists can rightly flag a site that's offline.",
+  },
+  {
+    term: LOOK_ALIKE_WORD,
+    text: `When we recognise another site's address in a Safe link's subdomain or login name, as in paypal.com.secure-login.xyz, the result reads ${LOOK_ALIKE_WORD} instead. The score doesn't change, and the details still show it. We look for addresses with common endings such as .com or .co.uk, not every possible name, and never in the page part of a link.`,
+  },
+];
+
 /** A share of 1 as a whole or one-decimal percentage: 0.044 → "4.4". */
 function percent(share: number): string {
   return String(Math.round(share * 1000) / 10);
@@ -297,11 +321,14 @@ export const CONFIDENCE = {
   high: percent(policy.labels.high),
   moderate: percent(policy.labels.moderate),
   caps: [
-    `A Safe result with one of VirusTotal, Google Safe Browsing, or the threat feeds missing, or answering only in part, goes no higher than ${percent(policy.caps.safeOneListMissing)}%; with two or more, no higher than ${percent(policy.caps.safeListsMissing)}%. Either way it can't be High.`,
+    `A Safe result with one of VirusTotal, Google Safe Browsing, or the threat feeds missing, or answering only in part, goes no higher than ${percent(policy.caps.safeOneListMissing)}%; with ${policy.caps.manyListsMissing} or more, no higher than ${percent(policy.caps.safeListsMissing)}%. Either way it can't be High.`,
     `A Safe result resting on a VirusTotal analysis more than ${VT_STALE_ANALYSIS_DAYS} days old goes no higher than ${percent(policy.caps.safeStaleVirusTotal)}%.`,
     `Unknown goes no higher than ${percent(policy.caps.unknown)}%, so it's always Low.`,
     `Every result stays between ${percent(policy.floor)}% and ${percent(policy.safeCeiling)}% (Safe) or ${percent(policy.riskyCeiling)}% (everything else).`,
   ],
+  /** Under the arithmetic: what "major list" and "answered clean" mean. */
+  footnote:
+    "The major lists are VirusTotal, Google Safe Browsing, and the threat feeds. The threat feeds count as answering clean only when every feed answered and none listed the site, not even with a shared-platform listing set aside from the score. “Otherwise” means any verdict but Safe and Unknown; Unknown is worked out like Safe, then capped.",
   /** How the figure adds up, before the caps. */
   steps: [
     { step: "Start", value: `${percent(policy.start)}%` },
@@ -310,7 +337,7 @@ export const CONFIDENCE = {
       value: signed(policy.perDataRichCheck, "+"),
     },
     {
-      step: "Each check that finished without much (no certificate, no registration record, no answer from the site, a list answering only in part)",
+      step: "Each check that finished without much (no certificate, no registration record, no answer from the site, or threat feeds that answered only in part and found nothing)",
       value: signed(policy.perThinCheck, "+"),
     },
     {
@@ -360,7 +387,7 @@ export const CONFIDENCE = {
       value: signed(policy.risky.perMissingList, "−"),
     },
     {
-      step: `Otherwise: two or more different kinds of finding back it up (say, a list and the link pattern model), not counting weak signs (${formatList(weakSigns)})`,
+      step: `Otherwise: ${policy.risky.corroboratedKinds} or more different kinds of finding back it up (say, a list and the link pattern model), not counting weak signs (${formatList(weakSigns)})`,
       value: signed(policy.risky.corroborated, "+"),
     },
   ],

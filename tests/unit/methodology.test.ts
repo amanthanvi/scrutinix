@@ -7,9 +7,15 @@ import {
   CONVICTS_AT,
   DISCOUNTS_OFF_AT,
   LINK_CHECK_MAX,
+  RULES,
   SCORE_BANDS,
   SCORING_TABLES,
 } from "@/lib/domain/methodology";
+import {
+  THREATFOX_HIGH_CONFIDENCE,
+  VT_CONVICTION_ENGINES,
+  VT_STALE_ANALYSIS_DAYS,
+} from "@/lib/domain/reputation";
 import type {
   PageContentFindings,
   RedirectData,
@@ -30,7 +36,6 @@ import {
   scoredFindings,
   scoreToConfidenceLabel,
 } from "@/lib/domain/verdict";
-import { THREATFOX_HIGH_CONFIDENCE } from "@/lib/server/providers/threatfox";
 import { MANY_ADDRESS_RECORDS } from "@/lib/server/signals/dns";
 import { fixtureSignals } from "@/tests/fixtures/scenario-signals";
 
@@ -522,9 +527,10 @@ const SCENARIOS: Record<string, Scenario[]> = {
 };
 
 /**
- * Every number each row prints, in its finding and its points. A changed
- * figure in the copy fails here; a changed figure in the engine fails its
- * scenario above.
+ * Every number each row prints, in the order it prints them (finding, then
+ * points), so a changed figure or two thresholds swapped fail here; a
+ * changed figure in the engine fails its scenario above. Thresholds are
+ * written as digits for this reason.
  */
 const NUMBERS: Record<string, number[]> = {
   gsb: [62, 6, 74],
@@ -538,8 +544,8 @@ const NUMBERS: Record<string, number[]> = {
   "dbl-abused": [15],
   "surbl-high": [35],
   "surbl-abused": [20],
-  "vt-malicious-few": [12, 22, 32, 42],
-  "vt-malicious-many": [55, 5, 85],
+  "vt-malicious-few": [1, VT_CONVICTION_ENGINES - 1, 12, 22, 32, 42],
+  "vt-malicious-many": [VT_CONVICTION_ENGINES, 55, 5, 85],
   "vt-suspicious": [4, 16],
   "ml-malicious": [45, 0, 1, 25],
   "ml-risky": [16],
@@ -554,7 +560,7 @@ const NUMBERS: Record<string, number[]> = {
   "redirect-http": [10],
   "redirect-cross": [14],
   "page-password": [20],
-  "page-obfuscation": [10],
+  "page-obfuscation": [2, 10],
   "page-iframes": [3, 8],
   "page-refresh": [8],
   "vt-harmless": [60, 30, 10],
@@ -569,8 +575,6 @@ function printedNumbers(text: string): number[] {
   return (text.match(/\d+(?:\.\d+)?/g) ?? []).map(Number);
 }
 
-const sorted = (values: number[]) => [...values].sort((a, b) => a - b);
-
 describe("/about scoring tables", () => {
   it("has engine scenarios and declared numbers for exactly the rows it prints", () => {
     const ids = rows.map((row) => row.id).sort();
@@ -578,11 +582,14 @@ describe("/about scoring tables", () => {
     expect(Object.keys(NUMBERS).sort()).toEqual(ids);
   });
 
-  it.each(rows)("$id prints only the numbers it declares", (row) => {
-    expect(sorted(printedNumbers(`${row.finding} ${row.points}`))).toEqual(
-      sorted(NUMBERS[row.id] ?? []),
-    );
-  });
+  it.each(rows)(
+    "$id prints exactly the numbers it declares, in order",
+    (row) => {
+      expect(printedNumbers(`${row.finding} ${row.points}`)).toEqual(
+        NUMBERS[row.id],
+      );
+    },
+  );
 
   it.each(rows)("$id: the engine adds what the page says", (row) => {
     for (const scenario of SCENARIOS[row.id] ?? []) {
@@ -664,6 +671,15 @@ describe("/about scoring tables", () => {
 });
 
 describe("/about rules", () => {
+  it("prints the engine's thresholds in the rules", () => {
+    expect(RULES.map((rule) => printedNumbers(rule.text))).toEqual([
+      [CONVICTS_AT, THREATFOX_HIGH_CONFIDENCE, VT_CONVICTION_ENGINES],
+      [DISCOUNTS_OFF_AT],
+      [],
+      [],
+    ]);
+  });
+
   it("switches both discounts off at the stated single-finding size", () => {
     const listedAt45 = feed({
       feed: "spamhaus-dbl",
@@ -800,31 +816,99 @@ describe("/about confidence", () => {
     expect(unknown.threatInfo?.confidenceLabel).toBe("low");
   });
 
-  it("prints every step and cap from the engine's figures", () => {
-    const text = [
-      ...CONFIDENCE.caps,
-      ...CONFIDENCE.steps.map((row) => `${row.step} ${row.value}`),
-    ].join(" ");
+  it("prints each step's figure from its own policy field", () => {
     const policy = CONFIDENCE_POLICY;
-    for (const figure of [
-      policy.start,
-      policy.perDataRichCheck,
-      policy.perFailedCheck,
-      policy.maxLimitations,
-      policy.safe.perCleanList,
-      policy.safe.noCleanList,
-      policy.risky.perFlaggingList,
-      policy.risky.corroborated,
-      policy.modelAgreement * policy.modelAgreementShare.oneMember,
-      policy.caps.safeOneListMissing,
-      policy.caps.safeListsMissing,
-      policy.caps.safeStaleVirusTotal,
-      policy.caps.unknown,
-      policy.floor,
-      policy.safeCeiling,
-      policy.riskyCeiling,
-    ]) {
-      expect(text).toContain(String(Math.round(figure * 1000) / 10));
-    }
+    const pct = (share: number) => String(Math.round(share * 1000) / 10);
+    const agreement = policy.modelAgreementShare;
+    expect(CONFIDENCE.steps.map((row) => row.value)).toEqual([
+      `${pct(policy.start)}%`,
+      `+${pct(policy.perDataRichCheck)}`,
+      `+${pct(policy.perThinCheck)}`,
+      `+${pct(policy.perSkippedCheck)}`,
+      `−${pct(policy.perFailedCheck)}`,
+      `−${pct(policy.perLimitation)}, at most −${pct(policy.maxLimitations)} in all`,
+      [agreement.agree, agreement.oneMember, agreement.disagree]
+        .map((share) => `+${pct(policy.modelAgreement * share)}`)
+        .join(" / "),
+      `+${pct(policy.safe.perCleanList)}`,
+      `−${pct(policy.safe.perMissingList)}`,
+      `−${pct(policy.safe.noCleanList)}`,
+      `+${pct(policy.risky.perFlaggingList)}`,
+      `−${pct(policy.risky.perCleanList)}, at most −${pct(policy.risky.maxCleanLists)} in all`,
+      `−${pct(policy.risky.perMissingList)}`,
+      `+${pct(policy.risky.corroborated)}`,
+    ]);
+    expect(CONFIDENCE.steps.map((row) => printedNumbers(row.step))).toEqual([
+      [],
+      [],
+      [],
+      [],
+      [],
+      [],
+      [],
+      [],
+      [],
+      [],
+      [],
+      [],
+      [],
+      [policy.risky.corroboratedKinds, 30, 179],
+    ]);
+  });
+
+  it("prints each cap from its own policy field", () => {
+    const policy = CONFIDENCE_POLICY;
+    const pct = (share: number) => Math.round(share * 1000) / 10;
+    expect(CONFIDENCE.caps.map(printedNumbers)).toEqual([
+      [
+        pct(policy.caps.safeOneListMissing),
+        policy.caps.manyListsMissing,
+        pct(policy.caps.safeListsMissing),
+      ],
+      [VT_STALE_ANALYSIS_DAYS, pct(policy.caps.safeStaleVirusTotal)],
+      [pct(policy.caps.unknown)],
+      [pct(policy.floor), pct(policy.safeCeiling), pct(policy.riskyCeiling)],
+    ]);
+    expect(CONFIDENCE.footnote).toContain("shared-platform listing");
+  });
+
+  it("gives no clean-feed credit for a set-aside shared-platform listing, and full credit to a partial answer with a hit", async () => {
+    // A risky result, so neither Safe's caps nor its 97% ceiling hide the
+    // difference.
+    const clean = await fixtureSignals("example.com");
+    gsb("MALWARE")(clean);
+    const feeds = clean.threatFeeds;
+    if (feeds.status !== "success" || !feeds.data) throw new Error("fixture");
+    const confidenceWith = (data: typeof feeds.data) =>
+      buildThreatAssessment({ ...clean, threatFeeds: { ...feeds, data } })
+        .threatInfo?.confidence ?? Number.NaN;
+    const policy = CONFIDENCE_POLICY;
+
+    // The footnote: with a listing set aside, the feeds didn't answer clean.
+    expect(
+      confidenceWith({ ...feeds.data, sharedPlatformListingsIgnored: true }) -
+        confidenceWith(feeds.data),
+    ).toBeCloseTo(policy.risky.perCleanList, 5);
+
+    // The thin-check row: a partial answer is thin only when it found
+    // nothing. With a hit it counts in full (and, being a second kind of
+    // finding beside Google's, corroborates).
+    const abused = {
+      feed: "spamhaus-dbl" as const,
+      matchedUrl: "example.com",
+      detail: "lists this domain as a legitimate domain that has been abused",
+      confidence: "medium" as const,
+      matchType: "host" as const,
+    };
+    expect(
+      confidenceWith({
+        ...feeds.data,
+        matches: [abused],
+        warnings: ["Down."],
+      }) - confidenceWith({ ...feeds.data, matches: [], warnings: ["Down."] }),
+    ).toBeCloseTo(
+      policy.perDataRichCheck - policy.perThinCheck + policy.risky.corroborated,
+      5,
+    );
   });
 });

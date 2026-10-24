@@ -1,6 +1,7 @@
 import { getEnv } from "@/lib/config/env";
 import { threatIndicatorPhrase } from "@/lib/domain/feed-copy";
 import { PublicError } from "@/lib/domain/public-error";
+import { THREATFOX_HIGH_CONFIDENCE } from "@/lib/domain/reputation";
 import type { ThreatFeedsData } from "@/lib/domain/types";
 import { simplifyUrlForMatching } from "@/lib/domain/url";
 import { fetchWithTimeout } from "@/lib/server/http";
@@ -127,9 +128,6 @@ export async function checkThreatFox(
 
   return { match: null, warning: null };
 }
-
-/** ThreatFox confidence (0-100) at which a listing counts as high confidence. */
-export const THREATFOX_HIGH_CONFIDENCE = 75;
 
 function toMatch(
   entry: Record<string, unknown>,

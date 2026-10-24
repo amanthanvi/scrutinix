@@ -861,13 +861,16 @@ export const CONFIDENCE_POLICY = {
     maxCleanLists: 0.12,
     /** Subtracted per major list that didn't answer, or answered only in part. */
     perMissingList: 0.05,
-    /** Two or more kinds of medium- or high-quality finding. */
+    /** This many kinds of medium- or high-quality finding, or more. */
+    corroboratedKinds: 2,
     corroborated: 0.08,
   },
   /** Times the model agreement share below. */
   modelAgreement: 0.08,
   modelAgreementShare: { agree: 1, oneMember: 0.55, disagree: 0.45 },
   caps: {
+    /** Missing lists at which Safe takes the lower cap. */
+    manyListsMissing: 2,
     safeOneListMissing: 0.79,
     safeListsMissing: 0.69,
     /** Safe on a VirusTotal analysis older than `VT_STALE_ANALYSIS_DAYS`. */
@@ -943,7 +946,10 @@ function calculateConfidence({
 
   confidence += modelAgreement * policy.modelAgreement;
 
-  if (effectiveVerdict !== "safe" && corroboratedRiskCategories >= 2) {
+  if (
+    effectiveVerdict !== "safe" &&
+    corroboratedRiskCategories >= policy.risky.corroboratedKinds
+  ) {
     confidence += policy.risky.corroborated;
   }
 
@@ -957,7 +963,7 @@ function calculateConfidence({
   ) {
     confidence = Math.min(
       confidence,
-      unavailableHighConfidenceSources.length >= 2
+      unavailableHighConfidenceSources.length >= policy.caps.manyListsMissing
         ? policy.caps.safeListsMissing
         : policy.caps.safeOneListMissing,
     );
