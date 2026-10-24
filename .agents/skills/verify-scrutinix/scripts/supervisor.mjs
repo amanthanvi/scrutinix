@@ -142,8 +142,10 @@ function finish(leftover) {
 }
 
 // SIGTERM from the group signal reaches this process too; it is ignored once
-// a stop is under way. A SIGTERM, SIGINT, or SIGHUP from anyone else is a
-// stop request: `kill <supervisor pid>` is the manual way to end a run.
+// a stop is under way. A SIGTERM, SIGINT, or SIGHUP from anyone else (a
+// hang-up, or the handle of the process that spawned this one) is a stop
+// request. Cleanup is the way to end a run; a pid read from run.json is never
+// signalled.
 for (const signal of ["SIGTERM", "SIGINT", "SIGHUP"]) {
   process.on(signal, () => {
     if (stopping) return;

@@ -44,6 +44,11 @@ leaves anything else running. When the supervisor is gone and the recorded
 port is still open, cleanup names the listener and exits 1. A run.json for a
 different checkout is left alone.
 
+Cleanup is the only way to stop a run. It drops the supervisor pid from
+run.json with the token; never signal a pid read from run.json. Stop a
+process cleanup reported only after checking its pid, start time,
+executable, and cwd yourself.
+
 Evidence under the evidence directory is left in place. next-env.d.ts is
 restored to the pre-launch snapshot only when it still matches what this run
 wrote. Otherwise it is left unchanged, the snapshot bytes are saved under the
@@ -167,10 +172,11 @@ await delay(300);
 const port = validPort(state.port) ? state.port : defaultPort;
 const stillOpen = await tcpOpen(port);
 
-// The token is dropped with the run: the supervisor is gone or refused, and
-// a later cleanup must not treat this record as a live run.
+// The token and the supervisor pid are dropped with the run: the supervisor
+// is gone, a later cleanup must not treat this record as a live run, and a
+// pid that outlived its process names nothing.
 if (!legacyState(state) && leftRunning === 0) {
-  const { token: _token, ...rest } = state;
+  const { token: _token, supervisorPid: _pid, ...rest } = state;
   writeState({ ...rest, stoppedAt: new Date().toISOString() });
 }
 restoreDeclaration();
@@ -182,4 +188,10 @@ if (stillOpen && !reported) {
     `cleanup: port ${port} is still open, and this skill did not stop its listener. It stops only its own supervisor's process group.${owners ? `\n${owners}` : ""}\n`,
   );
 }
-process.exit(leftRunning || stillOpen || reported ? 1 : 0);
+const incomplete = Boolean(leftRunning || stillOpen || reported);
+if (incomplete) {
+  process.stderr.write(
+    "cleanup: nothing else was stopped. Before you stop a process yourself, check its pid, start time, executable, and cwd freshly (SKILL.md, \"Another next dev\"). Never signal a pid read from run.json.\n",
+  );
+}
+process.exit(incomplete ? 1 : 0);

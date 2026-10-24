@@ -727,6 +727,7 @@ check(
   forgedCleanup.status === 1 &&
     forged.connections.count === 1 &&
     forgedCleanup.stderr.includes("did not prove") &&
+    forgedCleanup.stderr.includes("Never signal a pid read from run.json") &&
     !exited(victim),
   `${output(forgedCleanup)}\nconnections ${forged.connections.count}`,
 );
@@ -923,12 +924,14 @@ check(
     !exited(outsider) &&
     !exited(victim),
 );
+// Finding 1 of round 4: no stale supervisor pid survives cleanup.
 check(
-  "the run's port is free and its socket, token, and lock are gone",
+  "the run's port is free and its socket, token, supervisor pid, and lock are gone",
   !(await runtime.tcpOpen(portA)) &&
     !existsSync(runtime.socketPath(runDir)) &&
     !existsSync(runtime.lockPath(runDir)) &&
-    runtime.readState(runDir)?.token === undefined,
+    runtime.readState(runDir)?.token === undefined &&
+    runtime.readState(runDir)?.supervisorPid === undefined,
 );
 const againCleanup = await runCli("cleanup.mjs", [], envFor(runDir));
 check(
@@ -1186,7 +1189,8 @@ check(
   lockless,
 );
 
-// `kill <supervisor pid>` is the manual stop: the group goes with it.
+// The supervisor's spawner can end it through the handle it holds (this
+// check's ChildProcess, never a saved pid): the group goes with it.
 const portE = await freePort();
 const signalDir = privateDir("signal");
 const signalled = await supervise(signalDir, portE, "html", "app-e");
@@ -1275,6 +1279,31 @@ check(
   !/process\.kill\(\s*-/.test(
     readFileSync(fileURLToPath(import.meta.url), "utf8"),
   ),
+);
+
+// Finding 1 of round 4: no instruction offers a recorded pid as a way to
+// stop a run. Cleanup is the only stop; a person stops a process only after
+// checking its identity freshly.
+const skillDocs = [
+  path.join(runtime.skillDir, "SKILL.md"),
+  path.join(runtime.repoRoot, "AGENTS.md"),
+  path.join(runtime.repoRoot, "CLAUDE.md"),
+  ...readdirSync(path.join(runtime.skillDir, "references", "features")).map(
+    (name) => path.join(runtime.skillDir, "references", "features", name),
+  ),
+  ...readdirSync(scriptDir)
+    .filter((name) => name !== "runtime.check.mjs")
+    .map((name) => path.join(scriptDir, name)),
+];
+const manualKill =
+  /kill\s+<supervisor|supervisor pid[^\n.]*\bkill\b|\bkill\b[^\n.]*(?:run\.json|supervisorPid)/i;
+const offersRecordedPid = skillDocs.filter((file) =>
+  manualKill.test(readFileSync(file, "utf8")),
+);
+check(
+  "no doc or script offers a recorded supervisor pid as a manual stop",
+  offersRecordedPid.length === 0 && skillDocs.length > 5,
+  `${offersRecordedPid.length} file(s)`,
 );
 
 // ---- Redaction --------------------------------------------------------------
