@@ -29,11 +29,19 @@ export interface SharedFields {
   title?: string | null;
 }
 
-const LINK_PATTERN = /https?:\/\/[^\s<>"'`]+/i;
+/** A link written into prose. `'` is a valid URL character, so it stays in. */
+const LINK_PATTERN = /https?:\/\/[^\s<>"`]+/i;
+/** A whole field that is nothing but one link. */
+const STANDALONE_LINK = /^https?:\/\/\S+$/i;
 const TRAILING_PUNCTUATION = /[.,;:!?'"»”’]+$/;
 const CLOSERS = { ")": "(", "]": "[", "}": "{" } as const;
 
-/** A link as it ends inside prose: drop sentence punctuation and unpaired closers. */
+/**
+ * A link as it ends inside prose: drop sentence punctuation and unpaired
+ * closers (`(https://a.example/x)` loses its `)`, `…/Mercury_(planet)`
+ * keeps it). Only for links found in prose: a link that is the whole
+ * field is taken as written, since `!`, `'`, or `)` may end a real path.
+ */
 function trimLinkEnd(link: string): string {
   let trimmed = link;
   for (;;) {
@@ -51,6 +59,24 @@ function trimLinkEnd(link: string): string {
 }
 
 /**
+ * The link one share-target field holds, as written, or null when it holds
+ * none. `url` is a structured field: its whole value is the link. `text`
+ * and `title` are prose unless they are one link and nothing else, which
+ * is how Android often shares a page.
+ */
+function linkInField(
+  value: string | null | undefined,
+  structured: boolean,
+): string | null {
+  const trimmed = value?.trim();
+  if (!trimmed) return null;
+  if (structured) return /^https?:/i.test(trimmed) ? trimmed : null;
+  if (STANDALONE_LINK.test(trimmed)) return trimmed;
+  const match = trimmed.match(LINK_PATTERN);
+  return match ? trimLinkEnd(match[0]) : null;
+}
+
+/**
  * The first http(s) link in what another app shared, normalized centrally
  * (`normalizeUrlInput`), or null. Android usually leaves `url` empty and
  * puts the link inside `text` ("Look at this https://…"), occasionally in
@@ -59,10 +85,14 @@ function trimLinkEnd(link: string): string {
  * they didn't mean.
  */
 export function extractSharedLink(fields: SharedFields): string | null {
-  for (const value of [fields.url, fields.text, fields.title]) {
-    const match = value?.match(LINK_PATTERN);
-    if (!match) continue;
-    const normalized = normalizeUrlInput(trimLinkEnd(match[0]));
+  for (const [value, structured] of [
+    [fields.url, true],
+    [fields.text, false],
+    [fields.title, false],
+  ] as const) {
+    const link = linkInField(value, structured);
+    if (!link) continue;
+    const normalized = normalizeUrlInput(link);
     return normalized.ok ? normalized.value.normalizedUrl : null;
   }
   return null;

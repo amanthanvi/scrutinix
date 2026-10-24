@@ -46,6 +46,53 @@ describe("extractSharedLink", () => {
     );
   });
 
+  it("takes the url field whole: its punctuation is part of the link", () => {
+    expect(extractSharedLink({ url: "https://example.com/a'b" })).toBe(
+      "https://example.com/a'b",
+    );
+    expect(extractSharedLink({ url: "https://example.com/important!" })).toBe(
+      "https://example.com/important!",
+    );
+    expect(extractSharedLink({ url: "  https://example.com/q?x=1.)  " })).toBe(
+      "https://example.com/q?x=1.)",
+    );
+    // Not a link: look in the text instead.
+    expect(
+      extractSharedLink({ url: "Delivery", text: "https://t.example/a" }),
+    ).toBe("https://t.example/a");
+  });
+
+  it("takes text that is one link and nothing else as written", () => {
+    expect(extractSharedLink({ text: "https://example.com/important!" })).toBe(
+      "https://example.com/important!",
+    );
+    expect(
+      extractSharedLink({ text: "\nhttps://example.com/it's-here.\n" }),
+    ).toBe("https://example.com/it's-here.");
+    expect(extractSharedLink({ title: "https://example.com/a)" })).toBe(
+      "https://example.com/a)",
+    );
+  });
+
+  it("keeps apostrophes inside a link in a sentence, and trims the sentence's own", () => {
+    expect(
+      extractSharedLink({ text: "Mark's link: https://example.com/a'b, ok?" }),
+    ).toBe("https://example.com/a'b");
+    expect(extractSharedLink({ text: "Open 'https://example.com/x'." })).toBe(
+      "https://example.com/x",
+    );
+    expect(
+      extractSharedLink({
+        text: "Look at this https://example.com/important!",
+      }),
+    ).toBe("https://example.com/important");
+    expect(
+      extractSharedLink({
+        text: "(see https://en.wikipedia.org/wiki/Mercury_(planet))",
+      }),
+    ).toBe("https://en.wikipedia.org/wiki/Mercury_(planet)");
+  });
+
   it("normalizes centrally: scheme case, default port, fragment", () => {
     expect(
       extractSharedLink({ text: "HTTPS://Login.Example:443/path#frag" }),
