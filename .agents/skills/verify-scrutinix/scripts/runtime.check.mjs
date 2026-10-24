@@ -319,6 +319,50 @@ check(
   runtime.privateDirProblem(underLoose),
 );
 
+// Finding 5 of round 3: the path is resolved component by component. A
+// symlink of ours in a directory others can write is refused even though its
+// target is safe, and so is a link whose target passes through one.
+const swappable = path.join(scratch, "swappable");
+mkdirSync(swappable);
+chmodSync(swappable, 0o777);
+const safeTarget = path.join(scratch, "safe-target");
+mkdirSync(path.join(safeTarget, "state"), { recursive: true, mode: 0o700 });
+mkdirSync(path.join(swappable, "real", "state"), {
+  recursive: true,
+  mode: 0o700,
+});
+symlinkSync("../safe-target", path.join(swappable, "link"));
+symlinkSync(path.join(swappable, "real"), path.join(scratch, "via-swappable"));
+symlinkSync("safe-target", path.join(scratch, "safe-link"));
+const throughLink = path.join(swappable, "link", "state");
+check(
+  "reject a state dir reached through a symlink in a swappable directory",
+  runtime.privateDirProblem(throughLink).includes(`${swappable} is writable`),
+  runtime.privateDirProblem(throughLink),
+);
+check(
+  "reject a state dir whose symlink target passes through a swappable directory",
+  runtime
+    .privateDirProblem(path.join(scratch, "via-swappable", "state"))
+    .includes(`${swappable} is writable`),
+  runtime.privateDirProblem(path.join(scratch, "via-swappable", "state")),
+);
+check(
+  "accept a state dir reached through a symlink in a private directory",
+  runtime.privateDirProblem(path.join(scratch, "safe-link", "state")) === "",
+  runtime.privateDirProblem(path.join(scratch, "safe-link", "state")),
+);
+let createdUnderSwappable = true;
+try {
+  runtime.ensureDirs([path.join(swappable, "link", "fresh")]);
+} catch (error) {
+  createdUnderSwappable = !(error instanceof runtime.UnsafeStateError);
+}
+check(
+  "nothing is created under a swappable path",
+  !createdUnderSwappable && !existsSync(path.join(safeTarget, "fresh")),
+);
+
 const runRecord = (extra = {}) => ({
   version: 2,
   runId: "abcdef012345",
@@ -639,6 +683,20 @@ check(
   looseCleanup.status === 2 && looseCleanup.stderr.includes("not sticky"),
   output(looseCleanup),
 );
+
+const swapSocket = await forgedSocket(throughLink);
+writeFileSync(path.join(throughLink, "run.json"), JSON.stringify(runRecord()), {
+  mode: 0o600,
+});
+const swapCleanup = await runCli("cleanup.mjs", [], envFor(throughLink));
+check(
+  "cleanup refuses a state dir reached through a swappable symlink",
+  swapCleanup.status === 2 &&
+    swapCleanup.stderr.includes("not sticky") &&
+    swapSocket.connections.count === 0,
+  `${output(swapCleanup)}\nconnections ${swapSocket.connections.count}`,
+);
+swapSocket.close();
 
 // The same forged socket in a safe directory is reached, and then refused
 // because it cannot prove the run token. This is the positive control for

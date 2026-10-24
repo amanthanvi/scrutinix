@@ -33,9 +33,14 @@ const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 
 export const repoRoot = path.resolve(scriptDir, "../../../..");
 export const skillDir = path.resolve(scriptDir, "..");
-export const stateDir = process.env.VERIFY_STATE_DIR || "/tmp/scrutinix-verify";
-export const evidenceDir =
-  process.env.VERIFY_EVIDENCE_DIR || path.join(stateDir, "evidence");
+// Resolved once, so the path every check validates is the path every later
+// open uses.
+export const stateDir = path.resolve(
+  process.env.VERIFY_STATE_DIR || "/tmp/scrutinix-verify",
+);
+export const evidenceDir = path.resolve(
+  process.env.VERIFY_EVIDENCE_DIR || path.join(stateDir, "evidence"),
+);
 export const stateFile = path.join(stateDir, "run.json");
 export const defaultPort = 3000;
 export const supervisorScript = path.join(scriptDir, "supervisor.mjs");
@@ -260,43 +265,67 @@ function trustedOwner(owner) {
   return uid === null || owner === uid || owner === 0;
 }
 
-// Nobody else may be able to swap the directory out: every symlink on the
-// given path, and every real ancestor, belongs to root or this user, and an
-// ancestor writable by others must be sticky (/tmp).
+// A directory nobody else can change entries in: owned by root or this user,
+// and writable by group or others only when sticky (/tmp), where nobody can
+// rename or remove an entry they do not own.
+function directoryProblem(dir) {
+  let stat;
+  try {
+    stat = lstatSync(dir);
+  } catch {
+    return `${dir} cannot be read`;
+  }
+  if (!stat.isDirectory()) return `${dir} is not a directory`;
+  if (!trustedOwner(stat.uid)) return `${dir} is owned by uid ${stat.uid}`;
+  if ((stat.mode & 0o022) !== 0 && (stat.mode & 0o1000) === 0) {
+    return `${dir} is writable by group or others and is not sticky`;
+  }
+  return "";
+}
+
+const maxSymlinks = 40;
+
+// Nobody else may be able to swap the directory out. The path is resolved one
+// component at a time, the way the kernel does: every directory an entry is
+// looked up in must pass directoryProblem, every entry on the way (symlinks
+// included) must belong to root or this user, and a symlink's target is
+// resolved the same way, so a link in a swappable directory, or one leading
+// through one, is refused. Components that do not exist yet are fine: they
+// are created later, mode 0700, under a directory that passed.
 function ancestorProblem(dir) {
-  let current = path.resolve(dir);
-  for (;;) {
-    const parent = path.dirname(current);
-    if (parent === current) break;
-    current = parent;
-    let stat;
-    try {
-      stat = lstatSync(current);
-    } catch {
+  const pending = path.resolve(dir).split("/").filter(Boolean);
+  let current = "/";
+  let links = 0;
+  while (pending.length) {
+    const name = pending.shift() ?? "";
+    if (name === ".") continue;
+    if (name === "..") {
+      current = path.dirname(current);
       continue;
     }
-    if (stat.isSymbolicLink() && !trustedOwner(stat.uid)) {
-      return `${current} is a symlink owned by uid ${stat.uid}`;
-    }
-  }
-  current = canonicalPath(path.dirname(path.resolve(dir)));
-  for (;;) {
+    const problem = directoryProblem(current);
+    if (problem) return problem;
+    const entry = path.join(current, name);
     let stat;
     try {
-      stat = statSync(current);
+      stat = lstatSync(entry);
     } catch {
-      return `${current} cannot be read`;
+      return "";
     }
     if (!trustedOwner(stat.uid)) {
-      return `${current} is owned by uid ${stat.uid}`;
+      return `${entry} is ${stat.isSymbolicLink() ? "a symlink " : ""}owned by uid ${stat.uid}`;
     }
-    if ((stat.mode & 0o022) !== 0 && (stat.mode & 0o1000) === 0) {
-      return `${current} is writable by group or others and is not sticky`;
+    if (stat.isSymbolicLink()) {
+      links += 1;
+      if (links > maxSymlinks) return `${dir} has too many symlinks`;
+      const target = readlinkSync(entry);
+      if (target.startsWith("/")) current = "/";
+      pending.unshift(...target.split("/").filter(Boolean));
+      continue;
     }
-    const parent = path.dirname(current);
-    if (parent === current) return "";
-    current = parent;
+    current = entry;
   }
+  return "";
 }
 
 // Why `dir` is not safe to read actionable state from, or "" when it is: a
@@ -336,6 +365,13 @@ function assertPrivateDir(dir) {
 export function ensureDirs(dirs = [stateDir, evidenceDir]) {
   for (const dir of dirs) {
     if (!existsSync(dir)) {
+      // Nothing is created under a path someone else could swap.
+      const problem = ancestorProblem(dir);
+      if (problem) {
+        throw new UnsafeStateError(
+          `verify: ${problem}. Refusing to use it for verify state.`,
+        );
+      }
       mkdirSync(dir, { recursive: true, mode: 0o700 });
       chmodSync(dir, 0o700);
     }
