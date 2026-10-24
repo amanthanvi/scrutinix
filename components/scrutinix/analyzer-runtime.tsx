@@ -16,6 +16,7 @@ import { getToast } from "@/components/ui/lazy-toaster";
 import { useBatchStream } from "@/hooks/use-batch-stream";
 import { warmLinkParser } from "@/hooks/use-link-anatomy";
 import { useScanStream } from "@/hooks/use-scan-stream";
+import { claimLaunch, forgetOldLaunches } from "@/lib/client/launch-claims";
 import {
   SHARE_MAX_AGE_WORDS,
   buildSharedSnapshot,
@@ -35,8 +36,11 @@ import { PREFILL_PARAM } from "@/lib/domain/share-launch";
 /** A link handed to the page from outside: `?url=`, or the share target. */
 export interface Launch {
   url: string;
-  /** Only a share-target launch from this device's share sheet. */
-  autoScan: boolean;
+  /**
+   * The launch grant's random id when this page may start the scan (a
+   * share-sheet launch from this device, for this exact link), else null.
+   */
+  grantId: string | null;
 }
 
 /** Query parameters that describe what the page opened on. */
@@ -215,16 +219,22 @@ function useCreateAnalyzerRuntime(
     [scan],
   );
 
-  // A share-target launch scans once, on arrival. The server already spent
-  // the grant that allowed it (`proxy.ts`, `redeemLaunchGrant`), so a
-  // reload, another tab, or the same link opened again only prefills.
-  const autoScanRef = useRef(launch?.autoScan ? launch.url : null);
+  // A share-target launch scans once, on arrival. The server cleared the
+  // cookie that carried it (`proxy.ts`), so a reload or a new visit only
+  // prefills; the browser records the grant's id (`claimLaunch`), so going
+  // Back (the router restores this render into a new component) or a
+  // second tab that received the same grant only prefills too.
+  const pendingLaunchRef = useRef(launch?.grantId ? launch : null);
   useEffect(() => {
-    const url = autoScanRef.current;
-    if (!url) return;
-    autoScanRef.current = null;
+    forgetOldLaunches();
+  }, []);
+  useEffect(() => {
+    const pending = pendingLaunchRef.current;
+    if (!pending?.grantId) return;
+    pendingLaunchRef.current = null;
+    if (!claimLaunch(pending.grantId)) return;
     clearLaunchParams();
-    void rescanUrl(url);
+    void rescanUrl(pending.url);
   }, [rescanUrl]);
 
   // A result (a fresh scan, or one opened from history or a batch) has
@@ -369,7 +379,7 @@ function useCreateAnalyzerRuntime(
     live,
     openStoredResult,
     // Arrived with a link to check (`?url=`) that waits for a tap.
-    prefilled: Boolean(launch && !launch.autoScan),
+    prefilled: Boolean(launch && !launch.grantId),
     rescanUrl,
     scan,
     scored,

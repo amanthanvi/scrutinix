@@ -18,8 +18,8 @@ export const PREFILL_PARAM = "url";
  * It is spent on the server: `proxy.ts` takes it off every request for
  * `/`, hands it to the page in `SHARE_LAUNCH_HEADER`, and clears it in
  * that same response, whether or not it matches; the page starts a scan
- * only when the grant names `?url=` and has not been redeemed before.
- * No script reads it (`HttpOnly`).
+ * only when the grant names `?url=`, and the browser only once per grant
+ * id (`lib/client/launch-claims.ts`). No script reads it (`HttpOnly`).
  */
 export const SHARE_LAUNCH_COOKIE = "sx-share-launch";
 
@@ -147,7 +147,7 @@ export function isShareTargetLaunch(method: string, headers: Headers): boolean {
 /**
  * The link `?url=` prefills, normalized, or null when it is absent or not
  * checkable (which says nothing). Whether it also scans is the launch
- * grant's to say (`redeemLaunchGrant`).
+ * grant's to say (`launchGrantId`).
  */
 export function resolvePrefill(
   param: string | null | undefined,

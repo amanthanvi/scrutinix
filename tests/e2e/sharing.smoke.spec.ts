@@ -158,7 +158,27 @@ test("a share-sheet launch of a long link still scans it @smoke", async ({
   await expect(await urlField(page)).toHaveValue(long);
 });
 
-test("one share-sheet launch scans once, even in two tabs at once @smoke", async ({
+test("going Back to a launched page never scans it again @smoke", async ({
+  page,
+}) => {
+  await isolateRateLimit(page);
+  const scans = recordScans(page);
+  await launchFromShareSheet(page, { text: `Your parcel: ${LINK}` });
+  await expect(page.getByLabel(/^scan result: malicious$/i)).toBeVisible();
+  expect(scans).toHaveLength(1);
+
+  // The router restores the page as it was rendered, launch and all, into
+  // a fresh component: only the browser can know this launch already ran.
+  await page.locator("header").getByRole("link", { name: "About" }).click();
+  await page.waitForURL((url) => url.pathname === "/about");
+  await page.goBack();
+  await page.waitForURL((url) => url.pathname === "/");
+  await expect(await urlField(page)).toHaveValue(LINK);
+  await page.waitForTimeout(750);
+  expect(scans).toHaveLength(1);
+});
+
+test("one share-sheet launch scans once, though a second tab got the grant too @smoke", async ({
   page,
 }) => {
   const context = page.context();
@@ -171,34 +191,51 @@ test("one share-sheet launch scans once, even in two tabs at once @smoke", async
   }
   const total = () => scans.flat().length;
   await grantLaunch(context, LINK);
+  const grant = (await context.cookies()).find(
+    (cookie) => cookie.name === "sx-share-launch",
+  )!.value;
+  const grantId = grant.split(".")[0]!;
 
-  // Hold both page loads until both are asked for, so both carry the
-  // cookie before either response can clear it.
+  // Hold both page loads until both are asked for, so both reach the
+  // server carrying the cookie before either response can clear it. The
+  // server keeps nothing, so both are granted; the second tab's answer is
+  // delivered once the first tab has started its scan.
   let held = 0;
   let release!: () => void;
   const bothHeld = new Promise<void>((resolve) => (release = resolve));
-  for (const tab of tabs) {
-    await tab.route(
-      (url) => url.pathname === "/" && url.searchParams.has("url"),
-      async (route) => {
-        held += 1;
-        if (held === 2) release();
-        await bothHeld;
-        await route.continue();
-      },
-    );
-  }
+  const firstScan = page.waitForRequest((request) =>
+    new URL(request.url()).pathname.startsWith("/api/analyze"),
+  );
+  let secondHtml = "";
+  const isLaunch = (url: URL) =>
+    url.pathname === "/" && url.searchParams.has("url");
+  const hold = async () => {
+    held += 1;
+    if (held === 2) release();
+    await bothHeld;
+  };
+  await page.route(isLaunch, async (route) => {
+    await hold();
+    expect(route.request().headers().cookie ?? "").toContain(grant);
+    await route.continue();
+  });
+  await other.route(isLaunch, async (route) => {
+    await hold();
+    expect(route.request().headers().cookie ?? "").toContain(grant);
+    const response = await route.fetch();
+    secondHtml = await response.text();
+    await firstScan;
+    await route.fulfill({ response });
+  });
   const target = `/?url=${encodeURIComponent(LINK)}`;
-  const responses = await Promise.all(tabs.map((tab) => tab.goto(target)));
-  for (const response of responses) {
-    const sent = await response!.request().allHeaders();
-    expect(sent.cookie ?? "").toContain("sx-share-launch=");
-  }
+  await Promise.all(tabs.map((tab) => tab.goto(target)));
 
+  // The second tab was granted the same launch, and only prefilled.
+  expect(secondHtml).toContain(grantId);
   for (const tab of tabs) await expect(await urlField(tab)).toHaveValue(LINK);
   await expect.poll(total).toBe(1);
-  await page.waitForTimeout(750);
-  expect(total()).toBe(1);
+  await other.waitForTimeout(750);
+  expect(scans.map((tab) => tab.length)).toEqual([1, 0]);
   expect(await launchCookieNames(context)).toEqual([]);
   await other.close();
 });

@@ -102,6 +102,7 @@ const LINK = "https://parcel-help.example/track";
 
 beforeEach(() => {
   window.history.replaceState(null, "", "/");
+  localStorage.clear();
 });
 
 afterEach(() => {
@@ -112,7 +113,7 @@ describe("a /?url= link", () => {
   it("fills the Single field and focuses it, and never scans", async () => {
     const fetchMock = stubScan(LINK);
     window.history.replaceState(null, "", `/?url=${encodeURIComponent(LINK)}`);
-    renderApp({ launch: { url: LINK, autoScan: false } });
+    renderApp({ launch: { url: LINK, grantId: null } });
 
     const input = screen.getByRole<HTMLInputElement>("textbox", {
       name: /url to analyze/i,
@@ -134,8 +135,8 @@ describe("a /?url= link", () => {
 });
 
 describe("a share-target launch", () => {
-  // The grant itself is spent on the server (proxy.ts, redeemLaunchGrant);
-  // the page only acts on the decision it was rendered with.
+  // The server clears the grant's cookie (proxy.ts) and checks it names
+  // this link (launchGrantId); the browser scans each grant id once.
   it("scans once on arrival and clears the address", async () => {
     const fetchMock = stubScan(LINK);
     window.history.replaceState(
@@ -143,7 +144,7 @@ describe("a share-target launch", () => {
       "",
       `/?url=${encodeURIComponent(LINK)}&utm=1`,
     );
-    renderApp({ launch: { url: LINK, autoScan: true } });
+    renderApp({ launch: { url: LINK, grantId: "arrival-launch-id" } });
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     const [, init] = fetchMock.mock.calls[0] as unknown as [
@@ -156,6 +157,101 @@ describe("a share-target launch", () => {
       expect(screen.getByLabelText(/^scan result: /i)).toBeDefined(),
     );
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("a launch the page is rendered with again", () => {
+  /** Mount with `launch`, let any scan it starts finish, and unmount. */
+  async function visit(launch: Launch) {
+    const view = renderApp({ launch });
+    const input = screen.getByRole<HTMLInputElement>("textbox", {
+      name: /url to analyze/i,
+    });
+    expect(input.value).toBe(launch.url);
+    // Long enough for an effect's scan to have been asked for.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    view.unmount();
+  }
+
+  it("scans once across a remount: the second only prefills", async () => {
+    const fetchMock = stubScan(LINK);
+    // Back restores the cached render (same props) into a new component.
+    const launch = { url: LINK, grantId: "remount-launch-id" };
+    await visit(launch);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    await visit(launch);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    // The browser keeps the random id, never the link.
+    const stored = localStorage.getItem("sx-launches") ?? "";
+    expect(stored).toContain("remount-launch-id");
+    expect(stored).not.toContain("parcel-help");
+    // A new launch of the same link is a new grant, and scans.
+    await visit({ url: LINK, grantId: "next-launch-id" });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("only prefills in a tab that finds the id another tab recorded", async () => {
+    const fetchMock = stubScan(LINK);
+    localStorage.setItem(
+      "sx-launches",
+      JSON.stringify([["other-tab-launch-id", Date.now()]]),
+    );
+    await visit({ url: LINK, grantId: "other-tab-launch-id" });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("still scans once when storage is refused (private modes)", async () => {
+    const fetchMock = stubScan(LINK);
+    const refuse = () => {
+      throw new DOMException("The operation is insecure.", "SecurityError");
+    };
+    const getItem = vi
+      .spyOn(Storage.prototype, "getItem")
+      .mockImplementation(refuse);
+    const setItem = vi
+      .spyOn(Storage.prototype, "setItem")
+      .mockImplementation(refuse);
+    try {
+      const launch = { url: LINK, grantId: "no-storage-launch-id" };
+      await visit(launch);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      await visit(launch);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    } finally {
+      getItem.mockRestore();
+      setItem.mockRestore();
+    }
+  });
+
+  it("keeps a few recent ids and drops ones over ten minutes old", async () => {
+    stubScan(LINK);
+    const now = Date.now();
+    localStorage.setItem(
+      "sx-launches",
+      JSON.stringify([
+        ["stale-launch-id", now - 11 * 60_000],
+        ["not-an-entry"],
+        ...Array.from({ length: 10 }, (_, index) => [
+          `recent-${index}`,
+          now - 60_000,
+        ]),
+      ]),
+    );
+    await visit({ url: LINK, grantId: "pruning-launch-id" });
+    const ids = (
+      JSON.parse(localStorage.getItem("sx-launches")!) as [string, number][]
+    ).map(([id]) => id);
+    expect(ids).toHaveLength(8);
+    expect(ids.at(-1)).toBe("pruning-launch-id");
+    expect(ids).not.toContain("stale-launch-id");
+
+    // Opening the page with no launch forgets ids once they are old.
+    localStorage.setItem(
+      "sx-launches",
+      JSON.stringify([["stale-launch-id", now - 11 * 60_000]]),
+    );
+    renderApp({}).unmount();
+    expect(localStorage.getItem("sx-launches")).toBeNull();
   });
 });
 

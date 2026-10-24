@@ -95,13 +95,15 @@ function applyCspNonce(request: NextRequest) {
  * The share-target launch grant (`SHARE_LAUNCH_COOKIE`) is spent by the
  * first response for `/` that carries it, matching or not: the page gets
  * the grant in `SHARE_LAUNCH_HEADER` and this response clears the cookie,
- * so a reload, another tab, or an abandoned launch never finds it again.
- * The cookie itself can't carry it to the page: Next merges a cookie the
- * proxy clears into what `cookies()` reads for the same render. Whether
- * the grant scans, and that it does so once, is the page's call
- * (`redeemLaunchGrant`). Only `/` reads it, so other paths (the manifest
- * and icon fetches a launch makes, `/share` itself) leave it alone.
- * Returns whether the cookie is to be cleared.
+ * so a reload, a later tab, or an abandoned launch never finds it again.
+ * This is the only server-side record that a grant was used. The cookie
+ * itself can't carry it to the page: Next merges a cookie the proxy clears
+ * into what `cookies()` reads for the same render. Whether the grant
+ * scans is the page's call (`launchGrantId`: only for the link it names),
+ * and the browser's (`claimLaunch`: once per grant id). Only `/` reads
+ * it, so other paths (the manifest and icon fetches a launch makes,
+ * `/share` itself) leave it alone. Returns whether the cookie is to be
+ * cleared.
  */
 function handOverShareLaunch(
   request: NextRequest,

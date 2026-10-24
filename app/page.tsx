@@ -13,7 +13,7 @@ import {
   SHARE_LAUNCH_HEADER,
   resolvePrefill,
 } from "@/lib/domain/share-launch";
-import { redeemLaunchGrant } from "@/lib/server/share-launch-grant";
+import { launchGrantId } from "@/lib/server/share-launch-grant";
 import {
   getSharedMetadata,
   resolveSharedView,
@@ -72,16 +72,17 @@ export default async function HomePage({
 
   // `?url=` prefills the Single field and waits for a tap. Only the
   // installed app's share target (`app/share/route.ts`) leaves the grant
-  // that starts the scan too, and it scans once: `proxy.ts` has already
-  // cleared its cookie from this response, and redeeming spends it. A
-  // shared result outranks both (its grant, if any, is cleared unused).
+  // that starts the scan too, and only for the link it names. It scans
+  // once: `proxy.ts` has already cleared its cookie from this response,
+  // and the browser scans each grant id once (`claimLaunch`). A shared
+  // result outranks both (its grant, if any, is cleared unused).
   const prefill = shared
     ? null
     : resolvePrefill(paramOf(params, PREFILL_PARAM));
   const launch = prefill
     ? {
         url: prefill,
-        autoScan: await redeemLaunchGrant(
+        grantId: launchGrantId(
           (await headers()).get(SHARE_LAUNCH_HEADER),
           prefill,
         ),

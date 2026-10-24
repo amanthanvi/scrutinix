@@ -4,7 +4,7 @@ import { GET, POST } from "@/app/share/route";
 import { SHARE_LAUNCH_COOKIE, resolvePrefill } from "@/lib/domain/share-launch";
 import { normalizeUrlInput } from "@/lib/domain/url";
 import { parseScanRequest } from "@/lib/server/scan-request";
-import { redeemLaunchGrant } from "@/lib/server/share-launch-grant";
+import { launchGrantId } from "@/lib/server/share-launch-grant";
 
 const ORIGIN = "https://www.scrutinix.net";
 
@@ -77,8 +77,8 @@ describe("POST /share", () => {
     expect(cookie).not.toContain("parcel-help");
     const grant = grantIn(response)!;
     expect(
-      await redeemLaunchGrant(grant, "https://parcel-help.example/track?id=42"),
-    ).toBe(true);
+      launchGrantId(grant, "https://parcel-help.example/track?id=42"),
+    ).toBe(grant.split(".")[0]);
   });
 
   it("keeps the grant small for a long link, so the browser still stores it", async () => {
@@ -96,7 +96,7 @@ describe("POST /share", () => {
     ).toBe(link);
     const cookie = launchCookie(response)!;
     expect(cookie.length).toBeLessThan(200);
-    expect(await redeemLaunchGrant(grantIn(response), link)).toBe(true);
+    expect(launchGrantId(grantIn(response), link)).not.toBeNull();
   });
 
   it("only prefills for a form another site posts", async () => {
@@ -292,7 +292,7 @@ describe("a Unicode link, from the share sheet to the scan", () => {
       ok: true,
       value: { normalizedUrl: prefill },
     });
-    expect(await redeemLaunchGrant(grantIn(launched), prefill!)).toBe(true);
+    expect(launchGrantId(grantIn(launched), prefill!)).not.toBeNull();
     const accepted = await scanRequest(prefill!);
     expect(accepted.ok && accepted.targets[0]!.normalizedUrl).toBe(prefill);
   });
