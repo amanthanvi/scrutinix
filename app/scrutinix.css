@@ -325,6 +325,18 @@ main:has(#sx-verdict-heading) > .sx-hero-form {
   color: var(--sx-text);
 }
 
+/* Two columns stop fitting a slug, a number, and a name once the screen is
+   narrower than 20rem of the person's text size (150% text on a 320px
+   phone): one column of eight, so no name is squeezed to nothing. Never at
+   the default size, where 20rem is 320px. */
+@media (max-width: 19.98rem) {
+  .sx-strip {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
+    grid-auto-flow: row;
+  }
+}
+
 @media (min-width: 40rem) {
   .sx-strip {
     grid-template-columns: repeat(4, minmax(0, 1fr));

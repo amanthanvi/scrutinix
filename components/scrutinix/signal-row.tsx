@@ -69,7 +69,7 @@ export function SignalRow<N extends SignalName>({
         className="mt-[0.3125rem] h-3.5 w-6 shrink-0 rounded-[2px]"
       />
       <span className="flex min-w-0 flex-1 flex-col gap-1 sm:flex-row sm:gap-6 lg:gap-12">
-        <span className="text-body flex shrink-0 items-baseline gap-[0.4375rem] font-medium text-[var(--sx-text)] sm:w-52 sm:whitespace-nowrap lg:w-[16.625rem]">
+        <span className="text-body flex shrink-0 items-baseline gap-[0.4375rem] font-medium [overflow-wrap:anywhere] text-[var(--sx-text)] sm:w-52 sm:whitespace-nowrap lg:w-[16.625rem]">
           <span aria-hidden="true" className="sx-tag self-center">
             {cellNumber(name)}
           </span>

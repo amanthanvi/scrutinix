@@ -121,12 +121,16 @@ export function ScanForm() {
         <TabsList aria-label="Scan mode">
           <TabsTrigger value="single">Single</TabsTrigger>
           {/* The hint says what Batch is without joining the tab's name. */}
-          <TabsTrigger value="batch" aria-describedby="sx-batch-tab-hint">
+          <TabsTrigger
+            value="batch"
+            aria-describedby="sx-batch-tab-hint"
+            className="flex-wrap gap-x-1.5"
+          >
             Batch
             <span
               id="sx-batch-tab-hint"
               aria-hidden="true"
-              className="ml-1.5 font-normal text-[var(--sx-text-soft)]"
+              className="font-normal text-[var(--sx-text-soft)]"
             >
               up to 10 links
             </span>

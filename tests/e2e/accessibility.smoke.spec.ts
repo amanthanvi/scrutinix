@@ -134,10 +134,11 @@ async function expectReflow(
   }
 }
 
-// 150% from the narrowest phone, 200% from 360px; and where the link
-// first goes inline at each size.
+// 150% and 200% from the narrowest phone; and where the link first goes
+// inline at each size.
 const REFLOW_SIZES = [
   [24, 320],
+  [32, 320],
   [32, 360],
   [16, 656],
   [24, 960],
@@ -160,6 +161,7 @@ test.describe("on a phone", () => {
   }) => {
     await expectReflow(page, [
       [24, 320],
+      [32, 320],
       [32, 360],
       [32, 375],
     ]);

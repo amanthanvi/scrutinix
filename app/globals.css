@@ -280,6 +280,10 @@ body {
   text-rendering: optimizeLegibility;
   font-kerning: normal;
   caret-color: var(--sx-accent);
+  /* A word wider than its line (a long domain at a large text size)
+     breaks rather than pushing the page sideways. Only an overflowing
+     word is affected, so text that fits is laid out as before. */
+  overflow-wrap: break-word;
 }
 
 ::selection {
