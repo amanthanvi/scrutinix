@@ -22,6 +22,16 @@ export const YOUNG_DOMAIN_DAYS = 180;
  */
 export const NEW_DOMAIN_DAYS = 30;
 
+/**
+ * The verdict engine's page and certificate rules that the Summary
+ * questions name, shared so the copy can never disagree with the score: a
+ * redirect chain this long, this many frames on the final page (hidden or
+ * not), and a certificate younger than this on a brand-new domain.
+ */
+export const LONG_REDIRECT_CHAIN_HOPS = 3;
+export const MANY_FRAMES = 3;
+export const FRESH_CERTIFICATE_DAYS = 7;
+
 export const severities = [
   "clear",
   "neutral",
