@@ -62,13 +62,33 @@ export function selectHostingAddress(
   addresses: readonly string[],
 ): string | null {
   const queryable = addresses.filter(
-    (address) => isIP(address) !== 0 && !isBlockedNetworkAddress(address),
+    (address) =>
+      (isIP(address) === 4 || isGlobalUnicastIpv6(address)) &&
+      !isBlockedNetworkAddress(address),
   );
   return (
     queryable.find((address) => isIP(address) === 4) ??
     queryable.find((address) => isIP(address) === 6) ??
     null
   );
+}
+
+/**
+ * Only global unicast (2000::/3, RFC 4291 §2.4) can have an origin AS.
+ * That excludes, among others, unassigned space such as 4000::1 and the
+ * IPv4-mapped, IPv4-compatible, and NAT64 forms, which are rejected rather
+ * than unwrapped to IPv4. Inside 2000::/3, the IANA IPv6 Special-Purpose
+ * Address Registry (iana.org/assignments/iana-ipv6-special-registry,
+ * updated 2025-10-09) lists 2001::/23, 2001:db8::/32, 2002::/16, and
+ * 3fff::/20, all removed by `isBlockedNetworkAddress`, and
+ * 2620:4f:8000::/48 (AS112), which is announced and so kept.
+ */
+function isGlobalUnicastIpv6(address: string): boolean {
+  if (isIP(address) !== 6) {
+    return false;
+  }
+  const firstByte = parseIpv6Bytes(address)?.[0];
+  return firstByte !== undefined && (firstByte & 0xe0) === 0x20;
 }
 
 /**

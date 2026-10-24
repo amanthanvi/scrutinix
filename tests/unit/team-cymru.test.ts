@@ -68,6 +68,34 @@ describe("selectHostingAddress", () => {
     ).toBe("2606:4700::6810:84e5");
   });
 
+  it("queries IPv6 only inside global unicast 2000::/3", () => {
+    for (const address of [
+      "4000::1",
+      "::ffff:8.8.8.8",
+      "::ffff:808:808",
+      "::8.8.8.8",
+      "64:ff9b::808:808",
+      "5f00::1",
+      "100::1",
+      "fe80::1",
+      "fe80::1%eth0",
+      "ff02::1",
+      "2001::1",
+      "2001:2::1",
+      "2002:808:808::1",
+      "3fff::1",
+    ]) {
+      expect(selectHostingAddress([address]), address).toBeNull();
+    }
+    expect(selectHostingAddress(["::ffff:8.8.8.8", "4000::1"])).toBeNull();
+    expect(selectHostingAddress(["2a00:1450:4001:80b::200e"])).toBe(
+      "2a00:1450:4001:80b::200e",
+    );
+    expect(selectHostingAddress(["2620:4f:8000::42"])).toBe(
+      "2620:4f:8000::42",
+    );
+  });
+
   it("returns null when nothing is queryable", () => {
     expect(selectHostingAddress(["127.0.0.1", "::1", "not-an-ip"])).toBeNull();
     expect(selectHostingAddress([])).toBeNull();
@@ -288,11 +316,15 @@ describe("lookupHostingNetwork", () => {
     expect(hosting?.asName).toBe("EXAMPLE-NET");
   });
 
-  it("never queries a private address", async () => {
+  it("never queries a private, reserved, or IPv4-mapped address", async () => {
     const resolver = fakeResolver({});
 
     await expect(
-      lookupHostingNetwork(["10.0.0.5", "192.168.0.1"], undefined, resolver),
+      lookupHostingNetwork(
+        ["10.0.0.5", "192.168.0.1", "4000::1", "::ffff:8.8.8.8"],
+        undefined,
+        resolver,
+      ),
     ).resolves.toBeUndefined();
     expect(resolver.queries).toEqual([]);
   });
