@@ -826,11 +826,33 @@ check(
 // stand-in Playwright prints a canary to stdout and stderr and reports one
 // failing test; smoke prints the counts, the failing title, and the log path,
 // and the canary reaches only the 0600 log.
-const fakePlaywright = path.join(scratch, "fake-playwright.cjs");
+//
+// Finding 5 of round 4: the stand-in reaches runSuite only as the argument
+// this check passes. smoke.mjs, the npm entry point, always runs the real
+// Playwright CLI.
+const suiteModule = new URL("./suite.mjs", import.meta.url).href;
+function runSuiteWith(cli, argv, env) {
+  return runCli(
+    path.join(scratch, "run-suite.mjs"),
+    [suiteModule, cli, JSON.stringify(argv)],
+    env,
+  );
+}
 writeFileSync(
-  fakePlaywright,
-  `const fs = require("fs");
-const canary = "SYNTH-pw-canary-28";
+  path.join(scratch, "run-suite.mjs"),
+  `const [suite, cli, argv] = process.argv.slice(2);
+const { runSuite } = await import(suite);
+process.exit(runSuite(JSON.parse(argv), cli));
+`,
+);
+const standInPlaywright = (name, body) => {
+  const file = path.join(scratch, `${name}.cjs`);
+  writeFileSync(file, `const fs = require("fs");\n${body}`);
+  return file;
+};
+const fakePlaywright = standInPlaywright(
+  "fake-playwright",
+  `const canary = "SYNTH-pw-canary-28";
 process.stdout.write("  x 1 drive > shares a signed link\\n    accessToken=" + canary + "\\n");
 process.stderr.write("Authorization: Bearer " + canary + "\\n" + JSON.stringify({ token: canary }) + "\\n");
 fs.writeFileSync(process.env.VERIFY_REPORT_FILE, JSON.stringify({
@@ -844,10 +866,10 @@ fs.writeFileSync(process.env.VERIFY_REPORT_FILE, JSON.stringify({
 process.exit(1);
 `,
 );
-const driveRun = await runCli(
-  "smoke.mjs",
+const driveRun = await runSuiteWith(
+  fakePlaywright,
   ["--drive", "--port", String(portA), "-g", "signed"],
-  envFor(runDir, { VERIFY_PLAYWRIGHT_CLI: fakePlaywright }),
+  envFor(runDir),
 );
 const driveLog = path.join(runDir, "drive.log");
 check(
@@ -869,6 +891,82 @@ check(
   existsSync(driveLog) &&
     (lstatSync(driveLog).mode & 0o777) === 0o600 &&
     readFileSync(driveLog, "utf8").includes("accessToken=SYNTH-pw-canary-28"),
+);
+
+// A Playwright that exits 0 without a report, or with a report in which no
+// test ran, verified nothing: smoke fails.
+const silentPlaywright = standInPlaywright(
+  "silent-playwright",
+  "process.exit(0);\n",
+);
+const emptyPlaywright = standInPlaywright(
+  "empty-playwright",
+  `fs.writeFileSync(process.env.VERIFY_REPORT_FILE, JSON.stringify({ suites: [], errors: [], stats: { expected: 0, unexpected: 0, flaky: 0, skipped: 1 } }));
+process.exit(0);
+`,
+);
+for (const [label, cli, message] of [
+  [
+    "no report",
+    silentPlaywright,
+    "smoke: Playwright exited 0 and wrote no report, so nothing was verified",
+  ],
+  [
+    "a report with no test run",
+    emptyPlaywright,
+    "smoke: no test ran, so nothing was verified",
+  ],
+]) {
+  const empty = await runSuiteWith(
+    cli,
+    ["--port", String(portA)],
+    envFor(runDir),
+  );
+  check(
+    `smoke fails when Playwright exits 0 with ${label}`,
+    empty.status === 1 && empty.stderr.includes(message),
+    output(empty),
+  );
+}
+
+// The npm entry point ignores VERIFY_PLAYWRIGHT_CLI, the round-4 test hook:
+// with it set, the real Playwright runs (a -g that matches no test makes it
+// exit at once, before any browser starts) and the stand-in never does.
+const hookMarker = path.join(scratch, "hook-ran");
+const hookPlaywright = standInPlaywright(
+  "hook-playwright",
+  `fs.writeFileSync(${JSON.stringify(hookMarker)}, "ran");
+fs.writeFileSync(process.env.VERIFY_REPORT_FILE, JSON.stringify({ suites: [], errors: [], stats: { expected: 1, unexpected: 0, flaky: 0, skipped: 0 } }));
+process.exit(0);
+`,
+);
+const hooked = await runNpm(
+  [
+    "--silent",
+    "run",
+    "verify:smoke",
+    "--",
+    "--port",
+    String(portA),
+    "-g",
+    "SYNTH-no-such-test",
+  ],
+  envFor(runDir, { VERIFY_PLAYWRIGHT_CLI: hookPlaywright }),
+);
+const smokeLog = path.join(runDir, "smoke.log");
+check(
+  "npm run verify:smoke ignores VERIFY_PLAYWRIGHT_CLI and runs the real Playwright",
+  hooked.status !== 0 &&
+    !existsSync(hookMarker) &&
+    readFileSync(smokeLog, "utf8").includes("No tests found"),
+  output(hooked),
+);
+check(
+  "smoke.mjs reads no runner from the environment",
+  !/process\.env\.VERIFY_PLAYWRIGHT_CLI|VERIFY_PLAYWRIGHT_CLI/.test(
+    readFileSync(path.join(scriptDir, "smoke.mjs"), "utf8") +
+      readFileSync(path.join(scriptDir, "suite.mjs"), "utf8"),
+  ),
 );
 
 const doctorForeign = await runCli(
