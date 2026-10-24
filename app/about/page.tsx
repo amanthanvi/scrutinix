@@ -87,7 +87,11 @@ function ScoringTableView({ table }: { table: ScoringTable }) {
           ))}
         </tbody>
       </table>
-      <p className={`${PROSE} text-meta`}>{table.note}</p>
+      {table.notes.map((note) => (
+        <p key={note} className={`${PROSE} text-meta`}>
+          {note}
+        </p>
+      ))}
     </div>
   );
 }
@@ -166,10 +170,11 @@ export default function AboutPage() {
         <dl className={TERMS}>
           <dt className={DT}>Convicts on its own</dt>
           <dd className={DD}>
-            Any single finding worth {CONVICTS_AT} or more makes a link
+            Any single finding worth {CONVICTS_AT} or more makes a link at least
             Malicious by itself: a Google Safe Browsing listing, an exact-link
-            listing on URLhaus or OpenPhish, a ThreatFox listing at 75%
-            confidence or more, or five or more VirusTotal engines.
+            listing on URLhaus or OpenPhish, a ThreatFox listing of the link or
+            its site at 75% confidence or more, or five or more VirusTotal
+            engines.
           </dd>
           <dt className={DT}>Can&apos;t erase a hit</dt>
           <dd className={DD}>
@@ -188,10 +193,12 @@ export default function AboutPage() {
           </dd>
           <dt className={DT}>{LOOK_ALIKE_WORD}</dt>
           <dd className={DD}>
-            A Safe result whose link spells out another site&apos;s address,
-            such as paypal.com.secure-login.xyz, reads {LOOK_ALIKE_WORD}{" "}
-            instead. The score doesn&apos;t change, and the details still show
-            it.
+            When we recognise another site&apos;s address in a Safe link&apos;s
+            subdomain or login name, as in paypal.com.secure-login.xyz, the
+            result reads {LOOK_ALIKE_WORD} instead. The score doesn&apos;t
+            change, and the details still show it. We look for addresses with
+            common endings such as .com or .co.uk, not every possible name, and
+            never in the page part of a link.
           </dd>
         </dl>
       </section>
@@ -204,19 +211,67 @@ export default function AboutPage() {
           Moderate from {CONFIDENCE.moderate}%, Low below that.
         </p>
         <ul className={BULLETS}>
-          <li>
-            A Safe result loses confidence when a major list doesn&apos;t
-            answer. With one of VirusTotal, Google Safe Browsing, or the threat
-            feeds missing, it goes no higher than{" "}
-            {CONFIDENCE.safeOneListMissing}%; with two or more, no higher than{" "}
-            {CONFIDENCE.safeListsMissing}%. Either way it can&apos;t be High.
-          </li>
-          <li>
-            Unknown goes no higher than {CONFIDENCE.unknown}%, so it&apos;s
-            always Low.
-          </li>
-          <li>A risky result gains confidence when separate sources agree.</li>
+          {CONFIDENCE.caps.map((cap) => (
+            <li key={cap}>{cap}</li>
+          ))}
         </ul>
+        <details className="sx-disclosure">
+          <summary className="text-body inline-flex min-h-11 items-center gap-2 font-medium text-[var(--sx-text-muted)] hover:text-[var(--sx-text)]">
+            <svg
+              aria-hidden="true"
+              viewBox="0 0 8 8"
+              className="sx-chevron size-2 fill-current"
+            >
+              <path d="M2 0l4 4-4 4z" />
+            </svg>
+            How the figure adds up
+          </summary>
+          <table
+            className={`${LIST_MEASURE} text-body mt-2 w-full table-fixed border-collapse`}
+          >
+            <caption className="sr-only">
+              How the confidence figure adds up, before the limits above. The
+              major lists are VirusTotal, Google Safe Browsing, and the threat
+              feeds.
+            </caption>
+            <thead>
+              <tr className="text-meta border-b border-[var(--sx-border)] text-left text-[var(--sx-text-soft)]">
+                <th scope="col" className="pb-2 font-normal">
+                  For
+                </th>
+                <th
+                  scope="col"
+                  className="w-[38%] pb-2 pl-4 font-normal sm:w-56"
+                >
+                  Percentage points
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {CONFIDENCE.steps.map((row) => (
+                <tr
+                  key={row.step}
+                  className="border-b border-[var(--sx-border)] align-baseline"
+                >
+                  <th
+                    scope="row"
+                    className="py-2.5 text-left font-normal text-pretty text-[var(--sx-text-muted)]"
+                  >
+                    {row.step}
+                  </th>
+                  <td className="py-2.5 pl-4 font-medium text-pretty text-[var(--sx-text)] tabular-nums">
+                    {row.value}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p className={`${PROSE} text-meta mt-3`}>
+            The major lists are VirusTotal, Google Safe Browsing, and the threat
+            feeds. &ldquo;Otherwise&rdquo; means any verdict but Safe and
+            Unknown; Unknown is worked out like Safe, then capped.
+          </p>
+        </details>
         <p className={PROSE}>
           Any check that didn&apos;t finish is named next to the verdict.
         </p>

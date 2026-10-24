@@ -18,6 +18,9 @@ import { bareHostname } from "@/lib/domain/url";
 import { withTimeout } from "@/lib/server/http";
 import { lookupHostingNetwork } from "@/lib/server/providers/team-cymru";
 
+/** Public addresses at which a hostname's address records count as unusual. */
+export const MANY_ADDRESS_RECORDS = 6;
+
 /**
  * `signal` cancels the hosting-network lookup (the only lookup here that
  * reaches a third party); the record lookups use their own timeouts.
@@ -111,7 +114,7 @@ export async function runDnsSignal(
     anomalies.push("The hostname uses punycode encoding.");
   }
 
-  if (publicAddresses.length >= 6) {
+  if (publicAddresses.length >= MANY_ADDRESS_RECORDS) {
     anomalies.push(
       "The hostname resolves to an unusually high number of address records.",
     );

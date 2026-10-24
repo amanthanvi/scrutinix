@@ -1,12 +1,19 @@
+import { formatList } from "@/lib/domain/copy";
+import { VT_STALE_ANALYSIS_DAYS } from "@/lib/domain/reputation";
 import type { Verdict } from "@/lib/domain/types";
+import { CONFIDENCE_POLICY } from "@/lib/domain/verdict";
 
 /**
  * The scoring method as /about states it: every weight, threshold, and rule
  * the verdict engine applies (`lib/domain/verdict.ts`, `reputation.ts`,
- * `score-bands.ts`), in plain words plus numbers. This module is copy only;
- * the engine keeps its own constants. `tests/unit/methodology.test.ts` runs
- * every row and number here through the engine, so the page can't drift
- * from what it describes. Change both together.
+ * `score-bands.ts`, and the provider thresholds they rely on), in plain
+ * words plus numbers.
+ *
+ * The points tables are copy: `tests/unit/methodology.test.ts` runs every
+ * row through the engine, checks every number a row prints against the
+ * numbers it declares, and tests both sides of each threshold. The
+ * confidence figures are the engine's own `CONFIDENCE_POLICY`, printed
+ * directly. Change a weight and its row together.
  */
 
 export interface ScoringRow {
@@ -15,14 +22,20 @@ export interface ScoringRow {
   finding: string;
   /** Points as shown. Negative points start with a real minus sign. */
   points: string;
-  /** Enough on its own to make a link Malicious. */
+  /** Enough on its own to make a link at least Malicious. */
   convicts?: true;
+  /**
+   * A weak sign (the engine's low-quality evidence), named this way in the
+   * confidence arithmetic. Weak signs add points but never count as a
+   * second kind of evidence backing a risky verdict.
+   */
+  weak?: string;
 }
 
 export interface ScoringTable {
   id: "lists" | "link" | "discounts";
   caption: string;
-  note: string;
+  notes: readonly string[];
   rows: readonly ScoringRow[];
 }
 
@@ -47,25 +60,14 @@ export const SCORE_BANDS: ReadonlyArray<{
   { min: 80, max: 100, verdict: "critical", label: "Critical" },
 ];
 
-/** Confidence, as a percentage, and the caps that keep it honest. */
-export const CONFIDENCE = {
-  /** "High confidence" from here. */
-  high: 85,
-  /** "Moderate confidence" from here; "Low" below. */
-  moderate: 50,
-  /** Safe with one of the three major lists missing goes no higher. */
-  safeOneListMissing: 79,
-  /** Safe with two or more of them missing goes no higher. */
-  safeListsMissing: 69,
-  /** Unknown never goes above this. */
-  unknown: 40,
-} as const;
-
 export const SCORING_TABLES: readonly ScoringTable[] = [
   {
     id: "lists",
     caption: "Lists of known bad links",
-    note: "Each listing counts separately, so two lists naming the same link add up.",
+    notes: [
+      "Each listing counts separately, so two lists naming the same link add up.",
+      "On shared platforms where anyone can publish, such as github.com or docs.google.com, a listing of the whole site doesn't count; a listing of this exact link still does.",
+    ],
     rows: [
       {
         id: "gsb",
@@ -109,7 +111,7 @@ export const SCORING_TABLES: readonly ScoringTable[] = [
       },
       {
         id: "dbl-spam",
-        finding: "Spamhaus DBL lists the domain for spam",
+        finding: "Spamhaus DBL lists the domain for spam only",
         points: "25",
       },
       {
@@ -150,27 +152,32 @@ export const SCORING_TABLES: readonly ScoringTable[] = [
   {
     id: "link",
     caption: "Checks of the link itself",
-    note: `No single one of these can make a link Malicious: the most any one adds is ${LINK_CHECK_MAX}. Several together can.`,
+    notes: [
+      `No single one of these can make a link Malicious: the most any one adds is ${LINK_CHECK_MAX}. Several together can.`,
+      "The page checks read the page's HTML as it downloads; they don't run its scripts.",
+    ],
     rows: [
       {
         id: "ml-malicious",
         finding: "The link pattern model calls it malicious",
-        points: "25 to 45, by how sure it is",
+        points: "45 × the model's score (0 to 1), rounded, but at least 25",
       },
       {
         id: "ml-risky",
         finding: "The link pattern model calls it risky",
-        points: "Up to 16, by how sure it is",
+        points: "16 × the model's score, rounded",
       },
       {
         id: "cert-invalid",
         finding: "The site's certificate is invalid",
         points: "28",
+        weak: "an invalid certificate",
       },
       {
         id: "cert-untrusted",
         finding: "The site's certificate is untrusted or self-signed",
         points: "26",
+        weak: "an untrusted certificate",
       },
       {
         id: "cert-fresh",
@@ -186,21 +193,25 @@ export const SCORING_TABLES: readonly ScoringTable[] = [
         id: "age-young",
         finding: "The domain was registered 30 to 179 days ago",
         points: "8",
+        weak: "a domain 30 to 179 days old",
       },
       {
         id: "dns-punycode",
         finding: "The name is punycode, which can hide look-alike letters",
         points: "8",
+        weak: "unusual DNS records",
       },
       {
         id: "dns-addresses",
         finding: "The name points to 6 or more addresses",
         points: "4",
+        weak: "unusual DNS records",
       },
       {
         id: "redirect-hops",
         finding: "The link redirects 3 or more times",
         points: "8",
+        weak: "a long redirect chain",
       },
       {
         id: "redirect-http",
@@ -222,28 +233,34 @@ export const SCORING_TABLES: readonly ScoringTable[] = [
         id: "page-obfuscation",
         finding: "The final page hides its code (two or more signs)",
         points: "10",
+        weak: "hidden page code",
       },
       {
         id: "page-iframes",
         finding: "The final page embeds a hidden frame, or 3 or more frames",
         points: "8",
+        weak: "embedded frames",
       },
       {
         id: "page-refresh",
-        finding: "The final page jumps to another site on its own",
+        finding:
+          "The final page's HTML sends you to another site automatically (a meta refresh)",
         points: "8",
+        weak: "an automatic jump",
       },
     ],
   },
   {
     id: "discounts",
     caption: "What lowers the score",
-    note: `Neither applies when any single finding is worth ${DISCOUNTS_OFF_AT} or more, so a good record never talks down a serious listing.`,
+    notes: [
+      `Neither applies when any single finding is worth ${DISCOUNTS_OFF_AT} or more, so a good record never talks down a serious listing.`,
+    ],
     rows: [
       {
         id: "vt-harmless",
         finding:
-          "60 or more VirusTotal engines call it harmless, none flag it, and the analysis isn't more than 30 days old",
+          "60 or more VirusTotal engines call it harmless, none flag it, and its analysis is no more than 30 days old (or has no date)",
         points: "−10",
       },
       {
@@ -255,3 +272,96 @@ export const SCORING_TABLES: readonly ScoringTable[] = [
     ],
   },
 ];
+
+/** A share of 1 as a whole or one-decimal percentage: 0.044 → "4.4". */
+function percent(share: number): string {
+  return String(Math.round(share * 1000) / 10);
+}
+
+function signed(share: number, sign: "+" | "−"): string {
+  return `${sign}${percent(share)}`;
+}
+
+const policy = CONFIDENCE_POLICY;
+
+const weakSigns = [
+  ...new Set(
+    SCORING_TABLES.flatMap((table) => table.rows)
+      .map((row) => row.weak)
+      .filter((weak): weak is string => Boolean(weak)),
+  ),
+];
+
+/** Confidence as /about states it: the engine's own figures. */
+export const CONFIDENCE = {
+  high: percent(policy.labels.high),
+  moderate: percent(policy.labels.moderate),
+  caps: [
+    `A Safe result with one of VirusTotal, Google Safe Browsing, or the threat feeds missing, or answering only in part, goes no higher than ${percent(policy.caps.safeOneListMissing)}%; with two or more, no higher than ${percent(policy.caps.safeListsMissing)}%. Either way it can't be High.`,
+    `A Safe result resting on a VirusTotal analysis more than ${VT_STALE_ANALYSIS_DAYS} days old goes no higher than ${percent(policy.caps.safeStaleVirusTotal)}%.`,
+    `Unknown goes no higher than ${percent(policy.caps.unknown)}%, so it's always Low.`,
+    `Every result stays between ${percent(policy.floor)}% and ${percent(policy.safeCeiling)}% (Safe) or ${percent(policy.riskyCeiling)}% (everything else).`,
+  ],
+  /** How the figure adds up, before the caps. */
+  steps: [
+    { step: "Start", value: `${percent(policy.start)}%` },
+    {
+      step: "Each check that came back with something to go on",
+      value: signed(policy.perDataRichCheck, "+"),
+    },
+    {
+      step: "Each check that finished without much (no certificate, no registration record, no answer from the site, a list answering only in part)",
+      value: signed(policy.perThinCheck, "+"),
+    },
+    {
+      step: "Each check that didn't apply",
+      value: signed(policy.perSkippedCheck, "+"),
+    },
+    {
+      step: "Each check that failed",
+      value: signed(policy.perFailedCheck, "−"),
+    },
+    {
+      step: "Each note about something that couldn't be checked",
+      value: `${signed(policy.perLimitation, "−")}, at most ${signed(policy.maxLimitations, "−")} in all`,
+    },
+    {
+      step: "The link pattern model's two members agree / only one answered / they disagree",
+      value: [
+        policy.modelAgreementShare.agree,
+        policy.modelAgreementShare.oneMember,
+        policy.modelAgreementShare.disagree,
+      ]
+        .map((share) => signed(policy.modelAgreement * share, "+"))
+        .join(" / "),
+    },
+    {
+      step: "Safe: each major list that answered clean",
+      value: signed(policy.safe.perCleanList, "+"),
+    },
+    {
+      step: "Safe: each major list missing or answering only in part",
+      value: signed(policy.safe.perMissingList, "−"),
+    },
+    {
+      step: "Safe: no major list answered clean",
+      value: signed(policy.safe.noCleanList, "−"),
+    },
+    {
+      step: "Otherwise: each major list that flagged it (for the threat feeds, a listing strong enough to convict, or a high-confidence Spamhaus DBL or SURBL listing)",
+      value: signed(policy.risky.perFlaggingList, "+"),
+    },
+    {
+      step: "Otherwise: each major list that answered clean",
+      value: `${signed(policy.risky.perCleanList, "−")}, at most ${signed(policy.risky.maxCleanLists, "−")} in all`,
+    },
+    {
+      step: "Otherwise: each major list missing or answering only in part",
+      value: signed(policy.risky.perMissingList, "−"),
+    },
+    {
+      step: `Otherwise: two or more different kinds of finding back it up (say, a list and the link pattern model), not counting weak signs (${formatList(weakSigns)})`,
+      value: signed(policy.risky.corroborated, "+"),
+    },
+  ],
+} as const;

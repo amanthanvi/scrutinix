@@ -1,5 +1,7 @@
+import { parse } from "tldts";
 import { describe, expect, it } from "vitest";
 
+import { splitLinkAnatomy } from "@/lib/domain/link-anatomy";
 import {
   CONFIDENCE,
   CONVICTS_AT,
@@ -17,22 +19,28 @@ import type {
   WhoisData,
 } from "@/lib/domain/schemas";
 import { threatScoreToVerdict } from "@/lib/domain/score-bands";
+import { isSharedPlatformHost } from "@/lib/domain/shared-platforms";
 import {
   createPendingSignalResults,
   type SignalResults,
 } from "@/lib/domain/types";
 import {
   buildThreatAssessment,
+  CONFIDENCE_POLICY,
+  scoredFindings,
   scoreToConfidenceLabel,
 } from "@/lib/domain/verdict";
+import { THREATFOX_HIGH_CONFIDENCE } from "@/lib/server/providers/threatfox";
+import { MANY_ADDRESS_RECORDS } from "@/lib/server/signals/dns";
 import { fixtureSignals } from "@/tests/fixtures/scenario-signals";
 
 /**
  * /about prints the scoring method from `lib/domain/methodology.ts`. Every
- * row here runs through the real engine: `add` on top of `base` must move
- * the score by exactly `points`, and unless `stated` is false the row's
- * text must print that number. A changed weight fails until the page says
- * the same thing.
+ * row runs through the real engine: `add` on top of `base` must move the
+ * score by exactly `points`, including just past each threshold the row
+ * names. Every number a row prints must be one it declares in `NUMBERS`,
+ * so a changed weight, step, or threshold fails until page and engine
+ * agree. The confidence section prints `CONFIDENCE_POLICY` itself.
  */
 
 type Edit = (signals: SignalResults) => void;
@@ -224,6 +232,7 @@ const harmlessVt = vt({ harmless: 60, lastAnalysisDate: daysAgo(30) });
 const SCENARIOS: Record<string, Scenario[]> = {
   gsb: [
     { add: gsb("MALWARE"), points: 62 },
+    // "plus 6 for each further kind": 62 + 6.
     { add: gsb("MALWARE", "SOCIAL_ENGINEERING"), points: 68, stated: false },
     {
       add: gsb("MALWARE", "SOCIAL_ENGINEERING", "UNWANTED_SOFTWARE"),
@@ -322,6 +331,7 @@ const SCENARIOS: Record<string, Scenario[]> = {
   ],
   "vt-malicious-many": [
     { add: vt({ malicious: 5 }), points: 55 },
+    // "plus 5 for each further engine": 55 + 5.
     { add: vt({ malicious: 6 }), points: 60, stated: false },
     { add: vt({ malicious: 11 }), points: 85 },
     { add: vt({ malicious: 40 }), points: 85 },
@@ -335,12 +345,16 @@ const SCENARIOS: Record<string, Scenario[]> = {
 
   "ml-malicious": [
     { add: ml("malicious", 1), points: 45 },
-    { add: ml("malicious", 0.8), points: 36, stated: false },
+    // 45 × 0.9 = 40.5, rounded to 41; 45 × 0.55 = 24.75, rounded to 25.
+    { add: ml("malicious", 0.9), points: 41, stated: false },
+    { add: ml("malicious", 0.55), points: 25 },
+    // 45 × 0.1 = 4.5, rounded to 5, but at least 25.
     { add: ml("malicious", 0.1), points: 25 },
   ],
   "ml-risky": [
     { add: ml("risky", 1), points: 16 },
     { add: ml("risky", 0.5), points: 8, stated: false },
+    { add: ml("risky", 0.03), points: 0, stated: false },
   ],
   "cert-invalid": [{ add: invalidCert, points: 28 }],
   "cert-untrusted": [
@@ -351,6 +365,7 @@ const SCENARIOS: Record<string, Scenario[]> = {
   ],
   "cert-fresh": [
     { base: whois(10), add: ssl({ validFrom: daysAgo(2) }), points: 12 },
+    { base: whois(29), add: ssl({ validFrom: daysAgo(6.5) }), points: 12 },
     {
       base: whois(10),
       add: ssl({ validFrom: daysAgo(7) }),
@@ -403,6 +418,15 @@ const SCENARIOS: Record<string, Scenario[]> = {
       }),
       points: 10,
     },
+    {
+      // A relative location on a plain-HTTP hop stays on HTTP too.
+      add: redirect({
+        totalHops: 1,
+        finalUrl: "http://site.com/b",
+        hops: [{ url: "http://site.com/a", status: 301, location: "/b" }],
+      }),
+      points: 10,
+    },
   ],
   "redirect-cross": [
     {
@@ -449,6 +473,18 @@ const SCENARIOS: Record<string, Scenario[]> = {
     { base: invalidCert, add: harmlessVt, points: -10 },
     {
       base: invalidCert,
+      add: vt({ harmless: 60, lastAnalysisDate: daysAgo(30.9) }),
+      points: -10,
+    },
+    // "(or has no date)": a missing or unreadable date doesn't count as old.
+    { base: invalidCert, add: vt({ harmless: 60 }), points: -10 },
+    {
+      base: invalidCert,
+      add: vt({ harmless: 60, lastAnalysisDate: "not a date" }),
+      points: -10,
+    },
+    {
+      base: invalidCert,
       add: vt({ harmless: 59, lastAnalysisDate: daysAgo(1) }),
       points: 0,
       stated: false,
@@ -459,9 +495,17 @@ const SCENARIOS: Record<string, Scenario[]> = {
       points: 0,
       stated: false,
     },
+    {
+      base: invalidCert,
+      add: vt({ harmless: 80, suspicious: 1, lastAnalysisDate: daysAgo(1) }),
+      // The suspicious engine adds 4; no discount.
+      points: 4,
+      stated: false,
+    },
   ],
   "domain-history": [
     { base: invalidCert, add: whois(365 * 5), points: -8 },
+    { base: invalidCert, add: whois(365 * 5 - 1), points: 0, stated: false },
     {
       base: invalidCert,
       add: whois(365 * 5, { subdomainOf: "example.com" }),
@@ -477,19 +521,66 @@ const SCENARIOS: Record<string, Scenario[]> = {
   ],
 };
 
+/**
+ * Every number each row prints, in its finding and its points. A changed
+ * figure in the copy fails here; a changed figure in the engine fails its
+ * scenario above.
+ */
+const NUMBERS: Record<string, number[]> = {
+  gsb: [62, 6, 74],
+  "feed-url": [55],
+  "feed-host": [25],
+  "threatfox-high": [THREATFOX_HIGH_CONFIDENCE, 55],
+  "threatfox-medium": [40],
+  "threatfox-elsewhere": [25],
+  "dbl-high": [45],
+  "dbl-spam": [25],
+  "dbl-abused": [15],
+  "surbl-high": [35],
+  "surbl-abused": [20],
+  "vt-malicious-few": [12, 22, 32, 42],
+  "vt-malicious-many": [55, 5, 85],
+  "vt-suspicious": [4, 16],
+  "ml-malicious": [45, 0, 1, 25],
+  "ml-risky": [16],
+  "cert-invalid": [28],
+  "cert-untrusted": [26],
+  "cert-fresh": [7, 30, 12],
+  "age-month": [30, 15],
+  "age-young": [30, 179, 8],
+  "dns-punycode": [8],
+  "dns-addresses": [MANY_ADDRESS_RECORDS, 4],
+  "redirect-hops": [3, 8],
+  "redirect-http": [10],
+  "redirect-cross": [14],
+  "page-password": [20],
+  "page-obfuscation": [10],
+  "page-iframes": [3, 8],
+  "page-refresh": [8],
+  "vt-harmless": [60, 30, 10],
+  "domain-history": [5, 8],
+};
+
 const rows = SCORING_TABLES.flatMap((table) =>
   table.rows.map((row) => ({ ...row, table: table.id })),
 );
 
-function statesNumber(text: string, points: number) {
-  const sign = points < 0 ? "−" : "";
-  return new RegExp(`(^|[^\\d])${sign}${Math.abs(points)}(?!\\d)`).test(text);
+function printedNumbers(text: string): number[] {
+  return (text.match(/\d+(?:\.\d+)?/g) ?? []).map(Number);
 }
 
+const sorted = (values: number[]) => [...values].sort((a, b) => a - b);
+
 describe("/about scoring tables", () => {
-  it("has engine scenarios for exactly the rows it prints", () => {
-    expect(Object.keys(SCENARIOS).sort()).toEqual(
-      rows.map((row) => row.id).sort(),
+  it("has engine scenarios and declared numbers for exactly the rows it prints", () => {
+    const ids = rows.map((row) => row.id).sort();
+    expect(Object.keys(SCENARIOS).sort()).toEqual(ids);
+    expect(Object.keys(NUMBERS).sort()).toEqual(ids);
+  });
+
+  it.each(rows)("$id prints only the numbers it declares", (row) => {
+    expect(sorted(printedNumbers(`${row.finding} ${row.points}`))).toEqual(
+      sorted(NUMBERS[row.id] ?? []),
     );
   });
 
@@ -498,18 +589,21 @@ describe("/about scoring tables", () => {
       const base = scenario.base ?? (() => {});
       expect(scoreOf(base, scenario.add) - scoreOf(base)).toBe(scenario.points);
       if (scenario.stated !== false) {
-        expect(statesNumber(row.points, scenario.points)).toBe(true);
+        expect(NUMBERS[row.id]).toContain(Math.abs(scenario.points));
+        expect(row.points.startsWith("−")).toBe(scenario.points < 0);
       }
     }
   });
 
   it("marks exactly the rows that convict on their own", () => {
     for (const row of rows) {
-      const scenarios = SCENARIOS[row.id] ?? [];
-      const alone = scenarios.map((scenario) => scoreOf(scenario.add));
-      if (row.convicts) {
-        expect(alone.every((score) => score >= CONVICTS_AT)).toBe(true);
-      } else {
+      const alone = (SCENARIOS[row.id] ?? []).map((scenario) =>
+        scoreOf(scenario.add),
+      );
+      expect(alone.every((score) => score >= CONVICTS_AT)).toBe(
+        Boolean(row.convicts),
+      );
+      if (!row.convicts) {
         expect(alone.every((score) => score < CONVICTS_AT)).toBe(true);
       }
     }
@@ -525,6 +619,48 @@ describe("/about scoring tables", () => {
     expect(Math.max(...linkPoints)).toBe(LINK_CHECK_MAX);
     expect(LINK_CHECK_MAX).toBeLessThan(CONVICTS_AT);
   });
+
+  it("calls weak signs exactly the findings the engine weighs as weak", () => {
+    for (const row of rows.filter((row) => row.table !== "discounts")) {
+      for (const scenario of SCENARIOS[row.id] ?? []) {
+        if (scenario.points <= 0) continue;
+        const signals = createPendingSignalResults();
+        all(scenario.base ?? (() => {}), scenario.add)(signals);
+        const before = createPendingSignalResults();
+        (scenario.base ?? (() => {}))(before);
+        // What the row's finding added: everything not already in the base.
+        const remaining = [...scoredFindings(before)];
+        const added = scoredFindings(signals).filter((finding) => {
+          const index = remaining.findIndex(
+            (existing) =>
+              existing.signal === finding.signal &&
+              existing.category === finding.category &&
+              existing.score === finding.score &&
+              existing.quality === finding.quality,
+          );
+          if (index === -1) return true;
+          remaining.splice(index, 1);
+          return false;
+        });
+        expect(added.length).toBeGreaterThan(0);
+        for (const finding of added) {
+          expect([row.id, finding.quality === "low"]).toEqual([
+            row.id,
+            Boolean(row.weak),
+          ]);
+        }
+      }
+    }
+  });
+
+  it("names real shared platforms and a real provider threshold", () => {
+    // The provider-level filter itself is covered by
+    // tests/integration/threat-feeds-provider.test.ts.
+    expect(isSharedPlatformHost("github.com")).toBe(true);
+    expect(isSharedPlatformHost("docs.google.com")).toBe(true);
+    const lists = SCORING_TABLES.find((table) => table.id === "lists");
+    expect(lists?.notes.join(" ")).toContain("github.com or docs.google.com");
+  });
 });
 
 describe("/about rules", () => {
@@ -534,11 +670,14 @@ describe("/about rules", () => {
       confidence: "high",
       detail: "lists this domain as a phishing domain",
     });
+    const modelAt45 = ml("malicious", 1);
     const modelAt44 = ml("malicious", 0.98);
     expect(scoreOf(listedAt45)).toBe(DISCOUNTS_OFF_AT);
+    expect(scoreOf(modelAt45)).toBe(DISCOUNTS_OFF_AT);
     expect(scoreOf(modelAt44)).toBe(DISCOUNTS_OFF_AT - 1);
 
     expect(scoreOf(listedAt45, harmlessVt)).toBe(DISCOUNTS_OFF_AT);
+    expect(scoreOf(modelAt45, whois(365 * 5))).toBe(DISCOUNTS_OFF_AT);
     expect(scoreOf(modelAt44, harmlessVt)).toBe(DISCOUNTS_OFF_AT - 1 - 10);
     expect(scoreOf(modelAt44, whois(365 * 5))).toBe(DISCOUNTS_OFF_AT - 1 - 8);
   });
@@ -559,55 +698,133 @@ describe("/about rules", () => {
       if (next) expect(next.min).toBe(band.max + 1);
     });
   });
+
+  it("recognises the look-alike the page shows, and not what it says it skips", () => {
+    const impersonates = (url: string) =>
+      splitLinkAnatomy(parse, url)?.impersonates ?? null;
+    expect(impersonates("https://paypal.com.secure-login.xyz/")).toBe(
+      "paypal.com",
+    );
+    expect(impersonates("https://paypal.co.uk.secure-login.xyz/")).toBe(
+      "paypal.co.uk",
+    );
+    expect(impersonates("https://paypal.com@secure-login.xyz/")).toBe(
+      "paypal.com",
+    );
+    // Not every name, and never the page part.
+    expect(impersonates("https://paypal.app.secure-login.xyz/")).toBeNull();
+    expect(impersonates("https://example.com/paypal.com")).toBeNull();
+  });
 });
 
 describe("/about confidence", () => {
-  it("states the cut-offs between the confidence words", () => {
-    expect(scoreToConfidenceLabel(CONFIDENCE.high / 100)).toBe("high");
-    expect(scoreToConfidenceLabel((CONFIDENCE.high - 1) / 100)).toBe(
-      "moderate",
-    );
-    expect(scoreToConfidenceLabel(CONFIDENCE.moderate / 100)).toBe("moderate");
-    expect(scoreToConfidenceLabel((CONFIDENCE.moderate - 1) / 100)).toBe("low");
+  it("prints the engine's own cut-offs", () => {
+    expect(CONFIDENCE.high).toBe("85");
+    expect(CONFIDENCE.moderate).toBe("50");
+    const { labels } = CONFIDENCE_POLICY;
+    expect(scoreToConfidenceLabel(labels.high)).toBe("high");
+    expect(scoreToConfidenceLabel(labels.high - 0.01)).toBe("moderate");
+    expect(scoreToConfidenceLabel(labels.moderate)).toBe("moderate");
+    expect(scoreToConfidenceLabel(labels.moderate - 0.01)).toBe("low");
   });
 
-  it("caps a Safe result at the stated figures when major lists are missing", async () => {
+  it("caps a Safe result when a major list is missing or answers only in part", async () => {
     const clean = await fixtureSignals("example.com");
     const full = buildThreatAssessment(clean);
     expect(full.verdict).toBe("safe");
     expect(full.threatInfo?.confidenceLabel).toBe("high");
 
-    // Unconfigured, not failed: the most a Safe result can have with a
-    // list missing, so the cap is what binds.
+    // Unconfigured, not failed: the most a Safe result can have with a list
+    // missing, so the cap is what binds.
     const skipped = {
       status: "skipped" as const,
       error: "Not configured.",
       durationMs: 0,
       data: null,
     };
-    const oneMissing = { ...clean, virusTotal: skipped };
-    const one = buildThreatAssessment(oneMissing).threatInfo;
-    expect(one?.confidence).toBe(CONFIDENCE.safeOneListMissing / 100);
-    expect(one?.confidenceLabel).not.toBe("high");
+    const one = buildThreatAssessment({ ...clean, virusTotal: skipped });
+    expect(one.threatInfo?.confidence).toBe(
+      CONFIDENCE_POLICY.caps.safeOneListMissing,
+    );
+    expect(one.threatInfo?.confidenceLabel).not.toBe("high");
+
+    const feeds = clean.threatFeeds;
+    if (feeds.status !== "success" || !feeds.data) throw new Error("fixture");
+    const partial = buildThreatAssessment({
+      ...clean,
+      threatFeeds: {
+        ...feeds,
+        data: { ...feeds.data, warnings: ["One feed didn't answer."] },
+      },
+    });
+    expect(partial.threatInfo?.confidence).toBe(
+      CONFIDENCE_POLICY.caps.safeOneListMissing,
+    );
 
     const two = buildThreatAssessment({
-      ...oneMissing,
+      ...clean,
+      virusTotal: skipped,
       googleSafeBrowsing: skipped,
-    }).threatInfo;
-    expect(two?.confidence).toBeLessThanOrEqual(
-      CONFIDENCE.safeListsMissing / 100,
+    });
+    expect(two.threatInfo?.confidence).toBeLessThanOrEqual(
+      CONFIDENCE_POLICY.caps.safeListsMissing,
     );
-    expect(two?.confidenceLabel).not.toBe("high");
   });
 
-  it("stops Unknown at the stated cap", async () => {
+  it("caps a Safe result on a stale VirusTotal analysis", async () => {
+    const clean = await fixtureSignals("example.com");
+    const vtSignal = clean.virusTotal;
+    if (vtSignal.status !== "success" || !vtSignal.data) {
+      throw new Error("fixture");
+    }
+    const stale = buildThreatAssessment({
+      ...clean,
+      virusTotal: {
+        ...vtSignal,
+        data: { ...vtSignal.data, lastAnalysisDate: daysAgo(31) },
+      },
+    });
+    expect(stale.threatInfo?.confidence).toBe(
+      CONFIDENCE_POLICY.caps.safeStaleVirusTotal,
+    );
+  });
+
+  it("caps Unknown", async () => {
     const unknown = buildThreatAssessment(
       await fixtureSignals("unreachable.scrutinix.test"),
     );
     expect(unknown.verdict).toBe("unknown");
     expect(unknown.threatInfo?.confidence).toBeLessThanOrEqual(
-      CONFIDENCE.unknown / 100,
+      CONFIDENCE_POLICY.caps.unknown,
     );
     expect(unknown.threatInfo?.confidenceLabel).toBe("low");
+  });
+
+  it("prints every step and cap from the engine's figures", () => {
+    const text = [
+      ...CONFIDENCE.caps,
+      ...CONFIDENCE.steps.map((row) => `${row.step} ${row.value}`),
+    ].join(" ");
+    const policy = CONFIDENCE_POLICY;
+    for (const figure of [
+      policy.start,
+      policy.perDataRichCheck,
+      policy.perFailedCheck,
+      policy.maxLimitations,
+      policy.safe.perCleanList,
+      policy.safe.noCleanList,
+      policy.risky.perFlaggingList,
+      policy.risky.corroborated,
+      policy.modelAgreement * policy.modelAgreementShare.oneMember,
+      policy.caps.safeOneListMissing,
+      policy.caps.safeListsMissing,
+      policy.caps.safeStaleVirusTotal,
+      policy.caps.unknown,
+      policy.floor,
+      policy.safeCeiling,
+      policy.riskyCeiling,
+    ]) {
+      expect(text).toContain(String(Math.round(figure * 1000) / 10));
+    }
   });
 });

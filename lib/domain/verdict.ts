@@ -75,6 +75,26 @@ function collectContributions(signals: SignalResults): Contribution[] {
 }
 
 /**
+ * Every finding the engine scored, with its points and quality, before
+ * discounts. `tests/unit/methodology.test.ts` reads it to check which
+ * findings /about calls weak signs.
+ */
+export function scoredFindings(
+  signals: SignalResults,
+): ReadonlyArray<
+  Pick<Contribution, "signal" | "score" | "category" | "quality">
+> {
+  return collectContributions(signals).map(
+    ({ signal, score, category, quality }) => ({
+      signal,
+      score,
+      category,
+      quality,
+    }),
+  );
+}
+
+/**
  * The checks that added score to the verdict. The Summary view shows
  * exactly these (plus failures), so it can never say "All 8 checks found
  * nothing." under a verdict those checks raised. Exculpatory (negative)

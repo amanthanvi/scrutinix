@@ -128,6 +128,9 @@ export async function checkThreatFox(
   return { match: null, warning: null };
 }
 
+/** ThreatFox confidence (0-100) at which a listing counts as high confidence. */
+export const THREATFOX_HIGH_CONFIDENCE = 75;
+
 function toMatch(
   entry: Record<string, unknown>,
   matchType: NonNullable<FeedMatch["matchType"]>,
@@ -147,7 +150,8 @@ function toMatch(
     feed: "threatfox",
     matchedUrl,
     detail: `lists ${subject} as ${threatIndicatorPhrase(threatType, malware)}`,
-    confidence: confidenceLevel(entry) >= 75 ? "high" : "medium",
+    confidence:
+      confidenceLevel(entry) >= THREATFOX_HIGH_CONFIDENCE ? "high" : "medium",
     matchType,
     ...(listedAt ? { listedAt } : {}),
   };
