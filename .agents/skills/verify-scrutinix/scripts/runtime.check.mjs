@@ -985,9 +985,7 @@ const recordingPlaywright = standInPlaywright(
   "recording-playwright",
   `fs.writeFileSync(${JSON.stringify(recorded)}, JSON.stringify({
   argv: process.argv.slice(2),
-  playwrightEnv: Object.keys(process.env).filter((key) =>
-    /^(PLAYWRIGHT_|PW|DEBUG_FILE$|npm_(package_)?config_(pw|playwright|debug_file))/i.test(key),
-  ),
+  envKeys: Object.keys(process.env),
   htmlOpen: process.env.PLAYWRIGHT_HTML_OPEN,
 }));
 fs.writeFileSync(process.env.VERIFY_REPORT_FILE, JSON.stringify({ suites: [], errors: [], stats: { expected: 1, unexpected: 0, flaky: 0, skipped: 0 } }));
@@ -1020,6 +1018,10 @@ for (const [label, extra] of [
   );
 }
 rmSync(recorded, { force: true });
+// An inherited NODE_OPTIONS (here, a harmless preload) reaches the wrapper
+// but never Playwright.
+const preload = path.join(scratch, "SYNTH-preload.cjs");
+writeFileSync(preload, "");
 const filtered = await runSuiteWith(
   recordingPlaywright,
   ["--port", String(portA), "-g", "smoke home"],
@@ -1035,6 +1037,11 @@ const filtered = await runSuiteWith(
     npm_config_playwright_html_output_dir: path.join(scratch, "SYNTH-npm-html"),
     DEBUG_FILE: path.join(scratch, "SYNTH-debug.log"),
     npm_config_debug_file: path.join(scratch, "SYNTH-npm-debug.log"),
+    SELENIUM_REMOTE_URL: "http://127.0.0.1:9/SYNTH-grid",
+    SELENIUM_REMOTE_CAPABILITIES: '{"SYNTH":"caps"}',
+    SELENIUM_REMOTE_HEADERS: '{"SYNTH":"header"}',
+    NODE_OPTIONS: `--require ${preload}`,
+    SHARE_SIGNING_SECRET: "SYNTH-not-for-playwright",
     PLAYWRIGHT_BROWSERS_PATH: path.join(scratch, "browsers"),
   }),
 );
@@ -1054,14 +1061,57 @@ check(
     seen.argv[5] === "smoke home",
   cli(filtered),
 );
+// The child's environment is an allowlist plus what suite.mjs sets.
+const allowedChildEnv = new Set([
+  "PATH",
+  "HOME",
+  "USER",
+  "LOGNAME",
+  "SHELL",
+  "TMPDIR",
+  "TMP",
+  "TEMP",
+  "TZ",
+  "LANG",
+  "LANGUAGE",
+  "TERM",
+  "COLORTERM",
+  "NO_COLOR",
+  "CI",
+  "PLAYWRIGHT_BROWSERS_PATH",
+  "PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS",
+  "SystemRoot",
+  "windir",
+  "ComSpec",
+  "PATHEXT",
+  "USERPROFILE",
+  "APPDATA",
+  "LOCALAPPDATA",
+  "ProgramData",
+  "PLAYWRIGHT_HTML_OPEN",
+  "E2E_BASE_URL",
+  "VERIFY_EVIDENCE_DIR",
+  "VERIFY_RAW_DIR",
+  "VERIFY_SUITE",
+  "VERIFY_REPORT_FILE",
+]);
+const unexpectedChildEnv = seen
+  ? seen.envKeys.filter(
+      (key) =>
+        !allowedChildEnv.has(key) &&
+        // macOS adds this text-encoding hint to every process itself.
+        key !== "__CF_USER_TEXT_ENCODING" &&
+        !key.startsWith("LC_") &&
+        !key.startsWith("XDG_"),
+    )
+  : null;
 check(
-  "Playwright gets no inherited report, debug, inspector, or open-behaviour variables, in any spelling",
+  "Playwright inherits only the allowlisted environment: no reporter, debug, inspector, Selenium, NODE_OPTIONS, or secret variables",
   seen !== null &&
     seen.htmlOpen === "never" &&
-    seen.playwrightEnv.every((key) =>
-      ["PLAYWRIGHT_BROWSERS_PATH", "PLAYWRIGHT_HTML_OPEN"].includes(key),
-    ),
-  seen ? seen.playwrightEnv.length : null,
+    unexpectedChildEnv.length === 0 &&
+    seen.envKeys.includes("PLAYWRIGHT_BROWSERS_PATH"),
+  unexpectedChildEnv ? unexpectedChildEnv.length : null,
 );
 
 // The npm entry point ignores VERIFY_PLAYWRIGHT_CLI, the round-4 test hook:

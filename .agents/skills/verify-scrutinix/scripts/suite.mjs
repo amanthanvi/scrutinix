@@ -41,26 +41,49 @@ export function forwardedPlaywrightArgs(rest) {
   return out;
 }
 
-// Playwright reads report destinations and behaviour from the environment
-// ahead of the config: PLAYWRIGHT_HTML_*/JSON_* move reports, PWDEBUG and
-// PWDEBUGIMPL start the inspector (headed, no timeouts), DEBUG_FILE writes a
-// raw debug log wherever it points, and its lookup also takes the
-// npm_config_<name> and npm_package_config_<name> spellings. The child gets
-// none of them, except where browsers are installed and the
-// host-requirement switch, which write nothing.
-const KEPT_PLAYWRIGHT_ENV = new Set([
+// Playwright and its browser read many settings from the environment ahead
+// of the config: report destinations (PLAYWRIGHT_HTML_*, JSON_*), the
+// inspector (PWDEBUG), debug files (DEBUG_FILE), a remote browser
+// (SELENIUM_REMOTE_*), and more, in several spellings. Rather than chase
+// each one, the child gets an allowlist: what a headless local run needs
+// (paths, locale, terminal, CI, and where browsers are installed), plus
+// what this script sets below. Nothing else is inherited, secrets included.
+const INHERITED_ENV = new Set([
+  "PATH",
+  "HOME",
+  "USER",
+  "LOGNAME",
+  "SHELL",
+  "TMPDIR",
+  "TMP",
+  "TEMP",
+  "TZ",
+  "LANG",
+  "LANGUAGE",
+  "TERM",
+  "COLORTERM",
+  "NO_COLOR",
+  "CI",
   "PLAYWRIGHT_BROWSERS_PATH",
   "PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS",
+  // Windows equivalents of the paths above.
+  "SystemRoot",
+  "windir",
+  "ComSpec",
+  "PATHEXT",
+  "USERPROFILE",
+  "APPDATA",
+  "LOCALAPPDATA",
+  "ProgramData",
 ]);
-function isPlaywrightSetting(key) {
-  const npm = /^npm_(?:package_)?config_(.+)$/i.exec(key);
-  const name = (npm ? npm[1] : key).toUpperCase();
-  if (KEPT_PLAYWRIGHT_ENV.has(name)) return false;
-  return /^(PLAYWRIGHT_|PW)/.test(name) || name === "DEBUG_FILE";
-}
+const INHERITED_PREFIXES = ["LC_", "XDG_"];
 export function playwrightChildEnv(parent) {
   return Object.fromEntries(
-    Object.entries(parent).filter(([key]) => !isPlaywrightSetting(key)),
+    Object.entries(parent).filter(
+      ([key]) =>
+        INHERITED_ENV.has(key) ||
+        INHERITED_PREFIXES.some((prefix) => key.startsWith(prefix)),
+    ),
   );
 }
 
