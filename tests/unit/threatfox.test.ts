@@ -42,6 +42,7 @@ describe("checkThreatFox", () => {
               threat_type: "payload_delivery",
               malware_printable: "AgentTesla",
               confidence_level: 100,
+              first_seen: "2026-10-23 07:12:45 UTC",
             },
           ],
         });
@@ -58,7 +59,35 @@ describe("checkThreatFox", () => {
         "lists this link as an indicator of malware delivery (AgentTesla)",
       confidence: "high",
       matchType: "url",
+      listedAt: "2026-10-23T07:12:45.000Z",
     });
+  });
+
+  it("leaves listedAt unset when first_seen is missing or malformed", async () => {
+    vi.stubEnv("URLHAUS_AUTH_KEY", "abusech-key");
+    resetEnvForTests();
+
+    for (const first_seen of [undefined, "yesterday", "2026-13-45 99:00:00"]) {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async () =>
+          Response.json({
+            query_status: "ok",
+            data: [
+              {
+                ioc: "evil.example",
+                threat_type: "botnet_cc",
+                confidence_level: 90,
+                first_seen,
+              },
+            ],
+          }),
+        ),
+      );
+
+      const outcome = await checkThreatFox("https://evil.example/");
+      expect(outcome.match).not.toHaveProperty("listedAt");
+    }
   });
 
   it("lets a URL listed elsewhere on a shared host corroborate, never convict", async () => {

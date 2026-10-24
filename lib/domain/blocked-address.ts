@@ -200,7 +200,8 @@ function getEmbeddedIpv4FromIpv6(address: string) {
   return null;
 }
 
-function parseIpv6Bytes(address: string) {
+/** The 16 bytes of an IPv6 address, or null when it does not parse. */
+export function parseIpv6Bytes(address: string) {
   const hextets = parseIpv6Hextets(address);
   if (!hextets) {
     return null;

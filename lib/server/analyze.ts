@@ -120,7 +120,7 @@ export async function runAnalysis(
     threatFeeds: () => runThreatFeedsProvider(normalizedUrl, signal, scanId),
     ssl: () => runSslSignal(normalizedUrl, signal, scanId),
     whois: () => runWhoisSignal(normalizedUrl, signal),
-    dns: () => runDnsSignal(normalizedUrl),
+    dns: () => runDnsSignal(normalizedUrl, signal),
     redirectChain: () => runRedirectSignal(normalizedUrl, signal, scanId),
   };
   const task = <Name extends SignalName>(

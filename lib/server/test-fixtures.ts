@@ -15,6 +15,10 @@ import type { NormalizedUrl } from "@/lib/domain/url";
  *   error.scrutinix.test        -> every check fails (error)
  *   anything else               -> clean (safe)
  *
+ * Hosting networks use documentation ASNs (RFC 5398): clean hosts sit on
+ * AS64496 FIXTURE-HOSTING (US), the flagged scenarios on AS64500
+ * EXAMPLE-NET (NL).
+ *
  * This module is inert in production: it only activates through the explicit
  * environment flag, and it exports pure data behind one function.
  */
@@ -59,8 +63,25 @@ export function getFixtureSignalProviders(
   };
 }
 
+const FLAGGED_HOSTING = {
+  ip: "203.0.113.66",
+  asn: 64500,
+  asName: "EXAMPLE-NET",
+  prefix: "203.0.113.0/24",
+  registeredCountry: "NL",
+} as const;
+
+const HOUR_MS = 1000 * 60 * 60;
+
 function buildFixtureSignals(target: NormalizedUrl): SignalPayloadMap {
   const clean = buildCleanSignals(target);
+  const flaggedDns = {
+    ...clean.dns,
+    addresses: [FLAGGED_HOSTING.ip],
+    hosting: FLAGGED_HOSTING,
+  };
+  // Relative to now so the "Listed … ago" row reads the same on every run.
+  const listedAt = new Date(Date.now() - 6 * HOUR_MS).toISOString();
 
   switch (target.hostname) {
     case "malicious.scrutinix.test":
@@ -81,6 +102,7 @@ function buildFixtureSignals(target: NormalizedUrl): SignalPayloadMap {
             },
           ],
         },
+        dns: flaggedDns,
       };
     case "unreachable.scrutinix.test":
       return {
@@ -104,7 +126,9 @@ function buildFixtureSignals(target: NormalizedUrl): SignalPayloadMap {
           addresses: [],
           nameservers: [],
           mx: [],
+          txt: [],
           observations: ["No addresses resolved for this hostname."],
+          hosting: undefined,
         },
         redirectChain: {
           ...clean.redirectChain,
@@ -158,9 +182,11 @@ function buildFixtureSignals(target: NormalizedUrl): SignalPayloadMap {
               detail: "lists this link as active malware distribution",
               confidence: "high",
               matchType: "url",
+              listedAt,
             },
           ],
         },
+        dns: flaggedDns,
       };
     case "feed-hit.scrutinix.test":
       return {
@@ -174,9 +200,11 @@ function buildFixtureSignals(target: NormalizedUrl): SignalPayloadMap {
               detail: "lists this link as active malware distribution",
               confidence: "high",
               matchType: "url",
+              listedAt,
             },
           ],
         },
+        dns: flaggedDns,
       };
     default:
       return clean;
@@ -237,7 +265,8 @@ function buildCleanSignals(target: NormalizedUrl): SignalPayloadMap {
       validTo: "2027-01-01T00:00:00.000Z",
       daysRemaining: 200,
       selfSigned: false,
-      fingerprint256: "fixture-fingerprint",
+      fingerprint256:
+        "5E:2A:9C:41:0B:7D:E3:88:12:F4:6A:C0:39:D5:7E:21:AB:04:CF:93:60:1E:B8:4D:72:E9:0A:35:C6:5B:F1:8D",
       observations: [],
     },
     whois: {
@@ -258,11 +287,18 @@ function buildCleanSignals(target: NormalizedUrl): SignalPayloadMap {
       addresses: ["203.0.113.10"],
       cnames: [],
       mx: [`mx.${target.hostname}`],
-      txt: [],
-      nameservers: [`ns1.${target.hostname}`],
+      txt: ["v=spf1 -all", "google-site-verification=fixture-token"],
+      nameservers: [`ns1.${target.hostname}`, `ns2.${target.hostname}`],
       reverseHostnames: [],
       anomalies: [],
       observations: [],
+      hosting: {
+        ip: "203.0.113.10",
+        asn: 64496,
+        asName: "FIXTURE-HOSTING",
+        prefix: "203.0.113.0/24",
+        registeredCountry: "US",
+      },
     },
     redirectChain: {
       finalUrl: target.normalizedUrl,

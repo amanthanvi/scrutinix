@@ -4,6 +4,7 @@ import { PublicError } from "@/lib/domain/public-error";
 import type { ThreatFeedsData } from "@/lib/domain/types";
 import { simplifyUrlForMatching } from "@/lib/domain/url";
 import { fetchWithTimeout } from "@/lib/server/http";
+import { parseAbuseChTimestamp } from "@/lib/server/providers/abuse-ch";
 
 type FeedMatch = ThreatFeedsData["matches"][number];
 
@@ -140,6 +141,7 @@ function toMatch(
     entry.malware_printable !== "Unknown malware"
       ? entry.malware_printable
       : null;
+  const listedAt = parseAbuseChTimestamp(entry.first_seen);
 
   return {
     feed: "threatfox",
@@ -147,6 +149,7 @@ function toMatch(
     detail: `lists ${subject} as ${threatIndicatorPhrase(threatType, malware)}`,
     confidence: confidenceLevel(entry) >= 75 ? "high" : "medium",
     matchType,
+    ...(listedAt ? { listedAt } : {}),
   };
 }
 

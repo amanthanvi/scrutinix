@@ -8,6 +8,7 @@ export type {
   DNSData,
   GoogleSafeBrowsingData,
   HistoryEntry,
+  HostingNetwork,
   MLSignalData,
   PageContentFindings,
   RedirectData,

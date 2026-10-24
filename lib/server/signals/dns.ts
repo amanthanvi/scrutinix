@@ -12,21 +12,30 @@ import { isIP } from "node:net";
 import { isBlockedNetworkAddress } from "@/lib/domain/blocked-address";
 import type { DNSData } from "@/lib/domain/types";
 import { withTimeout } from "@/lib/server/http";
+import { lookupHostingNetwork } from "@/lib/server/providers/team-cymru";
 
 const REDACTED_ADDRESS_OBSERVATION =
   "Private or reserved addresses were omitted from the DNS result.";
 
-export async function runDnsSignal(url: string): Promise<DNSData> {
+/**
+ * `signal` cancels the hosting-network lookup (the only lookup here that
+ * reaches a third party); the record lookups use their own timeouts.
+ */
+export async function runDnsSignal(
+  url: string,
+  signal?: AbortSignal,
+): Promise<DNSData> {
   const hostname = new URL(url).hostname;
 
   if (isIP(hostname)) {
-    const reverseLookup = await Promise.allSettled([
-      withTimeout(reverse(hostname), 5_000, "PTR lookup"),
+    const { publicAddresses, blockedCount } = partitionAddresses([hostname]);
+    const [reverseLookup, hosting] = await Promise.all([
+      Promise.allSettled([withTimeout(reverse(hostname), 5_000, "PTR lookup")]),
+      lookupHostingNetwork(publicAddresses, signal),
     ]);
     const reverseHostnames =
       reverseLookup[0]?.status === "fulfilled" ? reverseLookup[0].value : [];
 
-    const { publicAddresses, blockedCount } = partitionAddresses([hostname]);
     const observations = [
       "DNS zone records do not apply to literal IP targets.",
       ...(reverseHostnames.length > 0
@@ -48,30 +57,40 @@ export async function runDnsSignal(url: string): Promise<DNSData> {
       reverseHostnames,
       anomalies: [],
       observations,
+      ...(hosting ? { hosting } : {}),
     };
   }
 
-  const [
-    ipv4Addresses,
-    ipv6Addresses,
-    cnames,
-    mxRecords,
-    nameservers,
-    txtRecords,
-  ] = await Promise.allSettled([
+  // The hosting lookup starts as soon as the addresses are known, so it
+  // overlaps the remaining record lookups instead of following them.
+  const addressLookup = Promise.allSettled([
     withTimeout(resolve4(hostname), 5_000, "A record lookup"),
     withTimeout(resolve6(hostname), 5_000, "AAAA record lookup"),
-    withTimeout(resolveCname(hostname), 5_000, "CNAME lookup"),
-    withTimeout(resolveMx(hostname), 5_000, "MX lookup"),
-    withTimeout(resolveNs(hostname), 5_000, "NS lookup"),
-    withTimeout(resolveTxt(hostname), 5_000, "TXT lookup"),
+  ]).then(([ipv4Addresses, ipv6Addresses]) => {
+    const addressList = unique([
+      ...(ipv4Addresses.status === "fulfilled" ? ipv4Addresses.value : []),
+      ...(ipv6Addresses.status === "fulfilled" ? ipv6Addresses.value : []),
+    ]);
+    return { addressList, ...partitionAddresses(addressList) };
+  });
+
+  const [
+    { addressList, publicAddresses, blockedCount },
+    hosting,
+    [cnames, mxRecords, nameservers, txtRecords],
+  ] = await Promise.all([
+    addressLookup,
+    addressLookup.then(({ publicAddresses }) =>
+      lookupHostingNetwork(publicAddresses, signal),
+    ),
+    Promise.allSettled([
+      withTimeout(resolveCname(hostname), 5_000, "CNAME lookup"),
+      withTimeout(resolveMx(hostname), 5_000, "MX lookup"),
+      withTimeout(resolveNs(hostname), 5_000, "NS lookup"),
+      withTimeout(resolveTxt(hostname), 5_000, "TXT lookup"),
+    ]),
   ]);
 
-  const addressList = unique([
-    ...(ipv4Addresses.status === "fulfilled" ? ipv4Addresses.value : []),
-    ...(ipv6Addresses.status === "fulfilled" ? ipv6Addresses.value : []),
-  ]);
-  const { publicAddresses, blockedCount } = partitionAddresses(addressList);
   const cnameList = cnames.status === "fulfilled" ? cnames.value : [];
   const mxList =
     mxRecords.status === "fulfilled"
@@ -117,6 +136,7 @@ export async function runDnsSignal(url: string): Promise<DNSData> {
     reverseHostnames: [],
     anomalies,
     observations,
+    ...(hosting ? { hosting } : {}),
   };
 }
 
