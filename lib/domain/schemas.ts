@@ -258,10 +258,14 @@ export type WhoisData = z.infer<typeof whoisDataSchema>;
  * routes the address. `registeredCountry` is registry data about the
  * network, never where the server is: word it "registered in". Evidence
  * only: never scored.
+ *
+ * `asn` has no fallback: a missing or invalid one fails the whole object,
+ * so the DNS schema drops `hosting` instead of reading corruption as "no
+ * network routes this". AS0 never originates a route (RFC 7607).
  */
 export const hostingNetworkSchema = z.object({
   ip: z.string(),
-  asn: z.number().int().positive().nullable().catch(null),
+  asn: z.number().int().min(1).max(4_294_967_295).nullable(),
   asName: nullableString,
   prefix: nullableString,
   registeredCountry: nullableString,

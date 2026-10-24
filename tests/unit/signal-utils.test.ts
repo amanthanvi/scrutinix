@@ -367,16 +367,44 @@ describe("dns hosting schema", () => {
     expect(dnsDataSchema.parse({ ...legacy, hosting: "AS1" }).hosting).toBe(
       undefined,
     );
-    expect(
-      dnsDataSchema.parse({ ...legacy, hosting: { ip: "1.1.1.1", asn: -4 } })
-        .hosting,
-    ).toEqual({
+  });
+
+  it("keeps an explicit unrouted answer but drops a missing or invalid ASN", () => {
+    const legacy = buildDns({ addresses: ["1.1.1.1"] });
+    const hostingOf = (hosting: unknown) =>
+      dnsDataSchema.parse({ ...legacy, hosting }).hosting;
+
+    expect(hostingOf({ ip: "1.1.1.1", asn: null })).toEqual({
       ip: "1.1.1.1",
       asn: null,
       asName: null,
       prefix: null,
       registeredCountry: null,
     });
+    expect(hostingOf({ ip: "1.1.1.1", asn: 4_294_967_295 })?.asn).toBe(
+      4_294_967_295,
+    );
+    for (const asn of [
+      "garbage",
+      -4,
+      0,
+      1.5,
+      4_294_967_296,
+      Number.NaN,
+      undefined,
+    ]) {
+      expect(hostingOf({ ip: "1.1.1.1", asn }), String(asn)).toBeUndefined();
+    }
+    expect(hostingOf({ ip: "1.1.1.1" })).toBeUndefined();
+
+    const kept = dnsDataSchema.parse({
+      ...legacy,
+      hosting: { ip: "1.1.1.1", asn: "garbage" },
+    });
+    expect(kept.addresses).toEqual(["1.1.1.1"]);
+    expect(getSignalDetailEntries("dns", kept, NOW)).not.toContainEqual(
+      expect.objectContaining({ value: expect.stringContaining("No network") }),
+    );
   });
 });
 
