@@ -19,6 +19,9 @@ import {
   VT_CONVICTION_ENGINES,
 } from "@/lib/domain/reputation";
 import {
+  FRESH_CERTIFICATE_DAYS,
+  LONG_REDIRECT_CHAIN_HOPS,
+  MANY_FRAMES,
   NEW_DOMAIN_DAYS,
   YOUNG_DOMAIN_DAYS,
 } from "@/lib/domain/signal-severity";
@@ -409,12 +412,17 @@ function answerDestination({
   }
 
   const data = signal.data;
-  if (!data.reachable) {
+  const hops = data.hops ?? [];
+  // No response at all: nothing was seen to describe.
+  if (!data.reachable && hops.length === 0) {
     return {
       answer: "We couldn't reach the site, so we can't say where it leads.",
       why: UNSEEN_PAGE,
     };
   }
+  // A chain we couldn't finish keeps the hops we saw (the engine scores
+  // them), but where it stopped is not where it ends.
+  const finished = data.reachable;
 
   // Sites by registered domain when the parser is here; hosts otherwise,
   // and then a different host is never claimed to be a different site.
@@ -423,12 +431,12 @@ function answerDestination({
     return host && registeredDomainOf ? registeredDomainOf(host) : host;
   };
   const start = siteOf(url);
-  const end = siteOf(data.finalUrl) ?? start;
+  const end = finished ? (siteOf(data.finalUrl) ?? start) : null;
   // Sites passed through need the parser: www.example.com is not a detour.
   const via = registeredDomainOf
     ? [
         ...new Set(
-          (data.hops ?? [])
+          hops
             .map((hop) => siteOf(hop.url))
             .filter(
               (site): site is string =>
@@ -438,27 +446,29 @@ function answerDestination({
       ]
     : [];
   const endsElsewhere = Boolean(start && end && start !== end);
+  const redirects =
+    data.totalHops > 0 ? countOf(data.totalHops, "redirect") : null;
+  const after = redirects ? ` after ${redirects}` : "";
 
   let route: string;
-  if (endsElsewhere) {
-    const ending = registeredDomainOf
-      ? `It ends on ${end}, a different site`
-      : `It ends on ${end}`;
-    route =
-      via.length > 0
-        ? `${ending}, after passing through ${formatList(via)}.`
-        : `${ending}.`;
+  if (!finished) {
+    const through = via.length > 0 ? `, through ${formatList(via)},` : "";
+    route = `We followed ${redirects ?? "the link"}${through} but couldn't reach the end, so we can't confirm where it finally leads.`;
+  } else if (endsElsewhere && registeredDomainOf) {
+    const through =
+      via.length > 0 ? `, passing through ${formatList(via)}` : "";
+    route = `It ends on ${end}, a different site${after ? `,${after}` : ""}${through}.`;
+  } else if (endsElsewhere) {
+    route = `It ends on ${end}${after}.`;
   } else if (via.length > 0) {
-    route = `It passes through ${formatList(via)} and comes back to this site.`;
-  } else if (data.totalHops === 0) {
-    route = "It opens this site directly, without redirects.";
+    route = `It passes through ${formatList(via)} and comes back to this site${after}.`;
+  } else if (redirects) {
+    route = `It stays on this site${after}.`;
   } else {
-    route = `It stays on this site after ${countOf(data.totalHops, "redirect")}.`;
+    route = "It opens this site directly, without redirects.";
   }
 
-  const downgraded = (data.hops ?? []).some((hop) =>
-    hop.location?.startsWith("http://"),
-  );
+  const downgraded = hops.some((hop) => hop.location?.startsWith("http://"));
   const content = data.content ?? null;
   const passwordHosts =
     content && content.passwordInputCount > 0
@@ -476,6 +486,13 @@ function answerDestination({
       ? "code written to be hard to read"
       : null,
   ].filter((part): part is string => part !== null);
+  // Hidden frames are named above; enough visible ones count too.
+  const frames =
+    content &&
+    content.hiddenIframeCount === 0 &&
+    content.iframeCount >= MANY_FRAMES
+      ? countOf(content.iframeCount, "frame")
+      : null;
 
   const answer = sentences([
     route,
@@ -485,6 +502,7 @@ function answerDestination({
     refreshesElsewhere &&
       `The page then moves you on to ${refreshSite} by itself.`,
     hidden.length > 0 && `The page has ${formatList(hidden)}.`,
+    frames && `The page embeds ${frames}.`,
   ]);
 
   let why: string;
@@ -497,8 +515,14 @@ function answerDestination({
       "Without encryption, others on the network can read or change what you see.";
   } else if (hidden.length > 0) {
     why = "Hidden parts of a page can do things you don't see.";
+  } else if (frames) {
+    why = "Frames can show another site's content inside this page.";
   } else if (via.length > 0) {
     why = "Detours through other sites can hide where a link really goes.";
+  } else if (!finished) {
+    why = "If we can't see where a link ends, we can't vouch for it.";
+  } else if (data.totalHops >= LONG_REDIRECT_CHAIN_HOPS) {
+    why = "A long chain of redirects is a weak sign on its own.";
   } else {
     why = "Scam links often bounce through other sites to hide where they end.";
   }
@@ -604,6 +628,12 @@ function domainAgeDays(signals: SignalResults): number | null {
     : null;
 }
 
+/** The registration age the engine scores, whoever the registration belongs to. */
+function scoredAgeDays(signals: SignalResults): number | null {
+  const whois = signals.whois;
+  return whois.status === "success" && whois.data ? whois.data.ageDays : null;
+}
+
 function describeRegistration(signals: SignalResults): string {
   const whois = signals.whois;
   if (whois.status === "skipped") {
@@ -617,7 +647,13 @@ function describeRegistration(signals: SignalResults): string {
     return "Its registration records weren't available.";
   }
   if (data.sharedPlatform) {
-    return "Its registration belongs to the shared platform it's on, not to whoever made this page.";
+    // Scored like any young domain, so said when it is one.
+    return sentences([
+      "Its registration belongs to the shared platform it's on, not to whoever made this page.",
+      data.ageDays !== null &&
+        data.ageDays < YOUNG_DOMAIN_DAYS &&
+        `The platform's domain was registered ${formatAge(data.ageDays)} ago.`,
+    ]);
   }
   return data.ageDays === null
     ? "Its registration records don't say when it was registered."
@@ -626,7 +662,7 @@ function describeRegistration(signals: SignalResults): string {
 
 function answerConcern({ signals }: Context): Answer {
   const pattern = describePattern(signals);
-  const ageDays = domainAgeDays(signals);
+  const ageDays = scoredAgeDays(signals);
   const young = ageDays !== null && ageDays < YOUNG_DOMAIN_DAYS;
   const registrationKnown = signals.whois.status === "success";
 
@@ -658,6 +694,8 @@ function answerConcern({ signals }: Context): Answer {
 
 const ONLY_THE_CONNECTION =
   "Even a valid certificate only protects the connection.";
+const FRESH_SETUP =
+  "A brand-new certificate on a brand-new domain is a common scam setup.";
 
 function answerHttps({ url, signals, now }: Context): Answer {
   const redirect = signals.redirectChain.data;
@@ -711,24 +749,33 @@ function answerCertificate(
 
   const data = signal.data;
   const issuedAt = data.validFrom ? Date.parse(data.validFrom) : Number.NaN;
+  const dated = Number.isFinite(issuedAt) && issuedAt <= now;
   // The certificate we read (the leaf), never the domain's first one.
-  const issued =
-    Number.isFinite(issuedAt) && issuedAt <= now
-      ? `This certificate was issued ${formatElapsed(now - issuedAt)} ago.`
-      : null;
+  const issued = dated
+    ? `This certificate was issued ${formatElapsed(now - issuedAt)} ago.`
+    : null;
+  // The engine's fresh-certificate rule: days old, on a brand-new domain.
+  const domainAge = scoredAgeDays(signals);
+  const freshOnNewDomain =
+    dated &&
+    Math.floor((now - issuedAt) / DAY_MS) < FRESH_CERTIFICATE_DAYS &&
+    domainAge !== null &&
+    domainAge < NEW_DOMAIN_DAYS;
 
   switch (data.validationState) {
     case "trusted":
       return {
         state: "The site has a valid certificate.",
         issued,
-        why: "Encryption protects the connection, not your trust in the site.",
+        why: freshOnNewDomain
+          ? FRESH_SETUP
+          : "Encryption protects the connection, not your trust in the site.",
       };
     case "warning":
       return {
         state: "We couldn't fully verify the site's certificate.",
         issued,
-        why: ONLY_THE_CONNECTION,
+        why: freshOnNewDomain ? FRESH_SETUP : ONLY_THE_CONNECTION,
       };
     default:
       return {
@@ -767,16 +814,19 @@ function answerOther({ signals }: Context): Answer {
     noAddress && data.observations.includes(PRIVATE_ADDRESSES_OMITTED);
   const anomalies = data.anomalies;
 
-  const records =
+  const addressing =
     data.subjectType === "ip"
       ? "The link uses a raw IP address instead of a domain name."
       : onlyPrivate
         ? "It points only to private or reserved addresses."
         : noAddress
           ? "We found no address for this name."
-          : anomalies.length > 0
-            ? anomalies.join(" ")
-            : "Nothing unusual in its DNS records.";
+          : null;
+  // Every unusual record is scored, so every one is stated.
+  const records =
+    addressing || anomalies.length > 0
+      ? sentences([addressing, ...anomalies])
+      : "Nothing unusual in its DNS records.";
 
   // The network's registered country, never where the server is.
   const hosting = data.hosting;

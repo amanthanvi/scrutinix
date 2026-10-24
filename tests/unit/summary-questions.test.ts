@@ -1,5 +1,5 @@
 import { parse } from "tldts";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { PRIVATE_ADDRESSES_OMITTED } from "@/lib/domain/blocked-address";
 import { registrableDomainOf } from "@/lib/domain/link-anatomy";
@@ -18,15 +18,24 @@ import {
   createPendingSignalResults,
   signalNames,
   type ClassificationFinding,
+  type PageContentFindings,
+  type RedirectData,
   type SignalResults,
 } from "@/lib/domain/types";
-import { buildThreatAssessment } from "@/lib/domain/verdict";
+import {
+  buildThreatAssessment,
+  getScoredFindings,
+  getScoredSignals,
+} from "@/lib/domain/verdict";
 import {
   cleanSignals,
   withDomainAge,
   withLureRedirect,
 } from "@/tests/fixtures/lure-signals";
-import { fixtureSignals } from "@/tests/fixtures/scenario-signals";
+import {
+  fixtureHosts,
+  fixtureSignals,
+} from "@/tests/fixtures/scenario-signals";
 
 const NOW = Date.parse("2026-10-24T12:00:00.000Z");
 const HOUR = 60 * 60 * 1000;
@@ -54,6 +63,40 @@ function ask(
     registeredDomainOf,
     ...options,
   });
+}
+
+/** A redirect chain from its hops: [url, status, location?]. */
+function chain(
+  hops: [string, number, string?][],
+  overrides: Partial<RedirectData> = {},
+): RedirectData {
+  const last = hops.at(-1);
+  return {
+    finalUrl: last?.[2] ?? last?.[0] ?? "",
+    totalHops: hops.filter(([, , location]) => location).length,
+    httpsUpgraded: false,
+    reachable: true,
+    terminalStatus: last?.[1] ?? null,
+    terminalError: overrides.reachable === false ? "Timed out." : null,
+    hops: hops.map(([url, status, location]) => ({ url, status, location })),
+    observations: [],
+    ...overrides,
+  };
+}
+
+/** The final page's findings; nothing notable unless overridden. */
+function page(overrides: Partial<PageContentFindings> = {}) {
+  return {
+    title: null,
+    crossOriginFormHosts: [],
+    crossOriginPasswordFormHosts: [],
+    passwordInputCount: 0,
+    iframeCount: 0,
+    hiddenIframeCount: 0,
+    obfuscationHints: [],
+    metaRefreshTarget: null,
+    ...overrides,
+  };
 }
 
 function byId(questions: SummaryQuestion[], id: SummaryQuestionId) {
@@ -508,7 +551,7 @@ describe("Where would it take me?", () => {
     const questions = ask(signals, { url: "https://short.example/a" });
     expect(byId(questions, "destination")).toMatchObject({
       answer:
-        "It ends on lure.example, a different site. Part of the way uses plain HTTP, without encryption. The page has 1 hidden frame.",
+        "It ends on lure.example, a different site, after 2 redirects. Part of the way uses plain HTTP, without encryption. The page has 1 hidden frame.",
       why: "The site you land on is the one you'd be trusting.",
     });
     expect(byId(questions, "concern")).toMatchObject({
@@ -525,7 +568,7 @@ describe("Where would it take me?", () => {
       byId(ask(signals, { url: "https://short.example/a" }), "destination"),
     ).toMatchObject({
       answer:
-        "It ends on lure.example, a different site. Part of the way uses plain HTTP, without encryption. Its page asks for a password and sends it to collect.example.",
+        "It ends on lure.example, a different site, after 2 redirects. Part of the way uses plain HTTP, without encryption. Its page asks for a password and sends it to collect.example.",
       why: "Your password would leave the site you reached.",
     });
   });
@@ -551,7 +594,7 @@ describe("Where would it take me?", () => {
     // Without the parser, a different host is named but not judged.
     expect(
       byId(ask(signals, { registeredDomainOf: null }), "destination").answer,
-    ).toBe("It ends on www.example.com.");
+    ).toBe("It ends on www.example.com after 1 redirect.");
   });
 
   it("names a detour through another site that comes back", () => {
@@ -575,7 +618,8 @@ describe("Where would it take me?", () => {
       ],
     };
     expect(byId(ask(signals), "destination")).toMatchObject({
-      answer: "It passes through example.net and comes back to this site.",
+      answer:
+        "It passes through example.net and comes back to this site after 2 redirects.",
       why: "Detours through other sites can hide where a link really goes.",
     });
     // Without the parser no host is judged a detour.
@@ -596,36 +640,104 @@ describe("Where would it take me?", () => {
       "We couldn't follow the link to see where it leads.",
     );
   });
+
+  it("keeps the hops it saw when it couldn't finish the chain", () => {
+    const signals = cleanSignals();
+    // Three redirects answered, one over plain HTTP; the next one timed out.
+    signals.redirectChain.data = chain(
+      [
+        ["https://example.com/", 301, "http://track.example.net/a"],
+        ["http://track.example.net/a", 302, "https://track.example.net/b"],
+        ["https://track.example.net/b", 302, "https://next.example/c"],
+      ],
+      { reachable: false, finalUrl: "https://track.example.net/b" },
+    );
+    // The engine scores what was seen, and the strip marks Redirects.
+    expect(getScoredSignals(signals).has("redirectChain")).toBe(true);
+
+    const destination = byId(ask(signals), "destination");
+    expect(destination).toMatchObject({
+      answer:
+        "We followed 3 redirects, through example.net, but couldn't reach the end, so we can't confirm where it finally leads. Part of the way uses plain HTTP, without encryption.",
+      why: "Without encryption, others on the network can read or change what you see.",
+    });
+    // Where it was heading is never named as where it ends.
+    expect(destination.answer).not.toMatch(/next\.example|ends on/);
+
+    // No response at all: nothing seen, so nothing to describe.
+    signals.redirectChain.data = chain([], {
+      reachable: false,
+      terminalStatus: null,
+    });
+    expect(byId(ask(signals), "destination")).toMatchObject({
+      answer: "We couldn't reach the site, so we can't say where it leads.",
+      why: "If we can't open the page, we can't vouch for it.",
+    });
+  });
+
+  it("names a page built from several frames, hidden or not", () => {
+    const signals = cleanSignals();
+    signals.redirectChain.data = chain([["https://example.com/", 200]], {
+      content: page({ iframeCount: 3 }),
+    });
+    expect(getScoredSignals(signals).has("redirectChain")).toBe(true);
+    expect(byId(ask(signals), "destination")).toMatchObject({
+      answer:
+        "It opens this site directly, without redirects. The page embeds 3 frames.",
+      why: "Frames can show another site's content inside this page.",
+    });
+
+    // Two visible frames aren't scored, and aren't mentioned.
+    signals.redirectChain.data.content = page({ iframeCount: 2 });
+    expect(getScoredSignals(signals).has("redirectChain")).toBe(false);
+    expect(byId(ask(signals), "destination").answer).toBe(
+      "It opens this site directly, without redirects.",
+    );
+  });
+
+  it("names a long chain that stays on the site, with a calm why", () => {
+    const signals = cleanSignals();
+    signals.redirectChain.data = chain([
+      ["https://example.com/", 301, "https://example.com/a"],
+      ["https://example.com/a", 302, "https://example.com/b"],
+      ["https://example.com/b", 302, "https://example.com/c"],
+      ["https://example.com/c", 200],
+    ]);
+    expect(byId(ask(signals), "destination")).toMatchObject({
+      answer: "It stays on this site after 3 redirects.",
+      why: "A long chain of redirects is a weak sign on its own.",
+    });
+  });
 });
 
+type Reading = [ClassificationFinding["label"], number];
+
+/** The ensemble as the server builds it: each member's own reading, and the real consensus. */
+function withMembers(
+  signals: SignalResults,
+  model: Reading | null,
+  structure: Reading,
+) {
+  const finding = ([label, score]: Reading, name: string) => ({
+    label,
+    score,
+    reasons: [],
+    model: name,
+  });
+  const transformerModel = model ? finding(model, "fixture") : null;
+  const lexicalModel = finding(structure, "lexical-heuristic");
+  const consensus = classifyConsensus(transformerModel, lexicalModel);
+  signals.mlEnsemble.data = {
+    ...signals.mlEnsemble.data!,
+    transformerModel,
+    lexicalModel,
+    consensusLabel: consensus.label,
+    consensusScore: consensus.score,
+  };
+  return consensus.label;
+}
+
 describe("What else raises concern?", () => {
-  type Reading = [ClassificationFinding["label"], number];
-
-  /** The ensemble as the server builds it: each member's own reading, and the real consensus. */
-  function withMembers(
-    signals: SignalResults,
-    model: Reading | null,
-    structure: Reading,
-  ) {
-    const finding = ([label, score]: Reading, name: string) => ({
-      label,
-      score,
-      reasons: [],
-      model: name,
-    });
-    const transformerModel = model ? finding(model, "fixture") : null;
-    const lexicalModel = finding(structure, "lexical-heuristic");
-    const consensus = classifyConsensus(transformerModel, lexicalModel);
-    signals.mlEnsemble.data = {
-      ...signals.mlEnsemble.data!,
-      transformerModel,
-      lexicalModel,
-      consensusLabel: consensus.label,
-      consensusScore: consensus.score,
-    };
-    return consensus.label;
-  }
-
   const concernOf = (signals: SignalResults) =>
     byId(ask(signals), "concern").answer!.split(" Its domain")[0];
 
@@ -875,5 +987,293 @@ describe("copy hygiene", () => {
         }
       }
     }
+  });
+});
+
+describe("every scored finding", () => {
+  // The fresh-certificate rule reads the clock when it scores.
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(NOW);
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const answerOf = (question: SummaryQuestion) => question.answer ?? "";
+  const statesReason = (question: SummaryQuestion, reason: string) =>
+    answerOf(question).includes(reason.replace(/\.$/, ""));
+
+  /**
+   * How the citing question names each finding, by the group the engine
+   * files it under. A finding with no rule here fails the walk, so a new
+   * scorer can't land without its Summary wording.
+   */
+  const named: Record<
+    string,
+    (question: SummaryQuestion, reason: string) => boolean
+  > = {
+    virusTotal: (q) => /VirusTotal engines? flags? it as/.test(answerOf(q)),
+    googleSafeBrowsing: (q) => /Safe Browsing lists it for/.test(answerOf(q)),
+    feed: statesReason,
+    "feed-host": (q) => /lists? other links on this site/.test(answerOf(q)),
+    ml: (q) =>
+      /find(?:s)? (?:the link|it) (?:risky|malicious-looking)|combined reading is/.test(
+        answerOf(q),
+      ),
+    tls: (q) => /certificate isn't trusted/.test(answerOf(q)),
+    // The answer dates it; the why says what that pairing means, unless a
+    // certificate error (scored too) is the bigger story.
+    "tls-fresh": (q) =>
+      /This certificate was issued .+ ago/.test(answerOf(q)) &&
+      (/brand-new certificate on a brand-new domain/.test(q.why ?? "") ||
+        /isn't trusted/.test(answerOf(q))),
+    "dns-punycode": statesReason,
+    dns: statesReason,
+    "redirect-hops": (q) => /\b\d+ redirects\b/.test(answerOf(q)),
+    "redirect-http": (q) => /plain HTTP/.test(answerOf(q)),
+    "redirect-cross": (q) => /, a different site\b/.test(answerOf(q)),
+    "page-password": (q) =>
+      /asks for a password and sends it to/.test(answerOf(q)),
+    "page-obfuscation": (q) => /hard to read/.test(answerOf(q)),
+    "page-iframes": (q) => /\bframes?\b/.test(answerOf(q)),
+    "page-refresh": (q) => /moves you on to/.test(answerOf(q)),
+    "domain-age": (q) => /registered .+ ago/.test(answerOf(q)),
+  };
+  const ruleFor = (group: string) =>
+    group.startsWith("feed:") ? "feed" : group;
+
+  /** Every scorer branch, both sides of each threshold where it has one. */
+  async function cases(): Promise<[string, SignalResults, string?][]> {
+    const list: [string, SignalResults, string?][] = [];
+    const add = (
+      label: string,
+      change: (signals: SignalResults) => void,
+      url?: string,
+    ) => {
+      const signals = cleanSignals();
+      change(signals);
+      list.push([label, signals, url]);
+    };
+
+    for (const host of fixtureHosts) list.push([host, await scenario(host)]);
+    list.push([
+      "critical",
+      await scenario("critical.scrutinix.test"),
+      "https://critical.scrutinix.test/",
+    ]);
+
+    for (const [malicious, suspicious] of [
+      [1, 0],
+      [4, 0],
+      [5, 0],
+      [0, 1],
+      [0, 3],
+      [2, 2],
+    ]) {
+      add(`virusTotal ${malicious}/${suspicious}`, (s) => {
+        s.virusTotal.data!.malicious = malicious!;
+        s.virusTotal.data!.suspicious = suspicious!;
+      });
+    }
+    add("safe browsing", (s) => {
+      s.googleSafeBrowsing.data!.matches = [
+        {
+          threatType: "MALWARE",
+          platformType: "ANY_PLATFORM",
+          threatEntryType: "URL",
+        },
+      ];
+    });
+    add("feed elsewhere on the host", (s) => {
+      s.threatFeeds.data!.matches = [
+        {
+          feed: "openphish",
+          matchedUrl: "https://example.com/other",
+          detail: "lists another link on this host",
+          confidence: "medium",
+          matchType: "host",
+        },
+      ];
+    });
+
+    const readings: (Reading | null)[] = [
+      null,
+      ["benign", 0.9],
+      ["risky", 0.5],
+      ["risky", 0.9],
+      ["malicious", 0.52],
+      ["malicious", 0.95],
+    ];
+    const structures: Reading[] = [
+      ["benign", 0.1],
+      ["risky", 0.5],
+      ["risky", 0.9],
+      ["malicious", 0.6],
+      ["malicious", 0.95],
+    ];
+    for (const model of readings) {
+      for (const structure of structures) {
+        add(
+          `model ${model?.join(" ")} / structure ${structure.join(" ")}`,
+          (s) => withMembers(s, model, structure),
+        );
+      }
+    }
+
+    for (const validationState of ["invalid", "untrusted"] as const) {
+      add(`certificate ${validationState}`, (s) => {
+        s.ssl.data!.validationState = validationState;
+      });
+    }
+    for (const [certHours, domainDays] of [
+      [2, 3],
+      [6 * 24 + 23, 29],
+      [7 * 24, 3],
+      [2, 30],
+    ] as const) {
+      add(`certificate ${certHours}h on a ${domainDays}-day domain`, (s) => {
+        s.ssl.data!.validFrom = new Date(NOW - certHours * HOUR).toISOString();
+        withDomainAge(s, domainDays);
+      });
+    }
+    add("fresh untrusted certificate on a new domain", (s) => {
+      s.ssl.data!.validationState = "untrusted";
+      s.ssl.data!.validFrom = new Date(NOW - 2 * HOUR).toISOString();
+      withDomainAge(s, 3);
+    });
+
+    add("punycode", (s) => {
+      s.dns.data!.anomalies = ["The hostname uses punycode encoding."];
+    });
+    add("many addresses", (s) => {
+      s.dns.data!.anomalies = [
+        "The hostname resolves to an unusually high number of address records.",
+      ];
+    });
+    add("punycode with no address", (s) => {
+      s.dns.data!.addresses = [];
+      s.dns.data!.anomalies = ["The hostname uses punycode encoding."];
+    });
+
+    const onSite = (count: number): [string, number, string?][] => [
+      ...Array.from({ length: count }, (_, index): [string, number, string] => [
+        `https://example.com/${index}`,
+        302,
+        `https://example.com/${index + 1}`,
+      ]),
+      [`https://example.com/${count}`, 200],
+    ];
+    for (const count of [2, 3, 5]) {
+      add(
+        `${count} redirects on the site`,
+        (s) => {
+          s.redirectChain.data = chain(onSite(count));
+        },
+        "https://example.com/0",
+      );
+    }
+    add(
+      "3 redirects to another site",
+      (s) => {
+        s.redirectChain.data = chain([
+          ["https://example.com/", 301, "https://a.example.net/"],
+          ["https://a.example.net/", 302, "https://b.example.org/"],
+          ["https://b.example.org/", 302, "https://lure.example/"],
+          ["https://lure.example/", 200],
+        ]);
+      },
+      "https://example.com/",
+    );
+    add(
+      "lure",
+      (s) => withLureRedirect(s, { passwordForm: true }),
+      "https://short.example/a",
+    );
+    add(
+      "downgrade that stays on the site",
+      (s) => {
+        s.redirectChain.data = chain([
+          ["https://example.com/", 301, "http://example.com/"],
+          ["http://example.com/", 200],
+        ]);
+      },
+      "https://example.com/",
+    );
+    add(
+      "unfinished chain",
+      (s) => {
+        s.redirectChain.data = chain(
+          [
+            ["https://example.com/", 301, "http://example.com/a"],
+            ["http://example.com/a", 302, "https://example.com/b"],
+            ["https://example.com/b", 302, "https://example.com/c"],
+          ],
+          { reachable: false, finalUrl: "https://example.com/b" },
+        );
+      },
+      "https://example.com/",
+    );
+    const pages: [string, Partial<PageContentFindings>][] = [
+      ["obfuscated", { obfuscationHints: ["eval", "atob"] }],
+      ["one obfuscation hint", { obfuscationHints: ["eval"] }],
+      ["hidden frame", { iframeCount: 1, hiddenIframeCount: 1 }],
+      ["three visible frames", { iframeCount: 3 }],
+      ["two visible frames", { iframeCount: 2 }],
+      [
+        "refresh elsewhere",
+        { metaRefreshTarget: "https://elsewhere.example/" },
+      ],
+      [
+        "refresh on the site",
+        { metaRefreshTarget: "https://www.example.com/" },
+      ],
+    ];
+    for (const [label, content] of pages) {
+      add(
+        `page: ${label}`,
+        (s) => {
+          s.redirectChain.data = chain([["https://example.com/", 200]], {
+            content: page(content),
+          });
+        },
+        "https://example.com/",
+      );
+    }
+
+    for (const days of [3, 29, 30, 179, 180]) {
+      add(`domain ${days} days old`, (s) => withDomainAge(s, days));
+    }
+    add("shared platform registered 3 days ago", (s) => {
+      s.whois.data = { ...s.whois.data!, ageDays: 3, sharedPlatform: true };
+    });
+    return list;
+  }
+
+  it("is named by the question citing its check", async () => {
+    const reached = new Set<string>();
+    const unexplained: string[] = [];
+    for (const [label, signals, url] of await cases()) {
+      const questions = ask(signals, url ? { url } : {});
+      for (const finding of getScoredFindings(signals)) {
+        const rule = ruleFor(finding.group);
+        reached.add(rule);
+        const isNamed = named[rule];
+        const question = byId(questions, questionCiting(finding.signal));
+        if (!isNamed) {
+          unexplained.push(`${label}: no Summary wording for ${rule}`);
+        } else if (
+          question.state !== "settled" ||
+          !isNamed(question, finding.reason)
+        ) {
+          unexplained.push(
+            `${label}: "${question.question}" doesn't explain "${finding.reason}" | ${question.answer} | ${question.why}`,
+          );
+        }
+      }
+    }
+    expect(unexplained).toEqual([]);
+    // The cases reach every rule the engine scores by.
+    expect([...reached].sort()).toEqual(Object.keys(named).sort());
   });
 });
