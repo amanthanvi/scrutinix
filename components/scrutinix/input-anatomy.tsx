@@ -21,12 +21,13 @@ export function InputAnatomy({ url }: { url: string }) {
   if (!anatomy) return null;
 
   return (
-    <section aria-label="The link, taken apart" className="flex flex-col gap-3">
+    <section aria-label="The link, taken apart" className="flex flex-col gap-4">
       <LinkAnatomyView
         id="sx-input-anatomy"
         url={url}
         anatomy={anatomy}
         captions
+        size="form"
       />
       <ExpectedSite anatomy={anatomy} />
     </section>
@@ -59,7 +60,7 @@ function ExpectedSite({ anatomy }: { anatomy: LinkAnatomy }) {
         type="button"
         aria-expanded={false}
         onClick={() => setOpen(true)}
-        className="text-meta sx-link -my-2 inline-flex min-h-11 items-center self-start"
+        className="text-meta sx-link -my-2.5 inline-flex min-h-11 items-center self-start"
       >
         Expecting a particular site?
       </button>
@@ -70,7 +71,7 @@ function ExpectedSite({ anatomy }: { anatomy: LinkAnatomy }) {
     <div className="flex flex-col gap-2">
       <label
         htmlFor={fieldId}
-        className="text-meta font-medium text-[var(--sx-text)]"
+        className="text-body font-medium text-[var(--sx-text)]"
       >
         Which site were you expecting?
       </label>
@@ -85,7 +86,7 @@ function ExpectedSite({ anatomy }: { anatomy: LinkAnatomy }) {
         onChange={(event) => setExpected(event.target.value)}
         placeholder="paypal.com or PayPal"
         aria-describedby={answerId}
-        className="text-body h-11 max-w-sm"
+        className="h-12 max-w-sm"
       />
       <p
         id={answerId}

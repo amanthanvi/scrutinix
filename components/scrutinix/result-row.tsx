@@ -25,8 +25,7 @@ import { cn } from "@/lib/utils";
  * Row layout: below `sm` the row wraps to two lines - glyph, verdict, and
  * the trailing item on the first; the link alone on the full-width second
  * line - so a phone never squeezes the owner out. From `sm` up it is one
- * line with a verdict column at least 5.5rem wide, wider only when a wide
- * system font needs it for "Unconfirmed", so the word never runs out of it.
+ * line with a fixed verdict column.
  */
 export const ROW_LAYOUT =
   "flex min-h-12 flex-wrap items-center gap-x-3 gap-y-0.5 sm:flex-nowrap sm:gap-x-4";
@@ -66,7 +65,7 @@ export function RowVerdict({
 }) {
   if (verdict === "safe" && anatomyStatus === "pending") {
     return (
-      <span className="text-meta w-auto shrink-0 font-semibold text-[var(--sx-text-soft)] sm:min-w-[5.5rem]">
+      <span className="text-body w-auto shrink-0 font-semibold text-[var(--sx-text-soft)] sm:w-24">
         <span aria-hidden="true">—</span>
       </span>
     );
@@ -79,7 +78,7 @@ export function RowVerdict({
   return (
     <span
       className={cn(
-        "text-meta w-auto shrink-0 font-semibold sm:min-w-[5.5rem]",
+        "text-body w-auto shrink-0 font-semibold sm:w-24",
         !verdict && "font-medium",
       )}
       style={{

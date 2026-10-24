@@ -19,11 +19,11 @@ export default function AppToaster() {
       toastOptions={{
         classNames: {
           toast:
-            "rounded-lg border border-[var(--sx-border)] bg-[var(--sx-surface)] text-[var(--sx-text)] shadow-lg",
-          title: "text-sm font-medium text-[var(--sx-text)]",
-          description: "text-xs text-[var(--sx-text-muted)]",
+            "rounded-md border border-[var(--sx-control)] bg-[var(--sx-surface)] text-[var(--sx-text)] shadow-[0_6px_20px_-8px_rgb(0_0_0/0.25)]",
+          title: "text-meta font-medium text-[var(--sx-text)]",
+          description: "text-caption text-[var(--sx-text-muted)]",
           actionButton:
-            "rounded-md bg-[var(--sx-accent)] text-[var(--sx-accent-fg)]",
+            "rounded-md bg-[var(--sx-button)] font-semibold text-[var(--sx-button-fg)]",
           cancelButton:
             "rounded-md border border-[var(--sx-border)] bg-transparent text-[var(--sx-text)]",
         },

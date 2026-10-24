@@ -47,9 +47,12 @@ export function BatchTable({
   const stopped = !isStreaming && results.length < items.length;
 
   return (
-    <section aria-label="Batch scan results" className="sx-enter">
-      <div className="flex items-baseline justify-between gap-3 border-b border-[var(--sx-border)] pb-3">
-        <h2 className="text-title font-semibold text-[var(--sx-text)]">
+    <section
+      aria-label="Batch scan results"
+      className="sx-enter max-w-[47.5rem]"
+    >
+      <div className="flex items-baseline justify-between gap-3 border-b border-[var(--sx-text)] pb-3">
+        <h2 className="sx-section-title">
           {isStreaming
             ? "Checking links"
             : stopped
@@ -93,7 +96,7 @@ function BatchRow({
 
   return (
     <li className={cn(ROW_LAYOUT, "py-1.5")}>
-      <span className="text-caption hidden w-5 shrink-0 font-mono text-[var(--sx-text-soft)] sm:inline">
+      <span className="text-caption hidden w-6 shrink-0 font-mono text-[var(--sx-text-soft)] sm:inline">
         {item.index + 1}
       </span>
       <SignalGlyph

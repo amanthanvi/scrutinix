@@ -1,6 +1,11 @@
 "use client";
 
-import { Component, type ErrorInfo, type ReactNode } from "react";
+import {
+  Component,
+  type CSSProperties,
+  type ErrorInfo,
+  type ReactNode,
+} from "react";
 
 interface ErrorBoundaryState {
   hasError: boolean;
@@ -23,18 +28,21 @@ export class ScrutinixErrorBoundary extends Component<
   render() {
     if (this.state.hasError) {
       return (
+        // The band's shape on the Error surface: squared, under its rule.
         <div
           role="alert"
-          className="rounded-xl border px-5 py-5 sm:px-7"
-          style={{
-            backgroundColor: "var(--sx-error-surface)",
-            borderColor: "var(--sx-error-edge)",
-          }}
+          className="sx-band px-5 pt-[1.625rem] pb-5 sm:px-11 sm:pt-9 sm:pb-7"
+          style={
+            {
+              backgroundColor: "var(--sx-error-surface)",
+              "--sx-pending": "var(--sx-error)",
+            } as CSSProperties
+          }
         >
-          <p className="text-lead font-semibold text-[var(--sx-text)]">
+          <p className="sm:text-question font-serif text-[1.25rem] leading-[1.3] font-semibold text-[var(--sx-text)]">
             This part of the page stopped working.
           </p>
-          <p className="text-body mt-1.5 text-[var(--sx-text-muted)]">
+          <p className="text-body mt-2 text-[var(--sx-error-ink)]">
             Reload the page to try again; your saved history is not affected.
           </p>
           <button
@@ -42,7 +50,7 @@ export class ScrutinixErrorBoundary extends Component<
             onClick={() => {
               window.location.reload();
             }}
-            className="sx-btn-press text-meta mt-4 inline-flex min-h-11 items-center justify-center rounded-md bg-[var(--sx-accent-solid)] px-4 font-medium text-[var(--sx-accent-fg)] hover:bg-[var(--sx-accent-solid-hover)]"
+            className="sx-btn-press text-body mt-5 inline-flex min-h-12 items-center justify-center rounded-md bg-[var(--sx-button)] px-5 font-semibold text-[var(--sx-button-fg)] hover:bg-[var(--sx-button-hover)]"
           >
             Reload page
           </button>

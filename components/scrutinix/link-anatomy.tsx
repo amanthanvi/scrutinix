@@ -17,13 +17,28 @@ const PATH_LIMIT = 48;
 /** A registered domain longer than this may wrap or truncate. */
 const LONG_DOMAIN = 26;
 
+/** A domain in a sentence never breaks at its hyphen unless it can't fit. */
+function keepWhole(domain: string): string {
+  return domain.length <= LONG_DOMAIN ? "whitespace-nowrap" : "break-all";
+}
+
 function shorten(value: string, limit = PATH_LIMIT): string {
   return value.length > limit ? `${value.slice(0, limit - 1)}…` : value;
 }
 
 /**
+ * The link line's size (app/scrutinix.css): reading size on a result, a
+ * step down in the form.
+ */
+const LINK_SIZE = {
+  result: "sx-link-result",
+  form: "sx-link-form",
+} as const;
+
+/**
  * "This link belongs to secure-login.xyz, not paypal.com." built from the
- * shared `ownershipSentence`, with the two domains set in mono.
+ * shared `ownershipSentence`, set in the serif with the two domains in
+ * mono and the owner emphasised.
  */
 function OwnershipSentence({
   registeredDomain,
@@ -38,9 +53,18 @@ function OwnershipSentence({
   return (
     <>
       {sentence.slice(0, ownerAt)}
-      <span className="font-mono">{registeredDomain}</span>
+      <span
+        className={cn(
+          "font-mono text-[0.86em] font-bold",
+          keepWhole(registeredDomain),
+        )}
+      >
+        {registeredDomain}
+      </span>
       {sentence.slice(ownerAt + registeredDomain.length, brandAt)}
-      <span className="font-mono">{impersonates}</span>
+      <span className={cn("font-mono text-[0.86em]", keepWhole(impersonates))}>
+        {impersonates}
+      </span>
       {sentence.slice(brandAt + impersonates.length)}
     </>
   );
@@ -74,6 +98,7 @@ export function LinkAnatomyView({
   streaming = false,
   id = "sx-link-anatomy",
   captions = false,
+  size = "result",
 }: {
   url: string;
   anatomy: LinkAnatomy | null;
@@ -89,6 +114,8 @@ export function LinkAnatomyView({
    * "Registered domain", "A page on that domain"): the link taken apart.
    */
   captions?: boolean;
+  /** The result's link at reading size, or the form's a step down. */
+  size?: keyof typeof LINK_SIZE;
 }) {
   const [expandedFor, setExpandedFor] = useState<string | null>(null);
   const expanded = expandedFor === url;
@@ -99,18 +126,22 @@ export function LinkAnatomyView({
   const truncates = Boolean(anatomy && anatomy.path.length > PATH_LIMIT);
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-4">
       {anatomy && captions ? (
         <CaptionedLink
           id={id}
           anatomy={anatomy}
           path={expanded ? anatomy.path : shorten(anatomy.path)}
+          className={LINK_SIZE[size]}
         />
       ) : (
         <p
           id={id}
           title={anatomy?.href ?? url}
-          className="text-body font-mono break-words text-[var(--sx-text-soft)]"
+          className={cn(
+            LINK_SIZE[size],
+            "font-mono break-words text-[var(--sx-text-soft)]",
+          )}
         >
           {anatomy ? (
             <>
@@ -131,7 +162,7 @@ export function LinkAnatomyView({
               {/* The owner never splits mid-name unless it cannot fit. */}
               <span
                 className={cn(
-                  "text-lead font-semibold text-[var(--sx-text)]",
+                  "font-bold text-[var(--sx-text)]",
                   anatomy.registeredDomain.length <= LONG_DOMAIN
                     ? "whitespace-nowrap"
                     : "break-all",
@@ -158,14 +189,14 @@ export function LinkAnatomyView({
           aria-expanded={expanded}
           aria-controls={id}
           onClick={() => setExpandedFor(expanded ? null : url)}
-          className="text-meta sx-link -my-2 inline-flex min-h-11 items-center self-start"
+          className="text-meta sx-link -my-2.5 inline-flex min-h-11 items-center self-start"
         >
           {expanded ? "Shorten link" : "Show full link"}
         </button>
       ) : null}
 
       {anatomy?.impersonates ? (
-        <p className="text-body font-medium text-[var(--sx-text)]">
+        <p className="sx-owner">
           <OwnershipSentence
             registeredDomain={anatomy.registeredDomain}
             impersonates={anatomy.impersonates}
@@ -174,7 +205,7 @@ export function LinkAnatomyView({
       ) : null}
 
       {facts.length > 0 ? (
-        <dl className="text-meta grid grid-cols-[auto_minmax(0,1fr)] items-baseline gap-x-4 gap-y-1">
+        <dl className="text-meta sm:text-body grid grid-cols-[auto_minmax(0,1fr)] items-baseline gap-x-5 gap-y-1.5">
           {facts.map((fact) => (
             <div key={fact.key} className="contents">
               <dt
@@ -216,18 +247,18 @@ function CaptionedLink({
   id,
   anatomy,
   path,
+  className,
 }: {
   id: string;
   anatomy: LinkAnatomy;
   path: string;
+  className?: string;
 }) {
   return (
-    <p
-      id={id}
-      title={anatomy.href}
-      className="text-body flex flex-wrap items-baseline font-mono text-[var(--sx-text-soft)]"
-    >
-      <span>{anatomy.scheme}://</span>
+    <p id={id} title={anatomy.href} className={cn("sx-anat", className)}>
+      {/* Phones stack the named parts; the bare scheme steps out of sight
+          there (the certificate fact below still speaks for it). */}
+      <span className="max-sm:sr-only">{anatomy.scheme}://</span>
       {anatomy.userinfo ? (
         <LinkPart caption="Ignored by browsers">
           <span className="break-all line-through">{anatomy.userinfo}@</span>
@@ -240,10 +271,10 @@ function CaptionedLink({
           </span>
         </LinkPart>
       ) : null}
-      <LinkPart caption="Registered domain">
+      <LinkPart caption="Registered domain" owner>
         <span
           className={cn(
-            "text-lead font-semibold text-[var(--sx-text)]",
+            "font-bold text-[var(--sx-text)]",
             anatomy.registeredDomain.length <= LONG_DOMAIN
               ? "whitespace-nowrap"
               : "break-all",
@@ -262,21 +293,25 @@ function CaptionedLink({
   );
 }
 
+/**
+ * One named part: its text over a hairline bracket carrying the caption
+ * (heavy for the registered domain). The caption never widens its part,
+ * so the link stays one continuous line of text.
+ */
 function LinkPart({
   caption,
+  owner = false,
   children,
 }: {
   caption: string;
+  owner?: boolean;
   children: ReactNode;
 }) {
   return (
-    <span className="inline-flex max-w-full min-w-0 flex-col">
+    <span className={cn("sx-anat-part", owner && "sx-anat-owner")}>
       <span className="sr-only">{caption}: </span>
       {children}
-      <span
-        aria-hidden="true"
-        className="text-caption mt-0.5 pr-3 font-sans text-[var(--sx-text-soft)]"
-      >
+      <span aria-hidden="true" className="sx-anat-caption">
         {caption}
       </span>
     </span>

@@ -17,15 +17,15 @@ export function AppHeader() {
   const isHome = pathname === "/";
 
   const wordmark = (
-    <span className="flex items-center gap-2.5 text-[0.9375rem] font-semibold tracking-[-0.015em] text-[var(--sx-text)]">
-      <BrandMark className="h-3.5 w-auto" />
+    <span className="flex items-center gap-[0.5625rem] font-serif text-[1.3125rem] leading-none font-semibold tracking-[-0.012em] text-[var(--sx-text)] sm:gap-[0.6875rem] sm:text-[1.4375rem]">
+      <BrandMark className="mt-px h-[0.5625rem] w-auto sm:h-2.5" />
       Scrutinix
     </span>
   );
 
   return (
     <header className="border-b border-[var(--sx-border)]">
-      <div className="mx-auto flex h-14 w-full max-w-[46rem] items-center justify-between px-4 sm:px-6">
+      <div className="mx-auto flex h-[3.75rem] w-full max-w-[71rem] items-center justify-between px-4 sm:h-[4.5rem] sm:px-6">
         {isHome ? (
           wordmark
         ) : (
@@ -45,7 +45,7 @@ export function AppHeader() {
               href={href}
               aria-current={pathname === href ? "page" : undefined}
               className={cn(
-                "text-meta inline-flex min-h-11 items-center rounded-md px-2.5 font-medium transition-colors",
+                "text-meta inline-flex min-h-11 min-w-11 items-center justify-center rounded-md px-2 font-medium transition-colors sm:px-3",
                 pathname === href
                   ? "text-[var(--sx-text)]"
                   : "text-[var(--sx-text-muted)] hover:text-[var(--sx-text)]",

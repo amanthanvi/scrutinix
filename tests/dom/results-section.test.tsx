@@ -189,12 +189,25 @@ const lookalikeShare = encodeSharedSnapshot({
   signature: Array(8).fill("clear"),
 });
 
+/**
+ * The link as written, without the anatomy's captions (hidden from
+ * assistive technology) or their spoken names (screen-reader only).
+ */
+function linkText(element: Element | null): string | null {
+  if (!element) return null;
+  const copy = element.cloneNode(true) as Element;
+  copy
+    .querySelectorAll('[aria-hidden="true"], .sr-only')
+    .forEach((node) => node.remove());
+  return copy.textContent;
+}
+
 // First in the file on purpose: the Public Suffix List parser is cached at
 // module level once any test loads it, which would hide the server path.
 describe("shared snapshot first paint", () => {
   it("hedges a shared look-alike from the first render, before the parser loads", () => {
     renderApp(undefined, { payload: lookalikeShare });
-    expect(document.querySelector("#sx-link-anatomy")?.textContent).toBe(
+    expect(linkText(document.querySelector("#sx-link-anatomy"))).toBe(
       "https://paypal.com.secure-login.xyz/verify",
     );
 
@@ -291,9 +304,12 @@ describe("ResultsSection", () => {
     expect(reported?.textContent).toContain(
       "7 of 67 VirusTotal engines flag it as malicious.",
     );
-    // One textual separator; the dot is drawn, so it isn't copied or read.
+    // Spoken as names; seen as the strip's cell numbers, each named.
     expect(reported?.textContent).toContain(
       "Sources: VirusTotal, Safe Browsing, Threat feeds",
+    );
+    expect(reported?.textContent).toContain(
+      "From 1VirusTotal·3Safe Browsing·4Threat feeds",
     );
     expect(reported?.textContent).not.toContain("·");
     expect(screen.queryByRole("list", { name: "Signals" })).toBeNull();
@@ -936,7 +952,7 @@ describe("shared links and their signature", () => {
     expect(screen.queryByRole("toolbar")).toBeNull();
 
     // The link's anatomy is Scrutinix's own computation, so it stays.
-    expect(document.querySelector("#sx-link-anatomy")?.textContent).toBe(
+    expect(linkText(document.querySelector("#sx-link-anatomy"))).toBe(
       "https://paypal.com.secure-login.xyz/verify",
     );
     expect(

@@ -96,7 +96,7 @@ export function BatchInput({
           }}
           aria-disabled={streaming || undefined}
           variant="primary"
-          className="h-11 px-5 text-sm"
+          className="h-12 px-6"
         >
           Start batch
         </Button>

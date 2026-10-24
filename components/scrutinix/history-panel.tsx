@@ -63,7 +63,7 @@ function HistoryRow({
         onClick={() => onSelect(entry)}
         className={cn(
           ROW_LAYOUT,
-          "-mx-2 w-[calc(100%+1rem)] rounded-md px-2 py-2.5 text-left transition-colors hover:bg-[var(--sx-subtle)]",
+          "-mx-3 w-[calc(100%+1.5rem)] rounded-[3px] px-3 py-3 text-left transition-colors hover:bg-[var(--sx-subtle)]",
         )}
       >
         <SignalGlyph result={entry} />
@@ -133,8 +133,8 @@ export function HistoryPanel({
 
   return (
     <section aria-label="Scan history">
-      <div className="flex min-h-11 flex-wrap items-center justify-between gap-x-3 gap-y-1">
-        <h2 className="text-title font-semibold text-[var(--sx-text)]">
+      <div className="flex min-h-11 flex-wrap items-end justify-between gap-x-3 gap-y-1 border-b border-[var(--sx-text)] pb-2">
+        <h2 className="sx-section-title">
           History
           {totalCount > 0 ? (
             <>
@@ -186,7 +186,7 @@ export function HistoryPanel({
       </div>
 
       {canUndoClear ? (
-        <p className="text-meta mt-1 text-[var(--sx-text-muted)]">
+        <p className="text-meta mt-3 text-[var(--sx-text-muted)]">
           History was cleared. Undo restores the previous list.
         </p>
       ) : null}
@@ -200,19 +200,24 @@ export function HistoryPanel({
           onChange={(event) => onHistoryQueryChange(event.target.value)}
           placeholder="Filter by link or verdict"
           aria-label="Filter scan history"
-          className="mt-3 h-10 text-sm"
+          className="mt-4 h-11"
         />
       ) : null}
 
       {entries.length === 0 ? (
         historyQuery ? (
-          <p className="mt-2 text-sm text-[var(--sx-text-soft)]">
+          <p className="text-body mt-3 text-[var(--sx-text-soft)]">
             No scans match this filter.
           </p>
         ) : null
       ) : (
         <>
-          <ul className="mt-3 divide-y divide-[var(--sx-border)] border-y border-[var(--sx-border)]">
+          <ul
+            className={cn(
+              "divide-y divide-[var(--sx-border)] border-b border-[var(--sx-border)]",
+              totalCount > 3 && "mt-3 border-t",
+            )}
+          >
             {entries.map((entry) => (
               <HistoryRow key={entry.id} entry={entry} onSelect={onSelect} />
             ))}

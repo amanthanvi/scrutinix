@@ -261,7 +261,7 @@ describe("VerdictBand", () => {
 
     for (const name of ["What to do", "Caveats", "Why high confidence"]) {
       const heading = screen.getByRole("heading", { level: 3, name });
-      expect(heading.className).toContain("text-meta");
+      expect(heading.className).toContain("text-body");
       expect(heading.className).toContain("font-semibold");
     }
   });
@@ -430,10 +430,10 @@ describe("VerdictBand", () => {
     ).toBeNull();
   });
 
-  it("sets the score numeral in sans so a zero never reads as a slashed zero", () => {
+  it("sets the score numeral in the display serif, never mono, so a zero never reads as a slashed zero", () => {
     renderPanel(buildResult("safe", { score: 0 }));
     const meter = screen.getByRole("meter", { name: "Threat score" });
-    expect(meter.className).toContain("font-sans");
+    expect(meter.className).toContain("font-serif");
     expect(meter.className).toContain("tabular-nums");
     expect(meter.className).not.toMatch(/(^|\s)font-mono(\s|$)/);
   });

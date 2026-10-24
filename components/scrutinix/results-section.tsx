@@ -8,6 +8,7 @@ import { useAnalyzerRuntime } from "@/components/scrutinix/analyzer-runtime";
 import { LinkAnatomyView } from "@/components/scrutinix/link-anatomy";
 import { retryableChunk } from "@/components/scrutinix/retryable-chunk";
 import { SignalRow } from "@/components/scrutinix/signal-row";
+import { SignalCell } from "@/components/scrutinix/signal-cell";
 import {
   SignalStrip,
   SignatureStrip,
@@ -36,7 +37,13 @@ import {
   type SignalName,
   type SignalResults,
 } from "@/lib/domain/types";
-import { isLegacySignalRecord } from "@/lib/domain/signal-signature";
+import { capitalize } from "@/lib/domain/copy";
+import type { Severity } from "@/lib/domain/signal-severity";
+import {
+  getSignalSignature,
+  isLegacySignalRecord,
+  severityWords,
+} from "@/lib/domain/signal-signature";
 import {
   evidenceTimeOf,
   getSummaryQuestions,
@@ -336,6 +343,8 @@ export function ResultsSection() {
             completedSignals={done}
             impersonates={impersonates}
             addressCheck={addressCheck}
+            registeredDomain={anatomy?.registeredDomain ?? null}
+            holdDomain={linkUrl !== null && addressCheck === "pending"}
             evidenceShown={hasSignalActivity}
             onCancelScan={() => {
               // Cancel unmounts with its band: hand focus back to the input.
@@ -354,35 +363,89 @@ export function ResultsSection() {
           />
 
           {linkUrl ? (
-            <div className="mt-6">
+            <section
+              aria-labelledby="sx-link-anatomy-heading"
+              className="mt-9 sm:mt-11"
+            >
+              <h3 id="sx-link-anatomy-heading" className="sx-rail-heading">
+                The link, taken apart
+              </h3>
               <LinkAnatomyView
                 url={linkUrl}
                 anatomy={anatomy}
+                captions
                 signals={showShared ? null : signals}
                 // The questions and rows state every check's facts, so the
                 // anatomy keeps them only while a scan streams.
                 visibleSignals={hasSignalActivity ? signalNames : []}
                 streaming={scan.state.isStreaming && !active}
               />
-            </div>
+            </section>
           ) : null}
 
           {showShared && sharedSnapshot?.signature ? (
-            <div className="mt-8">
+            <div className="mt-10 sm:mt-12">
               <SignatureStrip signature={sharedSnapshot.signature} />
             </div>
           ) : null}
 
           {legacyRecord ? (
-            <p className="text-body mt-8 max-w-[60ch] text-[var(--sx-text-muted)]">
+            <p className="text-body mt-10 max-w-[65ch] text-[var(--sx-text-muted)]">
               This scan was saved before per-check results were kept, so its
               eight checks can&apos;t be shown. Re-scan for a fresh result.
             </p>
           ) : null}
 
           {hasSignalActivity ? (
-            <>
-              <div className="mt-8">
+            <section
+              aria-labelledby="sx-evidence-heading"
+              className="mt-10 flex flex-col sm:mt-14"
+            >
+              <div className="flex items-end justify-between gap-4 border-b border-[var(--sx-text)]">
+                <h3
+                  id="sx-evidence-heading"
+                  className="sx-section-title pb-3 sm:pb-3.5"
+                >
+                  Evidence
+                </h3>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={viewMode === "full"}
+                  onClick={() =>
+                    setViewMode(viewMode === "summary" ? "full" : "summary")
+                  }
+                  className="text-body -mb-px inline-flex min-h-11 items-stretch gap-6 font-medium"
+                >
+                  {(
+                    [
+                      ["summary", "Summary"],
+                      ["full", "Full"],
+                    ] as const
+                  ).map(([mode, label]) => (
+                    <Fragment key={mode}>
+                      {mode === "full" ? " " : null}
+                      <span
+                        data-selected={viewMode === mode}
+                        className={cn(
+                          "sx-segment inline-flex min-w-11 items-center justify-center border-b-2 transition-colors",
+                          viewMode === mode
+                            ? "border-[var(--sx-text)] text-[var(--sx-text)]"
+                            : "border-transparent text-[var(--sx-text-soft)] hover:text-[var(--sx-text)]",
+                        )}
+                      >
+                        {label}
+                      </span>
+                    </Fragment>
+                  ))}
+                  {/* Name stays "Summary Full …": visible text first (WCAG 2.5.3). */}
+                  <span className="sr-only">{" signal list"}</span>
+                </button>
+              </div>
+
+              {/* The strip heads the evidence as its index: each numbered
+                  cell leads to the question citing it (or its row in Full). */}
+              <div className="sx-strip-index">
                 <SignalStrip
                   signals={signals}
                   scored={scored}
@@ -390,85 +453,49 @@ export function ResultsSection() {
                   leadsTo={questions ? "question" : "row"}
                   onActivate={activateSignal}
                 />
+                {active ? (
+                  <StripLegend signals={signals} scored={scored} />
+                ) : null}
               </div>
 
-              <div className="mt-10 flex flex-col gap-3">
-                <div className="flex items-center justify-between gap-4 border-b border-[var(--sx-border)]">
-                  <h3 className="text-meta font-semibold text-[var(--sx-text)]">
-                    Evidence
-                  </h3>
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={viewMode === "full"}
-                    onClick={() =>
-                      setViewMode(viewMode === "summary" ? "full" : "summary")
-                    }
-                    className="text-meta -mb-px inline-flex min-h-11 items-stretch gap-4 font-medium"
-                  >
-                    {(
-                      [
-                        ["summary", "Summary"],
-                        ["full", "Full"],
-                      ] as const
-                    ).map(([mode, label]) => (
-                      <Fragment key={mode}>
-                        {mode === "full" ? " " : null}
-                        <span
-                          data-selected={viewMode === mode}
-                          className={cn(
-                            "sx-segment inline-flex items-center border-b-2 px-0.5 transition-colors",
-                            viewMode === mode
-                              ? "border-[var(--sx-accent)] text-[var(--sx-text)]"
-                              : "border-transparent text-[var(--sx-text-soft)] hover:text-[var(--sx-text)]",
-                          )}
-                        >
-                          {label}
-                        </span>
-                      </Fragment>
-                    ))}
-                    {/* Name stays "Summary Full …": visible text first (WCAG 2.5.3). */}
-                    <span className="sr-only">{" signal list"}</span>
-                  </button>
-                </div>
-
-                {questions ? (
-                  <SummaryQuestionList questions={questions} />
-                ) : (
-                  <ul
-                    ref={signalListRef}
-                    aria-label="Signals"
-                    className="divide-y divide-[var(--sx-border)] border-b border-[var(--sx-border)]"
-                  >
-                    {signalNames.map((signalName, index) => (
-                      <RuntimeSignalRow
-                        key={signalName}
-                        name={signalName}
-                        signals={signals}
-                        scored={scored.has(signalName)}
-                        index={index}
-                        evidenceTime={evidenceTime}
-                      />
-                    ))}
-                  </ul>
-                )}
-              </div>
-            </>
+              {questions ? (
+                <SummaryQuestionList questions={questions} />
+              ) : (
+                <ul
+                  ref={signalListRef}
+                  aria-label="Signals"
+                  className="divide-y divide-[var(--sx-border)] border-b border-[var(--sx-border)]"
+                >
+                  {signalNames.map((signalName, index) => (
+                    <RuntimeSignalRow
+                      key={signalName}
+                      name={signalName}
+                      signals={signals}
+                      scored={scored.has(signalName)}
+                      index={index}
+                      evidenceTime={evidenceTime}
+                    />
+                  ))}
+                </ul>
+              )}
+            </section>
           ) : null}
 
           {active ? (
             <>
-              <div className="mt-6">
+              <div className="mt-8">
                 <VerdictDetails
                   result={active}
                   impersonates={impersonates}
                   addressCheck={addressCheck}
                 />
               </div>
-              <div className="mt-4 flex flex-wrap items-center gap-2">
+              {/* Phones: Download on its own row, Share and Re-scan halves. */}
+              <div className="mt-5 grid grid-cols-2 gap-2.5 sm:flex sm:flex-wrap sm:items-center sm:gap-3">
                 <Button
                   type="button"
                   variant="outline"
+                  className="col-span-2"
                   onClick={async () => {
                     downloadTextFile(
                       "scan.json",
@@ -501,6 +528,42 @@ export function ResultsSection() {
       )}
     </section>
   );
+}
+
+/** Legend order: the states that say most first. */
+const LEGEND_ORDER: readonly Severity[] = [
+  "malicious",
+  "suspicious",
+  "neutral",
+  "clear",
+  "error",
+  "skipped",
+];
+
+/**
+ * A key to the strip's shapes: only the states it actually draws, in the
+ * words its names and titles use. For the eye (each cell already states
+ * its own answer), so hidden from assistive technology.
+ */
+function StripLegend({
+  signals,
+  scored,
+}: {
+  signals: SignalResults;
+  scored: ReadonlySet<SignalName>;
+}) {
+  const present = new Set(getSignalSignature(signals, scored));
+  const states = LEGEND_ORDER.filter((severity) => present.has(severity));
+  return states.length > 0 ? (
+    <p aria-hidden="true" className="sx-legend">
+      {states.map((severity) => (
+        <span key={severity}>
+          <SignalCell severity={severity} settled />
+          {capitalize(severityWords[severity])}
+        </span>
+      ))}
+    </p>
+  ) : null;
 }
 
 function LiveStatus({ text }: { text: string }) {

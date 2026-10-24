@@ -94,7 +94,7 @@ function FallbackToaster() {
   return (
     <div
       role="alert"
-      className="fixed inset-x-4 bottom-4 z-50 mx-auto max-w-md rounded-lg border border-[var(--sx-border)] bg-[var(--sx-surface)] p-4 text-sm text-[var(--sx-text)] shadow-lg"
+      className="text-meta fixed inset-x-4 bottom-4 z-50 mx-auto max-w-md rounded-md border border-[var(--sx-control)] bg-[var(--sx-surface)] p-4 text-[var(--sx-text)] shadow-[0_6px_20px_-8px_rgb(0_0_0/0.25)]"
     >
       <p className="font-medium">{notice.title}</p>
       <div className="mt-2">{notice.options?.description}</div>

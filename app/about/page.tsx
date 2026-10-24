@@ -75,17 +75,17 @@ export default function AboutPage() {
           claim more than we know. Reputation checks still run on Unknown
           results and are listed with the result.
         </p>
-        <dl className="max-w-xs border-y border-[var(--sx-border)]">
+        <dl className="max-w-xs border-t border-b border-t-[var(--sx-text)] border-b-[var(--sx-border)]">
           {scoreBands.map((band) => (
             <div
               key={band.range}
               className="flex items-center justify-between gap-3 border-b border-[var(--sx-border)] py-2.5 last:border-b-0"
             >
-              <dt className="font-mono text-sm text-[var(--sx-text-muted)]">
+              <dt className="text-body font-mono text-[var(--sx-text-muted)]">
                 {band.range}
               </dt>
               <dd
-                className="text-sm font-semibold"
+                className="text-body font-semibold"
                 style={{ color: band.color }}
               >
                 {band.label}
@@ -123,7 +123,7 @@ export default function AboutPage() {
               <SignalCell
                 severity={item.severity}
                 settled
-                className="h-3 w-8 shrink-0"
+                className="sx-cell-tall h-5 w-11 shrink-0"
               />
               <span className="text-[var(--sx-text-muted)]">
                 {item.meaning}
