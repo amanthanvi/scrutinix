@@ -33,12 +33,12 @@ npm run test:e2e                   # Playwright with offline fixtures (E2E_PORT,
 npm run lighthouse                 # Lighthouse audit (LIGHTHOUSE_PORT, default 3000)
 npm run check:contrast             # WCAG token-pair guard, both themes
 npm run icons                      # Regenerate favicons/app icons from lib/brand-mark.ts
-npm run verify:launch              # Fixture dev server in tmux
+npm run verify:launch              # Fixture dev server under a supervisor
 npm run verify:doctor              # Read-only health check
 npm run verify:smoke               # One safe scan in Playwright
 npm run verify:drive               # Feature-map sweep
-npm run verify:cleanup             # Stop only what launch started (identity-checked)
-npm run verify:check               # The verify skill's own tests (needs tmux)
+npm run verify:cleanup             # Ask the supervisor to stop only what it started
+npm run verify:check               # The verify skill's own tests
 ```
 
 ## Architecture

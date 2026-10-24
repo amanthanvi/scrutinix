@@ -16,19 +16,20 @@ A maintain pass (`maintain-verification-skill`) edits only this directory: `SKIL
 
 This skill owns one app per checkout on `http://127.0.0.1:<port>` (default port 3000). Playwright gives each test a fresh browser context, so IndexedDB, theme, and clipboard stay inside that context. The dev server's in-memory result cache is shared by every context; its rate limit is per client address, and each drive test presents its own.
 
-Ownership is identity, never a name or a pattern:
+Ownership is what launch started, never a name, a pattern, or a cwd:
 
-- `run.json` stores the checkout path in `repoRoot`, the base URL, the tmux session (its name, server-assigned id such as `$3`, creation time, and pane process), and each listener process (pid, start time, executable, and cwd).
-- The tmux session name is per checkout: `scrutinix-verify-next-<hash of the checkout path>`. A name is still not ownership: tmux also prefix-matches names, and anyone can create a session with the same name after ours ends.
-- Before launch reuses or restarts, and before cleanup stops anything, the recorded identity is read again from the OS and tmux. A process or session is stopped only when every field still matches and its cwd is this checkout. Otherwise it is left running and the command says why.
+- Launch starts a small detached supervisor (`scripts/supervisor.mjs`). It leads its own session and process group, and it spawns `next dev` in that group, so the group holds exactly what this run started: `next dev` and whatever `next dev` starts. No process outside the session can join the group, and its id cannot be reused while the supervisor lives.
+- The supervisor answers on a Unix socket, `supervisor.sock`, mode `0600`, in the private state directory. Every request carries an HMAC of a random per-run token, and every reply carries one back. The token reaches the supervisor over a pipe, never argv or the environment, and is kept in `run.json` (mode `0600`).
+- Stopping asks the supervisor. It sends `SIGTERM` to its own group, waits for its child (which it has not yet reaped, so the pid cannot be reused), then `SIGKILL`s whatever ignored that, and exits. Cleanup itself never signals a pid. Nothing re-finds processes by pid, start time, cwd, name, or tmux session.
+- The run serves only the `127.0.0.1` port it was given. Doctor reports it as owned only when the supervisor proves the token, a process in its group holds `127.0.0.1:<port>`, and nothing outside the group listens on that port. Doctor checks this before and after its requests. A server from this checkout that the supervisor did not start is not owned.
 
 A different checkout does not reuse that server and does not stop it. A server this skill did not start is left running. Two checkouts that want to run at once use different ports (`--base-url`) and, when they share `/tmp`, different `VERIFY_STATE_DIR` values.
 
-Launch accepts only `http://127.0.0.1:<port>` with a port from 1024 to 65535. `--base-url URL` and `--base-url=URL` are both read. An empty value or a value that is not a URL exits 2 with a message. It does not fall back to the default and it does not throw. Launch refuses to start a second Next server when the port is already taken by someone else.
+The base URL is an origin: launch accepts only `http://127.0.0.1:<port>` with a port from 1024 to 65535, and every command refuses a user name, password, path, query string, or fragment in `--base-url` or `E2E_BASE_URL`. `--base-url URL` and `--base-url=URL` are both read. An empty or invalid value exits 2 with a message that never repeats the input, since it can carry credentials. It does not fall back to the default and it does not throw. Launch refuses to start a second Next server when the port is already taken by someone else.
 
 ## Launch
 
-From the repo root, with Node 24 on `PATH` (`.nvmrc` is `24.20.0`) and tmux installed:
+From the repo root, with Node 24 on `PATH` (`.nvmrc` is `24.20.0`):
 
 ```bash
 npm install
@@ -39,14 +40,13 @@ npm run verify:launch -- --base-url http://127.0.0.1:3417   # another port
 
 `npm run verify:launch` is `node .agents/skills/verify-scrutinix/scripts/launch.mjs`. It does the following:
 
-1. If doctor is `READY` and this checkout's recorded session still matches its identity, print `REUSED` and exit 0.
-2. If `run.json` names another checkout whose session or listener is still live, or the port is open and this checkout does not own it, exit 2 and leave that process alone. When the listener is another `next dev`, launch names its pid and cwd and prints how to check and stop that exact pid.
-3. If a tmux session with this checkout's name exists but is not the one recorded, exit 2 and leave it alone.
+1. Refuse (exit 2) when the state directory or `run.json` fails the checks under "Logs and state".
+2. If this checkout's supervisor answers and doctor is `READY` on the requested URL, print `REUSED` and exit 0. If it answers and doctor is not `READY` (unhealthy, or another port), ask it to stop and start fresh.
+3. If `run.json` names another checkout whose supervisor still answers, or the port is open and this run does not own it, exit 2 and leave that process alone. When the listener is another `next dev`, launch names its pid and cwd and prints how to check and stop that exact pid. A `run.json` from the tmux version of this skill is reported with its recorded pids, never acted on, and replaced.
 4. Run `npm ci` when `node_modules` is missing.
 5. Install Playwright Chromium. Set `VERIFY_SKIP_BROWSER_INSTALL=1` to skip. If Chromium's system libraries are missing, run `npx playwright install --with-deps chromium` and launch again.
-6. When this checkout owns an unhealthy session, stop that session and its recorded listeners, each after its identity is checked again, and start fresh.
-7. Start the tmux session with `SCRUTINIX_TEST_FIXTURES=1`, the published e2e share key (`SHARE_SIGNING_SECRET`, exactly as `scripts/run-e2e.mjs` passes it; `SHARE_SIGNING_SECRET_PREVIOUS` empty), empty Upstash and Vercel KV variables, and `npm run dev -- --hostname 127.0.0.1 --port <port>`. The session identity is written to `run.json` as soon as tmux creates it, before ready is checked, so a failed boot is still cleaned up. Ready means doctor reports `READY`. After ready, the identity of every listener serving this checkout is recorded.
-8. Snapshot `next-env.d.ts` before the dev server starts, then record the content `next dev` wrote after the file settles (`next dev` rewrites the route-type imports for its `.next/dev` dist directory). A later launch keeps that snapshot when the current file still matches the snapshot or the recorded write, including a restart of an owned server. If the file matches neither, launch drops the snapshot, warns, and saves the current file. Cleanup puts `next-env.d.ts` back only later, and only from that snapshot.
+6. Start the supervisor, which runs `next dev --hostname 127.0.0.1 --port <port>` (the `npm run dev` script, run directly) with `SCRUTINIX_TEST_FIXTURES=1`, the published e2e share key (`SHARE_SIGNING_SECRET`, exactly as `scripts/run-e2e.mjs` passes it; `SHARE_SIGNING_SECRET_PREVIOUS` empty), and empty Upstash and Vercel KV variables. `run.json` is written as soon as the supervisor starts, before ready is checked, so a failed boot is still cleaned up. Ready means a process in the supervisor's group holds `127.0.0.1:<port>`, then doctor reports `READY`. If next dev exits or another process takes the port first, launch prints the redacted log tail and exits 1.
+7. Snapshot `next-env.d.ts` before the dev server starts, then record the content `next dev` wrote after the file settles (`next dev` rewrites the route-type imports for its `.next/dev` dist directory). A later launch keeps that snapshot when the current file still matches the snapshot or the recorded write, including a restart of an owned server. If the file matches neither, launch drops the snapshot, warns, and saves the current file. Cleanup puts `next-env.d.ts` back only later, and only from that snapshot.
 
 `next.config.ts` sets `agentRules: false`, so `next dev` does not rewrite `AGENTS.md` or `CLAUDE.md`. This skill does not touch either file.
 
@@ -61,13 +61,14 @@ Fixture mode swaps the analyze orchestrator onto `lib/server/test-fixtures.ts`. 
 
 Those fixture hostnames do not exist in public DNS. A `malicious` verdict for `malicious.scrutinix.test` is the observation that fixture mode is on. Live VirusTotal, Google Safe Browsing, URLhaus, ThreatFox, Spamhaus, WHOIS, and real DNS are not contacted. A proof of those live providers is `INCONCLUSIVE` in this loop: it needs API keys and network, and this skill does not turn fixture mode off.
 
-`npm run dev` is the README command. The helper adds the fixture flag and share key, binds `127.0.0.1`, and records identities. Use the helper.
+`npm run dev` is the README command. The helper adds the fixture flag and share key, binds `127.0.0.1`, and owns the process group it starts. Use the helper.
 
 Logs and state (`VERIFY_STATE_DIR` overrides `/tmp/scrutinix-verify`):
 
-- The state directory is created with mode `0700`. Launch refuses an existing state directory that is a symlink, is owned by another user, or is group or world accessible, and it does not write the session script in that case.
-- `run.json` records `repoRoot`, `baseUrl`, the session identity, and listener identities
-- `scrutinix-verify-next-<hash>.log` is the dev server log. When launch fails it prints the last 4000 bytes with secrets redacted (`KEY=VALUE` pairs, secret-named keys, URL credentials, bearer tokens, and token-shaped strings). Read the raw file only when you need it, and do not paste it into a PR.
+- The state directory is created with mode `0700`. Launch, doctor, and cleanup check it before they read anything in it: a real directory (not a symlink), owned by this user, not group or world accessible, under ancestors owned by root or this user and writable by others only when sticky (as `/tmp` is). `run.json` and `next-env.json` must be regular files, opened without following symlinks, owned by this user, and not writable by anyone else. If a check fails, the command stops nothing, writes nothing, and exits 2.
+- `run.json` records `repoRoot`, `baseUrl`, `port`, the run id and token, the supervisor pid (for diagnostics only), and the log paths
+- `supervisor.sock` is the supervisor's socket; `supervisor.log` is its own log
+- `next.log` is the dev server log. When launch fails it prints the last whole lines, up to 4000 characters. The whole log is redacted first, so a cut never exposes half a secret. Redaction covers `KEY=VALUE` pairs, secret-named keys in any case or quoting (JSON, camelCase, escaped quotes, percent-encoded keys, YAML blocks, `\` continuations), PEM blocks, URL credentials, bearer tokens, secret flags and headers, and token-shaped strings. Read the raw file only when you need it, and do not paste it into a PR.
 - `evidence/` is created at launch and kept by cleanup
 
 ## Doctor
@@ -83,7 +84,8 @@ npm run verify:doctor
 - `GET /` is 200 and the HTML contains `URL to analyze`
 - `GET /about` is 200 and the HTML contains `How a scan becomes a verdict.`
 - `GET /privacy` is 200 and the HTML has `<main id="main-content">`, an `<h1>`, and the header link `href="/privacy"` with `aria-current="page"`. This is structure, not copy, so privacy disclosure rewrites do not break doctor.
-- `run.json` `repoRoot` is this checkout, and its recorded tmux session still matches by id, creation time, and pane process
+- `run.json`, in a state directory that passes its checks, is this checkout's run, and the run's supervisor proves the run token over its socket
+- the base URL is the `127.0.0.1` port that run was given, a process in the supervisor's group holds `127.0.0.1:<port>`, and nothing outside the group listens on that port, before and after the requests
 
 Anything else prints `NOT_READY` and exits 2. Codes:
 
@@ -102,7 +104,7 @@ node .agents/skills/verify-scrutinix/scripts/doctor.mjs --json
 node .agents/skills/verify-scrutinix/scripts/doctor.mjs --base-url http://127.0.0.1:3000
 ```
 
-Doctor prints each listener on the port as `pid, started, executable, cwd`. It finds listeners with `ss -ltnp` on Linux, `/proc/net/tcp` when `ss` is missing, and `lsof` elsewhere (macOS). It never prints a command line: command lines can carry tokens. A screenshot taken while doctor is `NOT_READY` is not evidence.
+Doctor prints why the server is or is not owned (`owned by run <id>` with the supervisor and listener pids, or `not owned (<reason>)`), and each listener on the port as `pid, started, executable, cwd`. It finds listeners in `/proc/net/tcp` on Linux and with `lsof` elsewhere (macOS). It never prints a command line or an environment: both can carry tokens. A failed request is reported as a code such as `ECONNREFUSED`, never as an error message. A screenshot taken while doctor is `NOT_READY` is not evidence.
 
 Doctor cannot see `SCRUTINIX_TEST_FIXTURES` in the HTTP response. Ownership plus the fixture verdicts in `verify:drive` are the check. A healthy server this skill did not start is `foreign-server` or `foreign-next` and is not worth driving.
 
@@ -197,12 +199,15 @@ The fixture table is the same production orchestrator path with the provider fun
 npm run verify:cleanup
 ```
 
-That runs `node .agents/skills/verify-scrutinix/scripts/cleanup.mjs`. When `run.json` `repoRoot` is this checkout, it re-reads each recorded session and listener:
+That runs `node .agents/skills/verify-scrutinix/scripts/cleanup.mjs`. It first checks the state directory and `run.json` (see "Logs and state"); if any check fails, it stops nothing and exits 2. When `run.json` is this checkout's run, cleanup asks the run's supervisor to stop. The supervisor stops its own process group, `next dev` and everything `next dev` started, and exits.
 
-- the tmux session is killed by its id only when its id, creation time, pane pid, pane start time, and pane cwd still match;
-- each listener gets `SIGTERM` only when its pid, start time, executable, and cwd still match and the cwd is this checkout.
+Cleanup never signals a pid itself. Nothing is stopped by name, pattern, cwd, or tmux session. So these are left running, and cleanup says so on stderr and exits 1:
 
-Anything that differs (a reused pid, a reused session name, a process serving another checkout, a bare pid or name-only session from an older `run.json`) is left running; cleanup prints why on stderr and exits 1. A `run.json` for another checkout is printed and left running. Nothing is stopped by name or pattern.
+- a socket that cannot prove the run token;
+- a `run.json` from the tmux version of this skill (its recorded pids are printed);
+- a listener still on the recorded port once the supervisor is gone (printed as `pid, started, executable, cwd`). For example, if the supervisor was killed with `SIGKILL`, the app it started is orphaned.
+
+A `run.json` for another checkout is printed and left running. To stop a run by hand, `kill <supervisor pid>` (from `run.json`) does the same as cleanup: the supervisor treats `SIGTERM`, `SIGINT`, and `SIGHUP` as a stop request.
 
 Cleanup leaves the evidence directory in place and prints that path. It restores `next-env.d.ts` to the snapshot taken at launch only when the file still equals the content this run wrote. If the file differs, cleanup leaves it unchanged, saves the snapshot bytes under the evidence directory, and prints that path. An unfinished snapshot, taken before the run recorded what it wrote, is dropped too, including when `run.json` is missing. After every failed launch or drive, run cleanup before starting again so a half-started session does not keep the port.
 
@@ -226,9 +231,9 @@ node .agents/skills/verify-scrutinix/scripts/smoke.mjs --help
 node .agents/skills/verify-scrutinix/scripts/cleanup.mjs --help
 ```
 
-`npm run verify:check` needs tmux. It starts and stops only its own child processes and its own uniquely named tmux sessions, by exact pid and session id.
+`npm run verify:check` runs in a few seconds and needs no server. It starts its own supervisors, stand-in apps, and stranger processes on free ports in private scratch directories under `/tmp`. Each stranger must survive every cleanup. It stops only what it started, by the handles it holds.
 
-`scripts/evidence.ts` writes screenshots and downloads into `VERIFY_EVIDENCE_DIR`. `scripts/support.ts` holds the shared Playwright steps (`gotoApp`, `fillSingle`, `scanSingle`, `historyState`).
+`scripts/supervisor.mjs` is the run supervisor; launch starts it, and nothing else should. `scripts/evidence.ts` writes screenshots and downloads into `VERIFY_EVIDENCE_DIR`. `scripts/support.ts` holds the shared Playwright steps (`gotoApp`, `fillSingle`, `scanSingle`, `historyState`).
 
 ## How to report
 
