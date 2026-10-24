@@ -168,6 +168,19 @@ describe("runDnsSignal", () => {
     );
   });
 
+  it("treats a bracketed IPv6 literal as the address, not a hostname", async () => {
+    reverseMock.mockResolvedValueOnce([]);
+
+    const result = await runDnsSignal("https://[2606:4700:4700::1111]/");
+
+    expect(result.subjectType).toBe("ip");
+    expect(resolve6Mock).not.toHaveBeenCalled();
+    expect(lookupHostingMock).toHaveBeenCalledWith(
+      ["2606:4700:4700::1111"],
+      undefined,
+    );
+  });
+
   it("redacts literal private IP subjects", async () => {
     reverseMock.mockResolvedValueOnce([]);
 

@@ -11,6 +11,7 @@ import { isIP } from "node:net";
 
 import { isBlockedNetworkAddress } from "@/lib/domain/blocked-address";
 import type { DNSData } from "@/lib/domain/types";
+import { bareHostname } from "@/lib/domain/url";
 import { withTimeout } from "@/lib/server/http";
 import { lookupHostingNetwork } from "@/lib/server/providers/team-cymru";
 
@@ -25,7 +26,7 @@ export async function runDnsSignal(
   url: string,
   signal?: AbortSignal,
 ): Promise<DNSData> {
-  const hostname = new URL(url).hostname;
+  const hostname = bareHostname(url);
 
   if (isIP(hostname)) {
     const { publicAddresses, blockedCount } = partitionAddresses([hostname]);

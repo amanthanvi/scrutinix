@@ -4,6 +4,7 @@ import { PublicError } from "@/lib/domain/public-error";
 import { getRegistrableDomain } from "@/lib/domain/registrable-domain";
 import { isSharedPlatformHost } from "@/lib/domain/shared-platforms";
 import type { WhoisData } from "@/lib/domain/types";
+import { bareHostname } from "@/lib/domain/url";
 import { fetchWithTimeout, SCRUTINIX_USER_AGENT } from "@/lib/server/http";
 import { SignalSkipError } from "@/lib/server/signal-error";
 
@@ -26,7 +27,7 @@ export async function runWhoisSignal(
   url: string,
   signal?: AbortSignal,
 ): Promise<WhoisData> {
-  const hostname = new URL(url).hostname;
+  const hostname = bareHostname(url);
 
   if (isIP(hostname)) {
     throw new SignalSkipError(

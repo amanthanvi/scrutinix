@@ -180,5 +180,8 @@ describe("runWhoisSignal", () => {
     await expect(
       runWhoisSignal("https://45.151.155.223/x86_64"),
     ).rejects.toBeInstanceOf(SignalSkipError);
+    await expect(
+      runWhoisSignal("https://[2606:4700:4700::1111]/"),
+    ).rejects.toBeInstanceOf(SignalSkipError);
   });
 });

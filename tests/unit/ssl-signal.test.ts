@@ -19,6 +19,13 @@ describe("getTlsProbeTarget", () => {
     expect(port).toBe(38376);
   });
 
+  it("reads an IPv6 literal without its URL brackets", () => {
+    expect(getTlsProbeTarget("https://[2606:4700:4700::1111]:8443/")).toEqual({
+      hostname: "2606:4700:4700::1111",
+      port: 8443,
+    });
+  });
+
   it("defaults https to 443 when port omitted", () => {
     const { port } = getTlsProbeTarget("https://example.com/path");
     expect(port).toBe(443);

@@ -115,6 +115,14 @@ export function simplifyUrlForMatching(url: string) {
   }
 }
 
+/**
+ * A URL's host as a resolver or `isIP` reads it. WHATWG URL keeps an IPv6
+ * literal's brackets ("[2606:4700::1111]"); the address is what is inside.
+ */
+export function bareHostname(url: string | URL): string {
+  return new URL(url).hostname.replace(/^\[(.*)\]$/, "$1");
+}
+
 export function isPrivateHostname(hostname: string) {
   return isBlockedHostname(hostname);
 }
