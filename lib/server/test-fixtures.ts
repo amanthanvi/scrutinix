@@ -13,6 +13,7 @@ import type { NormalizedUrl } from "@/lib/domain/url";
  *   feed-hit.scrutinix.test     -> URLhaus exact listing (malicious)
  *   critical.scrutinix.test     -> VirusTotal + Safe Browsing + feed (critical)
  *   error.scrutinix.test        -> every check fails (error)
+ *   long-hop.scrutinix.test     -> one redirect to a 63-letter hostname
  *   anything else               -> clean (safe)
  *
  * Hosting networks use documentation ASNs (RFC 5398): clean hosts sit on
@@ -72,6 +73,10 @@ const FLAGGED_HOSTING = {
 } as const;
 
 const HOUR_MS = 1000 * 60 * 60;
+
+/** The longest DNS label (63 letters, no break points): a phone-layout probe. */
+const LONGEST_LABEL_HOST =
+  "accountverificationandsecuritycheckpointforyoursigninportalnowx.com";
 
 function buildFixtureSignals(target: NormalizedUrl): SignalPayloadMap {
   const clean = buildCleanSignals(target);
@@ -206,6 +211,21 @@ function buildFixtureSignals(target: NormalizedUrl): SignalPayloadMap {
         },
         dns: flaggedDns,
       };
+    case "long-hop.scrutinix.test": {
+      const finalUrl = `https://${LONGEST_LABEL_HOST}/`;
+      return {
+        ...clean,
+        redirectChain: {
+          ...clean.redirectChain,
+          finalUrl,
+          totalHops: 1,
+          hops: [
+            { url: target.normalizedUrl, status: 302, location: finalUrl },
+            { url: finalUrl, status: 200 },
+          ],
+        },
+      };
+    }
     default:
       return clean;
   }

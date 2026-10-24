@@ -210,6 +210,19 @@
   background: var(--sx-subtle);
 }
 
+/*
+ * A question's sources: the dot between cell names is drawn, not text, so
+ * a copy gives one separator (the visually hidden comma and the space
+ * after it) and a screen reader hears only the comma. The empty alt text
+ * keeps the dot unspoken; the first declaration is the fallback where alt
+ * text isn't supported.
+ */
+.sx-source + .sx-source::before {
+  content: "·";
+  content: "·" / "";
+  margin-inline-start: 0.3em;
+}
+
 /* ---------------------------------------------------------------------
  * The verdict band: neutral while checks run, then the verdict surface.
  * ------------------------------------------------------------------- */

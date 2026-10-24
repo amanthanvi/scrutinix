@@ -8,6 +8,7 @@ import { sanitizeHistoryEntry } from "@/lib/domain/runtime-safety";
 import {
   evidenceTimeOf,
   getSummaryQuestions,
+  PLACEHOLDER_SHAPE,
   questionCiting,
   questionSources,
   summaryQuestionIds,
@@ -307,6 +308,24 @@ describe("the clock ages count from", () => {
 });
 
 describe("pending questions", () => {
+  it("hold room shaped like a clean link's answers", async () => {
+    const host = "example.com";
+    for (const question of ask(await scenario(host), {
+      url: `https://${host}/`,
+    })) {
+      const shape = PLACEHOLDER_SHAPE[question.id];
+      expect(question.why, question.id).toBe(shape.why);
+      // Only the ages and the network's name differ.
+      const generic = (text: string) =>
+        text
+          .replace(/about \d+ \w+ ago/g, "about N ago")
+          .replace(/AS\d+ [A-Z-]+/g, "AS-NETWORK");
+      expect(generic(question.answer!), question.id).toBe(
+        generic(shape.answer),
+      );
+    }
+  });
+
   it("are all pending before any check lands", () => {
     const questions = ask(createPendingSignalResults());
     for (const question of questions) {

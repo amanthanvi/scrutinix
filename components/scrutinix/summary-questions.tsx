@@ -1,10 +1,9 @@
 "use client";
 
-import { Fragment } from "react";
-
 import { cellNames } from "@/components/scrutinix/signal-cell";
 import {
   PENDING_ANSWER,
+  PLACEHOLDER_SHAPE,
   sourcesLabel,
   type SummaryQuestion,
   type SummaryQuestionId,
@@ -18,22 +17,23 @@ export function questionHeadingId(id: SummaryQuestionId): string {
 
 /**
  * The checks a question cites, by their strip cell names. One component,
- * so a later layer can cite numbered cells in one place.
+ * so a later layer can cite numbered cells in one place. The comma is the
+ * one textual separator (read aloud, and what a copy gives); the dot is
+ * drawn by `.sx-source` and is neither selectable nor spoken.
  */
 export function QuestionSources({ names }: { names: readonly SignalName[] }) {
   return (
     <p className="text-caption text-[var(--sx-text-soft)]">
       {sourcesLabel(names.length)}:{" "}
       {names.map((name, index) => (
-        <Fragment key={name}>
+        <span key={name} className="sx-source">
           {index > 0 ? (
             <>
-              <span aria-hidden="true"> · </span>
-              <span className="sr-only">, </span>
+              <span className="sr-only">,</span>{" "}
             </>
           ) : null}
           {cellNames[name]}
-        </Fragment>
+        </span>
       ))}
     </p>
   );
@@ -42,9 +42,10 @@ export function QuestionSources({ names }: { names: readonly SignalName[] }) {
 /**
  * Summary: five plain questions, each a heading with its answer, why it
  * matters, any disagreement, and its sources. A question whose checks are
- * still running holds its space with a quiet placeholder, so answers fill
- * in place as checks land. No severity colour: the strip and the Full rows
- * carry each check's severity once.
+ * still running holds the room a typical answer takes, so answers fill in
+ * place as checks land. No severity colour: the strip and the Full rows
+ * carry each check's severity once. Dynamic text wraps anywhere, so a long
+ * hostname breaks instead of widening a phone screen.
  */
 export function SummaryQuestionList({
   questions,
@@ -61,7 +62,7 @@ export function SummaryQuestionList({
           key={question.id}
           data-question={question.id}
           aria-busy={question.state === "pending" || undefined}
-          className="sx-enter flex flex-col gap-1 py-4"
+          className="sx-enter flex flex-col gap-1 py-4 wrap-anywhere"
         >
           <h4
             id={questionHeadingId(question.id)}
@@ -71,15 +72,28 @@ export function SummaryQuestionList({
             {question.question}
           </h4>
           {question.state === "pending" ? (
-            <>
-              <p className="text-body text-[var(--sx-text-soft)]">
+            <div className="grid">
+              {/*
+               * Holds a typical answer's room, drawn as generated content so
+               * it is never text; "Checking…" sits on its first line.
+               */}
+              <div
+                aria-hidden="true"
+                className="invisible col-start-1 row-start-1 flex flex-col gap-1"
+              >
+                <p
+                  data-stand-in={PLACEHOLDER_SHAPE[question.id].answer}
+                  className="text-body max-w-[62ch] before:content-[attr(data-stand-in)]"
+                />
+                <p
+                  data-stand-in={PLACEHOLDER_SHAPE[question.id].why}
+                  className="max-w-[62ch] text-sm before:content-[attr(data-stand-in)]"
+                />
+              </div>
+              <p className="text-body col-start-1 row-start-1 text-[var(--sx-text-soft)]">
                 {PENDING_ANSWER}
               </p>
-              {/* Holds the why line's space so nothing moves when it lands. */}
-              <p aria-hidden="true" className="invisible text-sm">
-                &nbsp;
-              </p>
-            </>
+            </div>
           ) : (
             <>
               <p className="text-body max-w-[62ch] text-[var(--sx-text)]">

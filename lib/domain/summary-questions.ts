@@ -86,6 +86,42 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 /** What an unanswered question shows while its checks run. */
 export const PENDING_ANSWER = "Checking…";
 
+/**
+ * What a pending question holds room for: a typical clean link's answer
+ * and why, drawn invisibly (never as text) under "Checking…", so the
+ * placeholder wraps like the answer that usually replaces it, at any
+ * width. Findings and disagreements run longer and still grow. A unit
+ * test keeps these near the real clean answers.
+ */
+export const PLACEHOLDER_SHAPE: Record<
+  SummaryQuestionId,
+  { answer: string; why: string }
+> = {
+  reported: {
+    answer: "Not on any list we checked.",
+    why: "Lists only know threats that someone has already reported.",
+  },
+  destination: {
+    answer: "It opens this site directly, without redirects.",
+    why: "Scam links often bounce through other sites to hide where they end.",
+  },
+  concern: {
+    answer:
+      "The link pattern model and structure checks didn't flag it. Its domain was registered about 8 years ago.",
+    why: "Age and wording are hints; they can't clear a link on their own.",
+  },
+  https: {
+    answer:
+      "No. The site has a valid certificate. This certificate was issued about 2 months ago.",
+    why: "Encryption protects the connection, not your trust in the site.",
+  },
+  other: {
+    answer:
+      "Nothing unusual in its DNS records. Its address belongs to network AS13335 CLOUDFLARENET, registered in US.",
+    why: "Ordinary DNS is common to good and bad sites alike.",
+  },
+};
+
 /** "Source" or "Sources", before the cell names a question cites. */
 export function sourcesLabel(count: number): string {
   return count === 1 ? "Source" : "Sources";

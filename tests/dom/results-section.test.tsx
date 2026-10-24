@@ -291,9 +291,11 @@ describe("ResultsSection", () => {
     expect(reported?.textContent).toContain(
       "7 of 67 VirusTotal engines flag it as malicious.",
     );
+    // One textual separator; the dot is drawn, so it isn't copied or read.
     expect(reported?.textContent).toContain(
-      "Sources: VirusTotal · , Safe Browsing · , Threat feeds",
+      "Sources: VirusTotal, Safe Browsing, Threat feeds",
     );
+    expect(reported?.textContent).not.toContain("·");
     expect(screen.queryByRole("list", { name: "Signals" })).toBeNull();
     // No severity colour in the questions: the strip carries it once.
     expect(questions.querySelector("[data-severity]")).toBeNull();
