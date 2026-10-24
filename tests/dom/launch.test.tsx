@@ -15,6 +15,7 @@ import {
   type Launch,
 } from "@/components/scrutinix/analyzer-runtime";
 import { ResultsSection } from "@/components/scrutinix/results-section";
+import * as launchClaims from "@/lib/client/launch-claims";
 import { ScanForm } from "@/components/scrutinix/scan-form";
 import {
   encodeSharedSnapshot,
@@ -268,6 +269,72 @@ describe("a launch the page is rendered with again", () => {
     await waitFor(() => expect(document.activeElement).toBe(urlInput()));
     view.unmount();
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("a launch still being claimed", () => {
+  /** Hold `claimLaunch` open until the test commits it. */
+  function holdClaim() {
+    let commit: (claimed: boolean) => void = () => {};
+    vi.spyOn(launchClaims, "claimLaunch").mockImplementation(
+      () =>
+        new Promise<boolean>((resolve) => {
+          commit = resolve;
+        }),
+    );
+    return { commit: (claimed: boolean) => commit(claimed) };
+  }
+
+  function scannedUrls(fetchMock: ReturnType<typeof stubScan>) {
+    return (fetchMock.mock.calls as unknown as [string, RequestInit][]).map(
+      ([, init]) => (JSON.parse(String(init.body)) as { url: string }).url,
+    );
+  }
+
+  it("only prefills when its claim commits after the launch's minute", async () => {
+    const fetchMock = stubScan(LINK);
+    const claim = holdClaim();
+    renderApp({ launch: launchOf("slow-commit-launch-id") });
+    await waitFor(() => expect(launchClaims.claimLaunch).toHaveBeenCalled());
+
+    // The page was paused mid-transaction past the grant's minute.
+    const now = performance.now.bind(performance);
+    vi.spyOn(performance, "now").mockImplementation(() => now() + 61_000);
+    await act(async () => claim.commit(true));
+
+    await waitFor(() => expect(document.activeElement).toBe(urlInput()));
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("gives way to the person's own scan", async () => {
+    const other = "https://example.com/other";
+    const fetchMock = stubScan(other);
+    const claim = holdClaim();
+    renderApp({ launch: launchOf("overridden-launch-id") });
+    await waitFor(() => expect(launchClaims.claimLaunch).toHaveBeenCalled());
+
+    fireEvent.change(urlInput(), { target: { value: other } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /analyze url/i }));
+    });
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+
+    await act(async () => claim.commit(true));
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 50)));
+    expect(scannedUrls(fetchMock)).toEqual([other]);
+  });
+
+  it("gives way to an edit of the field", async () => {
+    const fetchMock = stubScan(LINK);
+    const claim = holdClaim();
+    renderApp({ launch: launchOf("edited-launch-id") });
+    await waitFor(() => expect(launchClaims.claimLaunch).toHaveBeenCalled());
+
+    fireEvent.change(urlInput(), { target: { value: `${LINK}?edited` } });
+    await act(async () => claim.commit(true));
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 50)));
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(urlInput().value).toBe(`${LINK}?edited`);
   });
 });
 

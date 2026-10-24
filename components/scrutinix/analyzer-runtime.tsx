@@ -16,7 +16,11 @@ import { getToast } from "@/components/ui/lazy-toaster";
 import { useBatchStream } from "@/hooks/use-batch-stream";
 import { warmLinkParser } from "@/hooks/use-link-anatomy";
 import { useScanStream } from "@/hooks/use-scan-stream";
-import { claimLaunch, forgetSpentLaunches } from "@/lib/client/launch-claims";
+import {
+  claimLaunch,
+  forgetSpentLaunches,
+  isLaunchable,
+} from "@/lib/client/launch-claims";
 import {
   SHARE_MAX_AGE_WORDS,
   buildSharedSnapshot,
@@ -158,12 +162,19 @@ function useCreateAnalyzerRuntime(
     [scoredSignals],
   );
 
+  // A share-target launch still being claimed (below) gives way to anything
+  // the person does meanwhile: editing the field, scanning, re-scanning, or
+  // opening a saved result.
+  const launchWantedRef = useRef(true);
+
   const updateSingleUrl = useCallback((value: string) => {
+    launchWantedRef.current = false;
     setSingleUrl(value);
     setInputEditedSinceResult(true);
   }, []);
 
   const startSingleScan = useCallback(async () => {
+    launchWantedRef.current = false;
     setFormError(null);
     keepOpenedResultRef.current = false;
     setSelectedResult(null);
@@ -178,6 +189,7 @@ function useCreateAnalyzerRuntime(
   }, [scan, singleUrl]);
 
   const startBatchScan = useCallback(async () => {
+    launchWantedRef.current = false;
     setFormError(null);
     const urls = batchInput
       .split("\n")
@@ -206,7 +218,7 @@ function useCreateAnalyzerRuntime(
     await batch.startBatch(urls);
   }, [batch, batchInput]);
 
-  const rescanUrl = useCallback(
+  const scanUrl = useCallback(
     async (url: string) => {
       setFormError(null);
       keepOpenedResultRef.current = false;
@@ -218,6 +230,14 @@ function useCreateAnalyzerRuntime(
       await scan.startScan(url);
     },
     [scan],
+  );
+
+  const rescanUrl = useCallback(
+    (url: string) => {
+      launchWantedRef.current = false;
+      return scanUrl(url);
+    },
+    [scanUrl],
   );
 
   // A share-target launch scans once, on arrival. The server cleared the
@@ -241,22 +261,26 @@ function useCreateAnalyzerRuntime(
   }, [renderedAt]);
   useEffect(() => {
     const pending = pendingLaunchRef.current;
-    if (!pending?.grant) return;
+    const grant = pending?.grant;
+    if (!pending || !grant) return;
     pendingLaunchRef.current = null;
     const claim =
       renderedAt === null
         ? Promise.resolve(false)
-        : claimLaunch(pending.grant, renderedAt);
+        : claimLaunch(grant, renderedAt);
     void claim.then((claims) => {
-      if (!mountedRef.current) return;
-      if (!claims) {
+      if (!mountedRef.current || !launchWantedRef.current) return;
+      // The claim can commit after the grant's minute (a page paused
+      // mid-transaction): it stays recorded, so no other page scans it,
+      // and this one only prefills.
+      if (!claims || renderedAt === null || !isLaunchable(grant, renderedAt)) {
         setLaunchRefused(true);
         return;
       }
       clearLaunchParams();
-      void rescanUrl(pending.url);
+      void scanUrl(pending.url);
     });
-  }, [renderedAt, rescanUrl]);
+  }, [renderedAt, scanUrl]);
 
   // A result (a fresh scan, or one opened from history or a batch) has
   // replaced what the page opened on.
@@ -374,6 +398,7 @@ function useCreateAnalyzerRuntime(
 
   /** Show a stored result (history entry or batch row) as the active one. */
   const openStoredResult = useCallback((result: AnalysisResult) => {
+    launchWantedRef.current = false;
     keepOpenedResultRef.current = true;
     setSelectedResult(result);
     setSingleUrl(result.url);

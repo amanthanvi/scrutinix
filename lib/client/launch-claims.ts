@@ -60,7 +60,8 @@ export function launchAge(grant: LaunchGrant, renderedAt: number): number {
   return Math.max(0, renderedAt - grant.issuedAt) + sinceNavigation;
 }
 
-function isLaunchable(grant: LaunchGrant, renderedAt: number): boolean {
+/** Whether the grant is still within its window now. */
+export function isLaunchable(grant: LaunchGrant, renderedAt: number): boolean {
   return launchAge(grant, renderedAt) <= SHARE_LAUNCH_WINDOW_MS;
 }
 
