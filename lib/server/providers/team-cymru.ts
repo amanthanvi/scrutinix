@@ -33,7 +33,6 @@ export interface TxtResolver {
 interface OriginRecord {
   asn: number;
   prefix: string | null;
-  country: string | null;
 }
 
 interface AsNameRecord {
@@ -120,6 +119,8 @@ export function originQueryName(ip: string): string | null {
  * An address can sit in several announced prefixes (one TXT record each),
  * and a prefix announced by several networks lists them space-separated;
  * the most specific prefix and its first ASN win. Null when nothing parses.
+ * The country there is the prefix's registration, not the network's, so it
+ * is not kept: `registeredCountry` comes only from the AS record.
  */
 export function parseOriginRecords(records: string[][]): OriginRecord | null {
   let best: (OriginRecord & { length: number }) | null = null;
@@ -137,14 +138,14 @@ export function parseOriginRecords(records: string[][]): OriginRecord | null {
       continue;
     }
 
-    best = { asn, prefix, country: parseCountry(fields[2]), length };
+    best = { asn, prefix, length };
   }
 
   if (!best) {
     return null;
   }
 
-  return { asn: best.asn, prefix: best.prefix, country: best.country };
+  return { asn: best.asn, prefix: best.prefix };
 }
 
 /**
@@ -224,15 +225,22 @@ export async function lookupHostingNetwork(
       return undefined;
     }
 
+    // The one-shot abort listener may already have fired while the origin
+    // answer was settling; never start the second query after that.
+    if (signal?.aborted) {
+      return undefined;
+    }
+
     const asRecord = await lookupAsName(active, origin.asn, signal);
     return {
       ip,
       asn: origin.asn,
       asName: asRecord?.asName ?? null,
       prefix: origin.prefix,
-      // The network's registry country; the prefix's only when the AS
-      // record is unavailable. Both are registrations, not locations.
-      registeredCountry: asRecord?.country ?? origin.country,
+      // The network's (AS) registry country, never a location. Unknown when
+      // the AS record is unavailable: the prefix's registration can differ
+      // (AS15133: prefix EU, network US), so it is no stand-in.
+      registeredCountry: asRecord?.country ?? null,
     };
   } catch (error) {
     noteFailure("unexpected", error, signal);

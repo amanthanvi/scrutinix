@@ -91,9 +91,7 @@ describe("selectHostingAddress", () => {
     expect(selectHostingAddress(["2a00:1450:4001:80b::200e"])).toBe(
       "2a00:1450:4001:80b::200e",
     );
-    expect(selectHostingAddress(["2620:4f:8000::42"])).toBe(
-      "2620:4f:8000::42",
-    );
+    expect(selectHostingAddress(["2620:4f:8000::42"])).toBe("2620:4f:8000::42");
   });
 
   it("returns null when nothing is queryable", () => {
@@ -122,7 +120,7 @@ describe("Cymru TXT parsing", () => {
   it("reads an IPv4 origin answer", () => {
     expect(
       parseOriginRecords([["13335 | 1.1.1.0/24 | AU | apnic | 2011-08-11"]]),
-    ).toEqual({ asn: 13335, prefix: "1.1.1.0/24", country: "AU" });
+    ).toEqual({ asn: 13335, prefix: "1.1.1.0/24" });
   });
 
   it("reads an IPv6 origin answer split across TXT strings", () => {
@@ -130,7 +128,7 @@ describe("Cymru TXT parsing", () => {
       parseOriginRecords([
         ["13335 | 2606:4700::/32 | US | ar", "in | 2010-07-14"],
       ]),
-    ).toEqual({ asn: 13335, prefix: "2606:4700::/32", country: "US" });
+    ).toEqual({ asn: 13335, prefix: "2606:4700::/32" });
   });
 
   it("takes the most specific prefix and the first of several origin ASNs", () => {
@@ -139,7 +137,7 @@ describe("Cymru TXT parsing", () => {
         ["3356 | 8.0.0.0/9 | US | arin | 1992-12-01"],
         ["15169 36040 | 8.8.8.0/24 | US | arin | 2023-12-28"],
       ]),
-    ).toEqual({ asn: 15169, prefix: "8.8.8.0/24", country: "US" });
+    ).toEqual({ asn: 15169, prefix: "8.8.8.0/24" });
   });
 
   it("returns null for malformed answers", () => {
@@ -149,17 +147,17 @@ describe("Cymru TXT parsing", () => {
     expect(parseOriginRecords([["0 | 1.1.1.0/24 | AU"]])).toBeNull();
   });
 
-  it("keeps the ASN but drops a malformed prefix or country", () => {
+  it("keeps the ASN but drops a malformed prefix", () => {
     expect(parseOriginRecords([["64500 | 1.1.1.0/99 | Netherlands"]])).toEqual({
       asn: 64500,
       prefix: null,
-      country: null,
     });
-    expect(parseOriginRecords([["64500 | 1.1.1.0/24 | ZZ"]])).toEqual({
-      asn: 64500,
-      prefix: "1.1.1.0/24",
-      country: null,
-    });
+  });
+
+  it("keeps no country from the AS record when it is unknown", () => {
+    expect(
+      parseAsNameRecords([["64500 | ZZ | ripencc | | EXAMPLE-NET"]], 64500),
+    ).toEqual({ asName: "EXAMPLE-NET", country: null });
   });
 
   it("reads the AS name without its repeated country suffix", () => {
@@ -273,21 +271,23 @@ describe("lookupHostingNetwork", () => {
     ).resolves.toBeUndefined();
   });
 
-  it("keeps the ASN when the AS name lookup fails, using the prefix country", async () => {
+  it("keeps the ASN but no country when the AS lookup fails", async () => {
     vi.spyOn(logger, "logWarn").mockImplementation(() => {});
+    // AS15133's prefix is registered in EU, the network itself in US: the
+    // prefix country must never stand in for the network's.
     const resolver = fakeResolver({
-      [V4_ORIGIN]: [["64500 | 93.184.216.0/24 | NL | ripencc | 2008-06-02"]],
-      "AS64500.asn.cymru.com": dnsError("ESERVFAIL"),
+      [V4_ORIGIN]: [["15133 | 93.184.216.0/24 | EU | ripencc | 2008-06-02"]],
+      "AS15133.asn.cymru.com": dnsError("ETIMEOUT"),
     });
 
     await expect(
       lookupHostingNetwork(["93.184.216.34"], undefined, resolver),
     ).resolves.toEqual({
       ip: "93.184.216.34",
-      asn: 64500,
+      asn: 15133,
       asName: null,
       prefix: "93.184.216.0/24",
-      registeredCountry: "NL",
+      registeredCountry: null,
     });
   });
 
@@ -347,6 +347,29 @@ describe("lookupHostingNetwork", () => {
       lookupHostingNetwork(["93.184.216.34"], controller.signal, resolver),
     ).resolves.toBeUndefined();
     expect(resolver.cancel).toHaveBeenCalledOnce();
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it("never starts the AS query when the scan aborts as the origin answers", async () => {
+    const warn = vi.spyOn(logger, "logWarn").mockImplementation(() => {});
+    const controller = new AbortController();
+    const resolver = fakeResolver({
+      "AS15133.asn.cymru.com": [
+        ["15133 | US | arin | 2007-03-19 | EDGECAST, US"],
+      ],
+    });
+    resolver.resolveTxt = async (name: string) => {
+      resolver.queries.push(name);
+      // The answer is already in hand when the abort lands, so the
+      // cancel listener has nothing left to cancel.
+      controller.abort();
+      return [["15133 | 93.184.216.0/24 | EU | ripencc | 2008-06-02"]];
+    };
+
+    await expect(
+      lookupHostingNetwork(["93.184.216.34"], controller.signal, resolver),
+    ).resolves.toBeUndefined();
+    expect(resolver.queries).toEqual([V4_ORIGIN]);
     expect(warn).not.toHaveBeenCalled();
   });
 
