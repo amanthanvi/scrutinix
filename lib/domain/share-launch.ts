@@ -51,29 +51,41 @@ export interface SharedFields {
 const LINK_PATTERN = /https?:\/\/[^\s<>"`]+/i;
 /** A whole field that is nothing but one link. */
 const STANDALONE_LINK = /^https?:\/\/\S+$/i;
-const TRAILING_PUNCTUATION = /[.,;:!?'"»”’]+$/;
-const CLOSERS = { ")": "(", "]": "[", "}": "{" } as const;
+const TRAILING_PUNCTUATION = new Set(".,;:!?'\"»”’");
+type Closer = ")" | "]" | "}";
+const OPENERS: Record<string, Closer> = { "(": ")", "[": "]", "{": "}" };
+
+function isCloser(char: string | undefined): char is Closer {
+  return char === ")" || char === "]" || char === "}";
+}
 
 /**
  * A link as it ends inside prose: drop sentence punctuation and unpaired
  * closers (`(https://a.example/x)` loses its `)`, `…/Mercury_(planet)`
  * keeps it). Only for links found in prose: a link that is the whole
  * field is taken as written, since `!`, `'`, or `)` may end a real path.
+ * Linear: the closers each kind has spare are counted once, and trimming
+ * one spends one (a link is up to 16 KiB of shared text, all of it `)`).
  */
 function trimLinkEnd(link: string): string {
-  let trimmed = link;
-  for (;;) {
-    const before = trimmed;
-    trimmed = trimmed.replace(TRAILING_PUNCTUATION, "");
-    const last = trimmed.at(-1) as keyof typeof CLOSERS | undefined;
-    if (last && last in CLOSERS) {
-      const opener = CLOSERS[last];
-      const opens = trimmed.split(opener).length - 1;
-      const closes = trimmed.split(last).length - 1;
-      if (closes > opens) trimmed = trimmed.slice(0, -1);
-    }
-    if (trimmed === before) return trimmed;
+  const unpaired: Record<Closer, number> = { ")": 0, "]": 0, "}": 0 };
+  for (const char of link) {
+    if (isCloser(char)) unpaired[char] += 1;
+    else if (char in OPENERS) unpaired[OPENERS[char]!] -= 1;
   }
+  let end = link.length;
+  while (end > 0) {
+    const last = link[end - 1]!;
+    if (TRAILING_PUNCTUATION.has(last)) {
+      end -= 1;
+    } else if (isCloser(last) && unpaired[last] > 0) {
+      unpaired[last] -= 1;
+      end -= 1;
+    } else {
+      break;
+    }
+  }
+  return link.slice(0, end);
 }
 
 /**

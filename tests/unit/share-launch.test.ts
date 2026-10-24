@@ -46,6 +46,27 @@ describe("extractSharedLink", () => {
     );
   });
 
+  it("trims a long run of closers in one pass, not one rescan per closer", () => {
+    // Rescanning the link for each closer took ~0.9 s of CPU for 15,000
+    // ")" in a body under the share cap, with no grant needed.
+    for (const tail of [")".repeat(20_000), ").".repeat(10_000)]) {
+      const started = performance.now();
+      expect(
+        extractSharedLink({ text: `See https://example.com/x${tail}` }),
+      ).toBe("https://example.com/x");
+      expect(performance.now() - started).toBeLessThan(50);
+    }
+    // Pairs still count across the run: one "(" keeps one ")".
+    expect(
+      extractSharedLink({
+        text: `See https://example.com/a_(b${")".repeat(5)}, then (x]`,
+      }),
+    ).toBe("https://example.com/a_(b)");
+    expect(extractSharedLink({ text: "[https://example.com/a[1]]." })).toBe(
+      "https://example.com/a[1]",
+    );
+  });
+
   it("takes the url field whole: its punctuation is part of the link", () => {
     expect(extractSharedLink({ url: "https://example.com/a'b" })).toBe(
       "https://example.com/a'b",
