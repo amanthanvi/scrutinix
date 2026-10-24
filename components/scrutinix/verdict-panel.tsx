@@ -111,7 +111,7 @@ function Band({
             id={VERDICT_HEADING_ID}
             tabIndex={-1}
             className={cn(
-              "text-verdict-sm sm:text-verdict font-semibold outline-offset-4",
+              "text-verdict-sm sm:text-verdict font-semibold wrap-anywhere outline-offset-4",
               headingClassName,
             )}
           >
