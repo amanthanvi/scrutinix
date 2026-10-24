@@ -32,7 +32,7 @@ const sections = [
   },
   {
     title: "Logging",
-    body: "Our logs keep timings and a scrambled fingerprint of the link, never the link itself.",
+    body: "Our logs keep timings and a scrambled fingerprint of the link, never the link itself. Our hosting provider keeps its own record of the pages requested, so a link carried in a page's address, such as a link opened with ?url= (including after you share one to Scrutinix) or a shared result, can appear in its request logs for a limited time under its own policy.",
   },
   {
     title: "Rate limits",

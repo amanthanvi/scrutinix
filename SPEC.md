@@ -414,7 +414,7 @@ Implementation note: every stream ends with one terminal event (`scan_complete`/
 | Forged share link ("Safe: paypal.com") in a chat | Verdicts render only for server-signed payloads; others open neutral                                           |
 | A page or app making a visitor's browser scan    | Only a share-sheet launch (POST, `Sec-Fetch-Site: none`) auto-scans; `?url=` and cross-site posts only prefill |
 
-- **Audit/logging policy:** Log scan requests (URL hash only, not full URL) + response status + timing. Never log full URLs server-side (could contain PII in query params)
+- **Audit/logging policy:** Log scan requests (URL hash only, not full URL) + response status + timing. Never log full URLs server-side (could contain PII in query params). The hosting platform's own request logs are outside this policy and can record page addresses, so a link carried in a page address (`/?url=`, including the `/share` redirect, and `?shared=` results) can appear there; `/privacy` says so.
 
 ## 6) Reliability & Failure Modes
 
