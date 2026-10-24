@@ -158,6 +158,38 @@ test("a pasted link is taken apart before any scan, then hands over to the resul
   await expect(pasted).toHaveCount(0);
 });
 
+test("a long expected site wraps its answer instead of widening a phone", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 320, height: 700 });
+  await gotoApp(page);
+  await page
+    .getByRole("textbox", { name: /url to analyze/i })
+    .fill("https://example.com/");
+  const pasted = page.getByRole("region", { name: "The link, taken apart" });
+  await pasted
+    .getByRole("button", { name: "Expecting a particular site?" })
+    .click();
+  const expected = page.getByRole("textbox", {
+    name: "Which site were you expecting?",
+  });
+  for (const typed of [
+    "accountverificationandsecuritycheckpointforyoursigninportalnowx.com",
+    "Accountverificationandsecuritycheckpointforyoursigninportal",
+  ]) {
+    await expected.fill(typed);
+    await expect(pasted).toContainText(typed);
+    expect(
+      await page.evaluate(
+        () =>
+          document.documentElement.scrollWidth <=
+          document.documentElement.clientWidth,
+      ),
+      typed,
+    ).toBe(true);
+  }
+});
+
 test("a phone-width history row keeps a look-alike's real owner visible", async ({
   page,
 }) => {

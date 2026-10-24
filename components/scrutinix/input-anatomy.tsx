@@ -91,7 +91,8 @@ function ExpectedSite({ anatomy }: { anatomy: LinkAnatomy }) {
         id={answerId}
         aria-live="polite"
         className={cn(
-          "text-body min-h-6",
+          // A long typed domain or name breaks rather than widen a phone.
+          "text-body min-h-6 wrap-anywhere",
           comparison?.outcome === "mismatch"
             ? "font-medium text-[var(--sx-text)]"
             : "text-[var(--sx-text-muted)]",
