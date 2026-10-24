@@ -5,6 +5,7 @@ import {
   startTransition,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -29,6 +30,29 @@ import {
   type SignalName,
 } from "@/lib/domain/types";
 import { normalizeUrlInput } from "@/lib/domain/url";
+import { PREFILL_PARAM, SHARE_LAUNCH_COOKIE } from "@/lib/domain/share-launch";
+
+/** A link handed to the page from outside: `?url=`, or the share target. */
+export interface Launch {
+  url: string;
+  /** Only a share-target launch from this device's share sheet. */
+  autoScan: boolean;
+}
+
+/** Query parameters that describe what the page opened on. */
+const LAUNCH_PARAMS = ["shared", "sig", PREFILL_PARAM] as const;
+
+/**
+ * Drop the link the page opened on from the address bar once something
+ * else replaced it, so a reload doesn't reopen a stale share, prefill, or
+ * launch. Other parameters stay.
+ */
+function clearLaunchParams() {
+  const url = new URL(window.location.href);
+  if (!LAUNCH_PARAMS.some((name) => url.searchParams.has(name))) return;
+  for (const name of LAUNCH_PARAMS) url.searchParams.delete(name);
+  window.history.replaceState(window.history.state, "", url);
+}
 
 export type Tab = "single" | "batch";
 
@@ -58,10 +82,13 @@ const EXPIRED_SHARE_NOTE = `Shared results show for ${SHARE_MAX_AGE_WORDS} after
 /** The one line a sender needs about a verified link. */
 export const VERIFIED_SHARE_NOTE = `It shows this result for ${SHARE_MAX_AGE_WORDS} after the check.`;
 
-function useCreateAnalyzerRuntime(shared: SharedView | null) {
+function useCreateAnalyzerRuntime(
+  shared: SharedView | null,
+  launch: Launch | null,
+) {
   const [activeTab, setActiveTab] = useState<Tab>("single");
   const [viewMode, setViewMode] = useState<ViewMode>("summary");
-  const [singleUrl, setSingleUrl] = useState("");
+  const [singleUrl, setSingleUrl] = useState(launch?.url ?? "");
   const [batchInput, setBatchInput] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
   const [selectedResult, setSelectedResult] = useState<AnalysisResult | null>(
@@ -187,6 +214,26 @@ function useCreateAnalyzerRuntime(shared: SharedView | null) {
     },
     [scan],
   );
+
+  // A share-target launch scans once, on arrival. The cookie that allowed
+  // it is spent first, so a reload (or the same link opened again) only
+  // prefills.
+  const autoScanRef = useRef(launch?.autoScan ? launch.url : null);
+  useEffect(() => {
+    const url = autoScanRef.current;
+    if (!url) return;
+    autoScanRef.current = null;
+    document.cookie = `${SHARE_LAUNCH_COOKIE}=; Max-Age=0; Path=/; SameSite=Strict`;
+    clearLaunchParams();
+    void rescanUrl(url);
+  }, [rescanUrl]);
+
+  // A result (a fresh scan, or one opened from history or a batch) has
+  // replaced what the page opened on.
+  const hasActive = active !== null;
+  useEffect(() => {
+    if (hasActive) clearLaunchParams();
+  }, [hasActive]);
 
   const shareResult = useCallback(
     async (result: AnalysisResult) => {
@@ -322,6 +369,8 @@ function useCreateAnalyzerRuntime(shared: SharedView | null) {
     inputEditedSinceResult,
     live,
     openStoredResult,
+    // Arrived with a link to check (`?url=`) that waits for a tap.
+    prefilled: Boolean(launch && !launch.autoScan),
     rescanUrl,
     scan,
     scored,
@@ -361,6 +410,7 @@ export function useAnalyzerRuntime() {
 export function AnalyzerRuntimeProvider({
   children,
   shared = null,
+  launch = null,
 }: {
   children: ReactNode;
   /**
@@ -369,8 +419,10 @@ export function AnalyzerRuntimeProvider({
    * loads), and the snapshot only when Scrutinix signed it.
    */
   shared?: SharedView | null;
+  /** `?url=`, normalized on the server, and whether to scan it now. */
+  launch?: Launch | null;
 }) {
-  const value = useCreateAnalyzerRuntime(shared);
+  const value = useCreateAnalyzerRuntime(shared, launch);
   return (
     <AnalyzerRuntimeContext.Provider value={value}>
       {children}

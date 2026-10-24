@@ -42,6 +42,10 @@ const sections = [
     title: "Shared links",
     body: `A shared link carries the result inside the link itself: the verdict, the link, a one-line summary, and the eight check results. We have no database of shared links. Our server signs each link it creates, so it can tell its own results from edited ones: a link without a valid signature opens as a link to check yourself, with no verdict and no preview of one. Opening a shared link sends it to our server so it can check the signature; the link inside is not scanned unless you choose to scan it. When a chat app previews a signed link, our server draws the preview image from what is in the link and doesn't save it, though the image may be cached for up to an hour so previews load fast. A shared result shows one moment in time, so a signed link shows its result for ${SHARE_MAX_AGE_WORDS} after the check, then opens as a link to check yourself.`,
   },
+  {
+    title: "Sharing to Scrutinix",
+    body: "If you install Scrutinix on Android and share something to it, your phone sends what you shared to our server, which keeps only the first web link, discards the rest of the message, and logs none of it. To let that one share start a check on its own, it leaves a cookie holding the link for up to a minute, which the page removes as soon as the check starts. A link that opens Scrutinix with a link filled in, from a bookmarklet, a Shortcut, or another site, waits for you to tap Analyze.",
+  },
 ] as const;
 
 export default function PrivacyPage() {

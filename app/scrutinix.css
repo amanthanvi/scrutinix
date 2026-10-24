@@ -185,9 +185,9 @@
 /*
  * Once a verdict band is on the page, the hero headline steps down to the
  * headline size so one display size (the verdict) owns the moment. Keyed
- * on the band's heading, which mounts when a scan starts (or with a shared
- * snapshot from first paint), so the reflow happens once, before the
- * verdict lands, never after.
+ * on the band's heading, which mounts when a scan starts, so the reflow
+ * happens once, before the verdict lands, never after. (A shared link
+ * opens recipient-first, with no hero headline, so nothing steps down.)
  */
 @media (min-width: 40rem) {
   main:has(#sx-verdict-heading) > .sx-hero-title {
