@@ -41,21 +41,26 @@ export function forwardedPlaywrightArgs(rest) {
   return out;
 }
 
-// Playwright reads report destinations and behaviour (PLAYWRIGHT_HTML_*,
-// PLAYWRIGHT_JSON_*, PW_TEST_*, ...) from the environment ahead of the
-// config, which would let an inherited variable move a raw report into the
-// evidence directory. The child gets none of them, except where browsers
-// are installed and the host-requirement switch, which write nothing.
+// Playwright reads report destinations and behaviour from the environment
+// ahead of the config: PLAYWRIGHT_HTML_*/JSON_* move reports, PWDEBUG and
+// PWDEBUGIMPL start the inspector (headed, no timeouts), DEBUG_FILE writes a
+// raw debug log wherever it points, and its lookup also takes the
+// npm_config_<name> and npm_package_config_<name> spellings. The child gets
+// none of them, except where browsers are installed and the
+// host-requirement switch, which write nothing.
 const KEPT_PLAYWRIGHT_ENV = new Set([
   "PLAYWRIGHT_BROWSERS_PATH",
   "PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS",
 ]);
+function isPlaywrightSetting(key) {
+  const npm = /^npm_(?:package_)?config_(.+)$/i.exec(key);
+  const name = (npm ? npm[1] : key).toUpperCase();
+  if (KEPT_PLAYWRIGHT_ENV.has(name)) return false;
+  return /^(PLAYWRIGHT_|PW)/.test(name) || name === "DEBUG_FILE";
+}
 export function playwrightChildEnv(parent) {
   return Object.fromEntries(
-    Object.entries(parent).filter(
-      ([key]) =>
-        !/^(PLAYWRIGHT_|PW_)/.test(key) || KEPT_PLAYWRIGHT_ENV.has(key),
-    ),
+    Object.entries(parent).filter(([key]) => !isPlaywrightSetting(key)),
   );
 }
 

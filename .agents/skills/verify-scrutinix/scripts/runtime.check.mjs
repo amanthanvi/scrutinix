@@ -985,7 +985,9 @@ const recordingPlaywright = standInPlaywright(
   "recording-playwright",
   `fs.writeFileSync(${JSON.stringify(recorded)}, JSON.stringify({
   argv: process.argv.slice(2),
-  playwrightEnv: Object.keys(process.env).filter((key) => /^(PLAYWRIGHT_|PW_)/.test(key)),
+  playwrightEnv: Object.keys(process.env).filter((key) =>
+    /^(PLAYWRIGHT_|PW|DEBUG_FILE$|npm_(package_)?config_(pw|playwright|debug_file))/i.test(key),
+  ),
   htmlOpen: process.env.PLAYWRIGHT_HTML_OPEN,
 }));
 fs.writeFileSync(process.env.VERIFY_REPORT_FILE, JSON.stringify({ suites: [], errors: [], stats: { expected: 1, unexpected: 0, flaky: 0, skipped: 0 } }));
@@ -1026,6 +1028,13 @@ const filtered = await runSuiteWith(
     PLAYWRIGHT_HTML_REPORT: path.join(scratch, "SYNTH-html-report"),
     PLAYWRIGHT_JSON_OUTPUT_FILE: path.join(scratch, "SYNTH.json"),
     PW_TEST_HTML_REPORT_OPEN: "always",
+    PWDEBUG: "1",
+    PWDEBUGIMPL: "1",
+    npm_config_pwdebug: "1",
+    npm_package_config_pwdebug: "1",
+    npm_config_playwright_html_output_dir: path.join(scratch, "SYNTH-npm-html"),
+    DEBUG_FILE: path.join(scratch, "SYNTH-debug.log"),
+    npm_config_debug_file: path.join(scratch, "SYNTH-npm-debug.log"),
     PLAYWRIGHT_BROWSERS_PATH: path.join(scratch, "browsers"),
   }),
 );
@@ -1046,7 +1055,7 @@ check(
   cli(filtered),
 );
 check(
-  "Playwright gets no inherited report or open-behaviour variables",
+  "Playwright gets no inherited report, debug, inspector, or open-behaviour variables, in any spelling",
   seen !== null &&
     seen.htmlOpen === "never" &&
     seen.playwrightEnv.every((key) =>
