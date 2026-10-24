@@ -17,26 +17,35 @@ test("a VirusTotal conviction renders a malicious verdict", async ({
   const verdict = page.getByLabel(/^scan result: malicious$/i);
   await expect(verdict).toBeVisible();
   await expect(verdict.getByText("Don't open this link.")).toBeVisible();
-  // The driver row states the conviction; the band does not repeat it.
+  // The reported question states the conviction; the band does not.
   await expect(
     page.getByText("7 VirusTotal engines flagged this link."),
   ).toHaveCount(0);
-  // Summary holds only the signal that drove the verdict.
+  const reported = page.locator('[data-question="reported"]');
+  await expect(reported).toContainText(
+    "7 of 70 VirusTotal engines flag it as malicious and 2 as suspicious.",
+  );
+  await expect(reported).toContainText(
+    "Each source is kept separately, so one can catch a link the others haven't reached yet.",
+  );
+  // The hosting network is evidence: its registration, never a location.
+  await expect(page.locator('[data-question="other"]')).toContainText(
+    "Its address belongs to network AS64500 EXAMPLE-NET, registered in NL.",
+  );
+  // Summary has no per-check rows; Full keeps all eight.
+  await expect(
+    page.getByRole("list", { name: "Signals" }).getByLabel(/virustotal:/i),
+  ).toHaveCount(0);
+  await page.getByRole("switch", { name: /^summary full/i }).click();
   await expect(
     page.getByRole("list", { name: "Signals" }).getByLabel(/virustotal:/i),
   ).toHaveAttribute(
     "aria-label",
     "VirusTotal: 7 engines flagged this link as malicious, 2 as suspicious.",
   );
-  await expect(page.getByLabel(/google safe browsing:/i)).toHaveCount(0);
-  await expect(page.getByText("7 other checks found nothing.")).toBeVisible();
-
-  // Revealing the quiet checks keeps keyboard focus in the revealed list.
-  await page.getByRole("button", { name: /show all checks/i }).press("Enter");
-  const signals = page.getByRole("list", { name: "Signals" });
-  await expect(signals.locator(":focus")).toHaveCount(1);
-  await page.keyboard.press("Tab");
-  await expect(signals.locator(":focus")).toHaveCount(1);
+  await expect(
+    page.getByRole("list", { name: "Signals" }).getByRole("listitem"),
+  ).toHaveCount(8);
 });
 
 test("an unreachable host renders an unknown verdict, not safe", async ({
@@ -63,15 +72,24 @@ test("a threat-feed listing renders a malicious verdict", async ({ page }) => {
   await submitSingleScan(page, "https://feed-hit.scrutinix.test/payload.exe");
 
   await expect(page.getByLabel(/^scan result: malicious$/i)).toBeVisible();
-  // The driver row carries the listing; the reason itself sits in Details.
+  // The reported question carries the listing and its age, and says why
+  // VirusTotal hasn't caught up; the reason itself sits in Details.
+  const reported = page.locator('[data-question="reported"]');
+  await expect(reported).toContainText(
+    "URLhaus lists this link as active malware distribution (listed 6 hours ago).",
+  );
+  await expect(reported).toContainText(
+    "Lists often name a threat before VirusTotal's engines catch up.",
+  );
+  await expect(page.getByText("URLhaus flagged this link.")).toHaveCount(0);
+  await expect(page.getByText(/listed.*listed/i)).toHaveCount(0);
+  await page.getByRole("switch", { name: /^summary full/i }).click();
   await expect(
     page.getByRole("list", { name: "Signals" }).getByLabel(/threat feeds:/i),
   ).toHaveAttribute(
     "aria-label",
     "Threat Feeds: URLhaus lists this link as active malware distribution.",
   );
-  await expect(page.getByText("URLhaus flagged this link.")).toHaveCount(0);
-  await expect(page.getByText(/listed.*listed/i)).toHaveCount(0);
 });
 
 test("a look-alike subdomain is named plainly and shown as Look-alike", async ({
@@ -140,11 +158,22 @@ test("an unreachable https link says the certificate couldn't be checked", async
   await gotoApp(page);
   await submitSingleScan(page, "https://unreachable.scrutinix.test");
   await expect(page.getByLabel(/^scan result: unknown$/i)).toBeVisible();
-  await expect(page.getByText("Couldn't check the certificate")).toBeVisible();
+  // Said once, by the HTTPS question; the anatomy's fact steps aside.
+  await expect(page.locator('[data-question="https"]')).toContainText(
+    "No. We couldn't check the certificate.",
+  );
+  await expect(page.getByText(/couldn't check the certificate/i)).toHaveCount(
+    1,
+  );
+  await expect(page.locator('[data-question="destination"]')).toContainText(
+    "We couldn't reach the site, so we can't say where it leads.",
+  );
   await expect(page.getByText("No secure connection")).toHaveCount(0);
 });
 
-test("strip cells open their evidence row", async ({ page }) => {
+test("strip cells open their evidence: the question in Summary, the row in Full", async ({
+  page,
+}) => {
   await gotoApp(page);
   await submitSingleScan(page, "https://malicious.scrutinix.test/login");
   await expect(page.getByLabel(/^scan result: malicious$/i)).toBeVisible();
@@ -152,6 +181,16 @@ test("strip cells open their evidence row", async ({ page }) => {
   const strip = page.getByRole("toolbar", { name: "Checks" });
   await expect(strip.getByRole("button")).toHaveCount(8);
   // Names start with the visible cell label (WCAG 2.5.3 label in name).
+  await strip.getByRole("button", { name: /^DNS:/ }).click();
+  await expect(
+    page.getByRole("heading", { name: "What did the other checks find?" }),
+  ).toBeFocused();
+  await strip.getByRole("button", { name: /^Registration:/ }).click();
+  await expect(
+    page.getByRole("heading", { name: "What else raises concern?" }),
+  ).toBeFocused();
+
+  await page.getByRole("switch", { name: /^summary full/i }).click();
   await strip.getByRole("button", { name: /^DNS:/ }).click();
   await expect(page.getByLabel(/DNS Profile:/i)).toBeFocused();
 });

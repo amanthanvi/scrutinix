@@ -474,7 +474,7 @@ describe("shouldShowVerdictSummary", () => {
     }
   });
 
-  it("does not echo the quiet-checks line on the clean fixture", async () => {
+  it("leaves the clean fixture's summary to the imperative", async () => {
     const result = resultFrom(await fixtureSignals("example.com"));
     expect(result.verdict).toBe("safe");
     expect(result.threatInfo?.summary).toBe("No check flagged this link.");
@@ -687,13 +687,13 @@ describe("legacy records and the coverage caveat", () => {
 });
 
 describe("the verdict band's because line", () => {
-  it("yields to driver rows so one fact is stated once", () => {
+  it("yields to the questions and rows so one fact is stated once", () => {
     const result = buildResult("malicious", {
       score: 70,
       summary: "7 VirusTotal engines flagged this link.",
     });
     expect(shouldShowVerdictSummary(result)).toBe(true);
-    expect(shouldShowVerdictSummary(result, 1)).toBe(false);
+    expect(shouldShowVerdictSummary(result, true)).toBe(false);
   });
 });
 

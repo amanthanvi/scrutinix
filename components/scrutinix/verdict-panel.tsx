@@ -205,8 +205,11 @@ interface VerdictBandProps {
    * every other verdict shows at once.
    */
   addressCheck?: LinkParserStatus;
-  /** Rows Summary shows; the "because" line yields to them. */
-  driverRows?: number;
+  /**
+   * The questions or rows below state the evidence, so the "because" line
+   * yields to them.
+   */
+  evidenceShown?: boolean;
   onRunSharedScan?: () => void;
   /** Stops a running scan; shown inside the band so nothing reflows. */
   onCancelScan?: () => void;
@@ -227,7 +230,7 @@ export function VerdictBand({
   completedSignals = 0,
   impersonates = null,
   addressCheck = "ready",
-  driverRows = 0,
+  evidenceShown = false,
   onRunSharedScan,
   onCancelScan,
 }: VerdictBandProps) {
@@ -353,7 +356,7 @@ export function VerdictBand({
       : null;
   const caveat = getCoverageCaveat(result);
   const because =
-    threatInfo && shouldShowVerdictSummary(result, driverRows)
+    threatInfo && shouldShowVerdictSummary(result, evidenceShown)
       ? threatInfo.summary
       : null;
 

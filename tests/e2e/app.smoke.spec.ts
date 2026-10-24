@@ -269,12 +269,16 @@ test("single scan flow @smoke", async ({ page }) => {
   await expect(page.getByRole("meter", { name: /threat score/i })).toBeVisible({
     timeout: 30_000,
   });
-  // Nothing drove a clean verdict, so Summary shows one line, not rows.
+  // Summary answers the five questions instead of listing rows.
+  const questions = page.getByRole("list", { name: "Questions" });
+  await expect(questions.getByRole("heading", { level: 4 })).toHaveCount(5);
   await expect(
     page.getByRole("list", { name: "Signals" }).getByLabel(/VirusTotal:/i),
   ).toHaveCount(0);
-  await expect(page.getByText("All 8 checks found nothing.")).toBeVisible();
-  // The quiet line already says it; the panel doesn't repeat it.
+  await expect(
+    questions.getByText("Not on any list we checked."),
+  ).toBeVisible();
+  // The questions already say it; the band doesn't repeat it.
   await expect(verdict.getByText("No check flagged this link.")).toHaveCount(0);
 
   const signalView = page.getByRole("switch", { name: /^summary full/i });

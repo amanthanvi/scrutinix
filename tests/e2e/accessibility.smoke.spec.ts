@@ -84,16 +84,23 @@ for (const colorScheme of ["light", "dark"] as const) {
     await gotoApp(page);
     await submitSingleScan(page, "https://paypal.com.secure-login.xyz/verify");
     await expect(page.getByLabel(/^scan result: look-alike$/i)).toBeVisible();
-    await page.getByRole("switch", { name: /^summary full/i }).click();
-    await settleAnimations(page);
     await page
       .getByRole("button", { name: /open next\.js dev tools/i })
       .evaluateAll((elements) =>
         elements.forEach((element) => element.remove()),
       );
 
-    const report = await new AxeBuilder({ page }).analyze();
-    expect(report.violations).toEqual([]);
+    // Summary (the five questions) first, then Full (the eight rows).
+    await expect(page.getByRole("list", { name: "Questions" })).toBeVisible();
+    await settleAnimations(page);
+    const summary = await new AxeBuilder({ page }).analyze();
+    expect(summary.violations, "Summary").toEqual([]);
+
+    await page.getByRole("switch", { name: /^summary full/i }).click();
+    await expect(page.getByRole("list", { name: "Signals" })).toBeVisible();
+    await settleAnimations(page);
+    const full = await new AxeBuilder({ page }).analyze();
+    expect(full.violations, "Full").toEqual([]);
   });
 
   test(`${colorScheme} theme has zero axe violations on shared links, verified or not @smoke`, async ({
