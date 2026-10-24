@@ -288,6 +288,7 @@ score band. No score or verdict changes.
 
 - [x] The typed link is taken apart under the form before any scan (`components/scrutinix/input-anatomy.tsx`): each part captioned (P09 copy), a look-alike stated once, and the breakdown steps aside once that link's scan or result is on screen.
 - [x] "Expecting a particular site?" (`lib/domain/expected-site.ts`): one optional field compares a domain, link, or brand name with the registered domain, in the browser; a match never says "safe", an unrecognised name admits it. Security review: brand names are never confirmed (no hyphen/digit stripping, no TLD-agnostic match), and a domain's name is read from the anatomy's own private-suffix-aware registered domain.
+- [x] Review round: a name is never confirmed or denied ("not Microsoft" on live.com was false); typing the domain a look-alike spells out answers "No. The link only spells out paypal.com." so the owner is said once; screen readers hear each captioned part with its caption; a fragment route ("#/login") shows in the page part (display only; scans and cache keys never see it).
 - [x] Verified: unit (expected-site), DOM (paste flow, focus on open), e2e (paste → scan hand-over) and axe on the pasted state in both themes.
 
 ### P24 Resolve September dependency maintenance

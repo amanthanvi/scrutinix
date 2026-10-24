@@ -208,8 +208,9 @@ export function LinkAnatomyView({
 /**
  * The link with each part named beneath it. Parts wrap as units, so a
  * caption always stays under the text it names; long parts break inside
- * their own column. Captions are visual: the link reads as one string to
- * assistive technology, and a look-alike's owner sentence follows anyway.
+ * their own column. Assistive technology hears each part after its name
+ * ("Registered domain: secure-login.xyz"), in the link's own order, so the
+ * breakdown isn't only visual.
  */
 function CaptionedLink({
   id,
@@ -226,8 +227,7 @@ function CaptionedLink({
       title={anatomy.href}
       className="text-body flex flex-wrap items-baseline font-mono text-[var(--sx-text-soft)]"
     >
-      <span className="sr-only">{anatomy.href}</span>
-      <span aria-hidden="true">{anatomy.scheme}://</span>
+      <span>{anatomy.scheme}://</span>
       {anatomy.userinfo ? (
         <LinkPart caption="Ignored by browsers">
           <span className="break-all line-through">{anatomy.userinfo}@</span>
@@ -252,7 +252,7 @@ function CaptionedLink({
           {anatomy.registeredDomain}
         </span>
       </LinkPart>
-      {anatomy.port ? <span aria-hidden="true">{anatomy.port}</span> : null}
+      {anatomy.port ? <span>{anatomy.port}</span> : null}
       {path ? (
         <LinkPart caption="A page on that domain">
           <span className="break-all">{path}</span>
@@ -270,12 +270,13 @@ function LinkPart({
   children: ReactNode;
 }) {
   return (
-    <span
-      aria-hidden="true"
-      className="inline-flex max-w-full min-w-0 flex-col"
-    >
+    <span className="inline-flex max-w-full min-w-0 flex-col">
+      <span className="sr-only">{caption}: </span>
       {children}
-      <span className="text-caption mt-0.5 pr-3 font-sans text-[var(--sx-text-soft)]">
+      <span
+        aria-hidden="true"
+        className="text-caption mt-0.5 pr-3 font-sans text-[var(--sx-text-soft)]"
+      >
         {caption}
       </span>
     </span>

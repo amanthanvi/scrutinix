@@ -33,9 +33,7 @@ export function normalizeUrlInput(input: string): UrlValidationResult {
     };
   }
 
-  const candidate = /^[a-zA-Z][a-zA-Z\d+\-.]*:/.test(trimmed)
-    ? trimmed
-    : `https://${trimmed}`;
+  const candidate = withDefaultScheme(trimmed);
 
   let url: URL;
 
@@ -86,6 +84,25 @@ export function normalizeUrlInput(input: string): UrlValidationResult {
       protocol: url.protocol as "http:" | "https:",
     },
   };
+}
+
+/** "example.com" → "https://example.com"; a link with a scheme is kept. */
+function withDefaultScheme(input: string): string {
+  return /^[a-zA-Z][a-zA-Z\d+\-.]*:/.test(input) ? input : `https://${input}`;
+}
+
+/**
+ * The normalized link with the fragment it was typed with ("#/login" in a
+ * client-routed app), for showing the link only. A fragment never reaches
+ * the server, a scan, or a cache key, which use `normalizedUrl`.
+ */
+export function displayUrlOf(value: NormalizedUrl): string {
+  try {
+    const { hash } = new URL(withDefaultScheme(value.input));
+    return hash ? `${value.normalizedUrl}${hash}` : value.normalizedUrl;
+  } catch {
+    return value.normalizedUrl;
+  }
 }
 
 export function createCacheKey(normalizedUrl: string) {

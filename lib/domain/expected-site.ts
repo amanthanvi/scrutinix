@@ -1,4 +1,3 @@
-import { IMPERSONATED_BRAND_SET } from "@/lib/domain/impersonated-brands";
 import {
   registrableDomainOf,
   type LinkAnatomy,
@@ -14,7 +13,8 @@ import { ownershipSentence } from "@/lib/domain/verdict-guidance";
  *
  * A match only says the link belongs to the domain they typed, never that
  * it is safe: the scan still checks the rest. A brand name is never
- * confirmed, because a brand's name can sit on anyone's domain.
+ * compared either way, because we don't know which domains a brand owns:
+ * "paypal.xyz" carries PayPal's name, and live.com is Microsoft's without it.
  */
 export interface ExpectedSiteComparison {
   /**
@@ -53,7 +53,7 @@ function expectedDomain(parse: ParseHostname, expected: string): string | null {
 
 export function compareExpectedSite(
   parse: ParseHostname,
-  anatomy: Pick<LinkAnatomy, "registeredDomain" | "isIp">,
+  anatomy: Pick<LinkAnatomy, "registeredDomain" | "impersonates">,
   rawExpected: string,
 ): ExpectedSiteComparison | null {
   const expected = rawExpected.trim();
@@ -63,32 +63,24 @@ export function compareExpectedSite(
   // A domain or link: compare registered domains exactly.
   const domain = expectedDomain(parse, expected);
   if (domain) {
-    return domain === owner
-      ? { outcome: "match", sentence: `Matches ${domain}.` }
-      : { outcome: "mismatch", sentence: ownershipSentence(owner, domain) };
+    if (domain === owner) {
+      return { outcome: "match", sentence: `Matches ${domain}.` };
+    }
+    // The anatomy beside this answer already says whose site the link is
+    // and that it spells out this one: answer without saying it twice.
+    if (domain === anatomy.impersonates) {
+      return {
+        outcome: "mismatch",
+        sentence: `No. The link only spells out ${domain}.`,
+      };
+    }
+    return { outcome: "mismatch", sentence: ownershipSentence(owner, domain) };
   }
 
-  // A name. We don't know which domains a brand owns, so a name is never
-  // confirmed as a match: "paypal.xyz" carries PayPal's name too. Its own
-  // name (the registered domain's first label, exactly as the anatomy found
-  // it) only tells us the link isn't obviously someone else's.
-  const name = compact(expected);
-  if (!name) return null;
-  const ownerName = anatomy.isIp ? null : owner.split(".")[0];
-  if (ownerName === name) {
-    return {
-      outcome: "unknown",
-      sentence: `This link belongs to ${owner}. Check that's ${expected}'s address.`,
-    };
-  }
-  if (IMPERSONATED_BRAND_SET.has(name)) {
-    return {
-      outcome: "mismatch",
-      sentence: ownershipSentence(owner, expected),
-    };
-  }
+  // A name: never a match or a mismatch, only whose site it is.
+  if (!compact(expected)) return null;
   return {
     outcome: "unknown",
-    sentence: `We can't tell which site “${expected}” means. This link belongs to ${owner}.`,
+    sentence: `We can't tell from a name whether ${owner} is ${expected}'s site. Type its address to compare.`,
   };
 }

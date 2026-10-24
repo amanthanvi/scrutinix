@@ -15,7 +15,7 @@ import {
   resultsToCsv,
   resultsToJson,
 } from "@/lib/client/export";
-import { normalizeUrlInput } from "@/lib/domain/url";
+import { displayUrlOf, normalizeUrlInput } from "@/lib/domain/url";
 
 function StreamError({ message }: { message: string }) {
   return (
@@ -53,9 +53,11 @@ export function ScanForm() {
     (scan.state.isStreaming ? scan.state.url : null) ??
     shared?.url ??
     null;
+  // Shown with its fragment ("#/login"), which the scan itself never sees,
+  // so a fragment alone doesn't make it a different link.
   const pasteUrl =
     typed.ok && typed.value.normalizedUrl !== shownUrl
-      ? typed.value.normalizedUrl
+      ? displayUrlOf(typed.value)
       : null;
 
   return (

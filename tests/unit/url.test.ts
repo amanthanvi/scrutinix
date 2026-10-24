@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { isBlockedNetworkAddress } from "@/lib/domain/blocked-address";
 import {
   createCacheKey,
+  displayUrlOf,
   normalizeUrlInput,
   simplifyUrlForMatching,
 } from "@/lib/domain/url";
@@ -70,5 +71,30 @@ describe("normalizeUrlInput", () => {
     expect(createCacheKey("https://example.com/AdminPanel")).not.toBe(
       createCacheKey("https://example.com/adminpanel"),
     );
+  });
+});
+
+describe("displayUrlOf", () => {
+  function display(input: string) {
+    const result = normalizeUrlInput(input);
+    if (!result.ok) throw new Error(result.error);
+    return {
+      shown: displayUrlOf(result.value),
+      scanned: result.value.normalizedUrl,
+    };
+  }
+
+  it("shows a typed fragment that the scan never sees", () => {
+    expect(display("example.com/#/login")).toEqual({
+      shown: "https://example.com/#/login",
+      scanned: "https://example.com/",
+    });
+  });
+
+  it("is the normalized link when nothing was typed after #", () => {
+    expect(display("https://Example.com:443/a")).toEqual({
+      shown: "https://example.com/a",
+      scanned: "https://example.com/a",
+    });
   });
 });

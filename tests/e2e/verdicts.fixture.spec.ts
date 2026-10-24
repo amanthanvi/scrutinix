@@ -144,8 +144,12 @@ test("a pasted link is taken apart before any scan, then hands over to the resul
     .getByRole("textbox", { name: "Which site were you expecting?" })
     .fill("paypal.com");
   await expect(pasted).toContainText(
-    "This link belongs to secure-login.xyz, not paypal.com.",
+    "No. The link only spells out paypal.com.",
   );
+  // The owner is stated once, by the anatomy, not again by the answer.
+  await expect(
+    pasted.getByText("This link belongs to secure-login.xyz, not paypal.com."),
+  ).toHaveCount(1);
 
   // Scanning the same link: the result's own anatomy takes over, so the
   // owner is stated once.

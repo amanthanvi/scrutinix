@@ -19,13 +19,32 @@ describe("compareExpectedSite", () => {
   });
 
   it("compares an expected domain with the site the link belongs to", () => {
-    expect(compareExpectedSite(parse, lookAlike, "paypal.com")).toEqual({
+    expect(
+      compareExpectedSite(
+        parse,
+        anatomyOf("https://secure-login.xyz/"),
+        "paypal.com",
+      ),
+    ).toEqual({
       outcome: "mismatch",
       sentence: "This link belongs to secure-login.xyz, not paypal.com.",
     });
     expect(compareExpectedSite(parse, real, "paypal.com")).toEqual({
       outcome: "match",
       sentence: "Matches paypal.com.",
+    });
+  });
+
+  it("doesn't repeat the owner when the link spells out the expected site", () => {
+    // The anatomy beside the answer already says "This link belongs to
+    // secure-login.xyz, not paypal.com.": the answer must not say it again.
+    expect(compareExpectedSite(parse, lookAlike, "paypal.com")).toEqual({
+      outcome: "mismatch",
+      sentence: "No. The link only spells out paypal.com.",
+    });
+    expect(compareExpectedSite(parse, lookAlike, "apple.com")).toEqual({
+      outcome: "mismatch",
+      sentence: "This link belongs to secure-login.xyz, not apple.com.",
     });
   });
 
@@ -37,63 +56,47 @@ describe("compareExpectedSite", () => {
       compareExpectedSite(parse, lookAlike, "WWW.PayPal.com"),
     ).toMatchObject({
       outcome: "mismatch",
-      sentence: "This link belongs to secure-login.xyz, not paypal.com.",
+      sentence: "No. The link only spells out paypal.com.",
     });
   });
 
-  it("never confirms a brand name, only says when the link isn't that brand's", () => {
-    // We don't know which domains a brand owns: its name alone never matches.
-    expect(compareExpectedSite(parse, real, "PayPal")).toEqual({
+  it("never confirms or denies a name: it can't know which sites a brand owns", () => {
+    const answer = (url: string, name: string) =>
+      compareExpectedSite(parse, anatomyOf(url), name);
+    // Microsoft owns live.com: saying "not Microsoft" would be false.
+    expect(answer("https://login.live.com/", "Microsoft")).toEqual({
       outcome: "unknown",
       sentence:
-        "This link belongs to paypal.com. Check that's PayPal's address.",
+        "We can't tell from a name whether live.com is Microsoft's site. Type its address to compare.",
     });
-    expect(compareExpectedSite(parse, lookAlike, "PayPal")).toEqual({
-      outcome: "mismatch",
-      sentence: "This link belongs to secure-login.xyz, not PayPal.",
+    expect(compareExpectedSite(parse, real, "PayPal")).toMatchObject({
+      outcome: "unknown",
     });
-    expect(
-      compareExpectedSite(
-        parse,
-        anatomyOf("https://bankofamerica-secure.example/"),
-        "Bank of America",
-      ),
-    ).toEqual({
-      outcome: "mismatch",
-      sentence:
-        "This link belongs to bankofamerica-secure.example, not Bank of America.",
+    expect(compareExpectedSite(parse, lookAlike, "PayPal")).toMatchObject({
+      outcome: "unknown",
     });
+    // Punctuation, another ending, or a hosting customer's name: still
+    // nothing confirmed.
+    for (const [url, name] of [
+      ["https://pay-pal.com/", "PayPal"],
+      ["https://paypal.xyz/", "PayPal"],
+      ["https://bankofamerica-secure.example/", "Bank of America"],
+      ["https://login-verify.github.io/", "GitHub"],
+      ["https://secure-login.xyz/", "my bank"],
+    ] as const) {
+      expect(answer(url, name)).toMatchObject({ outcome: "unknown" });
+    }
+    expect(compareExpectedSite(parse, real, "!!")).toBeNull();
   });
 
-  it("can't be fooled by punctuation, another ending, or a hosting customer's name", () => {
-    // Hyphens and digits are not stripped from the link's own name.
-    expect(
-      compareExpectedSite(parse, anatomyOf("https://pay-pal.com/"), "PayPal"),
-    ).toMatchObject({ outcome: "mismatch" });
-    // The brand's name on another ending is not a match.
-    expect(
-      compareExpectedSite(parse, anatomyOf("https://paypal.xyz/"), "PayPal"),
-    ).toMatchObject({ outcome: "unknown" });
-    // A site under a hosting suffix is its own site, as the anatomy says.
+  it("treats a site under a hosting suffix as its own site", () => {
     const tenant = anatomyOf("https://login-verify.github.io/");
     expect(tenant.registeredDomain).toBe("login-verify.github.io");
-    expect(compareExpectedSite(parse, tenant, "GitHub")).toEqual({
-      outcome: "mismatch",
-      sentence: "This link belongs to login-verify.github.io, not GitHub.",
-    });
     expect(compareExpectedSite(parse, tenant, "github.com")).toMatchObject({
       outcome: "mismatch",
     });
     expect(
       compareExpectedSite(parse, tenant, "login-verify.github.io"),
     ).toMatchObject({ outcome: "match" });
-  });
-
-  it("admits when a name means no site it can compare", () => {
-    expect(compareExpectedSite(parse, lookAlike, "my bank")).toEqual({
-      outcome: "unknown",
-      sentence:
-        "We can't tell which site “my bank” means. This link belongs to secure-login.xyz.",
-    });
   });
 });
