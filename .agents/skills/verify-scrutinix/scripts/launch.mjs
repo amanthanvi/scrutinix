@@ -10,16 +10,17 @@ import {
   canonicalPath,
   checkHealth,
   ensureDirs,
+  exitSummary,
   evidenceDir,
   foreignNextStopHint,
   formatForeignNext,
   legacyPids,
   legacyState,
   loadState,
+  logPath,
   logTail,
   parseCliArgs,
   recordNextEnvWritten,
-  redactSecrets,
   releaseStateLock,
   repoRoot,
   runCommand,
@@ -143,12 +144,15 @@ function refuseForeignNext() {
   return true;
 }
 
-function failWithLog(reason, logPath) {
-  process.stderr.write(`launch: ${reason}. Log: ${logPath}\n`);
+// The raw log stays in the state directory (mode 0600). What is printed is a
+// short tail, redacted in full before it is cut, so a failed boot can be
+// read without opening the raw file.
+function failWithLog(reason, file) {
+  process.stderr.write(`launch: ${reason}. Log: ${file}\n`);
   process.stderr.write(
     "launch: last lines of the log, with secrets redacted:\n",
   );
-  process.stderr.write(`${logTail(logPath)}\n`);
+  process.stderr.write(`${logTail(file, 2_000)}\n`);
   process.stderr.write(
     "launch: run npm run verify:cleanup before launching again.\n",
   );
@@ -209,27 +213,37 @@ if (await tcpOpen(port)) {
   process.exit(2);
 }
 
+// npm ci and the browser install write to logs in the state directory; only
+// their exit status and the log path are printed.
 if (!existsSync(path.join(repoRoot, "node_modules"))) {
-  process.stdout.write("launch: installing dependencies\n");
-  const install = runCommand("npm", ["ci"], { timeoutMs: 300_000 });
-  if (install.stdout) process.stdout.write(redactSecrets(install.stdout));
-  if (install.stderr) process.stderr.write(redactSecrets(install.stderr));
-  if (install.status !== 0) process.exit(install.status ?? 1);
+  const install = runCommand("npm", ["ci"], {
+    timeoutMs: 300_000,
+    logFile: logPath("install.log"),
+  });
+  process.stdout.write(
+    `launch: npm ci ${exitSummary(install)}. Log: ${install.logFile}\n`,
+  );
+  if (install.status !== 0) {
+    failWithLog("npm ci failed", install.logFile);
+    process.exit(install.status || 1);
+  }
 }
 
 if (process.env.VERIFY_SKIP_BROWSER_INSTALL !== "1") {
-  process.stdout.write("launch: ensuring Playwright Chromium is installed\n");
   const cli = require.resolve("@playwright/test/cli");
   const browsers = runCommand(process.execPath, [cli, "install", "chromium"], {
     timeoutMs: 300_000,
+    logFile: logPath("browsers.log"),
   });
-  if (browsers.stdout) process.stdout.write(redactSecrets(browsers.stdout));
+  process.stdout.write(
+    `launch: Playwright Chromium install ${exitSummary(browsers)}. Log: ${browsers.logFile}\n`,
+  );
   if (browsers.status !== 0) {
-    process.stderr.write(redactSecrets(browsers.stderr || ""));
-    process.stderr.write(
-      "launch: browser install failed. Run: npx playwright install --with-deps chromium\n",
+    failWithLog(
+      "browser install failed. Run: npx playwright install --with-deps chromium",
+      browsers.logFile,
     );
-    process.exit(browsers.status ?? 1);
+    process.exit(browsers.status || 1);
   }
 }
 

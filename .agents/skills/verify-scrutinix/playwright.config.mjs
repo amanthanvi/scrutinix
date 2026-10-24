@@ -11,6 +11,8 @@ export default defineConfig({
   retries: 0,
   timeout: 180_000,
   expect: { timeout: 20_000 },
+  // smoke.mjs sends the list output to a private log and prints a summary
+  // from the JSON report.
   reporter: [
     ["list"],
     [
@@ -20,6 +22,9 @@ export default defineConfig({
         outputFolder: `${evidenceDir}/playwright-report/${suite}`,
       },
     ],
+    ...(process.env.VERIFY_REPORT_FILE
+      ? [["json", { outputFile: process.env.VERIFY_REPORT_FILE }]]
+      : []),
   ],
   outputDir: `${evidenceDir}/test-results/${suite}`,
   use: {

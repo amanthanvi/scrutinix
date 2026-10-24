@@ -11,19 +11,13 @@
 // a stop reaches what this run started and nothing else: no pid, tmux id, or
 // cwd is looked up again.
 import { spawn } from "node:child_process";
-import {
-  chmodSync,
-  closeSync,
-  constants,
-  lstatSync,
-  openSync,
-  unlinkSync,
-} from "node:fs";
+import { chmodSync, closeSync, lstatSync, unlinkSync } from "node:fs";
 import net from "node:net";
 import { setTimeout as delay } from "node:timers/promises";
 
 import {
   clientAuth,
+  openPrivateLog,
   portListeners,
   processGroup,
   processGroupMembers,
@@ -55,14 +49,7 @@ let appExitedAt = 0;
 // Started only once the socket is listening, so there is never an app that
 // no one can ask this supervisor to stop.
 function startApp() {
-  const appFd = openSync(
-    appLog,
-    constants.O_WRONLY |
-      constants.O_CREAT |
-      constants.O_TRUNC |
-      constants.O_NOFOLLOW,
-    0o600,
-  );
+  const appFd = openPrivateLog(appLog);
   app = spawn(command, args, {
     cwd: root,
     env,

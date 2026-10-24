@@ -810,6 +810,55 @@ check(
     doctorOwn.stdout.includes(`owned by run ${run.state.runId}`),
   output(doctorOwn),
 );
+// Finding 3 of round 3: smoke and drive capture Playwright's output. A
+// stand-in Playwright prints a canary to stdout and stderr and reports one
+// failing test; smoke prints the counts, the failing title, and the log path,
+// and the canary reaches only the 0600 log.
+const fakePlaywright = path.join(scratch, "fake-playwright.cjs");
+writeFileSync(
+  fakePlaywright,
+  `const fs = require("fs");
+const canary = "SYNTH-pw-canary-28";
+process.stdout.write("  x 1 drive > shares a signed link\\n    accessToken=" + canary + "\\n");
+process.stderr.write("Authorization: Bearer " + canary + "\\n" + JSON.stringify({ token: canary }) + "\\n");
+fs.writeFileSync(process.env.VERIFY_REPORT_FILE, JSON.stringify({
+  suites: [{ title: "drive.spec.ts", specs: [], suites: [{ title: "drive", specs: [
+    { title: "opens the home page", ok: true },
+    { title: "shares a signed link", ok: false, tests: [{ results: [{ error: { message: "token=" + canary } }] }] },
+  ] }] }],
+  errors: [],
+  stats: { expected: 1, unexpected: 1, flaky: 0, skipped: 0 },
+}));
+process.exit(1);
+`,
+);
+const driveRun = await runCli(
+  "smoke.mjs",
+  ["--drive", "--port", String(portA), "-g", "signed"],
+  envFor(runDir, { VERIFY_PLAYWRIGHT_CLI: fakePlaywright }),
+);
+const driveLog = path.join(runDir, "drive.log");
+check(
+  "drive prints a summary, never Playwright's output",
+  driveRun.status === 1 &&
+    !output(driveRun).includes("SYNTH-pw-canary-28") &&
+    driveRun.stdout.includes("doctor: READY") &&
+    driveRun.stderr.includes(
+      "drive: Playwright exited 1: 1 passed, 1 failed, 0 flaky, 0 skipped",
+    ) &&
+    driveRun.stderr.includes(
+      "drive: failed: drive.spec.ts › drive › shares a signed link",
+    ) &&
+    driveRun.stderr.includes(`drive: log ${driveLog}`),
+  output(driveRun),
+);
+check(
+  "Playwright's output is kept in a 0600 log",
+  existsSync(driveLog) &&
+    (lstatSync(driveLog).mode & 0o777) === 0o600 &&
+    readFileSync(driveLog, "utf8").includes("accessToken=SYNTH-pw-canary-28"),
+);
+
 const doctorForeign = await runCli(
   "doctor.mjs",
   ["--port", String(portB), "--json"],
@@ -1249,6 +1298,16 @@ const leaked = [
   "run --auth-token synth-flag-fifteen",
   "x-api-key: synth-header-sixteen",
   "upstashRestToken = 'synth-single-seventeen'",
+  // Finding 2 of round 3, alone on a line and embedded in a longer one
+  '{"token":"synth-json-eighteen"}',
+  '{"tokens":["synth-first-nineteen","synth-array-twenty"]}',
+  '{"apiKey":\n"synth-newline-twentyone"}',
+  String.raw`{"msg":"https:\/\/default:synth-escaped-url-22@registry.example.invalid/pkg"}`,
+  'npm error {"tokens":["a","synth-embedded-23"], "x":1}',
+  String.raw`warn {"msg":"https:\/\/default:synth-embedded-url-24@r.example.invalid"} end`,
+  'x {"secret": {"v": "synth-object-25"}} y',
+  String.raw`{"msg":"{\"token\":\"synth-nested-26\"}"}`,
+  '  "credentials": {\n    "user": "u",\n    "value": "synth-pretty-27"\n  }',
 ].join("\n");
 const redacted = runtime.redactSecrets(leaked);
 for (const secret of [
@@ -1282,6 +1341,16 @@ for (const secret of [
   "synth-flag-fifteen",
   "synth-header-sixteen",
   "synth-single-seventeen",
+  "synth-json-eighteen",
+  "synth-first-nineteen",
+  "synth-array-twenty",
+  "synth-newline-twentyone",
+  "synth-escaped-url-22",
+  "synth-embedded-23",
+  "synth-embedded-url-24",
+  "synth-object-25",
+  "synth-nested-26",
+  "synth-pretty-27",
 ]) {
   check(
     `redacts ${secret.slice(0, 16)}…`,
@@ -1289,6 +1358,28 @@ for (const secret of [
     redacted,
   );
 }
+// The reviewer's four inputs, each as the whole text.
+for (const [label, text] of [
+  ["a JSON token", '{"token":"SYNTH-r3-canary"}'],
+  ["a JSON token array", '{"tokens":["first","SYNTH-r3-canary"]}'],
+  ["a value on the next line", '{"apiKey":\n"SYNTH-r3-canary"}'],
+  [
+    "an escaped URL credential",
+    String.raw`{"msg":"https:\/\/default:SYNTH-r3-canary@registry.example.invalid/pkg"}`,
+  ],
+]) {
+  check(
+    `redacts ${label} on its own`,
+    !runtime.redactSecrets(text).includes("SYNTH-r3-canary"),
+    runtime.redactSecrets(text),
+  );
+}
+check(
+  "JSON redaction keeps non-secret fields",
+  runtime.redactSecrets('{"status":"ok","count":3,"token":"x1"}') ===
+    '{"status":"ok","count":3,"token":"[redacted]"}',
+  runtime.redactSecrets('{"status":"ok","count":3,"token":"x1"}'),
+);
 const benign =
   "▲ Next.js 16.3.8\n- Local: http://127.0.0.1:3000\n- Network: http://127.0.0.1:3000\n✓ Ready in 1.2s\nGET / 200 in 85ms\nGET /about 200 in 12ms (compile: 3ms, render: 9ms)\n/Users/me/GitRepos/scrutinix2/t3-c2a46879/node_modules/next/dist/server/lib/start-server.js\nauthor: someone, signals: 8";
 check(
@@ -1329,6 +1420,31 @@ check(
     !runtime.logTail(boundaryOneLine).includes(boundarySecret) &&
     runtime.logTail(boundaryFile).length <= 4000,
   runtime.logTail(boundaryFile).slice(0, 80),
+);
+
+// launch's npm ci and browser install go through runCommand: the child's
+// output lands in the log, and nothing reaches the caller's stdout or stderr.
+const captureDir = privateDir("capture");
+const capture = spawnSync(
+  process.execPath,
+  [
+    "--input-type=module",
+    "-e",
+    `const runtime = await import(${JSON.stringify(new URL("./runtime.mjs", import.meta.url).href)});
+const result = runtime.runCommand(process.execPath, ["-e", "console.log('accessToken=SYNTH-cmd-29'); console.error('Bearer SYNTH-cmd-29xyz')"], { logFile: runtime.logPath("install.log") });
+process.stdout.write(runtime.exitSummary(result));`,
+  ],
+  { env: envFor(captureDir), encoding: "utf8" },
+);
+const captureLog = path.join(captureDir, "install.log");
+check(
+  "runCommand keeps a child's output in its 0600 log",
+  capture.status === 0 &&
+    capture.stdout === "exited 0" &&
+    !`${capture.stdout}${capture.stderr}`.includes("SYNTH-cmd-29") &&
+    (lstatSync(captureLog).mode & 0o777) === 0o600 &&
+    readFileSync(captureLog, "utf8").includes("accessToken=SYNTH-cmd-29"),
+  `${capture.status}\n${capture.stdout}\n${capture.stderr}`,
 );
 
 // ---- Share key --------------------------------------------------------------

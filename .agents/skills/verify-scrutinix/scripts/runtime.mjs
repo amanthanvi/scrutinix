@@ -10,6 +10,7 @@ import {
   closeSync,
   constants,
   existsSync,
+  fchmodSync,
   fstatSync,
   lstatSync,
   mkdirSync,
@@ -114,10 +115,13 @@ function envKey(raw) {
 
 // A key, optionally quoted (or \"escaped\" inside a JSON string), a ":" or
 // "=", and a value. Percent-encoded keys (%74oken) are decoded before the
-// secret test.
+// secret test. A quoted, array, or object value may start on the next line.
 const keyChars = String.raw`(?:[A-Za-z0-9_.-]|%[0-9A-Fa-f]{2})+`;
 const keyQuote = String.raw`(?:\\?["'])?`;
+const pairSeparator = String.raw`[ \t]*[:=](?:[ \t]*\r?\n(?=[ \t]*\\?["'[{]))?[ \t]*`;
 const pairValue = [
+  String.raw`\[[^[\]]*\]`, // [array], one level, may span lines
+  String.raw`\{[^{}]*\}`, // {object}, one level, may span lines
   String.raw`"(?:[^"\\]|\\[\s\S])*"`, // "double", escape-aware
   String.raw`'(?:[^'\\]|\\[\s\S])*'`, // 'single', escape-aware
   String.raw`\\"(?:[^"\\]|\\(?!")[\s\S])*\\"`, // \"escaped\" in a JSON string
@@ -126,7 +130,7 @@ const pairValue = [
   String.raw`(?:\\\r?\n[ \t]*|[^\s&,;}\])])+`, // unquoted, with "\" continuations
 ].join("|");
 const pairPattern = new RegExp(
-  String.raw`(?<![A-Za-z0-9_%\\])(${keyQuote}(${keyChars})${keyQuote}[ \t]*[:=][ \t]*)(${pairValue})`,
+  String.raw`(?<![A-Za-z0-9_%\\])(${keyQuote}(${keyChars})${keyQuote}${pairSeparator})(${pairValue})`,
   "g",
 );
 
@@ -156,8 +160,9 @@ const redactions = [
     /-----BEGIN [A-Z0-9 ]+-----[\s\S]*?(?:-----END [A-Z0-9 ]+-----|$)/g,
     "[redacted PEM block]",
   ],
-  // Credentials in URLs: scheme://user:password@host
-  [/\b([a-z][a-z0-9+.-]*:\/\/)[^\s/?#@]+@/gi, "$1[redacted]@"],
+  // Credentials in URLs: scheme://user:password@host, also with the slashes
+  // JSON-escaped (https:\/\/user:password@host)
+  [/\b([a-z][a-z0-9+.-]*:(?:\/\/|\\\/\\\/))[^\s/\\?#@]+@/gi, "$1[redacted]@"],
   // Authorization schemes followed by a token
   [/\b(Bearer|Basic|Token)\s+[\w.~+/=-]{6,}/gi, "$1 [redacted]"],
   // Flags: --token VALUE, --password VALUE
@@ -193,8 +198,60 @@ function opaqueToken(run) {
   return longest.length >= 16 && mixedCase(longest) && mixedCase(run);
 }
 
+// A JSON value with every secret-named key's value (string, number, array,
+// or object) masked, and every other string redacted as text. Walking the
+// decoded value sees through escapes (\/, \n, \u0040) that a pattern misses.
+function redactJsonValue(value, depth = 0) {
+  if (depth > 64) return "[redacted]";
+  if (typeof value === "string") return redactSecrets(value);
+  if (Array.isArray(value)) {
+    return value.map((item) => redactJsonValue(item, depth + 1));
+  }
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [
+        redactSecrets(key),
+        secretKey(key) ? "[redacted]" : redactJsonValue(item, depth + 1),
+      ]),
+    );
+  }
+  return value;
+}
+
+function redactedJson(text) {
+  try {
+    const parsed = JSON.parse(text);
+    if (!parsed || typeof parsed !== "object") return null;
+    const redacted = redactJsonValue(parsed);
+    const same = JSON.stringify(redacted) === JSON.stringify(parsed);
+    return same ? text : JSON.stringify(redacted);
+  } catch {
+    return null;
+  }
+}
+
+// The whole text, or each line, that parses as a JSON object or array is
+// redacted through its decoded value. Everything else is left for the
+// patterns below, which also cover JSON embedded in a longer line.
+function redactJsonText(text) {
+  const trimmed = text.trim();
+  if (/^[[{]/.test(trimmed) && trimmed.includes("\n")) {
+    const whole = redactedJson(trimmed);
+    if (whole !== null) return whole;
+  }
+  return text
+    .split("\n")
+    .map((line) => {
+      const start = line.search(/\S/);
+      if (start === -1 || !/[[{]/.test(line[start] ?? "")) return line;
+      const redacted = redactedJson(line.slice(start).trimEnd());
+      return redacted === null ? line : line.slice(0, start) + redacted;
+    })
+    .join("\n");
+}
+
 export function redactSecrets(text) {
-  let next = String(text);
+  let next = redactJsonText(String(text));
   for (const [pattern, replacement] of redactions) {
     next = next.replace(pattern, replacement);
   }
@@ -1290,14 +1347,7 @@ export async function startSupervisor({
   // Recorded before the supervisor exists, so an interrupted launch or a
   // failed boot is still cleaned up through the socket.
   writeState(state, dir);
-  const logFd = openSync(
-    supervisorLog,
-    constants.O_WRONLY |
-      constants.O_CREAT |
-      constants.O_TRUNC |
-      constants.O_NOFOLLOW,
-    0o600,
-  );
+  const logFd = openPrivateLog(supervisorLog);
   let child;
   try {
     child = spawn(process.execPath, [supervisorScript], {
@@ -1717,15 +1767,104 @@ export async function checkHealth(port = defaultPort, { dir } = {}) {
   return { ok: false, code: "privacy-unhealthy", lines, owned };
 }
 
+// ---- Subprocess output ------------------------------------------------------
+
+// Subprocesses (npm ci, the browser install, next dev, Playwright) never write
+// to this terminal. Their output goes to a log in the private state
+// directory, and the commands print a summary: exit status, counts, failing
+// test titles, and the log's path.
+
+// Open `file` for writing as a fresh 0600 log, never through a symlink.
+export function openPrivateLog(file) {
+  ensureDirs([path.dirname(file)]);
+  const fd = openSync(
+    file,
+    constants.O_WRONLY |
+      constants.O_CREAT |
+      constants.O_TRUNC |
+      constants.O_NOFOLLOW,
+    0o600,
+  );
+  const stat = fstatSync(fd);
+  if (!stat.isFile() || (uid !== null && stat.uid !== uid)) {
+    closeSync(fd);
+    throw new UnsafeStateError(
+      `verify: ${file} is not a regular file owned by this user.`,
+    );
+  }
+  fchmodSync(fd, 0o600);
+  return fd;
+}
+
+export function logPath(name, dir = stateDir) {
+  return path.join(dir, name);
+}
+
+// Run a command with stdout and stderr in `logFile`. Returns its exit status
+// and signal; nothing it prints reaches this process's output.
 export function runCommand(
   command,
   args,
-  { timeoutMs = 120_000, env = process.env } = {},
+  { timeoutMs = 120_000, env = process.env, logFile },
 ) {
-  return spawnSync(command, args, {
-    cwd: repoRoot,
-    encoding: "utf8",
-    timeout: timeoutMs,
-    env,
-  });
+  const fd = openPrivateLog(logFile);
+  try {
+    const result = spawnSync(command, args, {
+      cwd: repoRoot,
+      timeout: timeoutMs,
+      env,
+      stdio: ["ignore", fd, fd],
+    });
+    return { status: result.status, signal: result.signal, logFile };
+  } finally {
+    closeSync(fd);
+  }
+}
+
+export function exitSummary({ status, signal }) {
+  if (signal) return `was stopped by ${signal}`;
+  return `exited ${status ?? "without a status"}`;
+}
+
+// One printable line from a test title: redacted, one line, and short.
+function titleLine(text) {
+  const line = redactSecrets(String(text))
+    .replace(/[\u0000-\u001f\u007f]+/g, " ")
+    .trim();
+  return line.length > 200 ? `${line.slice(0, 199)}…` : line;
+}
+
+// Counts and failing test titles from a Playwright JSON report. Error
+// messages and test output are never read: they stay in the log and report.
+export function summarizePlaywrightReport(file) {
+  let report;
+  try {
+    report = JSON.parse(readPrivateFile(file) ?? "null");
+  } catch {
+    report = null;
+  }
+  if (!report || typeof report !== "object") return null;
+  const stats = report.stats ?? {};
+  const count = (value) => (Number.isInteger(value) ? value : 0);
+  const failed = [];
+  const walk = (suite, titles) => {
+    const trail = suite.title ? [...titles, suite.title] : titles;
+    for (const spec of Array.isArray(suite.specs) ? suite.specs : []) {
+      if (spec?.ok === false) failed.push([...trail, spec.title].join(" › "));
+    }
+    for (const child of Array.isArray(suite.suites) ? suite.suites : []) {
+      walk(child, trail);
+    }
+  };
+  for (const suite of Array.isArray(report.suites) ? report.suites : []) {
+    walk(suite, []);
+  }
+  return {
+    passed: count(stats.expected),
+    failed: count(stats.unexpected),
+    flaky: count(stats.flaky),
+    skipped: count(stats.skipped),
+    failedTitles: failed.map(titleLine),
+    errors: Array.isArray(report.errors) ? report.errors.length : 0,
+  };
 }
