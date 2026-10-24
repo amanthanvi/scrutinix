@@ -311,7 +311,13 @@ describe("ResultsSection", () => {
     expect(reported?.textContent).toContain(
       "From 1VirusTotal·3Safe Browsing·4Threat feeds",
     );
-    expect(reported?.textContent).not.toContain("·");
+    // A copy gives the plain list once: the numbered line is for the eye,
+    // hidden from assistive technology and not selectable.
+    const numbered = reported?.querySelector(
+      ".sx-sources > [aria-hidden='true']",
+    );
+    expect(numbered?.textContent).toContain("·");
+    expect(numbered?.classList.contains("select-none")).toBe(true);
     expect(screen.queryByRole("list", { name: "Signals" })).toBeNull();
     // No severity colour in the questions: the strip carries it once.
     expect(questions.querySelector("[data-severity]")).toBeNull();
