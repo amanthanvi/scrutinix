@@ -59,6 +59,8 @@ async function holdScanStream(page: Page) {
 }
 
 async function release(page: Page, count: number) {
+  // The questions show as pending before the response arrives.
+  await page.waitForFunction(() => "__sxRelease" in window);
   await page.evaluate(
     (n) =>
       (window as unknown as { __sxRelease: (n: number) => void }).__sxRelease(
