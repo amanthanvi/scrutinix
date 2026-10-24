@@ -226,14 +226,14 @@ Confirm the evidence directory still exists after cleanup before citing it.
 
 ## Helpers
 
-| Command                  | Script                                                     |
-| ------------------------ | ---------------------------------------------------------- |
-| `npm run verify:launch`  | `scripts/launch.mjs`                                       |
-| `npm run verify:doctor`  | `scripts/doctor.mjs`                                       |
-| `npm run verify:smoke`   | `scripts/smoke.mjs` (doctor, then `smoke.spec.ts`)         |
-| `npm run verify:drive`   | `scripts/smoke.mjs --drive` (doctor, then `drive.spec.ts`) |
-| `npm run verify:cleanup` | `scripts/cleanup.mjs`                                      |
-| `npm run verify:check`   | `scripts/runtime.check.mjs` (the skill's own tests)        |
+| Command                  | Script                                                                          |
+| ------------------------ | ------------------------------------------------------------------------------- |
+| `npm run verify:launch`  | `scripts/launch.mjs`                                                            |
+| `npm run verify:doctor`  | `scripts/doctor.mjs`                                                            |
+| `npm run verify:smoke`   | `scripts/smoke.mjs` (doctor, then `smoke.spec.ts`, through `scripts/suite.mjs`) |
+| `npm run verify:drive`   | `scripts/smoke.mjs --drive` (doctor, then `drive.spec.ts`)                      |
+| `npm run verify:cleanup` | `scripts/cleanup.mjs`                                                           |
+| `npm run verify:check`   | `scripts/runtime.check.mjs` (the skill's own tests)                             |
 
 ```bash
 node .agents/skills/verify-scrutinix/scripts/launch.mjs --help
@@ -242,7 +242,7 @@ node .agents/skills/verify-scrutinix/scripts/smoke.mjs --help
 node .agents/skills/verify-scrutinix/scripts/cleanup.mjs --help
 ```
 
-`npm run verify:check` runs in under a minute and needs no server. It starts its own supervisors, stand-in apps, and stranger processes on free ports in private scratch directories under `/tmp`. Each stranger must survive every cleanup. It stops only what it started, by the handles it holds: supervisors and direct children through their `ChildProcess` handles, and every stand-in through a lifeline, a socket connection to the check that the stand-in exits on when it closes. It never signals a saved pid or process group. Its refusal tests run against a state directory every command refuses, so a broken guard fails the check instead of launching anything, and it keeps its scratch directory, and fails, if any supervisor there still answers.
+`npm run verify:check` runs in under a minute and needs no server. It starts its own supervisors, stand-in apps, and stranger processes on free ports in private scratch directories under `/tmp`. Each stranger must survive every cleanup. It stops only what it started, by the handles it holds: supervisors and direct children through their `ChildProcess` handles, and every stand-in (fake apps and their children, strangers, sleepers, and the fake `next dev`) through a lifeline, a socket connection to the check that the stand-in exits on when it closes. If the check throws, it tears down on exit; if it is killed, every lifeline closes, every stand-in exits, and each supervisor follows 10 seconds after its app. It never signals a saved pid or process group. A failing check prints its name and selected fields only (numbers, booleans, null); any string, array, or object prints as its kind and size, so no captured output, `run.json`, or run token reaches the terminal. It runs the smoke runner with a stand-in Playwright only by passing it to `runSuite` in `scripts/suite.mjs`; `smoke.mjs` always runs the real one. Its refusal tests run against a state directory every command refuses, so a broken guard fails the check instead of launching anything, and it keeps its scratch directory, and fails, if any supervisor there still answers.
 
 `scripts/supervisor.mjs` is the run supervisor; launch starts it, and nothing else should. `scripts/evidence.ts` writes screenshots and downloads into `VERIFY_EVIDENCE_DIR`. `scripts/support.ts` holds the shared Playwright steps (`gotoApp`, `fillSingle`, `scanSingle`, `historyState`).
 
