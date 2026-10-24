@@ -287,7 +287,7 @@ score band. No score or verdict changes.
 ### P29.3 Anatomy on paste (2026-10-24, layer 3 of the distinctiveness stack)
 
 - [x] The typed link is taken apart under the form before any scan (`components/scrutinix/input-anatomy.tsx`): each part captioned (P09 copy), a look-alike stated once, and the breakdown steps aside once that link's scan or result is on screen.
-- [x] "Expecting a particular site?" (`lib/domain/expected-site.ts`): one optional field compares a domain, link, or brand name with the registered domain, in the browser; a match never says "safe", an unrecognised name admits it.
+- [x] "Expecting a particular site?" (`lib/domain/expected-site.ts`): one optional field compares a domain, link, or brand name with the registered domain, in the browser; a match never says "safe", an unrecognised name admits it. Security review: brand names are never confirmed (no hyphen/digit stripping, no TLD-agnostic match), and a domain's name is read from the anatomy's own private-suffix-aware registered domain.
 - [x] Verified: unit (expected-site), DOM (paste flow, focus on open), e2e (paste → scan hand-over) and axe on the pasted state in both themes.
 
 ### P24 Resolve September dependency maintenance

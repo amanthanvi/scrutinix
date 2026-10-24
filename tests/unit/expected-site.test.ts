@@ -41,10 +41,12 @@ describe("compareExpectedSite", () => {
     });
   });
 
-  it("matches a brand name against the registered domain's own name", () => {
+  it("never confirms a brand name, only says when the link isn't that brand's", () => {
+    // We don't know which domains a brand owns: its name alone never matches.
     expect(compareExpectedSite(parse, real, "PayPal")).toEqual({
-      outcome: "match",
-      sentence: "Matches paypal.com.",
+      outcome: "unknown",
+      sentence:
+        "This link belongs to paypal.com. Check that's PayPal's address.",
     });
     expect(compareExpectedSite(parse, lookAlike, "PayPal")).toEqual({
       outcome: "mismatch",
@@ -61,6 +63,30 @@ describe("compareExpectedSite", () => {
       sentence:
         "This link belongs to bankofamerica-secure.example, not Bank of America.",
     });
+  });
+
+  it("can't be fooled by punctuation, another ending, or a hosting customer's name", () => {
+    // Hyphens and digits are not stripped from the link's own name.
+    expect(
+      compareExpectedSite(parse, anatomyOf("https://pay-pal.com/"), "PayPal"),
+    ).toMatchObject({ outcome: "mismatch" });
+    // The brand's name on another ending is not a match.
+    expect(
+      compareExpectedSite(parse, anatomyOf("https://paypal.xyz/"), "PayPal"),
+    ).toMatchObject({ outcome: "unknown" });
+    // A site under a hosting suffix is its own site, as the anatomy says.
+    const tenant = anatomyOf("https://login-verify.github.io/");
+    expect(tenant.registeredDomain).toBe("login-verify.github.io");
+    expect(compareExpectedSite(parse, tenant, "GitHub")).toEqual({
+      outcome: "mismatch",
+      sentence: "This link belongs to login-verify.github.io, not GitHub.",
+    });
+    expect(compareExpectedSite(parse, tenant, "github.com")).toMatchObject({
+      outcome: "mismatch",
+    });
+    expect(
+      compareExpectedSite(parse, tenant, "login-verify.github.io"),
+    ).toMatchObject({ outcome: "match" });
   });
 
   it("admits when a name means no site it can compare", () => {

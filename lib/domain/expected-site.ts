@@ -1,5 +1,9 @@
 import { IMPERSONATED_BRAND_SET } from "@/lib/domain/impersonated-brands";
-import type { LinkAnatomy, ParseHostname } from "@/lib/domain/link-anatomy";
+import {
+  registrableDomainOf,
+  type LinkAnatomy,
+  type ParseHostname,
+} from "@/lib/domain/link-anatomy";
 import { ownershipSentence } from "@/lib/domain/verdict-guidance";
 
 /**
@@ -8,8 +12,9 @@ import { ownershipSentence } from "@/lib/domain/verdict-guidance";
  * belongs to, the way a bank checks a payee's name before a transfer.
  * Runs in the browser on the link's anatomy; nothing is sent anywhere.
  *
- * A match only says the link belongs to the site they named, never that
- * it is safe: the scan still checks the rest.
+ * A match only says the link belongs to the domain they typed, never that
+ * it is safe: the scan still checks the rest. A brand name is never
+ * confirmed, because a brand's name can sit on anyone's domain.
  */
 export interface ExpectedSiteComparison {
   /**
@@ -26,9 +31,10 @@ function compact(value: string): string {
 }
 
 /**
- * The registrable domain of something typed as a domain or link
- * ("paypal.com", "www.paypal.com", "https://paypal.com/login"), or null if
- * it isn't one.
+ * The registered domain of something typed as a domain or link
+ * ("paypal.com", "www.paypal.com", "https://paypal.com/login"), worked out
+ * exactly as the link's own anatomy is (private suffixes included, so
+ * "you.github.io" is its own site), or null if it isn't one.
  */
 function expectedDomain(parse: ParseHostname, expected: string): string | null {
   if (/\s/.test(expected) || !expected.includes(".")) return null;
@@ -41,8 +47,8 @@ function expectedDomain(parse: ParseHostname, expected: string): string | null {
   } catch {
     return null;
   }
-  const parsed = parse(hostname);
-  return parsed.domain && parsed.isIcann ? parsed.domain.toLowerCase() : null;
+  if (!parse(hostname, { allowPrivateDomains: true }).domain) return null;
+  return registrableDomainOf(parse, hostname);
 }
 
 export function compareExpectedSite(
@@ -54,6 +60,7 @@ export function compareExpectedSite(
   if (!expected) return null;
   const owner = anatomy.registeredDomain.toLowerCase();
 
+  // A domain or link: compare registered domains exactly.
   const domain = expectedDomain(parse, expected);
   if (domain) {
     return domain === owner
@@ -61,15 +68,18 @@ export function compareExpectedSite(
       : { outcome: "mismatch", sentence: ownershipSentence(owner, domain) };
   }
 
-  // A name: compare it with the registered domain's own name, so "PayPal"
-  // matches paypal.com and paypal.de alike.
+  // A name. We don't know which domains a brand owns, so a name is never
+  // confirmed as a match: "paypal.xyz" carries PayPal's name too. Its own
+  // name (the registered domain's first label, exactly as the anatomy found
+  // it) only tells us the link isn't obviously someone else's.
   const name = compact(expected);
   if (!name) return null;
-  const ownerName = anatomy.isIp
-    ? null
-    : compact(parse(owner).domainWithoutSuffix ?? "");
-  if (ownerName && ownerName === name) {
-    return { outcome: "match", sentence: `Matches ${owner}.` };
+  const ownerName = anatomy.isIp ? null : owner.split(".")[0];
+  if (ownerName === name) {
+    return {
+      outcome: "unknown",
+      sentence: `This link belongs to ${owner}. Check that's ${expected}'s address.`,
+    };
   }
   if (IMPERSONATED_BRAND_SET.has(name)) {
     return {
