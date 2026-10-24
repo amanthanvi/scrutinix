@@ -23,9 +23,10 @@ last launched on, else 3000); --base-url exits 2. Other arguments are passed
 to Playwright.
 
 Playwright's own output goes to smoke.log or drive.log in the state
-directory (mode 0600), not to this terminal. smoke prints the exit status,
-the passed, failed, flaky, and skipped counts, each failing test's title,
-and the paths of the log, the HTML report, and the traces. A run with no
+directory (mode 0600), not to this terminal, and its HTML report and traces
+go to playwright/<suite>/ there, not to the evidence directory: all of them
+hold raw test output. smoke prints the exit status, the passed, failed,
+flaky, and skipped counts, each failing test's title, and those paths. A run with no
 Playwright report, or a report in which no test ran, exits non-zero.
 `;
 

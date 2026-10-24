@@ -969,6 +969,73 @@ check(
   ),
 );
 
+// Finding 3 of round 4: the HTML report and traces embed raw test output.
+// The config writes them under the private raw directory suite.mjs passes,
+// never under the evidence directory, and the optional workflow uploads
+// nothing and keeps its install output in files on the runner.
+const configProbe = spawnSync(
+  process.execPath,
+  [
+    "--input-type=module",
+    "-e",
+    `const { default: config } = await import(${JSON.stringify(new URL("../playwright.config.mjs", import.meta.url).href)});
+const html = config.reporter.filter(([name]) => name === "html").map(([, options]) => options.outputFolder);
+process.stdout.write(JSON.stringify({ outputDir: config.outputDir, html }));`,
+  ],
+  {
+    cwd: runtime.skillDir,
+    encoding: "utf8",
+    env: {
+      ...process.env,
+      VERIFY_EVIDENCE_DIR: "/tmp/sxv-probe/evidence",
+      VERIFY_RAW_DIR: "/tmp/sxv-probe/state/playwright/drive",
+      VERIFY_SUITE: "drive",
+    },
+  },
+);
+let configPaths = { outputDir: "", html: [] };
+try {
+  configPaths = JSON.parse(configProbe.stdout);
+} catch {
+  // Reported by the check below.
+}
+const rawPaths = [configPaths.outputDir, ...configPaths.html];
+check(
+  "Playwright writes its HTML report and traces to the private raw directory, not evidence",
+  configProbe.status === 0 &&
+    configPaths.html.length === 1 &&
+    rawPaths.every(
+      (file) =>
+        typeof file === "string" &&
+        file.startsWith("/tmp/sxv-probe/state/playwright/drive/") &&
+        !file.startsWith("/tmp/sxv-probe/evidence"),
+    ),
+  { status: configProbe.status, paths: rawPaths.length },
+);
+check(
+  "smoke's raw Playwright directory is private",
+  (lstatSync(path.join(runDir, "playwright")).mode & 0o777) === 0o700 &&
+    (lstatSync(path.join(runDir, "playwright", "smoke")).mode & 0o777) ===
+      0o700,
+);
+const workflow = readFileSync(
+  path.join(runtime.repoRoot, ".github/workflows/verify-smoke.yml"),
+  "utf8",
+);
+const installLines = workflow
+  .split("\n")
+  .filter((line) => /\bnpm ci\b|playwright install/.test(line))
+  .filter((line) => !/^(#|echo\b)/.test(line.trim()));
+check(
+  "the verify workflow uploads nothing and keeps install output off the log",
+  !/upload-artifact|actions\/upload/.test(workflow) &&
+    installLines.length === 2 &&
+    installLines.every((line) =>
+      /> "\$RUNNER_TEMP\/[\w.-]+\.log" 2>&1/.test(line),
+    ),
+  { installLines: installLines.length },
+);
+
 const doctorForeign = await runCli(
   "doctor.mjs",
   ["--port", String(portB), "--json"],

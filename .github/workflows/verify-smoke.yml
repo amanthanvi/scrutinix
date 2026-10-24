@@ -31,38 +31,42 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
 
+      # Install output stays on the runner, in a file nothing uploads. The
+      # log shows a fixed status line per step.
       - name: Install dependencies
-        run: npm ci
+        run: |
+          status=0
+          npm ci > "$RUNNER_TEMP/npm-ci.log" 2>&1 || status=$?
+          echo "npm ci exited $status (output kept on the runner, not printed or uploaded)"
+          exit "$status"
 
       - name: Install Playwright Chromium
-        run: npx playwright install --with-deps chromium
+        run: |
+          status=0
+          npx playwright install --with-deps chromium > "$RUNNER_TEMP/playwright-install.log" 2>&1 || status=$?
+          echo "Playwright Chromium install exited $status (output kept on the runner, not printed or uploaded)"
+          exit "$status"
 
+      # Each verify command prints only fixed messages, counts, failing test
+      # titles, and paths. Raw logs, the HTML report, and traces stay in the
+      # private state directory on the runner; nothing is uploaded.
       - name: Launch
-        run: npm run verify:launch
+        run: npm --silent run verify:launch
         env:
           VERIFY_SKIP_BROWSER_INSTALL: "1"
 
       - name: Doctor
-        run: npm run verify:doctor
+        run: npm --silent run verify:doctor
 
       - name: Skill checks
-        run: npm run verify:check
+        run: npm --silent run verify:check
 
       - name: Smoke
-        run: npm run verify:smoke
+        run: npm --silent run verify:smoke
 
       - name: Drive
-        run: npm run verify:drive
+        run: npm --silent run verify:drive
 
       - name: Cleanup
         if: always()
-        run: npm run verify:cleanup
-
-      - name: Upload evidence
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
-        with:
-          name: verify-smoke-evidence
-          path: /tmp/scrutinix-verify/evidence/
-          retention-days: 7
-          if-no-files-found: warn
+        run: npm --silent run verify:cleanup

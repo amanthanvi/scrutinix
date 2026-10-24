@@ -1,8 +1,11 @@
 import { defineConfig, devices } from "@playwright/test";
 
-const evidenceDir =
-  process.env.VERIFY_EVIDENCE_DIR || "/tmp/scrutinix-verify/evidence";
 const suite = process.env.VERIFY_SUITE || "playwright";
+// The HTML report and traces embed raw test output, so they go to the
+// private state directory (suite.mjs passes VERIFY_RAW_DIR), never to the
+// evidence directory people cite and share.
+const rawDir =
+  process.env.VERIFY_RAW_DIR || `/tmp/scrutinix-verify/playwright/${suite}`;
 
 export default defineConfig({
   testDir: "./scripts",
@@ -19,14 +22,14 @@ export default defineConfig({
       "html",
       {
         open: "never",
-        outputFolder: `${evidenceDir}/playwright-report/${suite}`,
+        outputFolder: `${rawDir}/report`,
       },
     ],
     ...(process.env.VERIFY_REPORT_FILE
       ? [["json", { outputFile: process.env.VERIFY_REPORT_FILE }]]
       : []),
   ],
-  outputDir: `${evidenceDir}/test-results/${suite}`,
+  outputDir: `${rawDir}/test-results`,
   use: {
     baseURL: process.env.E2E_BASE_URL || "http://127.0.0.1:3000",
     trace: "on",

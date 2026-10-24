@@ -49,7 +49,7 @@ npm run verify:launch -- --port 3417   # another port
 3. If `run.json` names another checkout whose supervisor still answers, or the port is open and this run does not own it, exit 2 and leave that process alone. When the listener is another `next dev`, launch names its pid and cwd and prints how to check and stop that exact pid. A `run.json` from the tmux version of this skill is reported with its recorded pids, never acted on, and replaced.
 4. Run `npm ci` when `node_modules` is missing. Its output goes to `install.log` in the state directory; launch prints only the exit status and the log path.
 5. Install Playwright Chromium, with its output in `browsers.log`. Set `VERIFY_SKIP_BROWSER_INSTALL=1` to skip. If Chromium's system libraries are missing, run `npx playwright install --with-deps chromium` and launch again.
-6. Start the supervisor, which runs `next dev --hostname 127.0.0.1 --port <port>` (the `npm run dev` script, run directly) with `SCRUTINIX_TEST_FIXTURES=1`, the published e2e share key (`SHARE_SIGNING_SECRET`, exactly as `scripts/run-e2e.mjs` passes it; `SHARE_SIGNING_SECRET_PREVIOUS` empty), and empty Upstash and Vercel KV variables. `run.json` is written as soon as the supervisor starts, before ready is checked, so a failed boot is still cleaned up. Ready means a process in the supervisor's group holds `127.0.0.1:<port>`, then doctor reports `READY`. If next dev exits or another process takes the port first, launch prints the reason, the log path, and a short redacted tail of the log, and exits 1.
+6. Start the supervisor, which runs `next dev --hostname 127.0.0.1 --port <port>` (the `npm run dev` script, run directly) with `SCRUTINIX_TEST_FIXTURES=1`, the published e2e share key (`SHARE_SIGNING_SECRET`, exactly as `scripts/run-e2e.mjs` passes it; `SHARE_SIGNING_SECRET_PREVIOUS` empty), and empty Upstash and Vercel KV variables. `run.json` is written as soon as the supervisor starts, before ready is checked, so a failed boot is still cleaned up. Ready means a process in the supervisor's group holds `127.0.0.1:<port>`, then doctor reports `READY`. If next dev exits or another process takes the port first, launch prints the reason, the exit status, and the log path, never the log, and exits 1.
 7. Snapshot `next-env.d.ts` before the dev server starts, then record the content `next dev` wrote after the file settles (`next dev` rewrites the route-type imports for its `.next/dev` dist directory). A later launch keeps that snapshot when the current file still matches the snapshot or the recorded write, including a restart of an owned server. If the file matches neither, launch drops the snapshot, warns, and saves the current file. Cleanup puts `next-env.d.ts` back only later, and only from that snapshot.
 
 `next.config.ts` sets `agentRules: false`, so `next dev` does not rewrite `AGENTS.md` or `CLAUDE.md`. This skill does not touch either file.
@@ -73,7 +73,8 @@ Logs and state (`VERIFY_STATE_DIR` overrides `/tmp/scrutinix-verify`):
 - `verify.lock` is the state lock (see "Isolate"). It exists only while a launch or cleanup runs.
 - `run.json` records `repoRoot`, `baseUrl`, `port`, the run id and token, the supervisor pid (for diagnostics only; never signal it, and cleanup removes it with the token), and the log paths
 - `supervisor.sock` is the supervisor's socket; `supervisor.log` is its own log
-- `next.log` is the dev server log, `install.log` and `browsers.log` hold `npm ci` and the Chromium install, and `smoke.log` and `drive.log` hold Playwright's output, with `smoke-report.json` and `drive-report.json` beside them. All are mode `0600`, and none is printed: commands print exit statuses, counts, failing test titles, and these paths. The one excerpt is the tail launch prints when it fails, up to 2000 characters of whole lines. It is redacted in full before it is cut, so a cut never exposes half a secret. Redaction is defence in depth: a line, or a whole text, that parses as JSON is redacted through its decoded value (a secret-named key hides its whole value, string, array, or object, and escapes such as `\/` are seen through), and patterns cover `KEY=VALUE` pairs, secret-named keys in any case or quoting (JSON embedded in a longer line, camelCase, escaped quotes, percent-encoded keys, array and object values, a value on the next line, YAML blocks, `\` continuations), PEM blocks, URL credentials (including `https:\/\/` escaped), bearer tokens, secret flags and headers, and token-shaped strings. The raw logs are unredacted. Read them only when you need to, and do not paste them into a PR or a CI log.
+- `next.log` is the dev server log, `install.log` and `browsers.log` hold `npm ci` and the Chromium install, and `smoke.log` and `drive.log` hold Playwright's output, with `smoke-report.json` and `drive-report.json` beside them. All are mode `0600`, and none is printed or excerpted: commands print exit statuses, counts, failing test titles, and these paths. A failed launch prints what failed (`npm ci failed`, `next dev exited`, …), how it exited, and the log's path, and nothing from the log. Nothing is redacted, because no subprocess text is ever printed. The raw logs hold whatever the tools wrote. Read them only when you need to, and do not paste them into a PR or a CI log.
+- `playwright/smoke/` and `playwright/drive/` hold Playwright's HTML report and traces (see "Drive"); they are raw too
 - `evidence/` is created at launch and kept by cleanup
 
 ## Doctor
@@ -151,7 +152,7 @@ npm run verify:drive
 
 Both commands run doctor first, against the port recorded for this checkout (or `--port <n>`). If doctor exits 2, the browser does not open.
 
-Playwright's own output (the list reporter, test stdout and stderr, error messages) goes to `smoke.log` or `drive.log`, not to the terminal. The command prints Playwright's exit status, the passed, failed, flaky, and skipped counts from its JSON report, the title of each failing test, and the paths of the log, the HTML report, and the traces. Read a failure in the HTML report or trace (`npx playwright show-trace <trace.zip>`).
+Playwright's own output (the list reporter, test stdout and stderr, error messages) goes to `smoke.log` or `drive.log`, not to the terminal. Its HTML report and traces embed that raw output, so they go to `playwright/smoke/` or `playwright/drive/` in the private state directory, never to the evidence directory. The command prints Playwright's exit status, the passed, failed, flaky, and skipped counts from its JSON report, the title of each failing test, and the paths of the log, the HTML report, and the traces. A run fails when Playwright writes no JSON report, or when no test ran, whatever its exit status. Read a failure in the HTML report or trace (`npx playwright show-trace <trace.zip>`) locally; do not upload or paste either.
 
 One feature, after doctor is `READY`:
 
@@ -181,8 +182,8 @@ Proof artifacts go to the evidence directory (`/tmp/scrutinix-verify/evidence/`,
 
 - `*.png` screenshots taken by the specs (`smoke-home.png`, `smoke-safe.png`, and the drive shots such as `verdict-malicious.png` and `single-shared-verified.png`)
 - `scan.json`, `scan-history.csv`, and `batch.csv` saved from the download the UI produced
-- `test-results/smoke/` and `test-results/drive/` Playwright traces (`trace.zip` per test, trace is `on`). A later smoke run does not delete drive traces, and a later drive run does not delete smoke traces.
-- `playwright-report/smoke/` and `playwright-report/drive/` HTML reports
+
+Playwright traces and HTML reports are not evidence. They embed raw test output, so they live in the private state directory, under `playwright/<suite>/test-results/` (`trace.zip` per test, trace is `on`) and `playwright/<suite>/report/`. A later smoke run does not delete drive traces, and a later drive run does not delete smoke traces. Read them locally; do not upload, attach, or paste them.
 
 A proof exercises the user path: type in the scan box, click Analyze, press Enter, switch Summary to Full, open a signal row, export, share, clear history. Reading `GET /` is the doctor check, not the proof that a scan works.
 
@@ -253,12 +254,12 @@ Put a Proof section on the pull request:
 ### Proof
 
 - Commands: the exact commands, including `npm run verify:doctor` and the drive you ran
-- Evidence: screenshot and trace paths that still exist after cleanup
+- Evidence: screenshot and download paths under the evidence directory that still exist after cleanup
 - Results: pass or fail per command, plus the observable end state (URL, verdict region, IndexedDB, download, clipboard, theme)
 - INCONCLUSIVE: any step that could not run, and the concrete reason (port busy, browser missing, fixture mode required, live provider keys absent, rate limit window)
 ```
 
-A missing check is `INCONCLUSIVE`. Do not describe it as passed. Do not paste raw logs (`next.log`, `install.log`, `browsers.log`, `smoke.log`, `drive.log`) or process command lines into the report.
+A missing check is `INCONCLUSIVE`. Do not describe it as passed. Do not paste raw logs (`next.log`, `install.log`, `browsers.log`, `smoke.log`, `drive.log`), the Playwright HTML report, traces, or process command lines into the report.
 
 ## Feature map
 

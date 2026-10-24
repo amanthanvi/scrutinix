@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 
 import {
   baseUrlFor,
+  ensureDirs,
   evidenceDir,
   exitSummary,
   logPath,
@@ -12,6 +13,7 @@ import {
   parseCliArgs,
   repoRoot,
   skillDir,
+  stateDir,
   summarizePlaywrightReport,
 } from "./runtime.mjs";
 
@@ -48,10 +50,14 @@ export function runSuite(argv, cli) {
   const log = logPath(`${suite}.log`);
   const reportFile = logPath(`${suite}-report.json`);
   rmSync(reportFile, { force: true });
+  // The HTML report and traces hold raw test output: private, like the log.
+  const rawDir = path.join(stateDir, "playwright", suite);
+  ensureDirs([path.dirname(rawDir), rawDir]);
   const env = {
     ...process.env,
     E2E_BASE_URL: baseUrlFor(args.port),
     VERIFY_EVIDENCE_DIR: evidenceDir,
+    VERIFY_RAW_DIR: rawDir,
     VERIFY_SUITE: suite,
     VERIFY_REPORT_FILE: reportFile,
   };
@@ -97,7 +103,8 @@ export function runSuite(argv, cli) {
   }
   out.write(`${suite}: log ${log} (raw, mode 0600; do not paste it)\n`);
   out.write(
-    `${suite}: report ${path.join(evidenceDir, "playwright-report", suite)}, traces ${path.join(evidenceDir, "test-results", suite)}\n`,
+    `${suite}: HTML report ${path.join(rawDir, "report")} and traces ${path.join(rawDir, "test-results")} (raw and private; do not upload or paste them)\n`,
   );
+  out.write(`${suite}: evidence directory ${evidenceDir}\n`);
   return code;
 }
