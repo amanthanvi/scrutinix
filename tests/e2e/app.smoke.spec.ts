@@ -260,7 +260,9 @@ test("single scan flow @smoke", async ({ page }) => {
     timeout: 30_000,
   });
   // Nothing drove a clean verdict, so Summary shows one line, not rows.
-  await expect(page.getByLabel(/VirusTotal signal:/i)).toHaveCount(0);
+  await expect(
+    page.getByRole("list", { name: "Signals" }).getByLabel(/VirusTotal:/i),
+  ).toHaveCount(0);
   await expect(page.getByText("All 8 checks found nothing.")).toBeVisible();
   // The quiet line already says it; the panel doesn't repeat it.
   await expect(verdict.getByText("No check flagged this link.")).toHaveCount(0);
@@ -271,12 +273,11 @@ test("single scan flow @smoke", async ({ page }) => {
   await expect(signalView.getByText("Full")).toBeVisible();
   await signalView.click();
   await expect(signalView).toHaveAttribute("aria-checked", "true");
-  await expect(page.getByLabel(/VirusTotal signal:/i)).toHaveAttribute(
-    "aria-label",
-    "VirusTotal signal: No engines flagged this link.",
-  );
-  await expect(page.getByLabel(/DNS Profile signal:/i)).toBeVisible();
-  await expect(page.getByLabel(/Redirect Chain signal:/i)).toBeVisible();
+  await expect(
+    page.getByRole("list", { name: "Signals" }).getByLabel(/VirusTotal:/i),
+  ).toHaveAttribute("aria-label", "VirusTotal: No engines flagged this link.");
+  await expect(page.getByLabel(/DNS Profile:/i)).toBeVisible();
+  await expect(page.getByLabel(/Redirect Chain:/i)).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Download result (JSON)" }),
   ).toBeVisible();

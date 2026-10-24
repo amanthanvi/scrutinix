@@ -174,9 +174,11 @@ describe("ResultsSection", () => {
 
     // Summary: VirusTotal drove the verdict; nothing else gets a row.
     expect(
-      screen.getByLabelText(/^VirusTotal signal: /).getAttribute("aria-label"),
-    ).toBe("VirusTotal signal: 7 engines flagged this link as malicious.");
-    expect(screen.queryByLabelText(/^Google Safe Browsing signal:/)).toBeNull();
+      screen
+        .getByLabelText(/^VirusTotal: /, { selector: "summary, li" })
+        .getAttribute("aria-label"),
+    ).toBe("VirusTotal: 7 engines flagged this link as malicious.");
+    expect(screen.queryByLabelText(/^Google Safe Browsing:/)).toBeNull();
     const quiet = screen.getByRole("button", {
       name: /1 other check found nothing and 6 couldn't give a full answer\. Show all checks/,
     });
@@ -187,7 +189,7 @@ describe("ResultsSection", () => {
 
     fireEvent.click(quiet);
     expect(viewSwitch.getAttribute("aria-checked")).toBe("true");
-    expect(screen.getByLabelText(/^Google Safe Browsing signal:/)).toBeTruthy();
+    expect(screen.getByLabelText(/^Google Safe Browsing:/)).toBeTruthy();
     // The button that revealed the rows is gone. None of the newly
     // revealed rows can expand here, so focus lands on the list - not
     // <body>, and not the VirusTotal row Summary already showed.
@@ -229,9 +231,11 @@ describe("ResultsSection", () => {
     fireEvent.click(screen.getByRole("button", { name: "open stored" }));
 
     // Summary already shows VirusTotal, the first expandable row in Full.
-    const virusTotal = await screen.findByLabelText(/^VirusTotal signal:/);
+    const virusTotal = await screen.findByLabelText(/^VirusTotal:/, {
+      selector: "summary, li",
+    });
     expect(virusTotal.tagName).toBe("SUMMARY");
-    expect(screen.queryByLabelText(/^DNS Profile signal:/)).toBeNull();
+    expect(screen.queryByLabelText(/^DNS Profile:/)).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: /Show all checks/ }));
 
     await waitFor(() => {
@@ -241,7 +245,7 @@ describe("ResultsSection", () => {
       expect(row?.dataset.signal).toBe("dns");
       expect(document.activeElement?.tagName).toBe("SUMMARY");
       expect(document.activeElement?.getAttribute("aria-label")).toMatch(
-        /^DNS Profile signal:/,
+        /^DNS Profile:/,
       );
     });
   });

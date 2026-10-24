@@ -21,11 +21,13 @@ test("a VirusTotal conviction renders a malicious verdict", async ({
     page.getByText("7 VirusTotal engines flagged this link."),
   ).toBeVisible();
   // Summary holds only the signal that drove the verdict.
-  await expect(page.getByLabel(/virustotal signal:/i)).toHaveAttribute(
+  await expect(
+    page.getByRole("list", { name: "Signals" }).getByLabel(/virustotal:/i),
+  ).toHaveAttribute(
     "aria-label",
-    "VirusTotal signal: 7 engines flagged this link as malicious, 2 as suspicious.",
+    "VirusTotal: 7 engines flagged this link as malicious, 2 as suspicious.",
   );
-  await expect(page.getByLabel(/google safe browsing signal:/i)).toHaveCount(0);
+  await expect(page.getByLabel(/google safe browsing:/i)).toHaveCount(0);
   await expect(page.getByText("7 other checks found nothing.")).toBeVisible();
 
   // Revealing the quiet checks keeps keyboard focus in the revealed list.
@@ -61,9 +63,11 @@ test("a threat-feed listing renders a malicious verdict", async ({ page }) => {
 
   await expect(page.getByLabel(/^scan result: malicious$/i)).toBeVisible();
   // The driver row carries the listing; the reason itself sits in Details.
-  await expect(page.getByLabel(/threat feeds signal:/i)).toHaveAttribute(
+  await expect(
+    page.getByRole("list", { name: "Signals" }).getByLabel(/threat feeds:/i),
+  ).toHaveAttribute(
     "aria-label",
-    "Threat Feeds signal: URLhaus lists this link as active malware distribution.",
+    "Threat Feeds: URLhaus lists this link as active malware distribution.",
   );
   await expect(page.getByText("URLhaus flagged this link.")).toBeVisible();
   await expect(page.getByText(/listed.*listed/i)).toHaveCount(0);

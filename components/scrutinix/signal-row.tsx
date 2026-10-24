@@ -44,8 +44,9 @@ export function SignalRow<N extends SignalName>({
     entries.push({ label: "Took", value: `${result.durationMs} ms` });
   }
 
-  // Keeps the e2e/a11y contract: "{Label} signal: {finding}".
-  const ariaLabel = `${label} signal: ${finding}`;
+  // The visible text, in order (WCAG 2.5.3: the name contains the label a
+  // voice user reads off the screen): "{Label}: {finding}".
+  const ariaLabel = `${label}: ${finding}`;
 
   // Stagger only the initial pending fill; resolving rows enter instantly.
   const enterDelay =
@@ -63,7 +64,7 @@ export function SignalRow<N extends SignalName>({
       <span className="flex min-w-0 flex-1 flex-col gap-0.5 sm:flex-row sm:gap-3">
         <span className="shrink-0 text-sm font-medium whitespace-nowrap text-[var(--sx-text)] sm:w-44">
           {label}
-        </span>
+        </span>{" "}
         <span className="min-w-0 flex-1 text-[0.8125rem] leading-5 break-words text-[var(--sx-text-muted)] sm:pt-px">
           {finding}
         </span>

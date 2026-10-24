@@ -81,9 +81,9 @@ describe("history saved before scoredSignals", () => {
     fireEvent.click(entry);
 
     await waitFor(() => {
-      expect(screen.getByLabelText(/^Redirect Chain signal:/)).toBeTruthy();
+      expect(screen.getByLabelText(/^Redirect Chain:/)).toBeTruthy();
     });
-    expect(screen.getByLabelText(/^Domain Registration signal:/)).toBeTruthy();
+    expect(screen.getByLabelText(/^Domain Registration:/)).toBeTruthy();
     expect(screen.queryByText(/All 8 checks found nothing/)).toBeNull();
     expect(
       screen.getByRole("button", {

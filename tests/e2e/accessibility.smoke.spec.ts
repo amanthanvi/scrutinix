@@ -24,7 +24,7 @@ test("result view accessibility @smoke", async ({ page }) => {
   await submitSingleScan(page, "https://malicious.scrutinix.test/login");
   await expect(page.getByLabel(/^scan result: malicious$/i)).toBeVisible();
   await page.getByRole("switch", { name: /^summary full/i }).click();
-  await expect(page.getByLabel(/DNS Profile signal:/i)).toBeVisible();
+  await expect(page.getByLabel(/DNS Profile:/i)).toBeVisible();
   // Let the 200ms row entrance finish so axe measures settled colors.
   await page.evaluate(() =>
     Promise.all(
