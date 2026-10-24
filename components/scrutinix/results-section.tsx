@@ -138,12 +138,15 @@ export function ResultsSection() {
   // same entry) is a real change and gets spoken again. The region itself
   // stays mounted: a freshly inserted live region is announced unreliably.
   const [announcedRequest, setAnnouncedRequest] = useState(0);
-  // Hold a verdict announcement until the link's anatomy is settled, so a
-  // look-alike is spoken with its hedge, never first without it. A failed
-  // parser settles it too: the announcement then says so.
+  // Hold a Safe verdict's announcement until the link's anatomy is settled,
+  // so a look-alike is spoken with its hedge, never first as "Safe". A
+  // failed parser settles it too: the announcement then says so. Any other
+  // verdict is already a warning and is spoken at once.
   const reannouncing =
     verdictFocusRequest !== announcedRequest ||
-    Boolean(active && activeTab === "single" && addressCheck === "pending");
+    (active?.verdict === "safe" &&
+      activeTab === "single" &&
+      addressCheck === "pending");
   useEffect(() => {
     if (verdictFocusRequest === 0) return;
     document.getElementById(VERDICT_HEADING_ID)?.focus();

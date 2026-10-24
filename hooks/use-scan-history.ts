@@ -15,8 +15,8 @@ import { sanitizeHistoryEntry } from "@/lib/domain/runtime-safety";
 import type { AnalysisResult, HistoryEntry } from "@/lib/domain/types";
 import { normalizeUrlInput } from "@/lib/domain/url";
 import {
-  getLinkParserStatus,
   getLoadedLinkParser,
+  useLinkParserStatus,
 } from "@/hooks/use-link-anatomy";
 import { splitLinkAnatomy } from "@/lib/domain/link-anatomy";
 import { verdictWord } from "@/lib/domain/verdict-guidance";
@@ -57,6 +57,7 @@ export function useScanHistory() {
   );
   const [historyUnavailable, setHistoryUnavailable] = useState(false);
   const failureNotified = useRef(false);
+  const parserStatus = useLinkParserStatus();
 
   // IndexedDB can be blocked (private browsing, storage pressure). Every
   // failure lands here instead of an unhandled rejection: the user gets one
@@ -170,9 +171,9 @@ export function useScanHistory() {
       const verdict = typeof entry.verdict === "string" ? entry.verdict : "";
       // Rows show "Look-alike" for a Safe look-alike, and "Unconfirmed"
       // once the parser has failed: match what is shown.
-      const parse = getLoadedLinkParser();
+      const parse = parserStatus === "ready" ? getLoadedLinkParser() : null;
       const shown =
-        verdict && (parse || getLinkParserStatus() === "failed")
+        verdict && parserStatus !== "pending"
           ? verdictWord({
               verdict: entry.verdict,
               impersonates: parse
@@ -188,7 +189,7 @@ export function useScanHistory() {
         summary.toLowerCase().includes(query)
       );
     });
-  }, [entries, historyQuery]);
+  }, [entries, historyQuery, parserStatus]);
 
   return {
     entries,

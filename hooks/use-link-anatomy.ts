@@ -85,7 +85,7 @@ export function getLoadedLinkParser(): ParseHostname | null {
   return loadedParse;
 }
 
-/** The parser's status, for synchronous callers (history filtering). */
+/** The parser's status right now; components use `useLinkParserStatus`. */
 export function getLinkParserStatus(): LinkParserStatus {
   if (loadedParse) return "ready";
   return loadFailed ? "failed" : "pending";
@@ -101,6 +101,15 @@ function subscribe(listener: () => void) {
 /** The server never has the parser: every link starts pending. */
 function getServerStatus(): LinkParserStatus {
   return "pending";
+}
+
+/**
+ * The parser's status, re-rendering when it loads or fails: anything that
+ * reads `getLoadedLinkParser()` while rendering (history search) must
+ * depend on it, or it keeps what it computed while the parser was pending.
+ */
+export function useLinkParserStatus(): LinkParserStatus {
+  return useSyncExternalStore(subscribe, getLinkParserStatus, getServerStatus);
 }
 
 export interface LinkAnatomyState {
@@ -121,11 +130,7 @@ export interface LinkAnatomyState {
  * full emphasis.
  */
 export function useLinkAnatomy(url: string | null): LinkAnatomyState {
-  const status = useSyncExternalStore(
-    subscribe,
-    getLinkParserStatus,
-    getServerStatus,
-  );
+  const status = useLinkParserStatus();
 
   // A link starts the load if nothing has yet. After a failure, only a
   // deliberate step (a new scan, focusing the link field) tries again: a

@@ -183,11 +183,13 @@ tests/
   `"ready"`, or `"failed"` (a failed import retries once after 1s, and
   stays "failed" until a later load succeeds). While pending, a Safe band
   holds in its Checking state ("Checking the link's address", no word,
-  tint, score, or confidence), rows hold "—", and the announcement waits;
-  other verdicts show at once. If it failed, a Safe result reads "Unconfirmed"
-  (`addressUnchecked`): neutral tone, no score, "Check the link's address
-  before you open it.", and a note that we couldn't check the address, on
-  the band, rows, live region, and history search; CSV says "Not checked".
+  tint, score, or confidence), rows hold "—", and its announcement waits;
+  other verdicts show and are announced at once. If it failed, a Safe
+  result reads "Unconfirmed" (`addressUnchecked`): neutral tone, no score,
+  "Check the link's address before you open it.", and a note that we
+  couldn't check the address, on
+  the band, rows, live region, and history search (which re-runs on each
+  status change, `useLinkParserStatus`); CSV says "Not checked".
 - **Signed shares**: a `?shared=` payload is plain base64 anyone can write,
   so Scrutinix states a shared verdict only when `&sig=` is its own HMAC
   (`lib/server/share-signing.ts`, `SHARE_SIGNING_SECRET`). The server builds

@@ -52,8 +52,14 @@ describe("while the link parser is still loading", () => {
       "73",
     );
     expect(within(shown).getByText("Don't open this link.")).toBeTruthy();
+    // Spoken at once too: only a Safe verdict waits for the address check.
+    await waitFor(() => {
+      expect(liveRegion()).toBe(
+        "Result for paypal.com.evil.scrutinix.test: Malicious, 73 out of 100. Don't open this link.",
+      );
+    });
     // The parser was asked for, and is still held.
-    await waitFor(() => expect(parser.calls).toBe(1));
+    expect(parser.calls).toBe(1);
     unmount();
   });
 
