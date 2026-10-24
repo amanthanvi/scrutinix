@@ -106,6 +106,8 @@ describe("runSslSignal", () => {
     const observation = result.observations.join("\n");
 
     expect(result.available).toBe(false);
+    // Lost coverage, not a finding: the scan result becomes partial.
+    expect(result.probeFailed).toBe(true);
     expect(observation).toContain("The TLS probe failed unexpectedly.");
     // The result states the scan's reference once; the row stays plain.
     expect(observation).not.toContain("Reference");

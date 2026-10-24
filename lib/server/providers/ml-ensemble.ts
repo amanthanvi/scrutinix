@@ -48,6 +48,7 @@ const RISKY_TLDS = new Set(["zip", "click", "top", "gq", "work", "country"]);
 // init/inference timeouts.
 export async function runMlEnsembleProvider(
   url: string,
+  scanId?: string,
 ): Promise<MLSignalData> {
   const lexicalModel = buildLexicalModel(url);
   const warnings: string[] = [];
@@ -60,6 +61,8 @@ export async function runMlEnsembleProvider(
     // (URL-free, per AGENTS.md) logs rather than the public stream.
     const hostname = URL.parse(url)?.hostname ?? "";
     logWarn("ml.classifier_unavailable", {
+      // The reference a partial result shows is its scan id.
+      ...(scanId ? { correlationId: scanId } : {}),
       detail: redactForLogs(
         getErrorMessage(error, "The local URL classifier failed."),
         [url, hostname],

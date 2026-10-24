@@ -7,6 +7,7 @@ import { decodeSharedSnapshot } from "@/lib/domain/signal-signature";
 import { classifyUrlLocally } from "@/lib/server/ml/local-classifier";
 import { verifySharePayload } from "@/lib/server/share-signing";
 import { runRedirectSignal } from "@/lib/server/signals/redirect-chain";
+import { runSslSignal } from "@/lib/server/signals/ssl";
 import { server } from "@/tests/setup/msw.server";
 
 // DNSBL lookups ride raw DNS, which MSW cannot intercept; stub them out.
@@ -613,6 +614,53 @@ describe("analysis routes", () => {
       metadata: { cacheHit: false, partialFailure: false },
     });
     expect(redirectMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("treats an unexpected TLS probe failure as lost coverage, never cached", async () => {
+    const { POST } = await import("@/app/api/analyze/route");
+    installHandlers();
+    const sslMock = vi.mocked(runSslSignal);
+    sslMock.mockResolvedValueOnce({
+      protocol: null,
+      available: false,
+      validationState: "unavailable",
+      authorized: false,
+      authorizationError: null,
+      issuer: null,
+      subject: null,
+      validFrom: null,
+      validTo: null,
+      daysRemaining: null,
+      selfSigned: false,
+      fingerprint256: null,
+      observations: ["The TLS probe failed unexpectedly."],
+      probeFailed: true,
+    });
+
+    const requestBody = JSON.stringify({ url: "tls-probe-failure.example" });
+    const send = () =>
+      POST(
+        new Request("http://localhost/api/analyze", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: requestBody,
+        }),
+      );
+    const firstEvents = await parseNdjsonEvents(await send());
+    const secondEvents = await parseNdjsonEvents(await send());
+
+    // Partial: the details show the scan's reference, and the cache skips it.
+    expect(firstEvents.at(-1)?.result).toMatchObject({
+      signals: { ssl: { status: "success", data: { probeFailed: true } } },
+      metadata: { cacheHit: false, partialFailure: true },
+    });
+    expect(secondEvents[0]).toMatchObject({
+      type: "scan_started",
+      cached: false,
+    });
+    expect(secondEvents.at(-1)?.result).toMatchObject({
+      metadata: { cacheHit: false, partialFailure: false },
+    });
   });
 
   it("replays signal_result events and sets cached on cache hits", async () => {

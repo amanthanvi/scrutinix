@@ -114,7 +114,7 @@ export async function runAnalysis(
   // for deterministic offline data; see lib/server/test-fixtures.ts.
   const providers: SignalProviderTable = getFixtureSignalProviders(target) ?? {
     virusTotal: () => runVirusTotalProvider(normalizedUrl, signal),
-    mlEnsemble: () => runMlEnsembleProvider(normalizedUrl),
+    mlEnsemble: () => runMlEnsembleProvider(normalizedUrl, scanId),
     googleSafeBrowsing: () =>
       runGoogleSafeBrowsingProvider(normalizedUrl, signal),
     threatFeeds: () => runThreatFeedsProvider(normalizedUrl, signal, scanId),
@@ -222,7 +222,8 @@ function hasPartialFailure(signals: SignalResults): boolean {
     (signals.threatFeeds.status === "success" &&
       (signals.threatFeeds.data?.warnings.length ?? 0) > 0) ||
     (signals.redirectChain.status === "success" &&
-      Boolean(signals.redirectChain.data?.terminalError))
+      Boolean(signals.redirectChain.data?.terminalError)) ||
+    (signals.ssl.status === "success" && Boolean(signals.ssl.data?.probeFailed))
   );
 }
 

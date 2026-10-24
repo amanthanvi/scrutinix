@@ -187,8 +187,11 @@ function runSslProbe(
 
     socket.once("error", (error) => {
       socket.destroy();
+      const failure = describeTlsFailure(error, port, failureLog);
       resolve(
-        createUnavailableSslData(describeTlsFailure(error, port, failureLog)),
+        createUnavailableSslData(failure.message, {
+          probeFailed: failure.unexpected,
+        }),
       );
     });
   });
@@ -220,8 +223,12 @@ function buildSslObservations(
   return observations;
 }
 
-function createUnavailableSslData(message: string): SSLData {
+function createUnavailableSslData(
+  message: string,
+  { probeFailed = false }: { probeFailed?: boolean } = {},
+): SSLData {
   return {
+    ...(probeFailed ? { probeFailed: true } : {}),
     protocol: null,
     available: false,
     validationState: "unavailable",
@@ -298,14 +305,17 @@ function describeTlsFailure(
       : null;
   const summary = code ? TLS_FAILURE_SUMMARIES[code] : undefined;
   if (summary) {
-    return summary(port);
+    return { message: summary(port), unexpected: false };
   }
 
-  return checkFailureMessage(error, {
-    ...failureLog,
-    summary: "The TLS probe failed unexpectedly.",
-    logEvent: "ssl.probe_failed",
-  });
+  return {
+    message: checkFailureMessage(error, {
+      ...failureLog,
+      summary: "The TLS probe failed unexpectedly.",
+      logEvent: "ssl.probe_failed",
+    }),
+    unexpected: true,
+  };
 }
 
 function normalizeCertificateName(

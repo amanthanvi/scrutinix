@@ -226,6 +226,7 @@ design on #59's code with the independent review's fixes.
 - [x] Stream backstop: an exception that escapes a route handler becomes a schema-valid `scan_error`/`batch_error` line instead of `controller.error()`; the client keeps the first terminal event.
 - [x] Review fixes over #63: one reference per scan (the scan id, or the batch id for a whole-batch failure; no random UUID per failure); failed rows, feed warnings, probe fallbacks, and failed batch items keep a plain sentence (`checkFailureMessage`) and log under the scan id, and `VerdictDetails` states `Reference: <scanId>` once for a failed or partial result; #59's `describeRateLimitWait` tiers kept (#63's fixed rate-limit text dropped); `withResultShare` kept in both routes; the backstop names its route ("The scan failed unexpectedly." / "The batch failed unexpectedly.").
 - [x] Verified (`E2E_PORT=3107`): format, lint, typecheck clean; unit 42 files / 484 tests, integration 3 / 42, DOM 10 / 69, e2e 29 passed, build green.
+- [x] Review round: shared-cache keys carry a version (`v2`) so results cached before public errors (possibly holding raw TLS text) are never replayed after deploy; an unexpected TLS probe failure marks `ssl.probeFailed`, so the result is partial (shows its reference, never cached); local-classifier fallback logs carry the scan id.
 
 ### P24 Resolve September dependency maintenance
 
