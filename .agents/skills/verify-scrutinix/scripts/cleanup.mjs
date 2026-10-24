@@ -30,13 +30,19 @@ user with mode 0700, under ancestors nobody else can swap out, holding a
 run.json that is a regular file (not a symlink) nobody else can write. If any
 check fails, cleanup stops nothing and exits 2.
 
-Then it asks the run's supervisor, over the private socket and with the run
-token, to stop. The supervisor signals its own process group: next dev and
-whatever next dev started. Cleanup itself never signals a pid, never looks
-processes up by name, pattern, cwd, or tmux session, and leaves anything else
-running. When the supervisor is gone and the recorded port is still open,
-cleanup names the listener (pid, start time, executable, cwd) and exits 1.
-A run.json for a different checkout is left alone.
+Then it takes the state lock (verify.lock; exit 2 if another launch or
+cleanup holds it, which is never taken over), reads run.json again, and asks
+the run's supervisor, over the private socket and with the run token, to
+stop. The supervisor signals its own process group: next dev and whatever
+next dev started that is still in the group. A process that left the group
+(setsid, or a detached spawn) is not stopped. Afterwards cleanup checks that
+the run's socket no longer answers and its port is free; if either still
+answers, it names the listener (pid, start time, executable, cwd), reports
+the cleanup as incomplete, and exits 1. Cleanup itself never signals a pid,
+never looks processes up by name, pattern, cwd, port, or tmux session, and
+leaves anything else running. When the supervisor is gone and the recorded
+port is still open, cleanup names the listener and exits 1. A run.json for a
+different checkout is left alone.
 
 Evidence under the evidence directory is left in place. next-env.d.ts is
 restored to the pre-launch snapshot only when it still matches what this run

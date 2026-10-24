@@ -60,7 +60,13 @@ smoke, and cleanup reuse the port recorded for this checkout.
 launch starts a detached supervisor that runs next dev in its own process
 group and answers on a private socket. A READY instance this checkout's
 supervisor serves is reused. Cleanup asks that supervisor to stop its own
-group, and never stops anything else.
+group, and never stops anything else. launch holds the state lock
+(verify.lock) while it reads and records the run, so a second launch or a
+cleanup refuses instead of interleaving.
+
+npm ci, the browser install, and next dev write to install.log,
+browsers.log, and next.log in the state directory (mode 0600). launch prints
+exit statuses and log paths, and on a failure a short redacted tail.
 Set VERIFY_SKIP_BROWSER_INSTALL=1 to skip Playwright Chromium install.
 `;
 

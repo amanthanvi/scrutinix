@@ -1089,8 +1089,9 @@ export function releaseStateLock(lock) {
 // ---- Supervisor -------------------------------------------------------------
 
 // launch starts one detached supervisor per run. It is a session and process
-// group leader (setsid), and the app it spawns stays in that group, so the
-// group holds exactly what this run started. Only processes in that session
+// group leader (setsid), and the app it spawns is in that group, so every
+// member of the group is something this run started (a descendant can still
+// leave it with setsid; see leftAfterStop). Only processes in that session
 // can join the group, and its id cannot be reused while the supervisor lives.
 // Stopping asks the supervisor; it signals its own group and nothing else.
 // Requests and replies are authenticated with the run token from run.json.

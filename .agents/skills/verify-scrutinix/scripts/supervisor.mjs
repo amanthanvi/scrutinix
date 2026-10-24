@@ -8,8 +8,10 @@
 // Stopping signals the supervisor's own group, -process.pid. While the
 // supervisor is alive that group id cannot belong to anything else, and only
 // processes in this session (descendants of the supervisor) can be in it. So
-// a stop reaches what this run started and nothing else: no pid, tmux id, or
-// cwd is looked up again.
+// a stop reaches only what this run started: no pid, tmux id, or cwd is
+// looked up again. A descendant that leaves the group (setsid, or a detached
+// spawn) is out of reach; stopRun reports it when it still holds the run's
+// port or socket.
 import { spawn } from "node:child_process";
 import { chmodSync, closeSync, lstatSync, unlinkSync } from "node:fs";
 import net from "node:net";
