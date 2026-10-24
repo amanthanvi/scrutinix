@@ -590,6 +590,8 @@ export function checkoutListeners(port, root = repoRoot) {
 // A tmux session is identified by its server-assigned id, its creation time,
 // and its pane process. A name is not ownership: anyone can create a session
 // with the same name after ours ends.
+// Fields are joined with ":", which tmux forbids in session names. Older tmux
+// (3.3) rewrites a tab in -F output as "_", so a tab separator is unsafe.
 export function tmuxSessionIdentity(name) {
   const { bin, prefix } = tmuxCommand();
   const listed = spawnSync(
@@ -598,13 +600,13 @@ export function tmuxSessionIdentity(name) {
       ...prefix,
       "list-sessions",
       "-F",
-      "#{session_name}\t#{session_id}\t#{session_created}\t#{pane_pid}",
+      "#{session_name}:#{session_id}:#{session_created}:#{pane_pid}",
     ],
     { encoding: "utf8" },
   );
   if (listed.status !== 0) return null;
   for (const line of listed.stdout.split("\n")) {
-    const [sessionName, id, created, panePid] = line.split("\t");
+    const [sessionName, id, created, panePid] = line.split(":");
     if (sessionName === name && id && created) {
       return { name, id, created, panePid: Number(panePid) };
     }
@@ -625,10 +627,17 @@ export function sessionProblem(recorded, { root = repoRoot } = {}) {
   }
   const current = tmuxSessionIdentity(recorded.name);
   if (!current) return { gone: true, problem: "" };
-  if (current.id !== recorded.id || current.created !== recorded.created) {
+  // A tmux server that restarts numbers sessions from $0 again, and creation
+  // time has one-second resolution, so the pane pid is part of the identity.
+  const recordedPanePid = recorded.pane?.pid;
+  if (
+    current.id !== recorded.id ||
+    current.created !== recorded.created ||
+    current.panePid !== recordedPanePid
+  ) {
     return {
       gone: false,
-      problem: `tmux session ${recorded.name} is now ${current.id} created ${current.created}, not ${recorded.id} created ${recorded.created}, so the name was reused`,
+      problem: `tmux session ${recorded.name} is now ${current.id} created ${current.created} with pane pid ${current.panePid}, not ${recorded.id} created ${recorded.created} with pane pid ${recordedPanePid ?? "unknown"}, so the name was reused`,
     };
   }
   const pane = processIdentity(current.panePid);
@@ -1039,7 +1048,7 @@ exec bash ${shellQuote(scriptPath)} > ${shellQuote(logPath)} 2>&1
       "-d",
       "-P",
       "-F",
-      "#{session_id}\t#{session_created}\t#{pane_pid}",
+      "#{session_id}:#{session_created}:#{pane_pid}",
       "-s",
       name,
       "-c",
@@ -1059,7 +1068,7 @@ exec bash ${shellQuote(scriptPath)} > ${shellQuote(logPath)} 2>&1
   // can never describe a same-named session someone else made.
   const [id = "", createdAt = "", panePid = ""] = created.stdout
     .trim()
-    .split("\t");
+    .split(":");
   const session = {
     name,
     id,
