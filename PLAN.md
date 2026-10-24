@@ -320,6 +320,8 @@ score band. No score or verdict changes.
 - [x] `/about` prints the scoring method in full: every finding's points (lists, checks of the link itself, discounts), the bands, what convicts on its own (a single finding worth 55+), what can't erase a hit (both discounts off at any single finding worth 45+; the domain-age discount off on any list hit), Unknown, Look-alike, and the confidence cut-offs and caps.
 - [x] The copy and numbers live in `lib/domain/methodology.ts`; `tests/unit/methodology.test.ts` runs every row through `buildThreatAssessment`, so a changed weight fails until the page states it (checked by mutating a feed weight).
 - [x] Pronunciation on /about: "Scrutinix (SCROO-tih-nix), from scrutiny: looking closely before you trust something."
+- [x] Review round: stated the shared-platform exception, the VirusTotal discount's no-date case, the model arithmetic, the meta-refresh and downloaded-HTML limits, "at least Malicious", and what Look-alike recognises; confidence now prints `CONFIDENCE_POLICY` (cut-offs, caps, bounds, full arithmetic in a disclosure). The test pins every printed number and both sides of each threshold (nine page/engine/provider mutations each fail it).
+- [x] Two engine fixes the review found: a multi-code Spamhaus answer reads as its strongest listing (phishing over spam), and a relative redirect on a plain-HTTP hop counts as staying on HTTP (10), like an absolute one.
 
 ### P24 Resolve September dependency maintenance
 
