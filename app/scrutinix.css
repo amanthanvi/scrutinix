@@ -497,6 +497,8 @@ main:has(#sx-verdict-heading) > .sx-hero-form {
 /* The band's frame and type (static, so kept out of the script). */
 .sx-band-frame {
   padding: 1.625rem 1.25rem 1rem;
+  /* The verdict word sizes against the band's own width (cqi below). */
+  container-type: inline-size;
 }
 
 .sx-band-body {
@@ -509,9 +511,15 @@ main:has(#sx-verdict-heading) > .sx-hero-form {
   min-width: 0;
 }
 
+/*
+ * The verdict word at display size, never wider than the band: the longest
+ * word ("Unconfirmed", about 6.1em in the serif at 600) fits at 16.4cqi, so
+ * narrow phones scale it down instead of overflowing; wider bands keep the
+ * full size.
+ */
 .sx-band-heading {
   outline-offset: 4px;
-  font-size: var(--text-verdict-sm);
+  font-size: min(var(--text-verdict-sm), 16.4cqi);
   line-height: var(--text-verdict-sm--line-height);
   letter-spacing: var(--text-verdict-sm--letter-spacing);
 }
@@ -625,7 +633,7 @@ main:has(#sx-verdict-heading) > .sx-hero-form {
   }
 
   .sx-band-heading {
-    font-size: var(--text-verdict);
+    font-size: min(var(--text-verdict), 16.4cqi);
     line-height: var(--text-verdict--line-height);
     letter-spacing: var(--text-verdict--letter-spacing);
   }

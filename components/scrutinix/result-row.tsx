@@ -65,7 +65,7 @@ export function RowVerdict({
 }) {
   if (verdict === "safe" && anatomyStatus === "pending") {
     return (
-      <span className="text-body w-auto shrink-0 font-semibold text-[var(--sx-text-soft)] sm:w-24">
+      <span className="text-body w-auto shrink-0 font-semibold text-[var(--sx-text-soft)] sm:w-28">
         <span aria-hidden="true">—</span>
       </span>
     );
@@ -78,7 +78,7 @@ export function RowVerdict({
   return (
     <span
       className={cn(
-        "text-body w-auto shrink-0 font-semibold sm:w-24",
+        "text-body w-auto shrink-0 font-semibold sm:w-28",
         !verdict && "font-medium",
       )}
       style={{
