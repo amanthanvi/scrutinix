@@ -18,8 +18,8 @@ export const PREFILL_PARAM = "url";
  * It is spent on the server: `proxy.ts` takes it off every request for
  * `/`, hands it to the page in `SHARE_LAUNCH_HEADER`, and clears it in
  * that same response, whether or not it matches; the page starts a scan
- * only when the grant names `?url=`, and the browser only once per grant
- * id (`lib/client/launch-claims.ts`). No script reads it (`HttpOnly`).
+ * only when the grant names `?url=`, and the browser only within the
+ * grant's minute and once per grant id (`lib/client/launch-claims.ts`). No script reads it (`HttpOnly`).
  */
 export const SHARE_LAUNCH_COOKIE = "sx-share-launch";
 
@@ -30,8 +30,22 @@ export const SHARE_LAUNCH_COOKIE = "sx-share-launch";
  */
 export const SHARE_LAUNCH_HEADER = "x-sx-share-launch";
 
-/** How long a share-target launch may take to reach the page. */
+/**
+ * How long a share-target launch may take, from the share to the page
+ * starting its scan: the cookie lasts this long, and the browser refuses a
+ * grant it can't show is younger (`launchAge`, `lib/client/launch-claims.ts`).
+ */
 export const SHARE_LAUNCH_MAX_AGE_SECONDS = 60;
+export const SHARE_LAUNCH_WINDOW_MS = SHARE_LAUNCH_MAX_AGE_SECONDS * 1000;
+
+/**
+ * A launch grant as the page hands it to the browser: its random id, and
+ * when `POST /share` issued it, on the server's clock.
+ */
+export interface LaunchGrant {
+  id: string;
+  issuedAt: number;
+}
 
 /** Set and cleared with the same attributes, so clearing always matches. */
 export const SHARE_LAUNCH_COOKIE_ATTRIBUTES = {

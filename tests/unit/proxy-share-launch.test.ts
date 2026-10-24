@@ -7,7 +7,7 @@ import {
 } from "@/lib/domain/share-launch";
 import { proxy } from "@/proxy";
 
-const GRANT = `${"a".repeat(22)}.${"b".repeat(43)}`;
+const GRANT = `${"a".repeat(22)}.1792843200000.${"b".repeat(43)}`;
 
 function documentRequest(
   path: string,

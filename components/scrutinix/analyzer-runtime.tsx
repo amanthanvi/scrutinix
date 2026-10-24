@@ -16,7 +16,7 @@ import { getToast } from "@/components/ui/lazy-toaster";
 import { useBatchStream } from "@/hooks/use-batch-stream";
 import { warmLinkParser } from "@/hooks/use-link-anatomy";
 import { useScanStream } from "@/hooks/use-scan-stream";
-import { claimLaunch, forgetOldLaunches } from "@/lib/client/launch-claims";
+import { claimLaunch, forgetSpentLaunches } from "@/lib/client/launch-claims";
 import {
   SHARE_MAX_AGE_WORDS,
   buildSharedSnapshot,
@@ -31,16 +31,16 @@ import {
   type SignalName,
 } from "@/lib/domain/types";
 import { normalizeUrlInput } from "@/lib/domain/url";
-import { PREFILL_PARAM } from "@/lib/domain/share-launch";
+import { PREFILL_PARAM, type LaunchGrant } from "@/lib/domain/share-launch";
 
 /** A link handed to the page from outside: `?url=`, or the share target. */
 export interface Launch {
   url: string;
   /**
-   * The launch grant's random id when this page may start the scan (a
-   * share-sheet launch from this device, for this exact link), else null.
+   * The launch grant when this page may start the scan (a share-sheet
+   * launch from this device, for this exact link), else null.
    */
-  grantId: string | null;
+  grant: LaunchGrant | null;
 }
 
 /** Query parameters that describe what the page opened on. */
@@ -89,6 +89,7 @@ export const VERIFIED_SHARE_NOTE = `It shows this result for ${SHARE_MAX_AGE_WOR
 function useCreateAnalyzerRuntime(
   shared: SharedView | null,
   launch: Launch | null,
+  renderedAt: number | null,
 ) {
   const [activeTab, setActiveTab] = useState<Tab>("single");
   const [viewMode, setViewMode] = useState<ViewMode>("summary");
@@ -223,19 +224,39 @@ function useCreateAnalyzerRuntime(
   // cookie that carried it (`proxy.ts`), so a reload or a new visit only
   // prefills; the browser records the grant's id (`claimLaunch`), so going
   // Back (the router restores this render into a new component) or a
-  // second tab that received the same grant only prefills too.
-  const pendingLaunchRef = useRef(launch?.grantId ? launch : null);
+  // second tab that received the same grant only prefills too, as does a
+  // page that holds the grant past its minute. A refused launch is a
+  // prefill: the field is focused and waits for a tap.
+  const pendingLaunchRef = useRef(launch?.grant ? launch : null);
+  const [launchRefused, setLaunchRefused] = useState(false);
+  const mountedRef = useRef(false);
   useEffect(() => {
-    forgetOldLaunches();
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
   }, []);
   useEffect(() => {
+    if (renderedAt !== null) void forgetSpentLaunches(renderedAt);
+  }, [renderedAt]);
+  useEffect(() => {
     const pending = pendingLaunchRef.current;
-    if (!pending?.grantId) return;
+    if (!pending?.grant) return;
     pendingLaunchRef.current = null;
-    if (!claimLaunch(pending.grantId)) return;
-    clearLaunchParams();
-    void rescanUrl(pending.url);
-  }, [rescanUrl]);
+    const claim =
+      renderedAt === null
+        ? Promise.resolve(false)
+        : claimLaunch(pending.grant, renderedAt);
+    void claim.then((claims) => {
+      if (!mountedRef.current) return;
+      if (!claims) {
+        setLaunchRefused(true);
+        return;
+      }
+      clearLaunchParams();
+      void rescanUrl(pending.url);
+    });
+  }, [renderedAt, rescanUrl]);
 
   // A result (a fresh scan, or one opened from history or a batch) has
   // replaced what the page opened on.
@@ -379,7 +400,7 @@ function useCreateAnalyzerRuntime(
     live,
     openStoredResult,
     // Arrived with a link to check (`?url=`) that waits for a tap.
-    prefilled: Boolean(launch && !launch.grantId),
+    prefilled: Boolean(launch && (!launch.grant || launchRefused)),
     rescanUrl,
     scan,
     scored,
@@ -420,6 +441,7 @@ export function AnalyzerRuntimeProvider({
   children,
   shared = null,
   launch = null,
+  renderedAt = null,
 }: {
   children: ReactNode;
   /**
@@ -430,8 +452,10 @@ export function AnalyzerRuntimeProvider({
   shared?: SharedView | null;
   /** `?url=`, normalized on the server, and whether to scan it now. */
   launch?: Launch | null;
+  /** The server's time when it rendered this page (`claimLaunch`). */
+  renderedAt?: number | null;
 }) {
-  const value = useCreateAnalyzerRuntime(shared, launch);
+  const value = useCreateAnalyzerRuntime(shared, launch, renderedAt);
   return (
     <AnalyzerRuntimeContext.Provider value={value}>
       {children}

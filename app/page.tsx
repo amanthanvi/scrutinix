@@ -13,7 +13,7 @@ import {
   SHARE_LAUNCH_HEADER,
   resolvePrefill,
 } from "@/lib/domain/share-launch";
-import { launchGrantId } from "@/lib/server/share-launch-grant";
+import { readLaunchGrant } from "@/lib/server/share-launch-grant";
 import {
   getSharedMetadata,
   resolveSharedView,
@@ -60,31 +60,34 @@ export default async function HomePage({
   // signed. The Public Suffix List is already on the server too: the shared
   // link's anatomy goes down with it so a look-alike hedges from the first
   // paint.
+  // A server component renders once per request and never re-renders on
+  // the client: this is the request's clock, which a share's and a launch
+  // grant's age are judged against.
+  // eslint-disable-next-line react-hooks/purity -- request time, see above
+  const renderedAt = Date.now();
   const shared = resolveSharedView(
     paramOf(params, "shared"),
     paramOf(params, "sig"),
-    // A server component renders once per request and never re-renders on
-    // the client: this is the request's clock, which the share's age is
-    // judged against.
-    // eslint-disable-next-line react-hooks/purity -- request time, see above
-    Date.now(),
+    renderedAt,
   );
 
   // `?url=` prefills the Single field and waits for a tap. Only the
   // installed app's share target (`app/share/route.ts`) leaves the grant
   // that starts the scan too, and only for the link it names. It scans
   // once: `proxy.ts` has already cleared its cookie from this response,
-  // and the browser scans each grant id once (`claimLaunch`). A shared
-  // result outranks both (its grant, if any, is cleared unused).
+  // and the browser scans each grant id once, within a minute of the share
+  // (`claimLaunch`, timed from `renderedAt`). A shared result outranks both
+  // (its grant, if any, is cleared unused).
   const prefill = shared
     ? null
     : resolvePrefill(paramOf(params, PREFILL_PARAM));
   const launch = prefill
     ? {
         url: prefill,
-        grantId: launchGrantId(
+        grant: readLaunchGrant(
           (await headers()).get(SHARE_LAUNCH_HEADER),
           prefill,
+          renderedAt,
         ),
       }
     : null;
@@ -97,7 +100,11 @@ export default async function HomePage({
   );
 
   return (
-    <AnalyzerRuntimeProvider shared={shared} launch={launch}>
+    <AnalyzerRuntimeProvider
+      shared={shared}
+      launch={launch}
+      renderedAt={renderedAt}
+    >
       <div className="flex min-h-screen flex-col">
         <AppHeader />
 

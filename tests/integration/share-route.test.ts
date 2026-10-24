@@ -4,7 +4,7 @@ import { GET, POST } from "@/app/share/route";
 import { SHARE_LAUNCH_COOKIE, resolvePrefill } from "@/lib/domain/share-launch";
 import { normalizeUrlInput } from "@/lib/domain/url";
 import { parseScanRequest } from "@/lib/server/scan-request";
-import { launchGrantId } from "@/lib/server/share-launch-grant";
+import { readLaunchGrant } from "@/lib/server/share-launch-grant";
 
 const ORIGIN = "https://www.scrutinix.net";
 
@@ -73,12 +73,18 @@ describe("POST /share", () => {
     expect(cookie).toMatch(/Secure/i);
     // Spent on the server: no script needs to read it.
     expect(cookie).toMatch(/HttpOnly/i);
-    // A grant for this link, not the link itself.
+    // A grant for this link, not the link itself, issued now.
     expect(cookie).not.toContain("parcel-help");
     const grant = grantIn(response)!;
+    const [id, issuedAt] = grant.split(".");
+    expect(Math.abs(Number(issuedAt) - Date.now())).toBeLessThan(5_000);
     expect(
-      launchGrantId(grant, "https://parcel-help.example/track?id=42"),
-    ).toBe(grant.split(".")[0]);
+      readLaunchGrant(
+        grant,
+        "https://parcel-help.example/track?id=42",
+        Date.now(),
+      ),
+    ).toEqual({ id, issuedAt: Number(issuedAt) });
   });
 
   it("keeps the grant small for a long link, so the browser still stores it", async () => {
@@ -96,7 +102,7 @@ describe("POST /share", () => {
     ).toBe(link);
     const cookie = launchCookie(response)!;
     expect(cookie.length).toBeLessThan(200);
-    expect(launchGrantId(grantIn(response), link)).not.toBeNull();
+    expect(readLaunchGrant(grantIn(response), link, Date.now())).not.toBeNull();
   });
 
   it("only prefills for a form another site posts", async () => {
@@ -292,7 +298,9 @@ describe("a Unicode link, from the share sheet to the scan", () => {
       ok: true,
       value: { normalizedUrl: prefill },
     });
-    expect(launchGrantId(grantIn(launched), prefill!)).not.toBeNull();
+    expect(
+      readLaunchGrant(grantIn(launched), prefill!, Date.now()),
+    ).not.toBeNull();
     const accepted = await scanRequest(prefill!);
     expect(accepted.ok && accepted.targets[0]!.normalizedUrl).toBe(prefill);
   });

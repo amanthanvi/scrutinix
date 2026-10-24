@@ -1,3 +1,6 @@
+import "fake-indexeddb/auto";
+
+import { IDBFactory } from "fake-indexeddb";
 import {
   act,
   fireEvent,
@@ -83,6 +86,10 @@ function stubScan(url: string) {
   return fetchMock;
 }
 
+/** The server's time when it issued the grant and rendered the page. */
+const ISSUED = Date.parse("2026-10-24T12:00:00.000Z");
+const RENDERED = ISSUED + 1_000;
+
 function renderApp({
   launch = null,
   shared = null,
@@ -91,7 +98,11 @@ function renderApp({
   shared?: SharedView | null;
 }) {
   return render(
-    <AnalyzerRuntimeProvider launch={launch} shared={shared}>
+    <AnalyzerRuntimeProvider
+      launch={launch}
+      shared={shared}
+      renderedAt={RENDERED}
+    >
       <ScanForm />
       <ResultsSection />
     </AnalyzerRuntimeProvider>,
@@ -100,12 +111,24 @@ function renderApp({
 
 const LINK = "https://parcel-help.example/track";
 
+function launchOf(id: string): Launch {
+  return { url: LINK, grant: { id, issuedAt: ISSUED } };
+}
+
+/** The Single field. */
+function urlInput() {
+  return screen.getByRole<HTMLInputElement>("textbox", {
+    name: /url to analyze/i,
+  });
+}
+
 beforeEach(() => {
   window.history.replaceState(null, "", "/");
-  localStorage.clear();
+  vi.stubGlobal("indexedDB", new IDBFactory());
 });
 
 afterEach(() => {
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
 
@@ -113,7 +136,7 @@ describe("a /?url= link", () => {
   it("fills the Single field and focuses it, and never scans", async () => {
     const fetchMock = stubScan(LINK);
     window.history.replaceState(null, "", `/?url=${encodeURIComponent(LINK)}`);
-    renderApp({ launch: { url: LINK, grantId: null } });
+    renderApp({ launch: { url: LINK, grant: null } });
 
     const input = screen.getByRole<HTMLInputElement>("textbox", {
       name: /url to analyze/i,
@@ -144,7 +167,7 @@ describe("a share-target launch", () => {
       "",
       `/?url=${encodeURIComponent(LINK)}&utm=1`,
     );
-    renderApp({ launch: { url: LINK, grantId: "arrival-launch-id" } });
+    renderApp({ launch: launchOf("arrival-launch-id") });
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     const [, init] = fetchMock.mock.calls[0] as unknown as [
@@ -161,97 +184,89 @@ describe("a share-target launch", () => {
 });
 
 describe("a launch the page is rendered with again", () => {
-  /** Mount with `launch`, let any scan it starts finish, and unmount. */
-  async function visit(launch: Launch) {
+  /**
+   * Mount with `launch`, wait until it has either asked for its scan or
+   * settled on a prefill (the field takes focus), and unmount.
+   */
+  async function visit(launch: Launch, fetchMock: ReturnType<typeof stubScan>) {
+    const scansBefore = fetchMock.mock.calls.length;
     const view = renderApp({ launch });
-    const input = screen.getByRole<HTMLInputElement>("textbox", {
-      name: /url to analyze/i,
-    });
+    const input = urlInput();
     expect(input.value).toBe(launch.url);
-    // Long enough for an effect's scan to have been asked for.
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    await waitFor(() =>
+      expect(
+        fetchMock.mock.calls.length > scansBefore ||
+          document.activeElement === input,
+      ).toBe(true),
+    );
     view.unmount();
   }
 
   it("scans once across a remount: the second only prefills", async () => {
     const fetchMock = stubScan(LINK);
     // Back restores the cached render (same props) into a new component.
-    const launch = { url: LINK, grantId: "remount-launch-id" };
-    await visit(launch);
+    const launch = launchOf("remount-launch-id");
+    await visit(launch, fetchMock);
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    await visit(launch);
+    await visit(launch, fetchMock);
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    // The browser keeps the random id, never the link.
-    const stored = localStorage.getItem("sx-launches") ?? "";
-    expect(stored).toContain("remount-launch-id");
-    expect(stored).not.toContain("parcel-help");
     // A new launch of the same link is a new grant, and scans.
-    await visit({ url: LINK, grantId: "next-launch-id" });
+    await visit(launchOf("next-launch-id"), fetchMock);
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it("only prefills in a tab that finds the id another tab recorded", async () => {
     const fetchMock = stubScan(LINK);
-    localStorage.setItem(
-      "sx-launches",
-      JSON.stringify([["other-tab-launch-id", Date.now()]]),
-    );
-    await visit({ url: LINK, grantId: "other-tab-launch-id" });
+    // The other tab: its own copy of the module, the same IndexedDB.
+    vi.resetModules();
+    const otherTab = await import("@/lib/client/launch-claims");
+    const launch = launchOf("other-tab-launch-id");
+    expect(await otherTab.claimLaunch(launch.grant!, RENDERED)).toBe(true);
+    await visit(launch, fetchMock);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("still scans once when storage is refused (private modes)", async () => {
+  it("only prefills where IndexedDB is unavailable", async () => {
     const fetchMock = stubScan(LINK);
-    const refuse = () => {
-      throw new DOMException("The operation is insecure.", "SecurityError");
-    };
-    const getItem = vi
-      .spyOn(Storage.prototype, "getItem")
-      .mockImplementation(refuse);
-    const setItem = vi
-      .spyOn(Storage.prototype, "setItem")
-      .mockImplementation(refuse);
-    try {
-      const launch = { url: LINK, grantId: "no-storage-launch-id" };
-      await visit(launch);
-      expect(fetchMock).toHaveBeenCalledTimes(1);
-      await visit(launch);
-      expect(fetchMock).toHaveBeenCalledTimes(1);
-    } finally {
-      getItem.mockRestore();
-      setItem.mockRestore();
-    }
+    vi.stubGlobal("indexedDB", undefined);
+    await visit(launchOf("no-storage-launch-id"), fetchMock);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("keeps a few recent ids and drops ones over ten minutes old", async () => {
-    stubScan(LINK);
-    const now = Date.now();
-    localStorage.setItem(
-      "sx-launches",
-      JSON.stringify([
-        ["stale-launch-id", now - 11 * 60_000],
-        ["not-an-entry"],
-        ...Array.from({ length: 10 }, (_, index) => [
-          `recent-${index}`,
-          now - 60_000,
-        ]),
-      ]),
-    );
-    await visit({ url: LINK, grantId: "pruning-launch-id" });
-    const ids = (
-      JSON.parse(localStorage.getItem("sx-launches")!) as [string, number][]
-    ).map(([id]) => id);
-    expect(ids).toHaveLength(8);
-    expect(ids.at(-1)).toBe("pruning-launch-id");
-    expect(ids).not.toContain("stale-launch-id");
+  it("only prefills when the page hydrates after the launch's minute", async () => {
+    // Rendered a second after the share, then a minute on the way in.
+    const fetchMock = stubScan(LINK);
+    const now = performance.now.bind(performance);
+    vi.spyOn(performance, "now").mockImplementation(() => now() + 60_000);
+    await visit(launchOf("late-launch-id"), fetchMock);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
 
-    // Opening the page with no launch forgets ids once they are old.
-    localStorage.setItem(
-      "sx-launches",
-      JSON.stringify([["stale-launch-id", now - 11 * 60_000]]),
+  it("only prefills a second page whose clock runs eleven minutes ahead", async () => {
+    // Round 3 repro B: that page dropped the first page's record as stale
+    // by its own Date.now(), and scanned again.
+    const fetchMock = stubScan(LINK);
+    const launch = launchOf("skewed-launch-id");
+    await visit(launch, fetchMock);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    // The second page: its own modules (so its own in-page record).
+    vi.resetModules();
+    const [{ AnalyzerRuntimeProvider: SecondPage }, { ScanForm: SecondForm }] =
+      await Promise.all([
+        import("@/components/scrutinix/analyzer-runtime"),
+        import("@/components/scrutinix/scan-form"),
+      ]);
+    const now = Date.now.bind(Date);
+    vi.spyOn(Date, "now").mockImplementation(() => now() + 11 * 60_000);
+    const view = render(
+      <SecondPage launch={launch} renderedAt={RENDERED + 500}>
+        <SecondForm />
+      </SecondPage>,
     );
-    renderApp({}).unmount();
-    expect(localStorage.getItem("sx-launches")).toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(urlInput()));
+    view.unmount();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
 
