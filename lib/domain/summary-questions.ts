@@ -91,7 +91,8 @@ export const PENDING_ANSWER = "Checking…";
  * What a pending question holds room for: a typical clean link's answer
  * and why, drawn invisibly (never as text) under "Checking…", so the
  * placeholder wraps like the answer that usually replaces it, at any
- * width. Findings and disagreements run longer and still grow. A unit
+ * width. Findings and disagreements run longer and still grow; short
+ * "couldn't check" answers take less room and shrink. A unit
  * test keeps these near the real clean answers.
  */
 export const PLACEHOLDER_SHAPE: Record<

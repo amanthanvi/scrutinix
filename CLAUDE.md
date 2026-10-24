@@ -172,7 +172,8 @@ tests/
   in NL", never "located/hosted in". Listing dates, certificate age, and
   hosting add no score contribution (the one existing certificate-age rule,
   a days-old certificate on a brand-new domain, predates them, and the
-  HTTPS why names it); nothing here changes a verdict or score, and the
+  HTTPS why names it unless a certificate error takes the why); nothing
+  here changes a verdict or score, and the
   questions read signals only (not `scoredSignals`), so a weak scored hit
   under Safe never reads as a "threat report". Every scored finding is
   named by its question: `tests/unit/summary-questions.test.ts` walks
@@ -182,14 +183,18 @@ tests/
   only when the labels match; the combined reading is its own sentence).
   A redirect chain that stopped partway keeps the hops it saw and leaves
   the destination unconfirmed; "couldn't reach" means nothing answered.
-  A finished result's ages count from its check time (`evidenceTimeOf`:
-  `checkedAt`, else `completedAt`), never from when it is reopened. A plain
+  Unscored page findings (one hard-to-read sign, under three frames) are
+  not raised. Ages of what was seen, in Summary and Full rows alike, count
+  from the result's check time (`evidenceTimeOf`: `checkedAt`, else
+  `completedAt`; the stream's start while scanning), never from when it is
+  reopened; certificate expiry counts from now. A plain
   HTTP link that moves to HTTPS says so and still gives the certificate. A
   name with no public address says so ("We found no address", or "only
   private or reserved addresses"), never "points nowhere". A question is pending
   until every check it cites lands; its placeholder holds room shaped like
   a typical clean answer (`PLACEHOLDER_SHAPE`, invisible generated content,
-  never text), so later headings hold still in the common case. Question
+  never text), so later headings hold still in the common case (findings
+  and long hosts still grow a question; "couldn't check" answers shrink). Question
   text wraps anywhere (long hosts break, never truncate), and the sources
   dot is drawn (`.sx-source::before`), so a copy reads "VirusTotal, Safe
   Browsing". The
