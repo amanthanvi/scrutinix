@@ -5,6 +5,7 @@ import {
   lstatSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
   symlinkSync,
@@ -119,6 +120,15 @@ const token = (fill) => fill.repeat(64);
 
 // Finding 7 of round 3: every command takes --port <n>, never a URL, and
 // refuses anything else without repeating it.
+//
+// These run against an inert state directory (mode 0755) that launch,
+// cleanup, and doctor all refuse to use. If a guard here ever breaks, the
+// command stops at that refusal with a different message, so the check fails
+// instead of launching a server on a real port.
+const inert = path.join(scratch, "inert");
+mkdirSync(inert, { mode: 0o755 });
+chmodSync(inert, 0o755);
+const inertEnv = envFor(inert);
 for (const script of ["launch.mjs", "doctor.mjs", "smoke.mjs"]) {
   for (const args of [
     ["--port", "not-a-port"],
@@ -133,7 +143,7 @@ for (const script of ["launch.mjs", "doctor.mjs", "smoke.mjs"]) {
     ["--port", " 3000"],
     ["--port=3420", "--port=3421"],
   ]) {
-    const refused = await runCli(script, args);
+    const refused = await runCli(script, args, inertEnv);
     check(
       `${script} refuses ${JSON.stringify(args)}`,
       refused.status === 2 &&
@@ -151,7 +161,7 @@ for (const script of ["launch.mjs", "doctor.mjs", "smoke.mjs"]) {
     ["--port", "http://user:SYNTH-cred-123@127.0.0.1:3000"],
     ["--port=http://user:SYNTH-cred-123@127.0.0.1:3000"],
   ]) {
-    const refused = await runCli(script, args);
+    const refused = await runCli(script, args, inertEnv);
     check(
       `${script} refuses ${args[0].slice(0, 10)} with credentials without echoing them`,
       refused.status === 2 &&
@@ -162,7 +172,7 @@ for (const script of ["launch.mjs", "doctor.mjs", "smoke.mjs"]) {
   }
 }
 for (const script of ["launch.mjs", "doctor.mjs", "cleanup.mjs"]) {
-  const unknown = await runCli(script, ["--token=SYNTH-arg-793"]);
+  const unknown = await runCli(script, ["--token=SYNTH-arg-793"], inertEnv);
   check(
     `${script} refuses an argument it does not take without echoing it`,
     unknown.status === 2 && !output(unknown).includes("SYNTH-arg-793"),
@@ -191,7 +201,7 @@ check(
 );
 const unusedPort = await freePort();
 const fromEnv = await runCli("doctor.mjs", ["--port", String(unusedPort)], {
-  ...process.env,
+  ...inertEnv,
   E2E_BASE_URL: "http://u:SYNTH-env-792@127.0.0.1:3000",
 });
 check(
@@ -232,7 +242,10 @@ for (const [script, args] of [
   ["verify:launch", ["--base-url=http://u:SYNTH-npm-794@127.0.0.1:3139"]],
   ["verify:drive", ["--base-url=http://u:SYNTH-npm-794@127.0.0.1:3139"]],
 ]) {
-  const viaNpm = await runNpm(["--silent", "run", script, "--", ...args]);
+  const viaNpm = await runNpm(
+    ["--silent", "run", script, "--", ...args],
+    inertEnv,
+  );
   check(
     `npm --silent run ${script} refuses ${args[0].slice(0, 10)} and prints no credential`,
     viaNpm.status === 2 &&
@@ -242,13 +255,15 @@ for (const [script, args] of [
     output(viaNpm),
   );
 }
-const npmPlain = await runNpm([
-  "run",
-  "verify:doctor",
-  "--",
-  "--port",
-  String(unusedPort),
-]);
+check(
+  "no refused command wrote to the inert state directory",
+  !existsSync(path.join(inert, "run.json")) &&
+    !existsSync(path.join(inert, "evidence")),
+);
+const npmPlain = await runNpm(
+  ["run", "verify:doctor", "--", "--port", String(unusedPort)],
+  inertEnv,
+);
 check(
   "npm run verify:doctor -- --port <n> shows only the port in npm's banner",
   npmPlain.status !== 0 &&
@@ -1234,8 +1249,31 @@ check(
   ),
 );
 
+// A supervisor still answering in the scratch directory is a run this check
+// did not stop. Keep the directory, so its run.json still reaches it.
+function answers(file) {
+  return new Promise((resolve) => {
+    const socket = net.createConnection(file);
+    const finish = (value) => {
+      socket.destroy();
+      resolve(value);
+    };
+    socket.once("connect", () => finish(true));
+    socket.once("error", () => finish(false));
+  });
+}
+const leftRuns = [];
+for (const name of readdirSync(scratch)) {
+  const file = runtime.socketPath(path.join(scratch, name));
+  if (existsSync(file) && (await answers(file))) leftRuns.push(name);
+}
+check(
+  "no supervisor is left answering in the scratch directory",
+  leftRuns.length === 0,
+  `${leftRuns.join(", ")}: stop with VERIFY_STATE_DIR=${scratch}/<dir> npm run verify:cleanup`,
+);
 chmodSync(loose, 0o700);
-rmSync(scratch, { recursive: true, force: true });
+if (!leftRuns.length) rmSync(scratch, { recursive: true, force: true });
 
 if (failures.length) {
   process.stderr.write(`${failures.join("\n")}\n`);
