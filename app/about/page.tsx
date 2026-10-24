@@ -133,7 +133,7 @@ export default function AboutPage() {
       </section>
 
       <section className="flex flex-col gap-4">
-        <SectionHeading>Who owns the link</SectionHeading>
+        <SectionHeading>Which site a link belongs to</SectionHeading>
         <p className={PROSE}>
           The part of a link that decides who controls it is the registered
           domain, the name just before the ending such as .com or .co.uk.

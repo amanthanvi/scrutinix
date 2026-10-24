@@ -3,7 +3,8 @@ import type { parse as tldtsParse } from "tldts";
 import { IMPERSONATED_BRAND_SET } from "@/lib/domain/impersonated-brands";
 
 /**
- * Isomorphic link anatomy: who really owns a link, and whether its
+ * Isomorphic link anatomy: which site a link really belongs to (its
+ * registered domain, not the organisation behind it), and whether its
  * subdomain spells out somebody else's domain.
  *
  * The Public Suffix List parser is passed in rather than imported, so this
