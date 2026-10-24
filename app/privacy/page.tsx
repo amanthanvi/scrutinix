@@ -20,7 +20,7 @@ const sections = [
   },
   {
     title: "What the server does",
-    body: "To check a link, our server sends it to VirusTotal, Google Safe Browsing, and the abuse.ch URLhaus feed, and sends its hostname to the abuse.ch ThreatFox feed. It sends the domain name to the Spamhaus and SURBL blocklists and the domain registry (WHOIS). It sends only the IP address of the link's server to Team Cymru, to learn which network it belongs to. It downloads the OpenPhish list and matches the link against it on our server, so the link is not sent to OpenPhish. It also visits the site to read its security certificate and redirects, and looks up its DNS records. Each of these services handles what it receives under its own privacy policy. We never store your history.",
+    body: "To check a link, our server sends it to VirusTotal, Google Safe Browsing, and the abuse.ch URLhaus feed, and sends its hostname to the abuse.ch ThreatFox feed. It sends the domain name to the Spamhaus and SURBL blocklists, and to rdap.org, which passes the registration lookup on to the domain's registry (WHOIS). It sends only the IP address of the link's server to Team Cymru, to learn which network it belongs to. It downloads the OpenPhish list and matches the link against it on our server, so the link is not sent to OpenPhish. It also visits the site to read its security certificate and redirects, and looks up its DNS records. Each of these services handles what it receives under its own privacy policy. We never store your history.",
   },
   {
     title: "Private and one-time links",
