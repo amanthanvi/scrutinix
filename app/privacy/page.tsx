@@ -44,7 +44,7 @@ const sections = [
   },
   {
     title: "Sharing to Scrutinix",
-    body: "If you install Scrutinix on Android and share something to it, your phone sends what you shared to our server, which keeps only the first web link, discards the rest of the message, and logs none of it. To let that one share start a check on its own, it leaves a cookie holding the link for up to a minute, which the page removes as soon as the check starts. A link that opens Scrutinix with a link filled in, from a bookmarklet, a Shortcut, or another site, waits for you to tap Analyze.",
+    body: "When you share a link to Scrutinix from your phone, your phone sends what you shared to our server, which keeps only the first web link, discards the rest of the message, and logs none of it. To let that one share start a check on its own, it leaves a cookie for up to a minute holding a one-time code for that link, not the link itself. The next time the page opens, our server removes the cookie and, to make sure the code works only once, remembers for two minutes that it was used, without the link. A link that opens Scrutinix with a link filled in, from a bookmarklet, a Shortcut, or another site, waits for you to tap Analyze.",
   },
 ] as const;
 

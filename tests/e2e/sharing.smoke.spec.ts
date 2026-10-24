@@ -358,3 +358,13 @@ test("a launch grant is spent by the first home page that loads, matching or not
   await page.waitForTimeout(500);
   expect(scans).toEqual([]);
 });
+
+test("the site never mentions installing it @smoke", async ({ page }) => {
+  // Owner decision: the browser's own install UI is the only prompt.
+  await isolateRateLimit(page);
+  for (const path of ["/", "/about", "/privacy"]) {
+    await page.goto(path);
+    const text = await page.locator("body").innerText();
+    expect(text, path).not.toMatch(/\binstall/i);
+  }
+});
