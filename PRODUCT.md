@@ -3,7 +3,7 @@
 <!-- impeccable:product-schema 1 -->
 
 Scrutinix — a FOSS public URL threat analyzer at https://www.scrutinix.net.
-People paste a link, watch eight independent security signals stream in, and
+People paste a link, watch eight separate security signals stream in, and
 get a verdict they can trust enough to decide whether to open or forward it.
 
 ## Platform
@@ -35,7 +35,7 @@ leave without an account.
 
 Honesty is the mechanism a neighboring scanner cannot truthfully copy:
 
-- Eight independent signals (VirusTotal, a local ML classifier, Google Safe
+- Eight separate signals (VirusTotal, a local ML classifier, Google Safe
   Browsing, threat feeds, TLS, domain registration, DNS, redirect chain) stream
   as they resolve; nothing waits on the slowest source.
 - Confirmed sources can convict; exculpatory evidence never erases a confirmed
@@ -88,7 +88,8 @@ Honesty is the mechanism a neighboring scanner cannot truthfully copy:
   over three committed alternate worlds (disclosure label, road signage, transit
   line) in a live draft round. Light theme uses a cool, crisp white ground, not
   warm paper. "Minimal" must still answer the original brief: the verdict owns
-  the moment, the link's real owner is legible, and the page is not bland.
+  the moment, the site a link really belongs to is legible, and the page is
+  not bland.
 
 ## Evidence on Hand
 

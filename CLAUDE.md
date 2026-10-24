@@ -3,11 +3,11 @@
 ## Project Overview
 
 **Scrutinix** — a FOSS multi-signal URL threat analyzer, live at
-https://www.scrutinix.net. It streams 8 independent security signals
+https://www.scrutinix.net. It streams 8 separate security signals
 (VirusTotal, ML ensemble, Google Safe Browsing, threat feeds, SSL, WHOIS,
 DNS, redirect chain) over NDJSON into a minimal, single-column product UI:
 the canonical minimal product tool on a cool crisp white ground, with the
-verdict band, the link's real owner, and an eight-cell signal strip as the
+verdict band, the site the link really belongs to, and an eight-cell signal strip as the
 one signature. Light and dark themes receive equal treatment.
 
 Operating conventions and learned gotchas live in [`AGENTS.md`](./AGENTS.md).
@@ -165,10 +165,14 @@ tests/
   in). Every contiguous run of 2+ subdomain labels is tested; a two-letter
   country-code run counts only for a listed brand (`amazon.de`), so
   regional/tenant hosts (`acme.us.auth0.com`) never read as look-alikes.
-  Look-alikes hedge presentation only; scores and the verdict word never
-  change. On Safe, `getVerdictGuidance` returns the action-only imperative,
-  `tone: "unknown"` (the band and OG card use it, never the raw verdict),
-  and a `confidenceNote` in place of "High confidence". The owner fact is
+  Look-alikes change presentation only; the stored verdict and score never
+  change. A Safe look-alike is shown as "Look-alike" (`verdictWord`) on the
+  band, history/batch rows, the live region, and the share card; its band
+  shows no score, and the details state the checks' own verdict and score
+  (`getUnderlyingVerdictNote`). `getVerdictGuidance` returns the
+  action-only imperative, `tone: "unknown"` (the band, rows, and OG card
+  use it, never the raw verdict), and a `confidenceNote` in place of "High
+  confidence". The owner fact is
   stated once, by `ownershipSentence` (anatomy, live region, share
   description, OG card). History/batch rows use `LinkAnatomyCompact`
   (`result-row.tsx`): the subdomain truncates from its left so the owner
