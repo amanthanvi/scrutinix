@@ -19,6 +19,46 @@ import {
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 
+// The only Playwright arguments passed through: a title filter. A second
+// --config, a spec path, a reporter, or an output option would run, or
+// write, something other than this skill's own suite, and its failing
+// titles would be printed as this suite's. Returns null for anything else.
+export function forwardedPlaywrightArgs(rest) {
+  const out = [];
+  for (let i = 0; i < rest.length; i += 1) {
+    const arg = rest[i];
+    if (arg === "-g" || arg === "--grep") {
+      const pattern = rest[i + 1];
+      if (pattern === undefined || pattern.startsWith("-")) return null;
+      out.push("--grep", pattern);
+      i += 1;
+    } else if (arg.startsWith("--grep=") && arg.length > "--grep=".length) {
+      out.push(arg);
+    } else {
+      return null;
+    }
+  }
+  return out;
+}
+
+// Playwright reads report destinations and behaviour (PLAYWRIGHT_HTML_*,
+// PLAYWRIGHT_JSON_*, PW_TEST_*, ...) from the environment ahead of the
+// config, which would let an inherited variable move a raw report into the
+// evidence directory. The child gets none of them, except where browsers
+// are installed and the host-requirement switch, which write nothing.
+const KEPT_PLAYWRIGHT_ENV = new Set([
+  "PLAYWRIGHT_BROWSERS_PATH",
+  "PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS",
+]);
+export function playwrightChildEnv(parent) {
+  return Object.fromEntries(
+    Object.entries(parent).filter(
+      ([key]) =>
+        !/^(PLAYWRIGHT_|PW_)/.test(key) || KEPT_PLAYWRIGHT_ENV.has(key),
+    ),
+  );
+}
+
 // Run doctor, then the smoke or drive spec through the Playwright CLI at
 // `cli`, and return the exit code. smoke.mjs always passes the real
 // @playwright/test CLI; only runtime.check.mjs passes a stand-in, as this
@@ -27,6 +67,13 @@ export function runSuite(argv, cli) {
   const args = parseCliArgs(argv, { flags: ["--drive"], rest: true });
   if (!args.ok) {
     process.stderr.write(`smoke: ${args.message}\n`);
+    return 2;
+  }
+  const forwarded = forwardedPlaywrightArgs(args.rest);
+  if (!forwarded) {
+    process.stderr.write(
+      "smoke: only -g/--grep <title pattern> is passed to Playwright; the config, specs, and reporters are fixed\n",
+    );
     return 2;
   }
   const suite = args.flags.has("--drive") ? "drive" : "smoke";
@@ -54,7 +101,8 @@ export function runSuite(argv, cli) {
   const rawDir = path.join(stateDir, "playwright", suite);
   ensureDirs([path.dirname(rawDir), rawDir]);
   const env = {
-    ...process.env,
+    ...playwrightChildEnv(process.env),
+    PLAYWRIGHT_HTML_OPEN: "never",
     E2E_BASE_URL: baseUrlFor(args.port),
     VERIFY_EVIDENCE_DIR: evidenceDir,
     VERIFY_RAW_DIR: rawDir,
@@ -69,7 +117,7 @@ export function runSuite(argv, cli) {
   try {
     child = spawnSync(
       process.execPath,
-      [cli, "test", "--config", config, spec, ...args.rest],
+      [cli, "test", "--config", config, spec, ...forwarded],
       { cwd: repoRoot, env, stdio: ["ignore", fd, fd] },
     );
   } finally {

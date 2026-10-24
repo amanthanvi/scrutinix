@@ -974,6 +974,87 @@ for (const [label, runner, message] of [
   );
 }
 
+// Round 5: only a title filter reaches Playwright. Another --config, a spec
+// path, or a reporter would run or write something other than this skill's
+// suite (and print that suite's titles as this one's), so smoke refuses
+// them before Playwright starts, without echoing them. Inherited
+// PLAYWRIGHT_*/PW_* variables, which Playwright reads ahead of the config,
+// never reach it, and the HTML report never opens.
+const recorded = path.join(scratch, "recorded-playwright.json");
+const recordingPlaywright = standInPlaywright(
+  "recording-playwright",
+  `fs.writeFileSync(${JSON.stringify(recorded)}, JSON.stringify({
+  argv: process.argv.slice(2),
+  playwrightEnv: Object.keys(process.env).filter((key) => /^(PLAYWRIGHT_|PW_)/.test(key)),
+  htmlOpen: process.env.PLAYWRIGHT_HTML_OPEN,
+}));
+fs.writeFileSync(process.env.VERIFY_REPORT_FILE, JSON.stringify({ suites: [], errors: [], stats: { expected: 1, unexpected: 0, flaky: 0, skipped: 0 } }));
+process.exit(0);
+`,
+);
+for (const [label, extra] of [
+  [
+    "another config",
+    ["--config", path.join(scratch, "SYNTH-other.config.mjs")],
+  ],
+  ["a spec path", [path.join(scratch, "SYNTH-other.spec.ts")]],
+  ["a reporter", ["--reporter=line"]],
+  ["an output directory", ["--output", path.join(scratch, "SYNTH-out")]],
+  ["a filter that is really an option", ["-g", "--config"]],
+]) {
+  rmSync(recorded, { force: true });
+  const refused = await runSuiteWith(
+    recordingPlaywright,
+    ["--port", String(portA), ...extra],
+    envFor(runDir),
+  );
+  check(
+    `smoke refuses ${label} before Playwright starts, without echoing it`,
+    refused.status === 2 &&
+      !existsSync(recorded) &&
+      !output(refused).includes("SYNTH-") &&
+      !output(refused).includes("--reporter=line"),
+    cli(refused),
+  );
+}
+rmSync(recorded, { force: true });
+const filtered = await runSuiteWith(
+  recordingPlaywright,
+  ["--port", String(portA), "-g", "smoke home"],
+  envFor(runDir, {
+    PLAYWRIGHT_HTML_OUTPUT_DIR: path.join(scratch, "SYNTH-html"),
+    PLAYWRIGHT_HTML_REPORT: path.join(scratch, "SYNTH-html-report"),
+    PLAYWRIGHT_JSON_OUTPUT_FILE: path.join(scratch, "SYNTH.json"),
+    PW_TEST_HTML_REPORT_OPEN: "always",
+    PLAYWRIGHT_BROWSERS_PATH: path.join(scratch, "browsers"),
+  }),
+);
+const seen = existsSync(recorded)
+  ? JSON.parse(readFileSync(recorded, "utf8"))
+  : null;
+check(
+  "smoke passes only the title filter after its own config and spec",
+  filtered.status === 0 &&
+    seen !== null &&
+    seen.argv.length === 6 &&
+    seen.argv[0] === "test" &&
+    seen.argv[1] === "--config" &&
+    seen.argv[2].endsWith("playwright.config.mjs") &&
+    seen.argv[3].endsWith("smoke.spec.ts") &&
+    seen.argv[4] === "--grep" &&
+    seen.argv[5] === "smoke home",
+  cli(filtered),
+);
+check(
+  "Playwright gets no inherited report or open-behaviour variables",
+  seen !== null &&
+    seen.htmlOpen === "never" &&
+    seen.playwrightEnv.every((key) =>
+      ["PLAYWRIGHT_BROWSERS_PATH", "PLAYWRIGHT_HTML_OPEN"].includes(key),
+    ),
+  seen ? seen.playwrightEnv.length : null,
+);
+
 // The npm entry point ignores VERIFY_PLAYWRIGHT_CLI, the round-4 test hook:
 // with it set, the real Playwright runs (a -g that matches no test makes it
 // exit at once, before any browser starts) and the stand-in never does.
