@@ -452,7 +452,7 @@ Each verdict owns five tokens: a graphic hue (`<v>`, 3:1 on the ground; the band
 - **Question** (600, 22px / 20px) and **Answer** (400, 21px / 18px, 1.5): Summary.
 - **Lead** (400, 22px / 18px, 1.45): the supporting line under a headline, in Muted Ink.
 - **Link** (mono 400, 27px / 19px on a result; 22px / 17px under the form): the link taken apart.
-- **Body** (16px, 24px): interface sentences, buttons, tabs, Full findings, public prose (at 34rem: 65–75 characters per line).
+- **Body** (16px, 24px): interface sentences, buttons, tabs, Full findings, public prose (at 32rem: 65–75 characters per line).
 - **Meta** (15px): nav, captions under the link, sources lines, cell names (14px on phones), the legend.
 - **Caption** (13px): timestamps and mono evidence entries.
 
@@ -474,7 +474,7 @@ With a result on the page the column starts 28px under the header (8px on phones
 
 **Shared-view order (recipient-first).** A shared link opens on the results stack (band, the link taken apart, and the strip when verified), then "Check another link" at Headline size with the supporting line and the form, 80px later. The hero headline is not drawn (an `sr-only` h1 "A link shared with you" keeps the outline). A fresh scan replaces the band in place. Nothing takes focus on arrival, and neither shared state speaks through the live region on load. A `/?url=` link opens the ordinary order with the link in the field, focused and taken apart below it.
 
-**Public pages** (`/about`, `/privacy`) use the same column and header: a serif title, the serif lead, one hairline, then sections 64px apart at the prose measure (34rem) or the list measure (48rem). Plain `<table>`, `<details>`, and `<code>` inside the shell are styled by `.sx-public` (zero-specificity `:where()`): an ink header rule over hairline rows, tabular figures, `data-numeric` cells right-aligned, disclosure summaries with a drawn chevron. `TableFrame` wraps a wide table so it scrolls on its own (focusable region) instead of widening a phone.
+**Public pages** (`/about`, `/privacy`) use the same column and header: a serif title, the serif lead, one hairline, then sections 64px apart at the prose measure (32rem) or the list measure (48rem). Plain `<table>`, `<details>`, and `<code>` inside the shell are styled by `.sx-public` (zero-specificity `:where()`): an ink header rule over hairline rows, tabular figures, `data-numeric` cells right-aligned, disclosure summaries with a drawn chevron. `TableFrame` wraps a wide table so it scrolls on its own (focusable region) instead of widening a phone.
 
 Responsive behaviour: the band's score moves from its right column (from 40rem) to a baseline row under the instruction; the strip is two columns of four rows below 40rem, a 4 × 2 grid to 64rem, a single row of eight from 64rem; the question rail starts at 64rem; the link's parts stack below 40rem. The page scrolls as one document; `scrollbar-gutter: stable` keeps the column still as results grow.
 

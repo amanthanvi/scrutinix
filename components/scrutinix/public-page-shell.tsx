@@ -9,7 +9,7 @@ import { AppHeader } from "@/components/scrutinix/app-header";
  * rendered line, not by eye: `ch` measures the "0", which runs wider than
  * the average letter).
  */
-export const PROSE_MEASURE = "max-w-[34rem]";
+export const PROSE_MEASURE = "max-w-[32rem]";
 
 /**
  * Two-column term/description lists: a 10rem term column plus a
