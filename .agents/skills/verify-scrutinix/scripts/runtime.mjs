@@ -21,7 +21,6 @@ import {
   realpathSync,
   renameSync,
   rmSync,
-  statSync,
   unlinkSync,
   writeFileSync,
 } from "node:fs";
@@ -65,240 +64,15 @@ export function privacyPageRendered(html) {
   );
 }
 
-// ---- Redaction --------------------------------------------------------------
+// ---- Diagnostics -------------------------------------------------------------
 
-// Log excerpts carry whatever npm or the dev server printed, so every excerpt
-// passes through redactSecrets before it reaches a terminal or a CI log.
-// Diagnostics otherwise print selected fields only (pid, start time,
-// executable, cwd), never a command line or an environment.
-
-// Key words that mark a value as secret. Strong words match anywhere in the
-// key (accessToken, X_API_KEY, clientSecret); weak words only as a whole word
-// of the key, so "author" or "signal" stay readable.
-const strongSecretWords =
-  /token|secret|passw|apikey|accesskey|privatekey|credential|cookie|signature|bearer/;
-const weakSecretWords = new Set([
-  "auth",
-  "authorization",
-  "key",
-  "keys",
-  "pass",
-  "pwd",
-  "sig",
-  "session",
-  "dsn",
-  "private",
-]);
-
-function decodeKey(raw) {
-  try {
-    return decodeURIComponent(raw);
-  } catch {
-    return raw;
-  }
-}
-
-export function secretKey(raw) {
-  const key = decodeKey(String(raw));
-  const words = key
-    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
-    .toLowerCase()
-    .split(/[^a-z0-9]+/)
-    .filter(Boolean);
-  if (strongSecretWords.test(words.join(""))) return true;
-  return words.some((word) => weakSecretWords.has(word));
-}
-
-function envKey(raw) {
-  return /^[A-Z][A-Z0-9_]+$/.test(decodeKey(String(raw)));
-}
-
-// A key, optionally quoted (or \"escaped\" inside a JSON string), a ":" or
-// "=", and a value. Percent-encoded keys (%74oken) are decoded before the
-// secret test. A quoted, array, or object value may start on the next line.
-const keyChars = String.raw`(?:[A-Za-z0-9_.-]|%[0-9A-Fa-f]{2})+`;
-const keyQuote = String.raw`(?:\\?["'])?`;
-const pairSeparator = String.raw`[ \t]*[:=](?:[ \t]*\r?\n(?=[ \t]*\\?["'[{]))?[ \t]*`;
-const pairValue = [
-  String.raw`\[[^[\]]*\]`, // [array], one level, may span lines
-  String.raw`\{[^{}]*\}`, // {object}, one level, may span lines
-  String.raw`"(?:[^"\\]|\\[\s\S])*"`, // "double", escape-aware
-  String.raw`'(?:[^'\\]|\\[\s\S])*'`, // 'single', escape-aware
-  String.raw`\\"(?:[^"\\]|\\(?!")[\s\S])*\\"`, // \"escaped\" in a JSON string
-  String.raw`[|>][-+]?[ \t]*(?:\r?\n[ \t]+[^\r\n]*)+`, // YAML block scalar
-  String.raw`(?=\r?\n[ \t])(?:\r?\n[ \t]+[^\r\n]*)+`, // empty, then indented lines
-  String.raw`(?:\\\r?\n[ \t]*|[^\s&,;}\])])+`, // unquoted, with "\" continuations
-].join("|");
-const pairPattern = new RegExp(
-  String.raw`(?<![A-Za-z0-9_%\\])(${keyQuote}(${keyChars})${keyQuote}${pairSeparator})(${pairValue})`,
-  "g",
-);
-
-function maskValue(value) {
-  for (const quote of ['\\"', '"', "'"]) {
-    if (value.startsWith(quote) && value.length >= quote.length * 2) {
-      return `${quote}[redacted]${quote}`;
-    }
-  }
-  return "[redacted]";
-}
-
-function redactPairs(text) {
-  return text.replace(pairPattern, (match, head, key, value) => {
-    if (value.startsWith("[redacted")) return match;
-    if (secretKey(key) || (head.includes("=") && envKey(key))) {
-      return `${head}${maskValue(value)}`;
-    }
-    // Not a secret key, but its value can still hold one ("msg": "token=…").
-    return `${head}${redactPairs(value)}`;
-  });
-}
-
-const redactions = [
-  // PEM blocks, including an unterminated one at the end of the text
-  [
-    /-----BEGIN [A-Z0-9 ]+-----[\s\S]*?(?:-----END [A-Z0-9 ]+-----|$)/g,
-    "[redacted PEM block]",
-  ],
-  // Credentials in URLs: scheme://user:password@host, also with the slashes
-  // JSON-escaped (https:\/\/user:password@host)
-  [/\b([a-z][a-z0-9+.-]*:(?:\/\/|\\\/\\\/))[^\s/\\?#@]+@/gi, "$1[redacted]@"],
-  // Authorization schemes followed by a token
-  [/\b(Bearer|Basic|Token)\s+[\w.~+/=-]{6,}/gi, "$1 [redacted]"],
-  // Flags: --token VALUE, --password VALUE
-  [
-    /(\s--?[\w-]*(?:token|secret|password|passwd|api-?key)[\w-]*[ \t]+)(?!-)(\S+)/gi,
-    "$1[redacted]",
-  ],
-];
-
-const tokenShapes = [
-  // Well-known token shapes and JWTs
-  [
-    /\b(?:gh[pousr]_\w{20,}|github_pat_\w{20,}|sk-[\w-]{16,}|xox[abposr]-[\w-]{10,}|AKIA[0-9A-Z]{16}|eyJ[\w-]{8,}\.[\w-]{8,}\.[\w-]{8,})/g,
-    "[redacted]",
-  ],
-  // Long hex strings
-  [/\b[0-9a-f]{32,}\b/gi, "[redacted]"],
-];
-
-// Long opaque base64-like runs. A run is redacted when it, and its longest
-// slash-separated piece (16+ characters), mix upper case, lower case, and
-// digits. Paths split into short readable pieces and stay.
-const opaqueRun = /[A-Za-z0-9+/_=-]{32,}/g;
-
-function mixedCase(value) {
-  return /[A-Z]/.test(value) && /[a-z]/.test(value) && /\d/.test(value);
-}
-
-function opaqueToken(run) {
-  const longest = run
-    .split("/")
-    .reduce((best, piece) => (piece.length > best.length ? piece : best), "");
-  return longest.length >= 16 && mixedCase(longest) && mixedCase(run);
-}
-
-// A JSON value with every secret-named key's value (string, number, array,
-// or object) masked, and every other string redacted as text. Walking the
-// decoded value sees through escapes (\/, \n, \u0040) that a pattern misses.
-function redactJsonValue(value, depth = 0) {
-  if (depth > 64) return "[redacted]";
-  if (typeof value === "string") return redactSecrets(value);
-  if (Array.isArray(value)) {
-    return value.map((item) => redactJsonValue(item, depth + 1));
-  }
-  if (value && typeof value === "object") {
-    return Object.fromEntries(
-      Object.entries(value).map(([key, item]) => [
-        redactSecrets(key),
-        secretKey(key) ? "[redacted]" : redactJsonValue(item, depth + 1),
-      ]),
-    );
-  }
-  return value;
-}
-
-function redactedJson(text) {
-  try {
-    const parsed = JSON.parse(text);
-    if (!parsed || typeof parsed !== "object") return null;
-    const redacted = redactJsonValue(parsed);
-    const same = JSON.stringify(redacted) === JSON.stringify(parsed);
-    return same ? text : JSON.stringify(redacted);
-  } catch {
-    return null;
-  }
-}
-
-// The whole text, or each line, that parses as a JSON object or array is
-// redacted through its decoded value. Everything else is left for the
-// patterns below, which also cover JSON embedded in a longer line.
-function redactJsonText(text) {
-  const trimmed = text.trim();
-  if (/^[[{]/.test(trimmed) && trimmed.includes("\n")) {
-    const whole = redactedJson(trimmed);
-    if (whole !== null) return whole;
-  }
-  return text
-    .split("\n")
-    .map((line) => {
-      const start = line.search(/\S/);
-      if (start === -1 || !/[[{]/.test(line[start] ?? "")) return line;
-      const redacted = redactedJson(line.slice(start).trimEnd());
-      return redacted === null ? line : line.slice(0, start) + redacted;
-    })
-    .join("\n");
-}
-
-export function redactSecrets(text) {
-  let next = redactJsonText(String(text));
-  for (const [pattern, replacement] of redactions) {
-    next = next.replace(pattern, replacement);
-  }
-  next = redactPairs(next);
-  // Header lines whose name is secret-like: the rest of the line is the value
-  // (Cookie: a=1; sid=…). A block scalar already redacted is left as it is.
-  next = next.replace(
-    /^([ \t]*[\w-]*(?:authorization|cookie|token|secret|api-key|password)[\w-]*[ \t]*:[ \t]*)(?!\[redacted\]$)(\S.*)$/gim,
-    "$1[redacted]",
-  );
-  for (const [pattern, replacement] of tokenShapes) {
-    next = next.replace(pattern, replacement);
-  }
-  return next.replace(opaqueRun, (run) =>
-    opaqueToken(run) ? "[redacted]" : run,
-  );
-}
-
-const logReadLimit = 32 * 1024 * 1024;
-
-// The last whole lines of a log, at most `chars` characters. The whole file is
-// redacted first, so a secret split by the cut can never show its value.
-export function logTail(file, chars = 4000) {
-  let text = "";
-  try {
-    if (!existsSync(file)) return "";
-    if (statSync(file).size > logReadLimit) {
-      return `[log larger than ${logReadLimit} bytes. Not excerpted.]`;
-    }
-    text = readFileSync(file, "utf8");
-  } catch {
-    return "";
-  }
-  const lines = redactSecrets(text).replace(/\s+$/, "").split("\n");
-  const kept = [];
-  let length = 0;
-  for (let index = lines.length - 1; index >= 0; index -= 1) {
-    const line = lines[index] ?? "";
-    if (length + line.length + 1 > chars) {
-      if (!kept.length) kept.unshift(line.slice(-chars));
-      break;
-    }
-    kept.unshift(line);
-    length += line.length + 1;
-  }
-  return kept.join("\n");
-}
+// Nothing here prints what a subprocess wrote. npm ci, the browser install,
+// next dev, and Playwright write to 0600 logs in the state directory, and the
+// commands print fixed messages: a failure category, an exit status, counts,
+// failing test titles, and log paths. Process diagnostics print selected
+// fields only (pid, start time, executable, cwd), never a command line or an
+// environment. No log is excerpted, so no redaction stands between a log and
+// a terminal or a CI log.
 
 // ---- Paths and the private state directory ----------------------------------
 
@@ -1827,9 +1601,10 @@ export function exitSummary({ status, signal }) {
   return `exited ${status ?? "without a status"}`;
 }
 
-// One printable line from a test title: redacted, one line, and short.
+// One printable line from a test title (the spec's own text): one line, and
+// short.
 function titleLine(text) {
-  const line = redactSecrets(String(text))
+  const line = String(text)
     .replace(/[\u0000-\u001f\u007f]+/g, " ")
     .trim();
   return line.length > 200 ? `${line.slice(0, 199)}…` : line;

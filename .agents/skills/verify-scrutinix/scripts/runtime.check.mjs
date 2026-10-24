@@ -1,6 +1,7 @@
 import { spawn, spawnSync } from "node:child_process";
 import {
   chmodSync,
+  copyFileSync,
   existsSync,
   lstatSync,
   mkdirSync,
@@ -68,7 +69,10 @@ function runCli(script, args = [], env = process.env) {
   return new Promise((resolve) => {
     const child = spawn(
       process.execPath,
-      [path.join(scriptDir, script), ...args],
+      [
+        path.isAbsolute(script) ? script : path.join(scriptDir, script),
+        ...args,
+      ],
       {
         env,
         stdio: ["ignore", "pipe", "pipe"],
@@ -1306,157 +1310,123 @@ check(
   `${offersRecordedPid.length} file(s)`,
 );
 
-// ---- Redaction --------------------------------------------------------------
+// ---- Launch failures ---------------------------------------------------------
 
-// Every value is synthetic.
-const leaked = [
-  "SHARE_SIGNING_SECRET=abc123def456",
-  'export VIRUSTOTAL_API_KEY="vt-key-value"',
-  "redis https://default:hunter2pass@eu1.upstash.io/db",
-  "Authorization: Bearer abcdefghijklmnop",
-  "?url=x&token=tok_9f8e7d6c&sig=AbCdEf123",
-  '"apiKey": "k-123456"',
-  "ghp_abcdefghijklmnopqrstuvwxyz0123456789",
-  "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.c2lnbmF0dXJlLXZhbHVl",
-  "bare Zk3Jq9XbT2mLw8RvN5cYp4Hs7Ag1Ed6U+/Qo==",
-  "hex 9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
-  '{"SHARE_SIGNING_SECRET_PREVIOUS": "synth-prev-one"}',
-  '{"accessToken":"synth-camel-two","refreshToken": "synth-camel-three"}',
-  "clientSecret=synth-camel-four",
-  '"password": "synth-esc\\"aped-five tail"',
-  '{\\"token\\": \\"synth-json-in-string-six\\"}',
-  "?%74oken=synth-urlenc-seven&%73ecret=synth-urlenc-eight",
-  "PRIVATE_KEY=-----BEGIN PRIVATE KEY-----\nMIIsynthpemlinenine\n-----END PRIVATE KEY-----",
-  "API_TOKEN=synth-multi-ten-a\\\n  synth-multi-ten-b",
-  "token: |\n  synth-yaml-eleven\n  synth-yaml-twelve",
-  "SECRET_VALUE=\n  synth-indented-thirteen",
-  "Cookie: session=synth-cookie-fourteen; theme=dark",
-  "run --auth-token synth-flag-fifteen",
-  "x-api-key: synth-header-sixteen",
-  "upstashRestToken = 'synth-single-seventeen'",
-  // Finding 2 of round 3, alone on a line and embedded in a longer one
-  '{"token":"synth-json-eighteen"}',
-  '{"tokens":["synth-first-nineteen","synth-array-twenty"]}',
-  '{"apiKey":\n"synth-newline-twentyone"}',
-  String.raw`{"msg":"https:\/\/default:synth-escaped-url-22@registry.example.invalid/pkg"}`,
-  'npm error {"tokens":["a","synth-embedded-23"], "x":1}',
-  String.raw`warn {"msg":"https:\/\/default:synth-embedded-url-24@r.example.invalid"} end`,
-  'x {"secret": {"v": "synth-object-25"}} y',
-  String.raw`{"msg":"{\"token\":\"synth-nested-26\"}"}`,
-  '  "credentials": {\n    "user": "u",\n    "value": "synth-pretty-27"\n  }',
+// Finding 2 of round 4: a failed launch prints a fixed message (what failed,
+// how it exited, the log path) and never any of the log. The real launch,
+// runtime, and supervisor are copied into a scratch checkout whose npm,
+// Playwright CLI, and next are stand-ins: each prints every form the reviewer
+// found leaking past the old redacted excerpt, around a canary, and exits 1.
+// Nothing real is installed or started.
+const launchCanary = "SYNTH-r4-launch-canary";
+const leakForms = [
+  `Error: {"token":"${launchCanary}"}`,
+  `error: {"token": {"nested": {"value":"${launchCanary}"}}}`,
+  `tokens:\n- ${launchCanary}`,
+  String.raw`warn {"msg":"https:\/\/default:${launchCanary}@registry.example.invalid\/pkg"}`,
+  `${'{"a":'.repeat(8000)}{"token":"${launchCanary}"}${"}".repeat(8000)}`,
+  `plain ${launchCanary}`,
 ].join("\n");
-const redacted = runtime.redactSecrets(leaked);
-for (const secret of [
-  "abc123def456",
-  "vt-key-value",
-  "hunter2pass",
-  "abcdefghijklmnop",
-  "tok_9f8e7d6c",
-  "AbCdEf123",
-  "k-123456",
-  "ghp_abcdefghijklmnopqrstuvwxyz0123456789",
-  "eyJhbGciOiJIUzI1NiJ9",
-  "Zk3Jq9XbT2mLw8RvN5cYp4Hs7Ag1Ed6U",
-  "9f86d081884c7d659a2feaa0c55ad015",
-  "synth-prev-one",
-  "synth-camel-two",
-  "synth-camel-three",
-  "synth-camel-four",
-  "synth-esc",
-  "aped-five",
-  "synth-json-in-string-six",
-  "synth-urlenc-seven",
-  "synth-urlenc-eight",
-  "MIIsynthpemlinenine",
-  "synth-multi-ten-a",
-  "synth-multi-ten-b",
-  "synth-yaml-eleven",
-  "synth-yaml-twelve",
-  "synth-indented-thirteen",
-  "synth-cookie-fourteen",
-  "synth-flag-fifteen",
-  "synth-header-sixteen",
-  "synth-single-seventeen",
-  "synth-json-eighteen",
-  "synth-first-nineteen",
-  "synth-array-twenty",
-  "synth-newline-twentyone",
-  "synth-escaped-url-22",
-  "synth-embedded-23",
-  "synth-embedded-url-24",
-  "synth-object-25",
-  "synth-nested-26",
-  "synth-pretty-27",
-]) {
-  check(
-    `redacts ${secret.slice(0, 16)}…`,
-    !redacted.includes(secret),
-    redacted,
-  );
+const leakFile = path.join(scratch, "leak-forms.txt");
+writeFileSync(leakFile, `${leakForms}\n`);
+const leakyTool = path.join(scratch, "leaky-tool.cjs");
+writeFileSync(
+  leakyTool,
+  `const text = require("fs").readFileSync(${JSON.stringify(leakFile)}, "utf8");
+process.stdout.write(text);
+process.stderr.write(text);
+process.exit(1);
+`,
+);
+
+function fakeCheckout(name, { modules = false } = {}) {
+  const root = path.join(scratch, name);
+  const scripts = path.join(root, ".agents/skills/verify-scrutinix/scripts");
+  mkdirSync(scripts, { recursive: true });
+  for (const file of [
+    "runtime.mjs",
+    "launch.mjs",
+    "supervisor.mjs",
+    "cleanup.mjs",
+  ]) {
+    copyFileSync(path.join(scriptDir, file), path.join(scripts, file));
+  }
+  if (modules) {
+    for (const file of [
+      "node_modules/@playwright/test/cli.js",
+      "node_modules/next/dist/bin/next.js",
+    ]) {
+      mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
+      copyFileSync(leakyTool, path.join(root, file));
+    }
+  }
+  return {
+    root,
+    launch: path.join(scripts, "launch.mjs"),
+    cleanup: path.join(scripts, "cleanup.mjs"),
+  };
 }
-// The reviewer's four inputs, each as the whole text.
-for (const [label, text] of [
-  ["a JSON token", '{"token":"SYNTH-r3-canary"}'],
-  ["a JSON token array", '{"tokens":["first","SYNTH-r3-canary"]}'],
-  ["a value on the next line", '{"apiKey":\n"SYNTH-r3-canary"}'],
+const leakyBin = path.join(scratch, "leaky-bin");
+mkdirSync(leakyBin);
+writeFileSync(
+  path.join(leakyBin, "npm"),
+  `#!/bin/sh\nexec ${JSON.stringify(process.execPath)} ${JSON.stringify(leakyTool)} "$@"\n`,
+  { mode: 0o755 },
+);
+
+const noModules = fakeCheckout("checkout-no-modules");
+const withModules = fakeCheckout("checkout-modules", { modules: true });
+for (const [label, checkoutCopy, logName, category, extra] of [
   [
-    "an escaped URL credential",
-    String.raw`{"msg":"https:\/\/default:SYNTH-r3-canary@registry.example.invalid/pkg"}`,
+    "npm ci",
+    noModules,
+    "install.log",
+    "npm ci failed (exited 1)",
+    {
+      PATH: `${leakyBin}${path.delimiter}${process.env.PATH ?? ""}`,
+      VERIFY_SKIP_BROWSER_INSTALL: "1",
+    },
+  ],
+  [
+    "browser install",
+    withModules,
+    "browsers.log",
+    "browser install failed. Run: npx playwright install --with-deps chromium (exited 1)",
+    { VERIFY_SKIP_BROWSER_INSTALL: "" },
+  ],
+  [
+    "next dev",
+    withModules,
+    "next.log",
+    "next dev exited (exited 1)",
+    { VERIFY_SKIP_BROWSER_INSTALL: "1" },
   ],
 ]) {
-  check(
-    `redacts ${label} on its own`,
-    !runtime.redactSecrets(text).includes("SYNTH-r3-canary"),
-    runtime.redactSecrets(text),
+  const dir = privateDir(`launch-fail-${logName.split(".")[0]}`);
+  const failed = await runCli(
+    checkoutCopy.launch,
+    ["--port", String(await freePort())],
+    envFor(dir, extra),
   );
+  const log = path.join(dir, logName);
+  const printed = `${failed.stdout}${failed.stderr}`;
+  check(
+    `a launch whose ${label} fails prints a fixed message and none of its log`,
+    failed.status === 1 &&
+      failed.stderr.includes(
+        `launch: ${category}. Log: ${log} (raw, mode 0600`,
+      ) &&
+      !printed.includes(launchCanary) &&
+      !printed.includes("RangeError") &&
+      !printed.includes('{"a":') &&
+      readFileSync(log, "utf8").includes(launchCanary),
+    { status: failed.status, canaryPrinted: printed.includes(launchCanary) },
+  );
+  // A failed next dev leaves its supervisor; cleanup ends it by the token.
+  if (label === "next dev") {
+    await runCli(checkoutCopy.cleanup, [], envFor(dir));
+  }
 }
-check(
-  "JSON redaction keeps non-secret fields",
-  runtime.redactSecrets('{"status":"ok","count":3,"token":"x1"}') ===
-    '{"status":"ok","count":3,"token":"[redacted]"}',
-  runtime.redactSecrets('{"status":"ok","count":3,"token":"x1"}'),
-);
-const benign =
-  "▲ Next.js 16.3.8\n- Local: http://127.0.0.1:3000\n- Network: http://127.0.0.1:3000\n✓ Ready in 1.2s\nGET / 200 in 85ms\nGET /about 200 in 12ms (compile: 3ms, render: 9ms)\n/Users/me/GitRepos/scrutinix2/t3-c2a46879/node_modules/next/dist/server/lib/start-server.js\nauthor: someone, signals: 8";
-check(
-  "redaction keeps ordinary log lines and paths",
-  runtime.redactSecrets(benign) === benign,
-  runtime.redactSecrets(benign),
-);
-const tailFile = path.join(scratch, "tail.log");
-writeFileSync(
-  tailFile,
-  `${"x".repeat(5000)}\nUPSTASH_REDIS_REST_TOKEN=secret-token\n`,
-);
-const tail = runtime.logTail(tailFile);
-check(
-  "logTail is short and redacted",
-  tail.length <= 4000 &&
-    tail.includes("UPSTASH_REDIS_REST_TOKEN=[redacted]") &&
-    !tail.includes("secret-token"),
-  tail.slice(-80),
-);
-// Finding 6: a key and its value split by the cut. Slicing the last 4000
-// characters first would start the excerpt with the bare value.
-const boundarySecret = "SYNTH-boundary-secret-eighteen";
-const afterKey = `${boundarySecret}"\n`;
-const boundaryFile = path.join(scratch, "boundary.log");
-writeFileSync(
-  boundaryFile,
-  `start\npassword="${afterKey}${"z".repeat(4000 - afterKey.length)}`,
-);
-const boundaryOneLine = path.join(scratch, "boundary-one-line.log");
-writeFileSync(
-  boundaryOneLine,
-  `password="${boundarySecret}"${" pad".repeat(1000 - boundarySecret.length / 4)}`,
-);
-check(
-  "logTail redacts before it cuts, so a split pair keeps its value hidden",
-  !runtime.logTail(boundaryFile).includes(boundarySecret) &&
-    !runtime.logTail(boundaryOneLine).includes(boundarySecret) &&
-    runtime.logTail(boundaryFile).length <= 4000,
-  runtime.logTail(boundaryFile).slice(0, 80),
-);
 
 // launch's npm ci and browser install go through runCommand: the child's
 // output lands in the log, and nothing reaches the caller's stdout or stderr.

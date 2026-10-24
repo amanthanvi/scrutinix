@@ -191,7 +191,7 @@ if (stillOpen && !reported) {
 const incomplete = Boolean(leftRunning || stillOpen || reported);
 if (incomplete) {
   process.stderr.write(
-    "cleanup: nothing else was stopped. Before you stop a process yourself, check its pid, start time, executable, and cwd freshly (SKILL.md, \"Another next dev\"). Never signal a pid read from run.json.\n",
+    'cleanup: nothing else was stopped. Before you stop a process yourself, check its pid, start time, executable, and cwd freshly (SKILL.md, "Another next dev"). Never signal a pid read from run.json.\n',
   );
 }
 process.exit(incomplete ? 1 : 0);

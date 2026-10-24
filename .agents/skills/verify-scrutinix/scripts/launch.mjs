@@ -18,7 +18,6 @@ import {
   legacyState,
   loadState,
   logPath,
-  logTail,
   parseCliArgs,
   recordNextEnvWritten,
   releaseStateLock,
@@ -65,8 +64,9 @@ group, and never stops anything else. launch holds the state lock
 cleanup refuses instead of interleaving.
 
 npm ci, the browser install, and next dev write to install.log,
-browsers.log, and next.log in the state directory (mode 0600). launch prints
-exit statuses and log paths, and on a failure a short redacted tail.
+browsers.log, and next.log in the state directory (mode 0600). launch never
+prints them: it prints exit statuses and log paths, and on a failure what
+failed, how it exited, and which log to read.
 Set VERIFY_SKIP_BROWSER_INSTALL=1 to skip Playwright Chromium install.
 `;
 
@@ -150,15 +150,21 @@ function refuseForeignNext() {
   return true;
 }
 
-// The raw log stays in the state directory (mode 0600). What is printed is a
-// short tail, redacted in full before it is cut, so a failed boot can be
-// read without opening the raw file.
-function failWithLog(reason, file) {
-  process.stderr.write(`launch: ${reason}. Log: ${file}\n`);
+// How the app exited, from the supervisor's status: { code, signal } once it
+// exited, or { error } (an errno code) when it could not be spawned.
+function appExitSummary(exit) {
+  if (!exit) return null;
+  if (exit.error) return `could not start (${String(exit.error)})`;
+  return exitSummary({ status: exit.code, signal: exit.signal });
+}
+
+// A failure prints a fixed message: what failed, how it exited, and where the
+// private log is. The log itself is never printed or excerpted: npm, the
+// browser install, and next dev can write anything there, secrets included.
+function failWithLog(category, file, how = null) {
   process.stderr.write(
-    "launch: last lines of the log, with secrets redacted:\n",
+    `launch: ${category} (${how ?? "no exit status"}). Log: ${file} (raw, mode 0600; not printed, do not paste it)\n`,
   );
-  process.stderr.write(`${logTail(file, 2_000)}\n`);
   process.stderr.write(
     "launch: run npm run verify:cleanup before launching again.\n",
   );
@@ -230,7 +236,7 @@ if (!existsSync(path.join(repoRoot, "node_modules"))) {
     `launch: npm ci ${exitSummary(install)}. Log: ${install.logFile}\n`,
   );
   if (install.status !== 0) {
-    failWithLog("npm ci failed", install.logFile);
+    failWithLog("npm ci failed", install.logFile, exitSummary(install));
     process.exit(install.status || 1);
   }
 }
@@ -248,6 +254,7 @@ if (process.env.VERIFY_SKIP_BROWSER_INSTALL !== "1") {
     failWithLog(
       "browser install failed. Run: npx playwright install --with-deps chromium",
       browsers.logFile,
+      exitSummary(browsers),
     );
     process.exit(browsers.status || 1);
   }
@@ -305,10 +312,12 @@ process.stdout.write(
 );
 
 // Ready means a process in the supervisor's group holds 127.0.0.1:<port>.
+let appExit = null;
 const up = await waitFor(async () => {
   const reply = await supervisorRequest(run, "status");
   if (!reply.proven) return "dead";
-  if (reply.body.app.exit) return "exited";
+  appExit = reply.body.app.exit;
+  if (appExit) return "exited";
   const { own, foreign } = reply.body.listeners;
   if (foreign.length) return "taken";
   return own.some((listener) => listener.address === "127.0.0.1")
@@ -323,7 +332,11 @@ if (up !== "ready") {
     taken: `another process took port ${port}`,
     "": "next dev timed out",
   };
-  failWithLog(reasons[up] ?? "next dev failed", run.appLog);
+  failWithLog(
+    reasons[up] ?? "next dev failed",
+    run.appLog,
+    appExitSummary(appExit),
+  );
   await captureSettledNextEnv();
   process.exit(1);
 }
@@ -338,7 +351,11 @@ while (
 ) {
   const reply = await supervisorRequest(run, "status");
   if (!reply.proven || reply.body.app.exit) {
-    failWithLog("next dev exited", run.appLog);
+    failWithLog(
+      reply.proven ? "next dev exited" : "the supervisor stopped answering",
+      run.appLog,
+      reply.proven ? appExitSummary(reply.body.app.exit) : null,
+    );
     await captureSettledNextEnv();
     process.exit(1);
   }
@@ -349,7 +366,11 @@ while (
 await captureSettledNextEnv();
 process.stdout.write(`${report.lines.join("\n")}\n`);
 if (!report.ok) {
-  failWithLog(`instance is NOT_READY (${report.code})`, run.appLog);
+  failWithLog(
+    `instance is NOT_READY (${report.code})`,
+    run.appLog,
+    "next dev still running",
+  );
   process.exit(2);
 }
 process.stdout.write(`launch: READY ${baseUrl}\n`);

@@ -12,7 +12,6 @@ import {
   logPath,
   openPrivateLog,
   parseCliArgs,
-  redactSecrets,
   repoRoot,
   skillDir,
   summarizePlaywrightReport,
@@ -65,14 +64,15 @@ const require = createRequire(import.meta.url);
 const cli =
   process.env.VERIFY_PLAYWRIGHT_CLI || require.resolve("@playwright/test/cli");
 
-// doctor prints only selected fields; its lines are redacted again anyway.
+// doctor prints only fixed messages and selected fields (pid, start time,
+// executable, cwd), the same lines it prints on its own.
 const doctor = spawnSync(
   process.execPath,
   [path.join(scriptDir, "doctor.mjs"), "--port", String(args.port)],
   { cwd: repoRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
 );
-if (doctor.stdout) process.stdout.write(redactSecrets(doctor.stdout));
-if (doctor.stderr) process.stderr.write(redactSecrets(doctor.stderr));
+if (doctor.stdout) process.stdout.write(doctor.stdout);
+if (doctor.stderr) process.stderr.write(doctor.stderr);
 if (doctor.status !== 0) {
   process.stderr.write("smoke: doctor is not READY, browser not started\n");
   process.exit(doctor.status ?? 2);
