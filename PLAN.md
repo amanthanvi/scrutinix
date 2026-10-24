@@ -241,6 +241,7 @@ open methodology.
 - [x] Removed the never-filled VirusTotal `domain` field, its detail rows, and its scoring path (production never fetched `/domains`; fetching it would halve free-tier capacity).
 - [x] Tightened two claims everywhere they appear: "eight separate checks" (not "independent": the sources don't vote independently) and "which site it really belongs to" (we know the registered domain, not the organisation behind it).
 - [x] A Safe look-alike is shown as "Look-alike" (`verdictWord`) on the band, history and batch rows, the live announcement, and share cards; its band shows no score, and the details state the checks' own verdict and score (`getUnderlyingVerdictNote`). The stored verdict and score are unchanged.
+- [x] Review round: "No check flagged it" only when the engine scored nothing (a Safe can carry minor findings); history/batch rows hold a Safe word until the link parser loads; history filtering matches the shown word; CSV exports gain "Look-alike of".
 
 ### P24 Resolve September dependency maintenance
 
