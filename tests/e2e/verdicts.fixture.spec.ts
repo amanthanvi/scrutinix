@@ -140,5 +140,5 @@ test("strip cells open their evidence row", async ({ page }) => {
   await expect(strip.getByRole("button")).toHaveCount(8);
   // Names start with the visible cell label (WCAG 2.5.3 label in name).
   await strip.getByRole("button", { name: /^DNS:/ }).click();
-  await expect(page.getByLabel(/DNS Profile signal:/i)).toBeFocused();
+  await expect(page.getByLabel(/DNS Profile:/i)).toBeFocused();
 });

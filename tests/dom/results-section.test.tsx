@@ -651,13 +651,13 @@ describe("ResultsSection", () => {
 
     // DNS is hidden on Summary: its cell switches to Full, opens the row,
     // and focuses it.
-    expect(screen.queryByLabelText(/^DNS Profile signal:/)).toBeNull();
+    expect(screen.queryByLabelText(/^DNS Profile:/)).toBeNull();
     const dnsCell = cells.find(
       (cell) => cell.dataset.signal === "dns",
     ) as HTMLElement;
     fireEvent.click(dnsCell);
     await waitFor(() => {
-      const row = screen.getByLabelText(/^DNS Profile signal:/);
+      const row = screen.getByLabelText(/^DNS Profile:/);
       expect(document.activeElement).toBe(row);
       expect(row.closest("details")?.open).toBe(true);
     });
