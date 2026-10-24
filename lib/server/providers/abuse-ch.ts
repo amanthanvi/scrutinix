@@ -17,5 +17,12 @@ export function parseAbuseChTimestamp(value: unknown): string | undefined {
   }
 
   const time = Date.parse(`${match[1]}T${match[2]}Z`);
-  return Number.isFinite(time) ? new Date(time).toISOString() : undefined;
+  if (!Number.isFinite(time)) {
+    return undefined;
+  }
+
+  // Date.parse rolls impossible days over (Feb 31 becomes Mar 3), so the
+  // parsed time has to read back as the same calendar date and clock.
+  const iso = new Date(time).toISOString();
+  return iso.startsWith(`${match[1]}T${match[2]}`) ? iso : undefined;
 }

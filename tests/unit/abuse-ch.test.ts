@@ -27,6 +27,25 @@ describe("parseAbuseChTimestamp", () => {
       expect(parseAbuseChTimestamp(value)).toBeUndefined();
     }
   });
+
+  it("rejects calendar dates that do not exist instead of rolling them over", () => {
+    for (const value of [
+      "2026-02-31 07:12:45 UTC",
+      "2026-02-30 00:00:00 UTC",
+      "2025-02-29 12:00:00 UTC",
+      "2026-04-31T00:00:00Z",
+      "2026-10-23 24:00:00 UTC",
+      "2026-10-23 07:60:00 UTC",
+    ]) {
+      expect(parseAbuseChTimestamp(value), value).toBeUndefined();
+    }
+    expect(parseAbuseChTimestamp("2024-02-29 12:00:00 UTC")).toBe(
+      "2024-02-29T12:00:00.000Z",
+    );
+    expect(parseAbuseChTimestamp("2026-10-23 07:12:45.999 UTC")).toBe(
+      "2026-10-23T07:12:45.000Z",
+    );
+  });
 });
 
 describe("feed listedAt schema", () => {
