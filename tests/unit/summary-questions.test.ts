@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import { PRIVATE_ADDRESSES_OMITTED } from "@/lib/domain/blocked-address";
 import { registrableDomainOf } from "@/lib/domain/link-anatomy";
+import { classifyConsensus } from "@/lib/domain/ml-consensus";
 import { sanitizeHistoryEntry } from "@/lib/domain/runtime-safety";
 import {
   getSummaryQuestions,
@@ -16,6 +17,7 @@ import {
 import {
   createPendingSignalResults,
   signalNames,
+  type ClassificationFinding,
   type SignalResults,
 } from "@/lib/domain/types";
 import { buildThreatAssessment } from "@/lib/domain/verdict";
@@ -592,6 +594,89 @@ describe("Where would it take me?", () => {
     };
     expect(byId(ask(signals), "destination").answer).toBe(
       "We couldn't follow the link to see where it leads.",
+    );
+  });
+});
+
+describe("What else raises concern?", () => {
+  type Reading = [ClassificationFinding["label"], number];
+
+  /** The ensemble as the server builds it: each member's own reading, and the real consensus. */
+  function withMembers(
+    signals: SignalResults,
+    model: Reading | null,
+    structure: Reading,
+  ) {
+    const finding = ([label, score]: Reading, name: string) => ({
+      label,
+      score,
+      reasons: [],
+      model: name,
+    });
+    const transformerModel = model ? finding(model, "fixture") : null;
+    const lexicalModel = finding(structure, "lexical-heuristic");
+    const consensus = classifyConsensus(transformerModel, lexicalModel);
+    signals.mlEnsemble.data = {
+      ...signals.mlEnsemble.data!,
+      transformerModel,
+      lexicalModel,
+      consensusLabel: consensus.label,
+      consensusScore: consensus.score,
+    };
+    return consensus.label;
+  }
+
+  const concernOf = (signals: SignalResults) =>
+    byId(ask(signals), "concern").answer!.split(" Its domain")[0];
+
+  it("describes each member by its own reading, and claims agreement only when they match", () => {
+    const signals = cleanSignals();
+    // A benign consensus doesn't mean both members were benign.
+    expect(withMembers(signals, ["malicious", 0.52], ["benign", 0.1])).toBe(
+      "benign",
+    );
+    expect(concernOf(signals)).toBe(
+      "The link pattern model finds the link malicious-looking; the structure checks don't flag it. Their combined reading doesn't flag it.",
+    );
+    // The disagreement with the lists isn't suppressed either.
+    expect(byId(ask(signals), "concern").disagreement).toBe(
+      "The link pattern model reads the link itself, so it can flag a new scam before any list does.",
+    );
+
+    // Malicious plus risky is not "both malicious-looking".
+    expect(withMembers(signals, ["malicious", 0.9], ["risky", 0.6])).toBe(
+      "malicious",
+    );
+    expect(concernOf(signals)).toBe(
+      "The link pattern model finds the link malicious-looking; the structure checks find it risky. Their combined reading is malicious-looking.",
+    );
+
+    expect(withMembers(signals, ["benign", 0.1], ["risky", 0.7])).toBe("risky");
+    expect(concernOf(signals)).toBe(
+      "The link pattern model doesn't flag it; the structure checks find it risky. Their combined reading is risky.",
+    );
+
+    // Agreement, said once, only when both readings and the aggregate match.
+    expect(withMembers(signals, ["risky", 0.9], ["risky", 0.9])).toBe("risky");
+    expect(concernOf(signals)).toBe(
+      "The link pattern model and structure checks both find the link risky.",
+    );
+    expect(withMembers(signals, ["benign", 0.1], ["benign", 0.1])).toBe(
+      "benign",
+    );
+    expect(concernOf(signals)).toBe(
+      "The link pattern model and structure checks didn't flag it.",
+    );
+    // Two weak risky readings can combine below the line; the aggregate says so.
+    expect(withMembers(signals, ["risky", 0.4], ["risky", 0.4])).toBe("benign");
+    expect(concernOf(signals)).toBe(
+      "The link pattern model and structure checks both find the link risky. Their combined reading doesn't flag it.",
+    );
+
+    // Without the model, the structure checks are the whole reading.
+    expect(withMembers(signals, null, ["risky", 0.6])).toBe("risky");
+    expect(concernOf(signals)).toBe(
+      "The structure checks find the link risky; the link pattern model didn't run.",
     );
   });
 });

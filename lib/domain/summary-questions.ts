@@ -512,12 +512,19 @@ function labelWord(label: ClassificationFinding["label"]): string {
   return label === "malicious" ? "malicious-looking" : "risky";
 }
 
-/** The link pattern model and structure checks, by name, as CLAUDE.md requires. */
+/**
+ * The link pattern model and structure checks, by name, as CLAUDE.md
+ * requires. Each member is described from its own reading, and agreement
+ * is claimed only when the readings match: the combined reading (what the
+ * engine scores) can differ from either, so it is a separate sentence
+ * whenever it isn't already implied.
+ */
 function describePattern(signals: SignalResults): {
   text: string;
+  /** Either member, or the combined reading, flags it. */
   flags: boolean;
   ran: boolean;
-  /** Who flagged it, as a sentence subject; null when nothing did. */
+  /** Who flagged it by their own reading, as a sentence subject; null when neither did. */
   flaggedBy: { subject: string; plural: boolean } | null;
 } {
   const signal = signals.mlEnsemble;
@@ -531,58 +538,59 @@ function describePattern(signals: SignalResults): {
   }
 
   const { consensusLabel, lexicalModel, transformerModel } = signal.data;
-  const structureFlags = lexicalModel.label !== "benign";
-  const modelFlags = Boolean(
-    transformerModel && transformerModel.label !== "benign",
-  );
-  const modelMissing = transformerModel
-    ? "the link pattern model doesn't"
-    : "the link pattern model didn't run";
-
-  if (consensusLabel === "benign") {
+  const structure = lexicalModel.label;
+  const structureFlags = structure !== "benign";
+  if (!transformerModel) {
+    // The structure checks alone: their reading is the combined one.
     return {
-      text: transformerModel
-        ? "The link pattern model and structure checks didn't flag it."
+      text: structureFlags
+        ? `The structure checks find the link ${labelWord(structure)}; the link pattern model didn't run.`
         : "The structure checks didn't flag it; the link pattern model didn't run.",
-      flags: false,
+      flags: structureFlags || consensusLabel !== "benign",
       ran: true,
-      flaggedBy: null,
+      flaggedBy: structureFlags
+        ? { subject: "The structure checks", plural: true }
+        : null,
     };
   }
 
-  const both = {
-    subject: "The link pattern model and structure checks",
-    plural: true,
-  };
-  if (modelFlags && structureFlags) {
-    return {
-      text: `The link pattern model and structure checks both find the link ${labelWord(consensusLabel)}.`,
-      flags: true,
-      ran: true,
-      flaggedBy: both,
-    };
+  const model = transformerModel.label;
+  const modelFlags = model !== "benign";
+  let members: string;
+  if (model === structure) {
+    members = modelFlags
+      ? `The link pattern model and structure checks both find the link ${labelWord(model)}.`
+      : "The link pattern model and structure checks didn't flag it.";
+  } else {
+    const modelPart = modelFlags
+      ? `The link pattern model finds the link ${labelWord(model)}`
+      : "The link pattern model doesn't flag it";
+    const structurePart = structureFlags
+      ? `the structure checks find it ${labelWord(structure)}`
+      : "the structure checks don't flag it";
+    members = `${modelPart}; ${structurePart}.`;
   }
-  if (modelFlags && transformerModel) {
-    return {
-      text: `The link pattern model finds the link ${labelWord(transformerModel.label)}; the structure checks don't.`,
-      flags: true,
-      ran: true,
-      flaggedBy: { subject: "The link pattern model", plural: false },
-    };
-  }
-  if (structureFlags) {
-    return {
-      text: `The structure checks find the link ${labelWord(lexicalModel.label)}; ${modelMissing}.`,
-      flags: true,
-      ran: true,
-      flaggedBy: { subject: "The structure checks", plural: true },
-    };
-  }
+  const combinedImplied = model === structure && consensusLabel === model;
+  const combined =
+    consensusLabel === "benign"
+      ? "Their combined reading doesn't flag it."
+      : `Their combined reading is ${labelWord(consensusLabel)}.`;
+
   return {
-    text: `The link pattern model and structure checks find the link ${labelWord(consensusLabel)}.`,
-    flags: true,
+    text: sentences([members, !combinedImplied && combined]),
+    flags: modelFlags || structureFlags || consensusLabel !== "benign",
     ran: true,
-    flaggedBy: both,
+    flaggedBy:
+      modelFlags && structureFlags
+        ? {
+            subject: "The link pattern model and structure checks",
+            plural: true,
+          }
+        : modelFlags
+          ? { subject: "The link pattern model", plural: false }
+          : structureFlags
+            ? { subject: "The structure checks", plural: true }
+            : null,
   };
 }
 
