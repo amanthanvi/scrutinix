@@ -99,8 +99,8 @@ function applyCspNonce(request: NextRequest) {
  * This is the only server-side record that a grant was used. The cookie
  * itself can't carry it to the page: Next merges a cookie the proxy clears
  * into what `cookies()` reads for the same render. Whether the grant
- * scans is the page's call (`launchGrantId`: only for the link it names),
- * and the browser's (`claimLaunch`: once per grant id). Only `/` reads
+ * scans is the page's call (`readLaunchGrant`: only for the link it names),
+ * and the browser's (`claimLaunch`: once per grant id, within its minute). Only `/` reads
  * it, so other paths (the manifest and icon fetches a launch makes,
  * `/share` itself) leave it alone. Returns whether the cookie is to be
  * cleared.

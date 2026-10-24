@@ -159,7 +159,8 @@ describe("a /?url= link", () => {
 
 describe("a share-target launch", () => {
   // The server clears the grant's cookie (proxy.ts) and checks it names
-  // this link (launchGrantId); the browser scans each grant id once.
+  // this link (readLaunchGrant); the browser scans each grant id once,
+  // within the grant's minute.
   it("scans once on arrival and clears the address", async () => {
     const fetchMock = stubScan(LINK);
     window.history.replaceState(

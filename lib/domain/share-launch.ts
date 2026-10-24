@@ -161,7 +161,7 @@ export function isShareTargetLaunch(method: string, headers: Headers): boolean {
 /**
  * The link `?url=` prefills, normalized, or null when it is absent or not
  * checkable (which says nothing). Whether it also scans is the launch
- * grant's to say (`launchGrantId`).
+ * grant's to say (`readLaunchGrant`).
  */
 export function resolvePrefill(
   param: string | null | undefined,
