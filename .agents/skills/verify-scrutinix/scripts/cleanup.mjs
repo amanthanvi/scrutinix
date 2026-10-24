@@ -2,6 +2,7 @@
 import { setTimeout as delay } from "node:timers/promises";
 
 import {
+  acquireStateLock,
   canonicalPath,
   defaultPort,
   evidenceDir,
@@ -10,6 +11,7 @@ import {
   legacyState,
   loadState,
   portDetails,
+  releaseStateLock,
   repoRoot,
   restoreNextEnvSnapshot,
   sameCheckout,
@@ -61,20 +63,44 @@ if (process.argv.length > 2) {
   process.exit(2);
 }
 
-// Validate first. Nothing in an unsafe directory is parsed or acted on.
-const { state, problem, missingDir } = loadState();
-if (problem) {
+function refuse(problem) {
   process.stderr.write(
     `cleanup: refusing to read ${stateDir}: ${problem}. Nothing was stopped.\n`,
   );
   process.exit(2);
 }
-if (missingDir) {
+
+// Validate first. Nothing in an unsafe directory is parsed or acted on.
+const checked = loadState();
+if (checked.problem) refuse(checked.problem);
+if (checked.missingDir) {
   process.stdout.write(
     `cleanup: no state directory at ${stateDir}. Nothing recorded by verify:launch was stopped.\n`,
   );
   process.exit(0);
 }
+
+// Then take the state lock and read run.json again under it, so a launch
+// running at the same time cannot change the run between the read and the stop.
+let lock;
+try {
+  lock = acquireStateLock("cleanup");
+} catch (error) {
+  process.stderr.write(
+    `cleanup: ${error instanceof Error ? error.message : String(error)} Nothing was stopped.\n`,
+  );
+  process.exit(2);
+}
+process.on("exit", () => releaseStateLock(lock));
+for (const [signal, code] of [
+  ["SIGINT", 130],
+  ["SIGTERM", 143],
+  ["SIGHUP", 129],
+]) {
+  process.on(signal, () => process.exit(code));
+}
+const { state, problem } = loadState();
+if (problem) refuse(problem);
 
 function restoreDeclaration() {
   const declaration = restoreNextEnvSnapshot();

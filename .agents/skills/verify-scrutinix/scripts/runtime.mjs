@@ -943,6 +943,92 @@ export function formatForeignNext(port, exclude = []) {
   return `another next dev holds port ${port} (${detail}). This skill did not start it and will not stop it.`;
 }
 
+// ---- State lock -------------------------------------------------------------
+
+// launch and cleanup change run.json, the socket, and the next-env snapshot.
+// Each holds an exclusive lock on the state directory while it does: a file
+// created with O_EXCL that holds a random nonce, removed only by the holder
+// that nonce names. A lock left by a command that died is never taken over;
+// the next launch or cleanup refuses and says how to remove it.
+
+export class StateLockedError extends UnsafeStateError {}
+
+export function lockPath(dir = stateDir) {
+  return path.join(dir, "verify.lock");
+}
+
+function lockHolder(file) {
+  try {
+    const held = JSON.parse(readPrivateFile(file) ?? "null");
+    const command = ["launch", "cleanup"].includes(held?.command)
+      ? held.command
+      : "a verify command";
+    const pid = validPid(held?.pid) ? `pid ${held.pid}, ` : "";
+    const since =
+      typeof held?.since === "string" && /^[0-9T:.Z-]{1,30}$/.test(held.since)
+        ? held.since
+        : "unknown";
+    return `${command} (${pid}since ${since})`;
+  } catch {
+    return "a verify command";
+  }
+}
+
+// Take the lock for `command`, or throw StateLockedError when anyone holds it.
+export function acquireStateLock(command, dir = stateDir) {
+  ensureDirs([dir]);
+  const lock = {
+    file: lockPath(dir),
+    nonce: randomBytes(16).toString("hex"),
+    command,
+    pid: process.pid,
+    since: new Date().toISOString(),
+  };
+  let fd;
+  try {
+    fd = openSync(
+      lock.file,
+      constants.O_WRONLY |
+        constants.O_CREAT |
+        constants.O_EXCL |
+        constants.O_NOFOLLOW,
+      0o600,
+    );
+  } catch (error) {
+    if (error?.code !== "EEXIST") throw error;
+    throw new StateLockedError(
+      `verify: ${lock.file} is held by ${lockHolder(lock.file)}. Another launch or cleanup is changing this state directory. If none is running, remove that file and try again; it is never taken over.`,
+    );
+  }
+  try {
+    writeFileSync(fd, JSON.stringify(lock));
+  } finally {
+    closeSync(fd);
+  }
+  return lock;
+}
+
+export function holdsStateLock(lock) {
+  if (!lock?.file || !lock.nonce) return false;
+  try {
+    return (
+      JSON.parse(readPrivateFile(lock.file) ?? "null")?.nonce === lock.nonce
+    );
+  } catch {
+    return false;
+  }
+}
+
+// Remove the lock only while it is still this holder's.
+export function releaseStateLock(lock) {
+  if (!holdsStateLock(lock)) return;
+  try {
+    unlinkSync(lock.file);
+  } catch {
+    // Already gone.
+  }
+}
+
 // ---- Supervisor -------------------------------------------------------------
 
 // launch starts one detached supervisor per run. It is a session and process
@@ -1144,7 +1230,8 @@ export async function runOwnership(port, { dir = stateDir } = {}) {
 }
 
 // Start a supervisor for `command` and record the run. The token reaches the
-// supervisor over a pipe, never argv or the environment.
+// supervisor over a pipe, never argv or the environment. The caller must hold
+// the state lock for `dir`, so two launches never both write run.json.
 export async function startSupervisor({
   command,
   args = [],
@@ -1155,9 +1242,15 @@ export async function startSupervisor({
   logName = "next.log",
   lingerMs = 120_000,
   record = {},
+  lock,
   onSpawn = () => {},
 }) {
   ensureDirs([dir]);
+  if (lock?.file !== lockPath(dir) || !holdsStateLock(lock)) {
+    throw new UnsafeStateError(
+      `verify: starting a run needs the lock on ${dir}. Refusing to write run.json.`,
+    );
+  }
   const socket = socketPath(dir);
   if (Buffer.byteLength(socket) > 100) {
     throw new UnsafeStateError(

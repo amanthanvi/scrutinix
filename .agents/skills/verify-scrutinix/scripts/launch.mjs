@@ -5,6 +5,7 @@ import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 
 import {
+  acquireStateLock,
   baseUrlFor,
   canonicalPath,
   checkHealth,
@@ -19,6 +20,7 @@ import {
   parseCliArgs,
   recordNextEnvWritten,
   redactSecrets,
+  releaseStateLock,
   repoRoot,
   runCommand,
   sameCheckout,
@@ -84,13 +86,25 @@ if (!args.ok) {
 const { port } = args;
 const baseUrl = baseUrlFor(port);
 
+// Everything from reading run.json to the new run being recorded happens
+// under the state lock, so a second launch or a cleanup cannot interleave.
+let lock;
 try {
   ensureDirs();
+  lock = acquireStateLock("launch");
 } catch (error) {
   process.stderr.write(
     `launch: ${error instanceof Error ? error.message : String(error)}\n`,
   );
   process.exit(2);
+}
+process.on("exit", () => releaseStateLock(lock));
+for (const [signal, code] of [
+  ["SIGINT", 130],
+  ["SIGTERM", 143],
+  ["SIGHUP", 129],
+]) {
+  process.on(signal, () => process.exit(code));
 }
 
 const loaded = loadState();
@@ -249,6 +263,7 @@ try {
     env: appEnv,
     port,
     record: { fixtureMode: true },
+    lock,
   });
 } catch (error) {
   process.stderr.write(

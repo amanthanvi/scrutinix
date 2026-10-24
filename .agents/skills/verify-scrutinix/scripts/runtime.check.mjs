@@ -552,22 +552,30 @@ async function stranger(port, name) {
   return { child, pids };
 }
 
+// Start a run as launch does. Takes the state lock unless the caller passes
+// one it holds.
 async function supervise(dir, port, mode, name, extra = {}) {
   const entry = { dir, state: null, child: null };
   supervised.push(entry);
-  const started = await runtime.startSupervisor({
-    command: process.execPath,
-    args: [fakeApp, String(port), mode, name],
-    env: process.env,
-    port,
-    baseUrl: `http://127.0.0.1:${port}`,
-    dir,
-    // Held from the moment of spawn, so an interrupted check still stops it.
-    onSpawn: (child) => {
-      entry.child = child;
-    },
-    ...extra,
-  });
+  const lock = extra.lock ?? runtime.acquireStateLock("launch", dir);
+  let started;
+  try {
+    started = await runtime.startSupervisor({
+      command: process.execPath,
+      args: [fakeApp, String(port), mode, name],
+      env: process.env,
+      port,
+      dir,
+      // Held from the moment of spawn, so an interrupted check still stops it.
+      onSpawn: (child) => {
+        entry.child = child;
+      },
+      ...extra,
+      lock,
+    });
+  } finally {
+    if (!extra.lock) runtime.releaseStateLock(lock);
+  }
   entry.state = started.state;
   const second = mode === "escape" ? "escaped" : "grandchild";
   const pids = await standInsOf(name, ["app", second], {
@@ -860,9 +868,10 @@ check(
     !exited(victim),
 );
 check(
-  "the run's port is free and its socket and token are gone",
+  "the run's port is free and its socket, token, and lock are gone",
   !(await runtime.tcpOpen(portA)) &&
     !existsSync(runtime.socketPath(runDir)) &&
+    !existsSync(runtime.lockPath(runDir)) &&
     runtime.readState(runDir)?.token === undefined,
 );
 const againCleanup = await runCli("cleanup.mjs", [], envFor(runDir));
@@ -936,6 +945,108 @@ check(
   "the orphans exit when the check closes their lifelines",
   (await release([orphan.pids.app, orphan.pids.grandchild])) &&
     !(await runtime.tcpOpen(portD)),
+);
+
+// Finding 4 of round 3: two launches race for one state directory. Both
+// start before either supervisor listens, so without the lock both would
+// write run.json and spawn. With it, exactly one does; the other refuses
+// before writing anything, and the recorded token is the live run's.
+const raceDir = privateDir("race");
+const racePort = await freePort();
+const raceSpawns = () =>
+  supervised.filter((entry) => entry.dir === raceDir && entry.child).length;
+const raceLaunch = async (name) => {
+  const lock = runtime.acquireStateLock("launch", raceDir);
+  try {
+    return await supervise(raceDir, racePort, "html", name, {
+      lock,
+      lingerMs: 1_000,
+    });
+  } finally {
+    runtime.releaseStateLock(lock);
+  }
+};
+const race = await Promise.allSettled([
+  raceLaunch("race-a"),
+  raceLaunch("race-b"),
+]);
+const raceWinner = race.find((result) => result.status === "fulfilled")?.value;
+const raceLoser = race.find((result) => result.status === "rejected")?.reason;
+const raceState = runtime.readState(raceDir);
+const raceStatus = raceState
+  ? await runtime.supervisorRequest(raceState, "status", { dir: raceDir })
+  : { proven: false };
+check(
+  "concurrent launches: one starts, the other refuses on the lock and writes nothing",
+  raceSpawns() === 1 &&
+    Boolean(raceWinner?.status) &&
+    raceLoser instanceof runtime.StateLockedError &&
+    raceLoser.message.includes("is held by launch") &&
+    raceState?.runId === raceWinner?.state.runId &&
+    raceStatus.proven === true &&
+    !existsSync(runtime.lockPath(raceDir)),
+  JSON.stringify({
+    spawns: raceSpawns(),
+    loser: String(raceLoser?.message ?? "none"),
+    proven: raceStatus.proven,
+  }),
+);
+if (raceState?.token) await runtime.stopRun(raceState, { dir: raceDir });
+
+// A lock left behind is never taken over: launch and cleanup refuse, contact
+// nothing, and leave the lock as it was. Each directory holds a forged socket
+// and a run.json pointing at it, so a broken lock check would only reach that
+// harmless socket (and fail here), never start or stop anything.
+for (const script of ["launch.mjs", "cleanup.mjs"]) {
+  const staleDir = privateDir(`stale-${script.split(".")[0]}`);
+  const staleLock = JSON.stringify({
+    nonce: "f".repeat(32),
+    command: "launch",
+    pid: 1,
+    since: "2026-01-01T00:00:00.000Z",
+  });
+  writeFileSync(runtime.lockPath(staleDir), staleLock, { mode: 0o600 });
+  writeFileSync(path.join(staleDir, "run.json"), JSON.stringify(runRecord()), {
+    mode: 0o600,
+  });
+  const staleSocket = await forgedSocket(staleDir);
+  const refused = await runCli(
+    script,
+    ["--port", String(await freePort())].slice(script === "launch.mjs" ? 0 : 2),
+    envFor(staleDir, { VERIFY_SKIP_BROWSER_INSTALL: "1" }),
+  );
+  check(
+    `${script} refuses a held lock, never takes it over, and contacts nothing`,
+    refused.status === 2 &&
+      refused.stderr.includes("is held by launch (pid 1, since 2026-01-01") &&
+      refused.stderr.includes("never taken over") &&
+      staleSocket.connections.count === 0 &&
+      readFileSync(runtime.lockPath(staleDir), "utf8") === staleLock &&
+      runtime.readState(staleDir)?.runId === "abcdef012345",
+    `${output(refused)}\nconnections ${staleSocket.connections.count}`,
+  );
+  staleSocket.close();
+}
+let lockless = "";
+try {
+  await runtime.startSupervisor({
+    command: process.execPath,
+    args: ["-e", ""],
+    port: await freePort(),
+    dir: privateDir("lockless"),
+    // Were the guard ever to break, this run would end itself in a second
+    // and teardown holds its handle.
+    lingerMs: 1_000,
+    onSpawn: (child) => children.push(child),
+  });
+} catch (error) {
+  lockless = error instanceof Error ? error.message : String(error);
+}
+check(
+  "startSupervisor refuses to write run.json without the lock",
+  lockless.includes("needs the lock") &&
+    !existsSync(path.join(scratch, "lockless", "run.json")),
+  lockless,
 );
 
 // `kill <supervisor pid>` is the manual stop: the group goes with it.
