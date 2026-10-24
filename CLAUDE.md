@@ -213,9 +213,11 @@ tests/
   a typical clean answer (`PLACEHOLDER_SHAPE`, invisible generated content,
   never text), so later headings hold still in the common case (findings
   and long hosts still grow a question; "couldn't check" answers shrink). Question
-  text wraps anywhere (long hosts break, never truncate), and the sources
-  dot is drawn (`.sx-source::before`), so a copy reads "VirusTotal, Safe
-  Browsing". The
+  text wraps anywhere (long hosts break, never truncate). The sources line
+  has two parts: an `sr-only` plain list ("Sources: VirusTotal, Safe
+  Browsing"), which is what assistive technology hears and what a copy
+  gives, and the numbered "From 1 VirusTotal · 3 Safe Browsing" line,
+  which is `aria-hidden` and `select-none`. The
   owner and look-alike are stated by the anatomy, never by a question; the
   anatomy's own facts (certificate, young domain, "Ends at") step aside
   once the evidence below states them. Legacy records, Error results (all
@@ -404,4 +406,4 @@ or pulled with `vercel env pull`.
 
 ### P29.4 speed
 
-The page requests no web fonts; `--font-display` defaults to `--font-sans`. Batch input and results load on demand; history storage hydrates eagerly, but its panel loads only for entries or Undo. Sonner mounts on the first notification and waits for its subscription before publishing. `npm run check:bundle` audits actual first-load browser requests after build; budgets live in `package.json`. CI runs it with provisioned Chromium.
+When P29.4 landed the page requested no web fonts and `--font-display` defaulted to `--font-sans`; P29.6 since fills that hook with Newsreader (two cuts, 46,864 B, budget 48,000), the only web font the page loads. Batch input and results load on demand; history storage hydrates eagerly, but its panel loads only for entries or Undo. Sonner mounts on the first notification and waits for its subscription before publishing. `npm run check:bundle` audits actual first-load browser requests after build; budgets live in `package.json`. CI runs it with provisioned Chromium.
