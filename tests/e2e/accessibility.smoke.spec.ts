@@ -58,10 +58,10 @@ test("larger default text reflows without sideways scrolling @smoke", async ({
         document.documentElement.scrollWidth >
         document.documentElement.clientWidth,
     );
-  // 150% from the narrowest phone; 200% from a common phone width.
+  // 150% from the narrowest phone; 200% from 360px.
   for (const [standard, width] of [
     [24, 320],
-    [32, 375],
+    [32, 360],
   ] as const) {
     await page.setViewportSize({ width, height: 700 });
     await setDefaultTextSize(page, standard);

@@ -1997,7 +1997,17 @@
       {
         "name": "sm",
         "value": "40rem",
-        "purpose": "Wider gutters, verdict at 84px with the score in a right column, the link's parts inline over brackets, the strip as a 4 x 2 grid, display steps."
+        "purpose": "Wider gutters (24px) and band padding, the link's parts inline over brackets, the strip as a 4 x 2 grid, display steps."
+      },
+      {
+        "name": "verdict-full",
+        "value": "768px",
+        "purpose": "The verdict's full 84px cap. A px width (48rem at the default text size), so a larger text size never switches it back to the phone cap."
+      },
+      {
+        "name": "md",
+        "value": "48rem",
+        "purpose": "The score takes its right column beside the verdict."
       },
       {
         "name": "lg",

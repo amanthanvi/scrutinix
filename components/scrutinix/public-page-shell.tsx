@@ -66,7 +66,7 @@ export function TableFrame({
       // scrollable-region-focusable); the region role names it.
       // eslint-disable-next-line jsx-a11y-x/no-noninteractive-tabindex
       tabIndex={0}
-      className="sx-table-frame -mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0"
+      className="sx-table-frame -mx-[16px] overflow-x-auto px-[16px] sm:mx-0 sm:px-0"
     >
       {children}
     </div>
@@ -84,7 +84,7 @@ export function PublicPageShell({
 
       <main
         id="main-content"
-        className="sx-public mx-auto w-full max-w-[71rem] flex-1 px-4 pt-12 sm:px-6 sm:pt-24"
+        className="sx-public sx-gutter mx-auto w-full max-w-[71rem] flex-1 pt-12 sm:pt-24"
       >
         <h1 className="max-w-[50rem] font-serif text-[clamp(2.5rem,1.6rem+3.6vw,4.25rem)] leading-[1.02] font-semibold tracking-[-0.024em] text-balance text-[var(--sx-text)]">
           {title}

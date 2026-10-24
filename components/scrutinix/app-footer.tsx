@@ -11,7 +11,7 @@ const LINK =
 export function AppFooter({ children }: AppFooterProps) {
   return (
     <footer className="mt-20 border-t border-[var(--sx-border)] sm:mt-24">
-      <div className="text-meta mx-auto flex w-full max-w-[71rem] flex-wrap items-center gap-x-5 gap-y-1 px-4 pt-2 pb-4 text-[var(--sx-text-soft)] sm:min-h-[4.75rem] sm:px-6 sm:py-0">
+      <div className="text-meta sx-gutter mx-auto flex w-full max-w-[71rem] flex-wrap items-center gap-x-5 gap-y-1 pt-2 pb-4 text-[var(--sx-text-soft)] sm:min-h-[4.75rem] sm:py-0">
         <span className="mr-1 font-serif text-[1.0625rem] leading-none font-semibold tracking-[-0.01em] text-[var(--sx-text)]">
           Scrutinix
         </span>

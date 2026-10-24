@@ -494,9 +494,25 @@ main:has(#sx-verdict-heading) > .sx-hero-form {
   }
 }
 
+/*
+ * The column's side gutters (page, header, footer, public pages) and the
+ * band's side padding are px, not rem: a larger default text size gives
+ * the words the room, not the margins, and the band never narrows as text
+ * grows, so the verdict (sized against it) never shrinks.
+ */
+.sx-gutter {
+  padding-inline: 16px;
+}
+
+@media (min-width: 40rem) {
+  .sx-gutter {
+    padding-inline: 24px;
+  }
+}
+
 /* The band's frame and type (static, so kept out of the script). */
 .sx-band-frame {
-  padding: 1.625rem 1.25rem 1rem;
+  padding: 1.625rem 20px 1rem;
   /* The verdict word sizes against the band's own width (cqi below). */
   container-type: inline-size;
 }
@@ -515,9 +531,10 @@ main:has(#sx-verdict-heading) > .sx-hero-form {
  * The verdict word at display size, never wider than the band: the longest
  * word ("Unconfirmed", about 6.1em in the serif at 600) fits at 16.4cqi, so
  * narrow phones scale it down instead of overflowing; wider bands keep the
- * full size. Never below 2rem, so a larger default text size makes the word
- * larger, not smaller (its rem padding narrows the band): where it then
- * can't fit, it wraps, at a hyphenation point if there is one.
+ * full size. A larger default text size never makes it smaller: the band's
+ * width doesn't shrink as text grows (px gutters and padding), the floor
+ * and caps are rem, and the full size switches on at a px width. Where the
+ * larger word can't fit, it wraps, at a hyphenation point if there is one.
  */
 .sx-band-heading {
   outline-offset: 4px;
@@ -597,7 +614,7 @@ main:has(#sx-verdict-heading) > .sx-hero-form {
 
 @media (min-width: 40rem) {
   .sx-band-frame {
-    padding: 2.25rem 2.75rem 1.5rem;
+    padding: 2.25rem 44px 1.5rem;
   }
 
   .sx-band-heading-claim {
@@ -627,19 +644,24 @@ main:has(#sx-verdict-heading) > .sx-hero-form {
   }
 }
 
-/* The score takes its own column, and the verdict its full size, only
-   once the longest word ("Suspicious") and a three-digit score both fit. */
+/* The verdict's full size from 768px, a px width (48rem at the default
+   text size), so a larger text size can't switch it back to the smaller
+   cap. The score's column below still waits for 48rem of text. */
+@media (min-width: 768px) {
+  .sx-band-heading {
+    font-size: clamp(2rem, 16.4cqi, var(--text-verdict));
+    line-height: var(--text-verdict--line-height);
+    letter-spacing: var(--text-verdict--letter-spacing);
+  }
+}
+
+/* The score takes its own column only once the longest word
+   ("Suspicious") and a three-digit score both fit. */
 @media (min-width: 48rem) {
   .sx-band-body {
     flex-direction: row;
     align-items: flex-start;
     justify-content: space-between;
-  }
-
-  .sx-band-heading {
-    font-size: clamp(2rem, 16.4cqi, var(--text-verdict));
-    line-height: var(--text-verdict--line-height);
-    letter-spacing: var(--text-verdict--letter-spacing);
   }
 
   .sx-score {

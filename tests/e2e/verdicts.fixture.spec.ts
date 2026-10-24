@@ -428,22 +428,32 @@ test("a link parser that fails to load leaves a Safe result Unconfirmed, never S
   expect(enlarged.inside).toBe(true);
 });
 
-test("a larger default text size makes a scored verdict larger, never smaller, and keeps it inside its band", async ({
+test("a larger default text size never shrinks a scored verdict, at any width, and keeps it inside its band", async ({
   page,
 }) => {
-  await page.setViewportSize({ width: 320, height: 640 });
   await gotoApp(page);
   await submitSingleScan(page, "https://critical.scrutinix.test/login");
   const verdict = page.getByLabel(/^scan result: critical$/i);
   await expect(verdict.getByRole("meter")).toBeVisible({ timeout: 15_000 });
 
-  let previous = await measureVerdict(page);
-  expect(previous.inside).toBe(true);
-  for (const standard of [24, 32]) {
-    await setDefaultTextSize(page, standard);
-    const current = await measureVerdict(page);
-    expect(current.size).toBeGreaterThan(previous.size);
-    expect(current.inside).toBe(true);
-    previous = current;
+  // Through the rem breakpoints (40rem, 48rem) as they move with the text.
+  for (const width of [320, 414, 640, 768, 1024, 1280]) {
+    await page.setViewportSize({ width, height: 800 });
+    let previous = 0;
+    for (const standard of [16, 24, 32]) {
+      await setDefaultTextSize(page, standard);
+      const current = await measureVerdict(page);
+      const at = `${width}px wide, ${standard}px text`;
+      expect(current.size, at).toBeGreaterThanOrEqual(previous);
+      expect(current.inside, at).toBe(true);
+      previous = current.size;
+    }
   }
+
+  // The narrowest phone: the 2rem floor makes it larger, not just equal.
+  await page.setViewportSize({ width: 320, height: 800 });
+  await setDefaultTextSize(page, 16);
+  const standard = await measureVerdict(page);
+  await setDefaultTextSize(page, 32);
+  expect((await measureVerdict(page)).size).toBeGreaterThan(standard.size);
 });

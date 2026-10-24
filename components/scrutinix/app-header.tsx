@@ -25,7 +25,7 @@ export function AppHeader() {
 
   return (
     <header className="border-b border-[var(--sx-border)]">
-      <div className="mx-auto flex min-h-[3.75rem] w-full max-w-[71rem] flex-wrap items-center justify-between px-4 sm:min-h-[4.5rem] sm:px-6">
+      <div className="sx-gutter mx-auto flex min-h-[3.75rem] w-full max-w-[71rem] flex-wrap items-center justify-between sm:min-h-[4.5rem]">
         {isHome ? (
           wordmark
         ) : (

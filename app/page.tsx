@@ -87,7 +87,7 @@ export default async function HomePage({
 
         <main
           id="main-content"
-          className="sx-home mx-auto w-full max-w-[71rem] flex-1 px-4 pt-[3.25rem] sm:px-6 sm:pt-[8.5rem]"
+          className="sx-home sx-gutter mx-auto w-full max-w-[71rem] flex-1 pt-[3.25rem] sm:pt-[8.5rem]"
         >
           {shared ? (
             // Recipient-first: whoever opened a shared link sees it (the
