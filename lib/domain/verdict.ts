@@ -19,6 +19,7 @@ import {
   LONG_REDIRECT_CHAIN_HOPS,
   MANY_FRAMES,
   NEW_DOMAIN_DAYS,
+  OBFUSCATION_HINTS,
   YOUNG_DOMAIN_DAYS,
 } from "@/lib/domain/signal-severity";
 import type {
@@ -609,7 +610,7 @@ function scoreRedirects(signals: SignalResults): ScoredItem[] {
       });
     }
 
-    if (content.obfuscationHints.length >= 2) {
+    if (content.obfuscationHints.length >= OBFUSCATION_HINTS) {
       contributions.push({
         score: 10,
         category: "Page Content",

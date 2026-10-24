@@ -568,12 +568,43 @@ describe("Does HTTPS make it safe?", () => {
       ...signals.redirectChain.data!,
       finalUrl: "http://example.com/",
     };
+    // Port 80 offers no TLS to read.
+    signals.ssl.data!.available = false;
     expect(
       byId(ask(signals, { url: "http://example.com/" }), "https"),
     ).toMatchObject({
       answer:
         "No. This link doesn't use HTTPS, so the connection isn't encrypted.",
       why: "Without encryption, what you send can be read on the way.",
+    });
+
+    // A plain-HTTP link to a TLS port can present a certificate, scored.
+    signals.ssl.data!.available = true;
+    signals.ssl.data!.validationState = "invalid";
+    expect(
+      byId(ask(signals, { url: "http://example.com:443/" }), "https").answer,
+    ).toBe(
+      "No. This link doesn't use HTTPS, so the connection isn't encrypted. The site's certificate isn't trusted.",
+    );
+  });
+
+  it("names hard-to-read code only when the engine counts it", () => {
+    const signals = cleanSignals();
+    signals.redirectChain.data = chain([["https://example.com/", 200]], {
+      content: page({ obfuscationHints: ["atob"] }),
+    });
+    // One hint is common on ordinary pages: not scored, not raised.
+    expect(getScoredSignals(signals).has("redirectChain")).toBe(false);
+    expect(byId(ask(signals), "destination").answer).toBe(
+      "It opens this site directly, without redirects.",
+    );
+    signals.redirectChain.data.content = page({
+      obfuscationHints: ["atob", "eval"],
+    });
+    expect(byId(ask(signals), "destination")).toMatchObject({
+      answer:
+        "It opens this site directly, without redirects. The page has code written to be hard to read.",
+      why: "Hidden parts of a page can do things you don't see.",
     });
   });
 });
@@ -1175,6 +1206,14 @@ describe("every scored finding", () => {
         withDomainAge(s, domainDays);
       });
     }
+    add(
+      "plain HTTP on a TLS port with an invalid certificate",
+      (s) => {
+        s.ssl.data!.validationState = "invalid";
+        s.redirectChain.data = chain([["http://example.com:443/", 200]]);
+      },
+      "http://example.com:443/",
+    );
     add("fresh untrusted certificate on a new domain", (s) => {
       s.ssl.data!.validationState = "untrusted";
       s.ssl.data!.validFrom = new Date(NOW - 2 * HOUR).toISOString();
@@ -1291,8 +1330,23 @@ describe("every scored finding", () => {
   it("is named by the question citing its check", async () => {
     const reached = new Set<string>();
     const unexplained: string[] = [];
+    const raised: string[] = [];
     for (const [label, signals, url] of await cases()) {
       const questions = ask(signals, url ? { url } : {});
+      // The other way round for page findings: what the engine doesn't
+      // count isn't presented as a concern.
+      const groups = new Set(
+        getScoredFindings(signals).map((finding) => finding.group),
+      );
+      const destination = answerOf(byId(questions, "destination"));
+      for (const [group, pattern] of [
+        ["page-obfuscation", /hard to read/],
+        ["page-iframes", /\bframes?\b/],
+      ] as const) {
+        if (!groups.has(group) && pattern.test(destination)) {
+          raised.push(`${label}: "${destination}" without ${group}`);
+        }
+      }
       for (const finding of getScoredFindings(signals)) {
         const rule = ruleFor(finding.group);
         reached.add(rule);
@@ -1311,6 +1365,7 @@ describe("every scored finding", () => {
       }
     }
     expect(unexplained).toEqual([]);
+    expect(raised).toEqual([]);
     // The cases reach every rule the engine scores by.
     expect([...reached].sort()).toEqual(Object.keys(named).sort());
   });

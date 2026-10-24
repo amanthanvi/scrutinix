@@ -23,6 +23,7 @@ import {
   LONG_REDIRECT_CHAIN_HOPS,
   MANY_FRAMES,
   NEW_DOMAIN_DAYS,
+  OBFUSCATION_HINTS,
   YOUNG_DOMAIN_DAYS,
 } from "@/lib/domain/signal-severity";
 import type {
@@ -538,7 +539,8 @@ function answerDestination({
     content && content.hiddenIframeCount > 0
       ? countOf(content.hiddenIframeCount, "hidden frame")
       : null,
-    content && content.obfuscationHints.length > 0
+    // One hint is common on ordinary pages; the engine counts two.
+    content && content.obfuscationHints.length >= OBFUSCATION_HINTS
       ? "code written to be hard to read"
       : null,
   ].filter((part): part is string => part !== null);
@@ -758,10 +760,22 @@ function answerHttps({ url, signals, now }: Context): Answer {
   if (url.toLowerCase().startsWith("http://")) {
     // Plain HTTP that moves to HTTPS: only the first request is exposed.
     if (!redirect?.finalUrl.toLowerCase().startsWith("https://")) {
+      // A plain-HTTP link to a TLS port can still present a certificate,
+      // and the engine scores it, so it is stated when one was read.
+      const certificate =
+        signals.ssl.status === "success" && signals.ssl.data?.available
+          ? answerCertificate(signals, now)
+          : null;
       return {
-        answer:
+        answer: sentences([
           "No. This link doesn't use HTTPS, so the connection isn't encrypted.",
-        why: "Without encryption, what you send can be read on the way.",
+          certificate?.state ?? null,
+          certificate?.issued ?? null,
+        ]),
+        why:
+          certificate?.why === FRESH_SETUP
+            ? FRESH_SETUP
+            : "Without encryption, what you send can be read on the way.",
       };
     }
     const secured = answerCertificate(signals, now);
