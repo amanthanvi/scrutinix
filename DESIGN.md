@@ -442,7 +442,7 @@ Each verdict owns five tokens: a graphic hue (`<v>`, 3:1 on the ground; the band
 ### Hierarchy
 
 - **Display** (600, 46–88px fluid, 0.98, −0.026em): the home headline. Public-page titles use a smaller fluid step (40–68px).
-- **Verdict** (600, 84px from 40rem, 60px below; 0.95; −0.03em): the verdict word, the largest type on any result. It never outgrows its band: the size is `min(size, 16.4cqi)` against the band frame (an inline-size container), so the longest word ("Unconfirmed") fits a 320px phone at about 38px while wider bands keep the full size.
+- **Verdict** (600, 84px from 48rem, 60px below; 0.95; −0.03em): the verdict word, the largest type on any result. It never outgrows its band: the size is `clamp(2rem, 16.4cqi, size)` against the band frame (an inline-size container), so the longest word ("Unconfirmed") fits a 320px phone at about 38px while wider bands keep the full size. The 2rem floor follows the reader's default text size, so enlarging it never shrinks the word (the band's rem padding narrows the container); where the larger word can't fit, it wraps, at a hyphenation point when there is one.
 - **Score** (600, 60px / 40px, tabular): the threat score numeral; "/100" beside it in the serif at 22px in the band's ink.
 - **Domain** (600, 44px / 30px, −0.02em): the registered domain under the verdict word.
 - **Headline** (600, 40px / 32px): "Check another link"; an unverified share's band heading.

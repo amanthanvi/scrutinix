@@ -515,13 +515,17 @@ main:has(#sx-verdict-heading) > .sx-hero-form {
  * The verdict word at display size, never wider than the band: the longest
  * word ("Unconfirmed", about 6.1em in the serif at 600) fits at 16.4cqi, so
  * narrow phones scale it down instead of overflowing; wider bands keep the
- * full size.
+ * full size. Never below 2rem, so a larger default text size makes the word
+ * larger, not smaller (its rem padding narrows the band): where it then
+ * can't fit, it wraps, at a hyphenation point if there is one.
  */
 .sx-band-heading {
   outline-offset: 4px;
-  font-size: min(var(--text-verdict-sm), 16.4cqi);
+  font-size: clamp(2rem, 16.4cqi, var(--text-verdict-sm));
   line-height: var(--text-verdict-sm--line-height);
   letter-spacing: var(--text-verdict-sm--letter-spacing);
+  overflow-wrap: anywhere;
+  hyphens: auto;
 }
 
 /* A shared link we can't vouch for: a plain heading, never verdict size. */
@@ -633,7 +637,7 @@ main:has(#sx-verdict-heading) > .sx-hero-form {
   }
 
   .sx-band-heading {
-    font-size: min(var(--text-verdict), 16.4cqi);
+    font-size: clamp(2rem, 16.4cqi, var(--text-verdict));
     line-height: var(--text-verdict--line-height);
     letter-spacing: var(--text-verdict--letter-spacing);
   }
@@ -648,6 +652,7 @@ main:has(#sx-verdict-heading) > .sx-hero-form {
 
 .sx-band-arrive {
   display: inline-block;
+  max-width: 100%;
   opacity: 1;
   translate: 0 0;
   transition:

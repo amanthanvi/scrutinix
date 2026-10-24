@@ -307,6 +307,30 @@ function headingWords(page: Page): Promise<string[]> {
   );
 }
 
+/**
+ * Set the browser's default text size, the setting a reader changes for
+ * larger text: rem grows (padding included) while the viewport doesn't,
+ * which page zoom or a root font-size override would not reproduce.
+ */
+async function setDefaultTextSize(page: Page, standard: number) {
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send("Page.setFontSizes", { fontSizes: { standard, fixed: 13 } });
+}
+
+/** The verdict heading's size in px, and whether its word stays inside it. */
+function measureVerdict(page: Page) {
+  return page.locator("#sx-verdict-heading").evaluate((heading) => {
+    const word = heading.firstElementChild ?? heading;
+    return {
+      size: parseFloat(getComputedStyle(heading).fontSize),
+      inside:
+        heading.scrollWidth <= heading.clientWidth + 1 &&
+        word.getBoundingClientRect().right <=
+          heading.getBoundingClientRect().right + 1,
+    };
+  });
+}
+
 test("a slow link parser holds a Safe look-alike, never showing Safe", async ({
   page,
 }) => {
@@ -405,4 +429,31 @@ test("a link parser that fails to load leaves a Safe result Unconfirmed, never S
       () => document.documentElement.scrollWidth <= window.innerWidth,
     ),
   ).toBe(true);
+
+  // With twice the default text size it is larger, and wraps to stay inside.
+  const standard = await measureVerdict(page);
+  await setDefaultTextSize(page, 32);
+  const enlarged = await measureVerdict(page);
+  expect(enlarged.size).toBeGreaterThan(standard.size);
+  expect(enlarged.inside).toBe(true);
+});
+
+test("a larger default text size makes a scored verdict larger, never smaller, and keeps it inside its band", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 320, height: 640 });
+  await gotoApp(page);
+  await submitSingleScan(page, "https://critical.scrutinix.test/login");
+  const verdict = page.getByLabel(/^scan result: critical$/i);
+  await expect(verdict.getByRole("meter")).toBeVisible({ timeout: 15_000 });
+
+  let previous = await measureVerdict(page);
+  expect(previous.inside).toBe(true);
+  for (const standard of [24, 32]) {
+    await setDefaultTextSize(page, standard);
+    const current = await measureVerdict(page);
+    expect(current.size).toBeGreaterThan(previous.size);
+    expect(current.inside).toBe(true);
+    previous = current;
+  }
 });

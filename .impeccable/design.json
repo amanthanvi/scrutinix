@@ -1882,11 +1882,11 @@
       },
       "verdict": {
         "displayName": "Verdict",
-        "purpose": "The verdict word in the band from 40rem; the largest type on any result."
+        "purpose": "The verdict word in the band from 48rem; the largest type on any result."
       },
       "verdict-sm": {
         "displayName": "Verdict (phone)",
-        "purpose": "The verdict word below 40rem."
+        "purpose": "The verdict word below 48rem."
       },
       "score": {
         "displayName": "Score",
