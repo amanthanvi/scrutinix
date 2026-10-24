@@ -315,6 +315,12 @@ score band. No score or verdict changes.
 - [x] Verified: format, lint, typecheck clean; unit 49 files / 601, integration 4 / 55, DOM 15 / 93, e2e 46 passed (`E2E_PORT=3133`, axe in both themes), production build, `check:bundle`, `check:contrast` (172), Lighthouse above. Every surface looked at in light and dark at 1440 and 375 (plus 640/768/1024/1280 for the band and anatomy): home empty, pasted, streaming, Safe, Look-alike, Malicious, Critical, feed hit, Unknown, Error, Full, cell focus, shared verified/unverified/expired, batch, history, /about, /privacy, OG cards. Public prose measured at 64–75 characters per line.
 - [ ] Owner: decide whether flagged strip cells keep the Malicious red (P09, the existing ramp) or go ink (P11; one panel judge and the critique preferred it).
 
+### P29.7 Open methodology (2026-10-24, layer 7 of the distinctiveness stack)
+
+- [x] `/about` prints the scoring method in full: every finding's points (lists, checks of the link itself, discounts), the bands, what convicts on its own (a single finding worth 55+), what can't erase a hit (both discounts off at any single finding worth 45+; the domain-age discount off on any list hit), Unknown, Look-alike, and the confidence cut-offs and caps.
+- [x] The copy and numbers live in `lib/domain/methodology.ts`; `tests/unit/methodology.test.ts` runs every row through `buildThreatAssessment`, so a changed weight fails until the page states it (checked by mutating a feed weight).
+- [x] Pronunciation on /about: "Scrutinix (SCROO-tih-nix), from scrutiny: looking closely before you trust something."
+
 ### P24 Resolve September dependency maintenance
 
 - [x] Merge the green minor-and-patch dependency group, including the Next.js `16.3.3` security update.
