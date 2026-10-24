@@ -3,56 +3,13 @@ import { normalizeUrlInput } from "@/lib/domain/url";
 /**
  * Ways a link reaches Scrutinix from outside the page: the installed app's
  * share target (`POST /share`, `app/share/route.ts`) and plain `/?url=`
- * links (bookmarklets, the iOS Shortcut, anyone's page). Both prefill the
- * Single field; only a genuine share-target launch starts the scan.
+ * links (bookmarklets, the iOS Shortcut, anyone's page). Every one of them
+ * does the same thing: it fills in the Single field and waits for the
+ * person to tap Analyze. Nothing starts a scan on its own.
  */
 
 /** The query parameter that prefills the Single field. */
 export const PREFILL_PARAM = "url";
-
-/**
- * Set by `POST /share` on a genuine share-target launch, holding a
- * one-use grant bound to the exact normalized link it redirects with
- * (`lib/server/share-launch-grant.ts`). Nothing a third-party page can
- * send sets it, so a plain `/?url=` link (or a crafted one) only prefills.
- * It is spent on the server: `proxy.ts` takes it off every request for
- * `/`, hands it to the page in `SHARE_LAUNCH_HEADER`, and clears it in
- * that same response, whether or not it matches; the page starts a scan
- * only when the grant names `?url=`, and the browser only within the
- * grant's minute and once per grant id (`lib/client/launch-claims.ts`). No script reads it (`HttpOnly`).
- */
-export const SHARE_LAUNCH_COOKIE = "sx-share-launch";
-
-/**
- * The request header `proxy.ts` hands the launch grant to the page in. The
- * proxy removes any copy a request arrives with; a navigation can't add
- * one, so a page can't make another site's visitor send it.
- */
-export const SHARE_LAUNCH_HEADER = "x-sx-share-launch";
-
-/**
- * How long a share-target launch may take, from the share to the page
- * starting its scan: the cookie lasts this long, and the browser refuses a
- * grant it can't show is younger (`launchAge`, `lib/client/launch-claims.ts`).
- */
-export const SHARE_LAUNCH_MAX_AGE_SECONDS = 60;
-export const SHARE_LAUNCH_WINDOW_MS = SHARE_LAUNCH_MAX_AGE_SECONDS * 1000;
-
-/**
- * A launch grant as the page hands it to the browser: its random id, and
- * when `POST /share` issued it, on the server's clock.
- */
-export interface LaunchGrant {
-  id: string;
-  issuedAt: number;
-}
-
-/** Set and cleared with the same attributes, so clearing always matches. */
-export const SHARE_LAUNCH_COOKIE_ATTRIBUTES = {
-  path: "/",
-  sameSite: "strict",
-  httpOnly: true,
-} as const;
 
 /** The share-target fields, in the order a link is looked for in them. */
 export interface SharedFields {
@@ -143,25 +100,8 @@ export function extractSharedLink(fields: SharedFields): string | null {
 }
 
 /**
- * Whether a request to the share target is the browser launching it from
- * the system share sheet. The share target is a POST navigation the user
- * agent builds itself (W3C Web Share Target, "Launching the web share
- * target"; Chromium loads it as a browser-initiated HTTP POST), so it has
- * no initiating site and carries `Sec-Fetch-Site: none` (W3C Fetch
- * Metadata §2.3). A form another page submits is `cross-site` (or
- * `same-site`); a link tapped in another app opens as a GET. A missing
- * header (an older browser) fails closed: prefill only.
- */
-export function isShareTargetLaunch(method: string, headers: Headers): boolean {
-  return (
-    method.toUpperCase() === "POST" && headers.get("sec-fetch-site") === "none"
-  );
-}
-
-/**
  * The link `?url=` prefills, normalized, or null when it is absent or not
- * checkable (which says nothing). Whether it also scans is the launch
- * grant's to say (`readLaunchGrant`).
+ * checkable (which says nothing). It never starts a scan.
  */
 export function resolvePrefill(
   param: string | null | undefined,

@@ -1,10 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 import { GET, POST } from "@/app/share/route";
-import { SHARE_LAUNCH_COOKIE, resolvePrefill } from "@/lib/domain/share-launch";
+import { resolvePrefill } from "@/lib/domain/share-launch";
 import { normalizeUrlInput } from "@/lib/domain/url";
 import { parseScanRequest } from "@/lib/server/scan-request";
-import { readLaunchGrant } from "@/lib/server/share-launch-grant";
 
 const ORIGIN = "https://www.scrutinix.net";
 
@@ -24,26 +23,23 @@ function shareRequest(
   });
 }
 
-function launchCookie(response: Response): string | null {
-  return (
-    response.headers
-      .getSetCookie()
-      .find((cookie) => cookie.startsWith(`${SHARE_LAUNCH_COOKIE}=`)) ?? null
-  );
+/** The redirect's target, resolved against the site. */
+function locationOf(response: Response): URL {
+  return new URL(response.headers.get("location")!, ORIGIN);
 }
 
-/** The grant value the launch cookie holds. */
-function grantIn(response: Response): string | null {
-  const cookie = launchCookie(response);
-  return cookie
-    ? decodeURIComponent(
-        cookie.slice(SHARE_LAUNCH_COOKIE.length + 1).split(";")[0]!,
-      )
-    : null;
+/**
+ * What the redirect asks of the page: the query parameters it carries, by
+ * name. `["url"]` alone is a prefill and nothing more.
+ */
+function paramsOf(response: Response): string[] {
+  return [...locationOf(response).searchParams.keys()];
 }
 
 describe("POST /share", () => {
-  it("redirects a share-sheet launch to the prefilled page and allows one scan", async () => {
+  it("redirects a share-sheet launch to the page with the link filled in, and nothing else", async () => {
+    // The share sheet's own POST: the browser builds it, so it has no
+    // initiating site.
     const response = await POST(
       shareRequest(
         {
@@ -59,65 +55,39 @@ describe("POST /share", () => {
     // Relative: never an origin the server guessed.
     const header = response.headers.get("location")!;
     expect(header.startsWith("/?")).toBe(true);
-    const location = new URL(header, ORIGIN);
-    expect(location.pathname).toBe("/");
-    expect(location.searchParams.get("url")).toBe(
+    expect(locationOf(response).pathname).toBe("/");
+    expect(locationOf(response).searchParams.get("url")).toBe(
       "https://parcel-help.example/track?id=42",
     );
-
-    const cookie = launchCookie(response);
-    expect(cookie).not.toBeNull();
-    expect(cookie).toMatch(/Max-Age=60/i);
-    expect(cookie).toMatch(/Path=\//i);
-    expect(cookie).toMatch(/SameSite=Strict/i);
-    expect(cookie).toMatch(/Secure/i);
-    // Spent on the server: no script needs to read it.
-    expect(cookie).toMatch(/HttpOnly/i);
-    // A grant for this link, not the link itself, issued now.
-    expect(cookie).not.toContain("parcel-help");
-    const grant = grantIn(response)!;
-    const [id, issuedAt] = grant.split(".");
-    expect(Math.abs(Number(issuedAt) - Date.now())).toBeLessThan(5_000);
-    expect(
-      readLaunchGrant(
-        grant,
-        "https://parcel-help.example/track?id=42",
-        Date.now(),
-      ),
-    ).toEqual({ id, issuedAt: Number(issuedAt) });
+    // Only a prefill: no cookie, and nothing else in the address that
+    // could ask the page to start the scan itself.
+    expect(response.headers.getSetCookie()).toEqual([]);
+    expect(paramsOf(response)).toEqual(["url"]);
   });
 
-  it("keeps the grant small for a long link, so the browser still stores it", async () => {
-    // Valid and under the 2,048-character link limit, but 4,500+ characters
-    // URI-encoded: a cookie holding the link itself is over the 4 KiB
-    // browsers accept, and the scan silently never starts.
-    const link = `https://parcel-help.example/${"/".repeat(1_500)}track`;
-    expect(encodeURIComponent(link).length).toBeGreaterThan(4_096);
-    const response = await POST(shareRequest({ url: link }, { site: "none" }));
-
-    expect(
-      new URL(response.headers.get("location")!, ORIGIN).searchParams.get(
-        "url",
-      ),
-    ).toBe(link);
-    const cookie = launchCookie(response)!;
-    expect(cookie.length).toBeLessThan(200);
-    expect(readLaunchGrant(grantIn(response), link, Date.now())).not.toBeNull();
-  });
-
-  it("only prefills for a form another site posts", async () => {
-    for (const site of ["cross-site", "same-site", undefined]) {
+  it("answers a form another site posts exactly as it answers the share sheet", async () => {
+    const answers = [];
+    for (const site of ["none", "cross-site", "same-site", undefined]) {
       const response = await POST(
         shareRequest({ text: "https://parcel-help.example/" }, { site }),
       );
-      expect(response.status).toBe(303);
-      expect(
-        new URL(response.headers.get("location")!, ORIGIN).searchParams.get(
-          "url",
-        ),
-      ).toBe("https://parcel-help.example/");
-      expect(launchCookie(response), String(site)).toBeNull();
+      expect(response.status, String(site)).toBe(303);
+      expect(response.headers.getSetCookie(), String(site)).toEqual([]);
+      answers.push(response.headers.get("location"));
     }
+    expect(new Set(answers)).toEqual(
+      new Set(["/?url=https%3A%2F%2Fparcel-help.example%2F"]),
+    );
+  });
+
+  it("carries a long link whole", async () => {
+    // Valid and under the 2,048-character link limit, but 4,500+ characters
+    // URI-encoded.
+    const link = `https://parcel-help.example/${"/".repeat(1_500)}track`;
+    expect(encodeURIComponent(link).length).toBeGreaterThan(4_096);
+    const response = await POST(shareRequest({ url: link }, { site: "none" }));
+    expect(locationOf(response).searchParams.get("url")).toBe(link);
+    expect(response.headers.getSetCookie()).toEqual([]);
   });
 
   it("goes home with nothing prefilled when no checkable link was shared", async () => {
@@ -128,7 +98,6 @@ describe("POST /share", () => {
       const response = await POST(shareRequest(fields, { site: "none" }));
       expect(response.status).toBe(303);
       expect(response.headers.get("location")).toBe("/");
-      expect(launchCookie(response)).toBeNull();
     }
   });
 
@@ -144,7 +113,6 @@ describe("POST /share", () => {
     });
     const response = await POST(big);
     expect(response.headers.get("location")).toBe("/");
-    expect(launchCookie(response)).toBeNull();
   });
 
   it("stops reading a streamed body at 16 KiB, whatever its Content-Length says", async () => {
@@ -161,7 +129,6 @@ describe("POST /share", () => {
         }),
       );
       expect(response.headers.get("location"), String(declared)).toBe("/");
-      expect(launchCookie(response), String(declared)).toBeNull();
       // Cancelled at the chunk that crossed the limit (plus the one the
       // stream queued ahead), not drained.
       expect(stream.sent(), String(declared)).toBeLessThanOrEqual(
@@ -184,12 +151,9 @@ describe("POST /share", () => {
         },
       ),
     );
-    expect(
-      new URL(response.headers.get("location")!, ORIGIN).searchParams.get(
-        "url",
-      ),
-    ).toBe("https://parcel-help.example/track?id=42");
-    expect(launchCookie(response)).not.toBeNull();
+    expect(locationOf(response).searchParams.get("url")).toBe(
+      "https://parcel-help.example/track?id=42",
+    );
   });
 
   it("parses multipart from the bounded bytes too, and nothing else", async () => {
@@ -202,11 +166,9 @@ describe("POST /share", () => {
         body: form,
       }),
     );
-    expect(
-      new URL(multipart.headers.get("location")!, ORIGIN).searchParams.get(
-        "url",
-      ),
-    ).toBe("https://parcel-help.example/");
+    expect(locationOf(multipart).searchParams.get("url")).toBe(
+      "https://parcel-help.example/",
+    );
 
     const plain = await POST(
       new Request(`${ORIGIN}/share`, {
@@ -216,7 +178,6 @@ describe("POST /share", () => {
       }),
     );
     expect(plain.headers.get("location")).toBe("/");
-    expect(launchCookie(plain)).toBeNull();
   });
 
   it("is never cached", async () => {
@@ -233,7 +194,7 @@ describe("GET /share", () => {
     expect(response.status).toBe(303);
     expect(response.headers.get("location")).toBe("/");
     expect(response.headers.get("cache-control")).toBe("no-store");
-    expect(launchCookie(response)).toBeNull();
+    expect(response.headers.getSetCookie()).toEqual([]);
   });
 });
 
@@ -242,11 +203,7 @@ const CHUNK = 1024;
 describe("a Unicode link, from the share sheet to the scan", () => {
   /** The link the page prefills: `/share`'s location, as `searchParams` decodes it. */
   function prefillAfter(response: Response): string | null {
-    return resolvePrefill(
-      new URL(response.headers.get("location")!, ORIGIN).searchParams.get(
-        "url",
-      ),
-    );
+    return resolvePrefill(locationOf(response).searchParams.get("url"));
   }
 
   /** The analyze routes' own validation of a scan request for `url`. */
@@ -274,7 +231,6 @@ describe("a Unicode link, from the share sheet to the scan", () => {
     );
     const shared = await POST(shareRequest({ url: long }, { site: "none" }));
     expect(shared.headers.get("location")).toBe("/");
-    expect(launchCookie(shared)).toBeNull();
     expect(resolvePrefill(long)).toBeNull();
     const refused = await scanRequest(long);
     expect(refused.ok).toBe(false);
@@ -289,7 +245,7 @@ describe("a Unicode link, from the share sheet to the scan", () => {
     }
 
     // 338 encode to exactly 2,048 characters: accepted at every boundary,
-    // and the page prefills, grants, and scans the very link /share took.
+    // and the page prefills, and Analyze scans, the very link /share took.
     const fits = `https://example.com/${"é".repeat(338)}`;
     const launched = await POST(shareRequest({ url: fits }, { site: "none" }));
     const prefill = prefillAfter(launched);
@@ -298,9 +254,6 @@ describe("a Unicode link, from the share sheet to the scan", () => {
       ok: true,
       value: { normalizedUrl: prefill },
     });
-    expect(
-      readLaunchGrant(grantIn(launched), prefill!, Date.now()),
-    ).not.toBeNull();
     const accepted = await scanRequest(prefill!);
     expect(accepted.ok && accepted.targets[0]!.normalizedUrl).toBe(prefill);
   });

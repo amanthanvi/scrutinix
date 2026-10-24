@@ -1,10 +1,4 @@
-import {
-  expect,
-  test,
-  type BrowserContext,
-  type Page,
-  type Route,
-} from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 import {
   encodeSharedPayload,
@@ -26,27 +20,23 @@ function recordScans(page: Page): string[] {
   return scans;
 }
 
-/** Whether each response from /share granted the one-scan launch cookie. */
-function recordLaunchGrants(page: Page): Promise<boolean>[] {
-  const grants: Promise<boolean>[] = [];
+/** What each response from /share tried to store: its Set-Cookie, if any. */
+function recordShareCookies(page: Page): Promise<string | null>[] {
+  const cookies: Promise<string | null>[] = [];
   page.on("response", (response) => {
     if (new URL(response.url()).pathname === "/share") {
-      grants.push(
-        response
-          .headerValue("set-cookie")
-          .then((value) => Boolean(value?.includes("sx-share-launch="))),
-      );
+      cookies.push(response.headerValue("set-cookie"));
     }
   });
-  return grants;
+  return cookies;
 }
 
 /**
  * Launch the share target the way the share sheet does. The share target
  * is a POST navigation the browser builds itself: turn a browser-initiated
  * navigation to /share into that POST. Chromium's network stack still
- * stamps it Sec-Fetch-Site: none, as it does for a real launch, so the
- * route grants the launch.
+ * stamps it Sec-Fetch-Site: none, as it does for a real launch. Resolves
+ * with the request /share received, as sent.
  */
 async function launchFromShareSheet(
   page: Page,
@@ -62,28 +52,12 @@ async function launchFromShareSheet(
       postData: new URLSearchParams(fields).toString(),
     }),
   );
+  const shared = page.waitForResponse(
+    (response) => new URL(response.url()).pathname === "/share",
+  );
   await page.goto("/share");
   await page.unroute("**/share");
-}
-
-/**
- * A launch grant for `link` in this browser's cookie jar, without opening
- * the page it redirects to (the request context shares the jar).
- */
-async function grantLaunch(context: BrowserContext, link: string) {
-  const response = await context.request.post("/share", {
-    headers: { "sec-fetch-site": "none" },
-    form: { text: link },
-    maxRedirects: 0,
-  });
-  expect(response.status()).toBe(303);
-  expect(await launchCookieNames(context)).toEqual(["sx-share-launch"]);
-}
-
-async function launchCookieNames(context: BrowserContext) {
-  return (await context.cookies())
-    .map((cookie) => cookie.name)
-    .filter((name) => name === "sx-share-launch");
+  return (await shared).request();
 }
 
 /** The Single field, hydrated (the theme toggle names its target once mounted). */
@@ -94,21 +68,47 @@ async function urlField(page: Page) {
   return page.getByRole("textbox", { name: /url to analyze/i });
 }
 
-test("a /?url= link prefills and focuses the field, and never scans @smoke", async ({
+/**
+ * The page the link arrived on: the link filled in and focused, taken
+ * apart below the field, and no scan, however long it waits.
+ */
+async function expectWaitingForAnalyze(
+  page: Page,
+  scans: string[],
+  link: string,
+) {
+  const input = await urlField(page);
+  await expect(input).toHaveValue(link);
+  await page.waitForTimeout(750);
+  expect(scans).toEqual([]);
+  await expect(page.getByLabel(/^scan result/i)).toHaveCount(0);
+  await expect(input).toBeFocused();
+  await expect(
+    page.getByRole("region", { name: "The link, taken apart" }),
+  ).toContainText("scrutinix.test");
+}
+
+/** Tap Analyze: exactly one scan, of the link in the field. */
+async function analyzeOnce(page: Page, scans: string[]) {
+  await page.getByRole("button", { name: /analyze url/i }).click();
+  await expect(page.getByLabel(/^scan result: malicious$/i)).toBeVisible();
+  await page.waitForTimeout(500);
+  expect(scans).toHaveLength(1);
+  // The result replaced what the page opened on.
+  expect(new URL(page.url()).searchParams.has("url")).toBe(false);
+}
+
+test("a /?url= link fills in the field and waits for Analyze @smoke", async ({
   page,
 }) => {
   await isolateRateLimit(page);
   const scans = recordScans(page);
-  await page.goto(`/?url=${encodeURIComponent(LINK)}`);
-
-  const input = await urlField(page);
-  await expect(input).toHaveValue(LINK);
-  await expect(input).toBeFocused();
-  // The link is taken apart while it waits for the tap.
-  await expect(page.getByText("scrutinix.test").first()).toBeVisible();
-  await page.waitForTimeout(500);
-  expect(scans).toEqual([]);
-  await expect(page.getByLabel(/^scan result/i)).toHaveCount(0);
+  // Normalized on the server: scheme and host case, default port, fragment.
+  await page.goto(
+    `/?url=${encodeURIComponent("HTTPS://Malicious.Scrutinix.Test:443/login#top")}`,
+  );
+  await expectWaitingForAnalyze(page, scans, LINK);
+  await analyzeOnce(page, scans);
 
   // Anything that is not a link to check prefills nothing, silently.
   for (const value of ["javascript:alert(1)", "http://localhost/", "%%%"]) {
@@ -119,245 +119,63 @@ test("a /?url= link prefills and focuses the field, and never scans @smoke", asy
       0,
     );
   }
-  expect(scans).toEqual([]);
+  expect(scans).toHaveLength(1);
 });
 
-test("a share-sheet launch of the installed app scans the shared link @smoke", async ({
+test("Share → Scrutinix fills in the shared link and waits for Analyze @smoke", async ({
   page,
 }) => {
   await isolateRateLimit(page);
   const scans = recordScans(page);
-  const grants = recordLaunchGrants(page);
-  await launchFromShareSheet(page, {
+  const shareCookies = recordShareCookies(page);
+  const sent = await launchFromShareSheet(page, {
     title: "Delivery",
     text: `Your parcel is waiting: ${LINK}`,
     url: "",
   });
 
-  await expect(page.getByLabel(/^scan result: malicious$/i)).toBeVisible();
-  expect(await Promise.all(grants)).toEqual([true]);
-  expect(scans).toHaveLength(1);
-  await expect(await urlField(page)).toHaveValue(LINK);
-  // The launch is spent: the address no longer carries it, and the cookie
-  // that allowed it is gone, so a reload or a repeat only prefills.
-  expect(new URL(page.url()).search).toBe("");
-  expect(await launchCookieNames(page.context())).toEqual([]);
-  await page.goto(`/?url=${encodeURIComponent(LINK)}`);
-  await expect(await urlField(page)).toHaveValue(LINK);
-  await page.waitForTimeout(500);
-  expect(scans).toHaveLength(1);
+  // The share sheet's own POST (Sec-Fetch-Site: none, which Playwright
+  // doesn't report for a routed request), which sets nothing and only
+  // fills in.
+  expect(sent.method()).toBe("POST");
+  expect(await Promise.all(shareCookies)).toEqual([null]);
+  expect(await page.context().cookies()).toEqual([]);
+  expect([...new URL(page.url()).searchParams.keys()]).toEqual(["url"]);
+  await expectWaitingForAnalyze(page, scans, LINK);
+  await analyzeOnce(page, scans);
 });
 
-test("a share-sheet launch of a long link still scans it @smoke", async ({
+test("a share-sheet launch carries a long link whole @smoke", async ({
   page,
 }) => {
   await isolateRateLimit(page);
   const scans = recordScans(page);
-  // Valid (under 2,048 characters), but over 4 KiB URI-encoded: a cookie
-  // holding the link itself is one Chromium refuses to store.
+  // Valid (under 2,048 characters), but over 4 KiB URI-encoded.
   const long = `${LINK}${"/".repeat(1_500)}step`;
   expect(encodeURIComponent(long).length).toBeGreaterThan(4_096);
   await launchFromShareSheet(page, { url: long });
-
-  await expect(page.getByLabel(/^scan result: malicious$/i)).toBeVisible();
-  expect(scans).toHaveLength(1);
-  await expect(await urlField(page)).toHaveValue(long);
+  await expectWaitingForAnalyze(page, scans, long);
 });
 
-test("going Back to a launched page never scans it again @smoke", async ({
+test("going Back to a page a link arrived on still waits for Analyze @smoke", async ({
   page,
 }) => {
   await isolateRateLimit(page);
   const scans = recordScans(page);
   await launchFromShareSheet(page, { text: `Your parcel: ${LINK}` });
-  await expect(page.getByLabel(/^scan result: malicious$/i)).toBeVisible();
-  expect(scans).toHaveLength(1);
+  await expect(await urlField(page)).toHaveValue(LINK);
 
-  // The router restores the page as it was rendered, launch and all, into
-  // a fresh component: only the browser can know this launch already ran.
+  // The router restores the page as it was rendered into a fresh component.
   await page.locator("header").getByRole("link", { name: "About" }).click();
   await page.waitForURL((url) => url.pathname === "/about");
   await page.goBack();
   await page.waitForURL((url) => url.pathname === "/");
   await expect(await urlField(page)).toHaveValue(LINK);
   await page.waitForTimeout(750);
-  expect(scans).toHaveLength(1);
-});
-
-/**
- * Two tabs and one launch grant for `LINK` in their shared cookie jar,
- * each tab with its own scan record and rate-limit identity.
- */
-async function twoTabsWithGrant(page: Page) {
-  const context = page.context();
-  const other = await context.newPage();
-  const scans: string[][] = [];
-  for (const tab of [page, other]) {
-    await isolateRateLimit(tab);
-    scans.push(recordScans(tab));
-  }
-  await grantLaunch(context, LINK);
-  const grant = (await context.cookies()).find(
-    (cookie) => cookie.name === "sx-share-launch",
-  )!.value;
-  return { context, other, scans, grant, grantId: grant.split(".")[0]! };
-}
-
-/**
- * Open the launched page in two tabs at once, as a second tab can: hold
- * both loads until both are asked for, so both reach the server carrying
- * the cookie before either response can clear it. The server keeps
- * nothing, so both are granted. The first tab's page is delivered at once;
- * the second's, already rendered, is held until `release` settles.
- * Resolves once the first tab has loaded, with the second tab's HTML and
- * its navigation.
- */
-async function raceLaunch(
-  first: Page,
-  second: Page,
-  grant: string,
-  release: Promise<unknown>,
-) {
-  let held = 0;
-  let bothAsked!: () => void;
-  const bothHeld = new Promise<void>((resolve) => (bothAsked = resolve));
-  const hold = async (route: Route) => {
-    expect(route.request().headers().cookie ?? "").toContain(grant);
-    held += 1;
-    if (held === 2) bothAsked();
-    await bothHeld;
-  };
-  let rendered!: (html: string) => void;
-  const secondHtml = new Promise<string>((resolve) => (rendered = resolve));
-  const isLaunch = (url: URL) =>
-    url.pathname === "/" && url.searchParams.has("url");
-  await first.route(isLaunch, async (route) => {
-    await hold(route);
-    await route.continue();
-  });
-  await second.route(isLaunch, async (route) => {
-    await hold(route);
-    const response = await route.fetch();
-    rendered(await response.text());
-    await release;
-    await route.fulfill({ response });
-  });
-  const target = `/?url=${encodeURIComponent(LINK)}`;
-  const secondLoad = second.goto(target, { timeout: 0 });
-  await first.goto(target);
-  await first.unroute(isLaunch);
-  return { secondHtml: await secondHtml, secondLoad };
-}
-
-test("one share-sheet launch scans once, though a second tab got the grant too @smoke", async ({
-  page,
-}) => {
-  const { context, other, scans, grant, grantId } =
-    await twoTabsWithGrant(page);
-  // The second tab's answer is delivered once the first tab has started
-  // its scan.
-  const firstScan = page.waitForRequest((request) =>
-    new URL(request.url()).pathname.startsWith("/api/analyze"),
-  );
-  const { secondHtml, secondLoad } = await raceLaunch(
-    page,
-    other,
-    grant,
-    firstScan,
-  );
-  await secondLoad;
-
-  // The second tab was granted the same launch, and only prefilled.
-  expect(secondHtml).toContain(grantId);
-  for (const tab of [page, other]) {
-    await expect(await urlField(tab)).toHaveValue(LINK);
-  }
-  await expect.poll(() => scans.flat().length).toBe(1);
-  await other.waitForTimeout(750);
-  expect(scans.map((tab) => tab.length)).toEqual([1, 0]);
-  expect(await launchCookieNames(context)).toEqual([]);
-  await other.close();
-});
-
-test("a page held while many more shares scan still never scans its launch twice @smoke", async ({
-  page,
-}) => {
-  // Round 3 repro: nine shares gave ten scans once eight newer ids had
-  // pushed the first out of the browser's record.
-  test.setTimeout(180_000);
-  const { other, scans, grant, grantId } = await twoTabsWithGrant(page);
-  let release!: () => void;
-  const released = new Promise<void>((resolve) => (release = resolve));
-  const { secondHtml, secondLoad } = await raceLaunch(
-    page,
-    other,
-    grant,
-    released,
-  );
-  expect(secondHtml).toContain(grantId);
-  await expect(page.getByLabel(/^scan result: malicious$/i)).toBeVisible();
-
-  // Nine more shares, each its own grant, each scanned once.
-  for (let share = 1; share <= 9; share += 1) {
-    await launchFromShareSheet(page, { text: `Share ${share}: ${LINK}` });
-    await expect(page.getByLabel(/^scan result: malicious$/i)).toBeVisible();
-    await expect.poll(() => scans[0]!.length).toBe(share + 1);
-  }
-
-  // Then the held page, rendered with the first grant, arrives.
-  release();
-  await secondLoad;
-  await expect(await urlField(other)).toHaveValue(LINK);
-  await other.waitForTimeout(750);
-  expect(scans.map((tab) => tab.length)).toEqual([10, 0]);
-  await other.close();
-});
-
-test("a second tab whose clock runs eleven minutes ahead still only prefills @smoke", async ({
-  page,
-}) => {
-  // Round 3 repro: the second page judged the first tab's record stale by
-  // its own Date.now() and scanned again.
-  const { other, scans, grant } = await twoTabsWithGrant(page);
-  await other.addInitScript(() => {
-    const realNow = Date.now;
-    Date.now = () => realNow() + 11 * 60_000;
-  });
-  const firstScan = page.waitForRequest((request) =>
-    new URL(request.url()).pathname.startsWith("/api/analyze"),
-  );
-  const { secondLoad } = await raceLaunch(page, other, grant, firstScan);
-  await secondLoad;
-  await expect(await urlField(other)).toHaveValue(LINK);
-  await expect.poll(() => scans.flat().length).toBe(1);
-  await other.waitForTimeout(750);
-  expect(scans.map((tab) => tab.length)).toEqual([1, 0]);
-  await other.close();
-});
-
-test("a launch that reaches a running page after its minute only prefills @smoke", async ({
-  page,
-}) => {
-  await isolateRateLimit(page);
-  const scans = recordScans(page);
-  // Hydration a minute after the navigation began, on this page's own
-  // monotonic clock (as a held response or a stalled device would leave it).
-  await page.addInitScript(() => {
-    const realNow = performance.now.bind(performance);
-    performance.now = () => realNow() + 61_000;
-  });
-  await launchFromShareSheet(page, { text: `Your parcel: ${LINK}` });
-
-  const input = await urlField(page);
-  await expect(input).toHaveValue(LINK);
-  await page.waitForTimeout(750);
   expect(scans).toEqual([]);
-  await expect(page.getByLabel(/^scan result/i)).toHaveCount(0);
-  // It waits for a tap, as any prefill does.
-  await expect(input).toBeFocused();
 });
 
-test("a form another site posts to the share target only prefills @smoke", async ({
+test("a form another site posts to the share target only fills in the field @smoke", async ({
   page,
   baseURL,
 }) => {
@@ -376,20 +194,15 @@ test("a form another site posts to the share target only prefills @smoke", async
         <script>document.forms[0].submit()</script>`,
     }),
   );
-  const grants = recordLaunchGrants(page);
+  const shareCookies = recordShareCookies(page);
 
   await page.goto(attacker);
   await page.waitForURL(
     (url) => url.origin === app.origin && url.pathname === "/",
   );
-  const input = await urlField(page);
-  await expect(input).toHaveValue(LINK);
-  expect(await Promise.all(grants)).toEqual([false]);
-  await page.waitForTimeout(500);
-  expect(scans).toEqual([]);
-  await expect(page.getByLabel(/^scan result/i)).toHaveCount(0);
-  const cookies = await page.context().cookies();
-  expect(cookies.map((cookie) => cookie.name)).not.toContain("sx-share-launch");
+  await expectWaitingForAnalyze(page, scans, LINK);
+  expect(await Promise.all(shareCookies)).toEqual([null]);
+  expect(await page.context().cookies()).toEqual([]);
 });
 
 const maliciousShare = {
@@ -420,7 +233,10 @@ test("a shared link opens recipient-first: the result, then Check another link @
     ],
     [sharedPath(unsigned, null), "Shared link, not verified"],
   ] as const) {
-    await page.goto(path);
+    // A shared result outranks a `?url=` beside it: nothing is filled in.
+    await page.goto(
+      `${path}&url=${encodeURIComponent("https://other.scrutinix.test/")}`,
+    );
     const band = page.getByLabel(bandLabel);
     const anatomy = page.getByText(
       "This link belongs to secure-login.xyz, not paypal.com.",
@@ -437,6 +253,7 @@ test("a shared link opens recipient-first: the result, then Check another link @
       0,
     );
     await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
+    await expect(input).toHaveValue("");
     await expect(input).not.toBeFocused();
 
     const top = async (locator: ReturnType<Page["getByText"]>) =>
@@ -482,35 +299,6 @@ test("a fresh scan from a shared link clears it from the address @smoke", async 
   await expect(
     page.getByRole("heading", { name: "Check a link before you click." }),
   ).toBeVisible();
-});
-
-test("a launch grant is spent by the first home page that loads, matching or not @smoke", async ({
-  page,
-}) => {
-  await isolateRateLimit(page);
-  const scans = recordScans(page);
-  const payload = encodeSharedPayload({
-    ...maliciousShare,
-    capturedAt: new Date().toISOString(),
-  });
-
-  for (const visit of [
-    // A different link in ?url=, a shared result, and the plain home page.
-    `/?url=${encodeURIComponent("https://other.scrutinix.test/")}`,
-    sharedPath(payload, signSharedPayload(payload)),
-    "/",
-  ]) {
-    await grantLaunch(page.context(), LINK);
-    await page.goto(visit);
-    await urlField(page);
-    expect(await launchCookieNames(page.context()), visit).toEqual([]);
-
-    // So the link the grant named, opened afterwards, only prefills.
-    await page.goto(`/?url=${encodeURIComponent(LINK)}`);
-    await expect(await urlField(page)).toHaveValue(LINK);
-  }
-  await page.waitForTimeout(500);
-  expect(scans).toEqual([]);
 });
 
 test("the site never mentions installing it @smoke", async ({ page }) => {

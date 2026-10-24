@@ -1,10 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  extractSharedLink,
-  isShareTargetLaunch,
-  resolvePrefill,
-} from "@/lib/domain/share-launch";
+import { extractSharedLink, resolvePrefill } from "@/lib/domain/share-launch";
 
 describe("extractSharedLink", () => {
   it("takes the link Android puts inside the shared text", () => {
@@ -48,7 +44,7 @@ describe("extractSharedLink", () => {
 
   it("trims a long run of closers in one pass, not one rescan per closer", () => {
     // Rescanning the link for each closer took ~0.9 s of CPU for 15,000
-    // ")" in a body under the share cap, with no grant needed.
+    // ")" in a body under the share cap.
     for (const tail of [")".repeat(20_000), ").".repeat(10_000)]) {
       const started = performance.now();
       expect(
@@ -131,27 +127,6 @@ describe("extractSharedLink", () => {
       }),
     ).toBeNull();
     expect(extractSharedLink({ url: "http://192.168.1.1/" })).toBeNull();
-  });
-});
-
-describe("isShareTargetLaunch", () => {
-  const headers = (site?: string) =>
-    new Headers(site ? { "sec-fetch-site": site } : {});
-
-  it("accepts only a POST the browser made itself (Sec-Fetch-Site: none)", () => {
-    expect(isShareTargetLaunch("POST", headers("none"))).toBe(true);
-  });
-
-  it("refuses forms other sites post, and same-site or same-origin ones", () => {
-    expect(isShareTargetLaunch("POST", headers("cross-site"))).toBe(false);
-    expect(isShareTargetLaunch("POST", headers("same-site"))).toBe(false);
-    expect(isShareTargetLaunch("POST", headers("same-origin"))).toBe(false);
-  });
-
-  it("fails closed without the header, and for anything but POST", () => {
-    expect(isShareTargetLaunch("POST", headers())).toBe(false);
-    // A link tapped in another app opens as a browser-initiated GET.
-    expect(isShareTargetLaunch("GET", headers("none"))).toBe(false);
   });
 });
 

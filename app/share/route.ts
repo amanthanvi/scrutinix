@@ -1,15 +1,7 @@
 import { NextResponse } from "next/server";
 
-import {
-  PREFILL_PARAM,
-  SHARE_LAUNCH_COOKIE,
-  SHARE_LAUNCH_COOKIE_ATTRIBUTES,
-  SHARE_LAUNCH_MAX_AGE_SECONDS,
-  extractSharedLink,
-  isShareTargetLaunch,
-} from "@/lib/domain/share-launch";
+import { PREFILL_PARAM, extractSharedLink } from "@/lib/domain/share-launch";
 import { readBoundedBody } from "@/lib/server/request-body";
-import { issueLaunchGrant } from "@/lib/server/share-launch-grant";
 
 export const runtime = "nodejs";
 
@@ -51,28 +43,17 @@ async function readSharedFields(request: Request) {
 /**
  * The installed app's Web Share Target (`share_target` in
  * `public/site.webmanifest`). Takes the first http(s) link from what was
- * shared and redirects to `/?url=<link>`, which prefills the Single field.
- * Only a share-sheet launch (`isShareTargetLaunch`) also sets the
- * short-lived launch cookie, a one-use grant bound to that link
- * (`issueLaunchGrant`), that lets the page start the scan; a form another
- * site posts here prefills and waits for a tap. Nothing is logged or
- * stored.
+ * shared and redirects to `/?url=<link>`, which fills in the Single field
+ * and waits for the person to tap Analyze, as any `?url=` link does. It
+ * sets no cookie, and nothing is logged or stored.
  */
 export async function POST(request: Request) {
   const link = extractSharedLink(await readSharedFields(request));
-  const location = link
-    ? `/?${new URLSearchParams({ [PREFILL_PARAM]: link }).toString()}`
-    : "/";
-
-  const response = redirectTo(location);
-  if (link && isShareTargetLaunch(request.method, request.headers)) {
-    response.cookies.set(SHARE_LAUNCH_COOKIE, issueLaunchGrant(link), {
-      ...SHARE_LAUNCH_COOKIE_ATTRIBUTES,
-      maxAge: SHARE_LAUNCH_MAX_AGE_SECONDS,
-      secure: new URL(request.url).protocol === "https:",
-    });
-  }
-  return response;
+  return redirectTo(
+    link
+      ? `/?${new URLSearchParams({ [PREFILL_PARAM]: link }).toString()}`
+      : "/",
+  );
 }
 
 /** Opened by hand: there is nothing to receive, so go home. */
@@ -84,8 +65,7 @@ export function GET() {
  * 303, so the page is fetched with GET and a reload never re-posts. The
  * location is relative: the server's idea of its own origin (`request.url`
  * under `next start` names `localhost`) must never send the visitor to a
- * different site, where the launch cookie would not exist. `no-store`: the
- * answer (and its one-use cookie) belongs to this one share.
+ * different site. `no-store`: the answer belongs to this one share.
  */
 function redirectTo(location: string) {
   return new NextResponse(null, {

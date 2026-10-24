@@ -17,11 +17,6 @@ import { useBatchStream } from "@/hooks/use-batch-stream";
 import { warmLinkParser } from "@/hooks/use-link-anatomy";
 import { useScanStream } from "@/hooks/use-scan-stream";
 import {
-  claimLaunch,
-  forgetSpentLaunches,
-  isLaunchable,
-} from "@/lib/client/launch-claims";
-import {
   SHARE_MAX_AGE_WORDS,
   buildSharedSnapshot,
   encodeSharedSnapshot,
@@ -35,25 +30,15 @@ import {
   type SignalName,
 } from "@/lib/domain/types";
 import { normalizeUrlInput } from "@/lib/domain/url";
-import { PREFILL_PARAM, type LaunchGrant } from "@/lib/domain/share-launch";
-
-/** A link handed to the page from outside: `?url=`, or the share target. */
-export interface Launch {
-  url: string;
-  /**
-   * The launch grant when this page may start the scan (a share-sheet
-   * launch from this device, for this exact link), else null.
-   */
-  grant: LaunchGrant | null;
-}
+import { PREFILL_PARAM } from "@/lib/domain/share-launch";
 
 /** Query parameters that describe what the page opened on. */
 const LAUNCH_PARAMS = ["shared", "sig", PREFILL_PARAM] as const;
 
 /**
  * Drop the link the page opened on from the address bar once something
- * else replaced it, so a reload doesn't reopen a stale share, prefill, or
- * launch. Other parameters stay.
+ * else replaced it, so a reload doesn't reopen a stale share or prefill.
+ * Other parameters stay.
  */
 function clearLaunchParams() {
   const url = new URL(window.location.href);
@@ -92,12 +77,11 @@ export const VERIFIED_SHARE_NOTE = `It shows this result for ${SHARE_MAX_AGE_WOR
 
 function useCreateAnalyzerRuntime(
   shared: SharedView | null,
-  launch: Launch | null,
-  renderedAt: number | null,
+  prefill: string | null,
 ) {
   const [activeTab, setActiveTab] = useState<Tab>("single");
   const [viewMode, setViewMode] = useState<ViewMode>("summary");
-  const [singleUrl, setSingleUrl] = useState(launch?.url ?? "");
+  const [singleUrl, setSingleUrl] = useState(prefill ?? "");
   const [batchInput, setBatchInput] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
   const [selectedResult, setSelectedResult] = useState<AnalysisResult | null>(
@@ -162,29 +146,12 @@ function useCreateAnalyzerRuntime(
     [scoredSignals],
   );
 
-  // A share-target launch still being claimed (below) gives way to anything
-  // the person does meanwhile: editing the field, switching tabs, editing a
-  // batch, scanning, re-scanning, or opening a saved result.
-  const launchWantedRef = useRef(true);
-
-  const chooseTab = useCallback((tab: Tab) => {
-    launchWantedRef.current = false;
-    setActiveTab(tab);
-  }, []);
-
-  const editBatchInput = useCallback((value: string) => {
-    launchWantedRef.current = false;
-    setBatchInput(value);
-  }, []);
-
   const updateSingleUrl = useCallback((value: string) => {
-    launchWantedRef.current = false;
     setSingleUrl(value);
     setInputEditedSinceResult(true);
   }, []);
 
   const startSingleScan = useCallback(async () => {
-    launchWantedRef.current = false;
     setFormError(null);
     keepOpenedResultRef.current = false;
     setSelectedResult(null);
@@ -199,7 +166,6 @@ function useCreateAnalyzerRuntime(
   }, [scan, singleUrl]);
 
   const startBatchScan = useCallback(async () => {
-    launchWantedRef.current = false;
     setFormError(null);
     const urls = batchInput
       .split("\n")
@@ -228,7 +194,7 @@ function useCreateAnalyzerRuntime(
     await batch.startBatch(urls);
   }, [batch, batchInput]);
 
-  const scanUrl = useCallback(
+  const rescanUrl = useCallback(
     async (url: string) => {
       setFormError(null);
       keepOpenedResultRef.current = false;
@@ -241,56 +207,6 @@ function useCreateAnalyzerRuntime(
     },
     [scan],
   );
-
-  const rescanUrl = useCallback(
-    (url: string) => {
-      launchWantedRef.current = false;
-      return scanUrl(url);
-    },
-    [scanUrl],
-  );
-
-  // A share-target launch scans once, on arrival. The server cleared the
-  // cookie that carried it (`proxy.ts`), so a reload or a new visit only
-  // prefills; the browser records the grant's id (`claimLaunch`), so going
-  // Back (the router restores this render into a new component) or a
-  // second tab that received the same grant only prefills too, as does a
-  // page that holds the grant past its minute. A refused launch is a
-  // prefill: the field is focused and waits for a tap.
-  const pendingLaunchRef = useRef(launch?.grant ? launch : null);
-  const [launchRefused, setLaunchRefused] = useState(false);
-  const mountedRef = useRef(false);
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-    };
-  }, []);
-  useEffect(() => {
-    if (renderedAt !== null) void forgetSpentLaunches(renderedAt);
-  }, [renderedAt]);
-  useEffect(() => {
-    const pending = pendingLaunchRef.current;
-    const grant = pending?.grant;
-    if (!pending || !grant) return;
-    pendingLaunchRef.current = null;
-    const claim =
-      renderedAt === null
-        ? Promise.resolve(false)
-        : claimLaunch(grant, renderedAt);
-    void claim.then((claims) => {
-      if (!mountedRef.current || !launchWantedRef.current) return;
-      // The claim can commit after the grant's minute (a page paused
-      // mid-transaction): it stays recorded, so no other page scans it,
-      // and this one only prefills.
-      if (!claims || renderedAt === null || !isLaunchable(grant, renderedAt)) {
-        setLaunchRefused(true);
-        return;
-      }
-      clearLaunchParams();
-      void scanUrl(pending.url);
-    });
-  }, [renderedAt, scanUrl]);
 
   // A result (a fresh scan, or one opened from history or a batch) has
   // replaced what the page opened on.
@@ -408,7 +324,6 @@ function useCreateAnalyzerRuntime(
 
   /** Show a stored result (history entry or batch row) as the active one. */
   const openStoredResult = useCallback((result: AnalysisResult) => {
-    launchWantedRef.current = false;
     keepOpenedResultRef.current = true;
     setSelectedResult(result);
     setSingleUrl(result.url);
@@ -435,14 +350,14 @@ function useCreateAnalyzerRuntime(
     live,
     openStoredResult,
     // Arrived with a link to check (`?url=`) that waits for a tap.
-    prefilled: Boolean(launch && (!launch.grant || launchRefused)),
+    prefilled: Boolean(prefill),
     rescanUrl,
     scan,
     scored,
     selectedResult,
     selectHistoryEntry,
-    setActiveTab: chooseTab,
-    setBatchInput: editBatchInput,
+    setActiveTab,
+    setBatchInput,
     setFormError,
     setSelectedResult,
     setSingleUrl,
@@ -475,8 +390,7 @@ export function useAnalyzerRuntime() {
 export function AnalyzerRuntimeProvider({
   children,
   shared = null,
-  launch = null,
-  renderedAt = null,
+  prefill = null,
 }: {
   children: ReactNode;
   /**
@@ -485,12 +399,13 @@ export function AnalyzerRuntimeProvider({
    * loads), and the snapshot only when Scrutinix signed it.
    */
   shared?: SharedView | null;
-  /** `?url=`, normalized on the server, and whether to scan it now. */
-  launch?: Launch | null;
-  /** The server's time when it rendered this page (`claimLaunch`). */
-  renderedAt?: number | null;
+  /**
+   * The link `?url=` fills in, normalized on the server. It waits for the
+   * person to tap Analyze; nothing scans it on arrival.
+   */
+  prefill?: string | null;
 }) {
-  const value = useCreateAnalyzerRuntime(shared, launch, renderedAt);
+  const value = useCreateAnalyzerRuntime(shared, prefill);
   return (
     <AnalyzerRuntimeContext.Provider value={value}>
       {children}

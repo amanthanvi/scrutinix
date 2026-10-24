@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { headers } from "next/headers";
 
 import { AnalyzerRuntimeProvider } from "@/components/scrutinix/analyzer-runtime";
 import { AppFooter } from "@/components/scrutinix/app-footer";
@@ -8,12 +7,7 @@ import { ScrutinixErrorBoundary } from "@/components/scrutinix/error-boundary";
 import { HistorySection } from "@/components/scrutinix/history-section";
 import { ResultsSection } from "@/components/scrutinix/results-section";
 import { ScanForm } from "@/components/scrutinix/scan-form";
-import {
-  PREFILL_PARAM,
-  SHARE_LAUNCH_HEADER,
-  resolvePrefill,
-} from "@/lib/domain/share-launch";
-import { readLaunchGrant } from "@/lib/server/share-launch-grant";
+import { PREFILL_PARAM, resolvePrefill } from "@/lib/domain/share-launch";
 import {
   getSharedMetadata,
   resolveSharedView,
@@ -60,37 +54,22 @@ export default async function HomePage({
   // signed. The Public Suffix List is already on the server too: the shared
   // link's anatomy goes down with it so a look-alike hedges from the first
   // paint.
-  // A server component renders once per request and never re-renders on
-  // the client: this is the request's clock, which a share's and a launch
-  // grant's age are judged against.
-  // eslint-disable-next-line react-hooks/purity -- request time, see above
-  const renderedAt = Date.now();
   const shared = resolveSharedView(
     paramOf(params, "shared"),
     paramOf(params, "sig"),
-    renderedAt,
+    // A server component renders once per request and never re-renders on
+    // the client: this is the request's clock, which the share's age is
+    // judged against.
+    // eslint-disable-next-line react-hooks/purity -- request time, see above
+    Date.now(),
   );
 
-  // `?url=` prefills the Single field and waits for a tap. Only the
-  // installed app's share target (`app/share/route.ts`) leaves the grant
-  // that starts the scan too, and only for the link it names. It scans
-  // once: `proxy.ts` has already cleared its cookie from this response,
-  // and the browser scans each grant id once, within a minute of the share
-  // (`claimLaunch`, timed from `renderedAt`). A shared result outranks both
-  // (its grant, if any, is cleared unused).
+  // `?url=` (a bookmarklet, the iOS Shortcut, another site, or the share
+  // target's redirect) fills in the Single field and waits for a tap on
+  // Analyze; nothing scans on its own. A shared result outranks it.
   const prefill = shared
     ? null
     : resolvePrefill(paramOf(params, PREFILL_PARAM));
-  const launch = prefill
-    ? {
-        url: prefill,
-        grant: readLaunchGrant(
-          (await headers()).get(SHARE_LAUNCH_HEADER),
-          prefill,
-          renderedAt,
-        ),
-      }
-    : null;
 
   const lead = (
     <p className="text-lead mt-3 max-w-[34rem] text-pretty text-[var(--sx-text-muted)]">
@@ -100,11 +79,7 @@ export default async function HomePage({
   );
 
   return (
-    <AnalyzerRuntimeProvider
-      shared={shared}
-      launch={launch}
-      renderedAt={renderedAt}
-    >
+    <AnalyzerRuntimeProvider shared={shared} prefill={prefill}>
       <div className="flex min-h-screen flex-col">
         <AppHeader />
 
