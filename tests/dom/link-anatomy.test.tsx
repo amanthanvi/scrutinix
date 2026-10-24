@@ -109,3 +109,7 @@ describe("LinkAnatomyView facts", () => {
     expect(screen.queryByText("No secure connection")).toBeNull();
   });
 });
+
+vi.mock("@/components/ui/lazy-toaster", () => ({
+  getToast: async () => (await import("sonner")).toast,
+}));

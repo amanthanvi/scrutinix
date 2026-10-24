@@ -50,6 +50,9 @@ export function HistorySection() {
     drainHistoryQueue();
   }, [addResult, drainHistoryQueue, historyQueue]);
 
+  if (!hasEntries && !canUndoClear)
+    return <section aria-label="Scan history" />;
+
   return (
     <HistoryPanel
       entries={filteredEntries}

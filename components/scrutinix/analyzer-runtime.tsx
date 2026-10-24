@@ -10,7 +10,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { toast } from "sonner";
+import { getToast } from "@/components/ui/lazy-toaster";
 
 import { useBatchStream } from "@/hooks/use-batch-stream";
 import { warmLinkParser } from "@/hooks/use-link-anatomy";
@@ -242,9 +242,9 @@ function useCreateAnalyzerRuntime(shared: SharedView | null) {
                 lead: "It isn't verified.",
                 note: UNVERIFIED_SHARE_NOTE,
               };
-      const tellNotice = () => {
+      const tellNotice = async () => {
         if (!notice) return;
-        toast(notice.title, {
+        (await getToast())(notice.title, {
           description: notice.note,
           ...(scanAgain ? { action: scanAgain } : {}),
         });
@@ -253,9 +253,9 @@ function useCreateAnalyzerRuntime(shared: SharedView | null) {
       try {
         await navigator.clipboard.writeText(link);
         if (notice) {
-          tellNotice();
+          await tellNotice();
         } else {
-          toast.success("Link copied to clipboard", {
+          (await getToast()).success("Link copied to clipboard", {
             description: VERIFIED_SHARE_NOTE,
           });
         }
@@ -265,7 +265,7 @@ function useCreateAnalyzerRuntime(shared: SharedView | null) {
         if (typeof navigator.share === "function") {
           try {
             await navigator.share({ url: link });
-            tellNotice();
+            await tellNotice();
             return;
           } catch (error) {
             if (error instanceof DOMException && error.name === "AbortError") {
@@ -273,7 +273,7 @@ function useCreateAnalyzerRuntime(shared: SharedView | null) {
             }
           }
         }
-        toast.error(
+        (await getToast()).error(
           "Couldn't copy the link — select it below and copy it yourself.",
           {
             duration: Infinity,

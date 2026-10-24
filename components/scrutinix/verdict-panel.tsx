@@ -384,7 +384,7 @@ export function VerdictBand({
               aria-valuetext={`${score} out of 100`}
               className="font-sans text-[2rem] leading-none font-medium tracking-[-0.02em] text-[var(--sx-text)] tabular-nums"
             >
-              {/* Sans: Geist Mono's slashed zero reads as "Ø" at this size. */}
+              {/* Sans keeps the score zero distinct from a slashed letterform. */}
               {score}
               <span className="text-meta font-mono font-normal tracking-normal text-[var(--sx-text-muted)]">
                 /100

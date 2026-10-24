@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { Fragment, useEffect, useRef, useState } from "react";
-import { toast } from "sonner";
+import { getToast } from "@/components/ui/lazy-toaster";
 
 import { useAnalyzerRuntime } from "@/components/scrutinix/analyzer-runtime";
 import { LinkAnatomyView } from "@/components/scrutinix/link-anatomy";
@@ -464,13 +464,13 @@ export function ResultsSection() {
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => {
+                  onClick={async () => {
                     downloadTextFile(
                       "scan.json",
                       JSON.stringify(active, null, 2),
                       "application/json",
                     );
-                    toast.success("Downloaded scan.json");
+                    (await getToast()).success("Downloaded scan.json");
                   }}
                 >
                   Download result (JSON)

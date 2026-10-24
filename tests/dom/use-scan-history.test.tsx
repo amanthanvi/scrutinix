@@ -270,3 +270,7 @@ describe("useScanHistory", () => {
     openSpy.mockRestore();
   });
 });
+
+vi.mock("@/components/ui/lazy-toaster", () => ({
+  getToast: async () => (await import("sonner")).toast,
+}));

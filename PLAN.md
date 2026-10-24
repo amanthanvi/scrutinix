@@ -501,3 +501,51 @@ score band. No score or verdict changes.
 - 2026-05-01: Keeping parallel PRs out of `PLAN.md` avoided artificial merge conflicts; use one consolidated plan update after the code branches land.
 - 2026-10-10: Unexpected analyze failures no longer forward `error.message`. `PublicError` is the allowlist for intentional copy (validation, rate limit, authored provider status). Full exception text is logged with URL redaction. The stream backstop writes a route-specific terminal error (required argument, no default) and the client keeps the first terminal event.
 - 2026-10-24: Porting #63 onto the redesign stack, a random reference per failed check made one scan show several unrelated ids. The scan id is now the only reference, stated once per result; rows stay plain.
+
+### P29.4 Speed (2026-10-24, layer 4)
+
+- [x] Replace page Geist fonts with system sans/mono; keep a `--font-display` hook and unchanged server OG fonts.
+- [x] Measure production `/` in a fresh Chromium context: baseline 13 scripts, 774,841 raw / 234,674 gzip JS bytes, 141,020 font bytes. Final: 11 scripts, 734,970 raw / 223,410 gzip JS bytes, zero font bytes.
+- [x] Defer Batch input and Sonner until requested; load the history panel only for saved entries/Undo while retaining eager IndexedDB hydration. Batch table was already conditional and dynamic.
+- [x] Add actual-browser first-load budget and regression self-check; CI gates 234,000 gzip JS bytes and zero page-font bytes. The 200 KB target remains unmet; retained boundary validation and result accessibility take priority over a broader rewrite.
+- [x] Investigate first evidence using actual POST/NDJSON with offline fixtures and sanitized timing logs: warm-module first `signal_result` 0.0971 ms before / 0.0993 ms repeat; first request 4.990 / 4.950 ms. No server change or speedup claimed: checks already start concurrently. Cold real local ML took 85–110 ms while other evidence arrived in 3.8–9.4 ms. A controlled 200 ms cache miss delayed first evidence to 201.3–202.0 ms; changing the 1 s cache timeout needs live latency evidence. Measurements exclude HTTP/proxy/browser time and use no live providers.
+- [x] Full verification: format, lint, typecheck, unit 495, integration 43, DOM 78, E2E 35, production build, bundle guard, contrast/strip tests. Lighthouse medians (3): Performance 0.97, Accessibility 1.00, Best Practices 0.96, SEO 1.00. Own ports: E2E 3109, Lighthouse 3110, visual fixture server 3112. Desktop/phone, light/dark home/result screenshots checked; score uses an unslashed system-sans zero with equal tabular digit widths.
+- [x] Review findings addressed: optional Sonner chunk rejection gets a local accessible fallback that retains manual-share copy/action; Batch loading skeleton matches resolved responsive geometry (deliberately delayed chunk tests at 1440/375 px).
+- [x] Independent adversarial review: two concrete issues fixed and second review clean. Delivered as a local conventional commit on `sx/4-speed`; no push or PR work.
+
+<details>
+<summary>P29.4 measured production script inventory</summary>
+
+The budget sums gzip-compressed response bodies individually; sizes are bytes, not HTTP header overhead. Fresh desktop Chromium, no stored history, measured through network idle; server-only OG font files are excluded.
+
+**Before** (`/_next/static/chunks/`):
+
+- `turbopack-2zsgxh2sm2lot.js`: 10,913 raw / 4,289 gzip
+- `1-_0vpsgswkva.js`: 27,475 raw / 8,380 gzip
+- `3fntmmi971322.js`: 14,377 raw / 3,661 gzip
+- `3660pm-83radu.js`: 933 raw / 487 gzip
+- `1ujcamtjp9ase.js`: 549 raw / 278 gzip
+- `2jv0t-ejozmiv.js`: 38,597 raw / 10,751 gzip
+- `3gjea__ygfi8s.js`: 40,635 raw / 14,599 gzip
+- `2pq9gd7xedcr4.js`: 172,661 raw / 46,243 gzip
+- `1996_jmxw62tn.js`: 4,909 raw / 1,979 gzip
+- `28vdvdtf35i73.js`: 34,806 raw / 11,323 gzip
+- `43ku-rydh5fpt.js`: 73,470 raw / 24,033 gzip
+- `1rj7ns8rte9vc.js`: 229,156 raw / 71,628 gzip
+- `392ieu_e0lkn5.js`: 126,360 raw / 37,023 gzip
+
+**After** (`/_next/static/chunks/`):
+
+- `1-_0vpsgswkva.js`: 27,475 raw / 8,380 gzip
+- `turbopack-2zsgxh2sm2lot.js`: 10,913 raw / 4,289 gzip
+- `13xxm950nv56_.js`: 650 raw / 299 gzip
+- `3fntmmi971322.js`: 14,377 raw / 3,661 gzip
+- `1290606knvs8c.js`: 5,124 raw / 2,262 gzip
+- `2pq9gd7xedcr4.js`: 172,661 raw / 46,243 gzip
+- `06ci8w3gzkksr.js`: 34,087 raw / 10,936 gzip
+- `0l2o1fo87bf8h.js`: 41,990 raw / 14,931 gzip
+- `1be5gszzcyh2x.js`: 72,177 raw / 23,758 gzip
+- `1rj7ns8rte9vc.js`: 229,156 raw / 71,628 gzip
+- `392ieu_e0lkn5.js`: 126,360 raw / 37,023 gzip
+
+</details>

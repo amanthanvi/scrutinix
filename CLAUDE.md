@@ -338,3 +338,7 @@ the committed e2e key (`scripts/run-e2e.mjs`; `env.ts` ignores it unless
 `SCRUTINIX_TEST_FIXTURES=1`, and ignores every other key when fixtures are
 on). Rotate the production key if it was ever set for Preview/Development
 or pulled with `vercel env pull`.
+
+### P29.4 speed
+
+The page requests no web fonts; `--font-display` defaults to `--font-sans`. Batch input and results load on demand; history storage hydrates eagerly, but its panel loads only for entries or Undo. Sonner mounts on the first notification and waits for its subscription before publishing. `npm run check:bundle` audits actual first-load browser requests after build; budgets live in `package.json`. CI runs it with provisioned Chromium.

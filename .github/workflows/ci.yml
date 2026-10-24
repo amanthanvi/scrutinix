@@ -145,5 +145,8 @@ jobs:
           path: playwright-report/
           retention-days: 7
 
+      - name: First-load bundle budget
+        run: npm run check:bundle
+
       - name: Lighthouse
         run: npm run lighthouse

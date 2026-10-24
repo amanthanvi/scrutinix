@@ -141,3 +141,7 @@ describe("shareResult", () => {
     expect(options).not.toHaveProperty("action");
   });
 });
+
+vi.mock("@/components/ui/lazy-toaster", () => ({
+  getToast: async () => (await import("sonner")).toast,
+}));

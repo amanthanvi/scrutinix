@@ -121,3 +121,7 @@ describe("the link, taken apart on paste", () => {
     expect(screen.getByText("Matches secure-login.xyz.")).toBeTruthy();
   });
 });
+
+vi.mock("@/components/ui/lazy-toaster", () => ({
+  getToast: async () => (await import("sonner")).toast,
+}));

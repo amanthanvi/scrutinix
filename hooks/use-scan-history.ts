@@ -9,7 +9,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { toast } from "sonner";
+import { getToast } from "@/components/ui/lazy-toaster";
 
 import { sanitizeHistoryEntry } from "@/lib/domain/runtime-safety";
 import type { AnalysisResult, HistoryEntry } from "@/lib/domain/types";
@@ -67,7 +67,9 @@ export function useScanHistory() {
     setHistoryUnavailable(true);
     if (!failureNotified.current) {
       failureNotified.current = true;
-      toast.error("Scan history is unavailable in this browser session.");
+      void getToast().then((toast) =>
+        toast.error("Scan history is unavailable in this browser session."),
+      );
     }
   }, []);
 
