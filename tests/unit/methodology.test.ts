@@ -869,7 +869,15 @@ describe("/about confidence", () => {
       [pct(policy.caps.unknown)],
       [pct(policy.floor), pct(policy.safeCeiling), pct(policy.riskyCeiling)],
     ]);
-    expect(CONFIDENCE.footnote).toContain("shared-platform listing");
+    // The two exceptions a review found missing: keep them stated.
+    expect(CONFIDENCE.footnote).toContain(
+      "not even with a shared-platform listing set aside",
+    );
+    expect(
+      CONFIDENCE.steps.find((row) =>
+        row.step.startsWith("Each check that finished without much"),
+      )?.step,
+    ).toContain("answered only in part and found nothing");
   });
 
   it("gives no clean-feed credit for a set-aside shared-platform listing, and full credit to a partial answer with a hit", async () => {

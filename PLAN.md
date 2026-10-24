@@ -321,6 +321,7 @@ score band. No score or verdict changes.
 - [x] The copy and numbers live in `lib/domain/methodology.ts`; `tests/unit/methodology.test.ts` runs every row through `buildThreatAssessment`, so a changed weight fails until the page states it (checked by mutating a feed weight).
 - [x] Pronunciation on /about: "Scrutinix (SCROO-tih-nix), from scrutiny: looking closely before you trust something."
 - [x] Review round: stated the shared-platform exception, the VirusTotal discount's no-date case, the model arithmetic, the meta-refresh and downloaded-HTML limits, "at least Malicious", and what Look-alike recognises; confidence now prints `CONFIDENCE_POLICY` (cut-offs, caps, bounds, full arithmetic in a disclosure). The test pins every printed number and both sides of each threshold (nine page/engine/provider mutations each fail it).
+- [x] Second review round: confidence copy states that a partial threat-feed answer is thin only when it found nothing and that a set-aside shared-platform listing earns no clean-feed credit; the rules text moved into `methodology.ts` and prints the engine's thresholds; thresholds are digits and each row's numbers are checked in order; each confidence step is checked against its own policy field. The reviewer's four escaping mutations now fail the test.
 - [x] Two engine fixes the review found: a multi-code Spamhaus answer reads as its strongest listing (phishing over spam), and a relative redirect on a plain-HTTP hop counts as staying on HTTP (10), like an absolute one.
 
 ### P24 Resolve September dependency maintenance
