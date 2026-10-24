@@ -293,7 +293,7 @@ export const RULES: ReadonlyArray<{ term: string; text: string }> = [
   },
   {
     term: LOOK_ALIKE_WORD,
-    text: `When we recognise another site's address in a Safe link's subdomain or login name, as in paypal.com.secure-login.xyz, the result reads ${LOOK_ALIKE_WORD} instead. The score doesn't change, and the details still show it. We look for addresses with common endings such as .com or .co.uk, not every possible name, and never in the page part of a link.`,
+    text: `When we recognise another site's address in a Safe link's subdomain or login name, as in paypal.com.secure-login.xyz, the result reads ${LOOK_ALIKE_WORD} instead. The score doesn't change, and the details still show it. We look for addresses with common endings such as .com or .co.uk, not every possible name, and never in the page part of a link. Your browser does this check; if it can't load the part that does, a Safe result reads Unconfirmed instead of Safe, with no score.`,
   },
 ];
 
