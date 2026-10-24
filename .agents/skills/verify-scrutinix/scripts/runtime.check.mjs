@@ -59,8 +59,6 @@ function envFor(dir, extra = {}) {
 }
 
 const children = [];
-const groups = [];
-const orphanGroups = new Set();
 const supervised = [];
 
 // CLI runs are asynchronous so servers in this process (the forged socket)
@@ -87,14 +85,8 @@ function runCli(script, args = [], env = process.env) {
 const output = (result) =>
   `${result.status}\n${result.stdout}\n${result.stderr}`;
 
-function alive(pid) {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch {
-    return false;
-  }
-}
+// Whether a child this check spawned has exited, read from its handle.
+const exited = (child) => child.exitCode !== null || child.signalCode !== null;
 
 async function waitUntil(predicate, timeoutMs = 5_000) {
   const deadline = Date.now() + timeoutMs;
@@ -296,38 +288,78 @@ function track(child) {
   return child;
 }
 
-// Stops everything this check started, only through handles that keep the
-// pid from being reused: ChildProcess.kill is a no-op once the child is
-// reaped, and a group is signalled only while its leader is still unreaped.
-// A supervisor's own stop path is SIGTERM. Also runs when the check itself is
-// interrupted, so a killed run leaves nothing behind.
-function stopGroup(leader, signal = "SIGTERM") {
-  if (leader.exitCode !== null || leader.signalCode !== null) return;
-  try {
-    process.kill(-leader.pid, signal);
-  } catch {
-    // The group is already empty.
-  }
-}
-
-// An orphaned run's group outlives its supervisor. Its id stays held while
-// any member lives, so it still names exactly those members.
-function stopOrphans() {
-  for (const pgid of orphanGroups) {
-    try {
-      process.kill(-pgid, "SIGKILL");
-    } catch {
-      // Already gone.
+// Every stand-in this check starts (fake apps, their grandchildren, and the
+// strangers) holds a connection to this lifeline socket and exits when that
+// connection closes. The check stops a stand-in by closing the end it holds,
+// never by a saved pid or process group, and reads "exited" from the close
+// the kernel delivers when the stand-in's process ends. If the check itself
+// dies, every lifeline closes and every stand-in exits on its own.
+const lifelinePath = path.join(scratch, "lifeline.sock");
+const standIns = [];
+const lifeline = net.createServer((socket) => {
+  const entry = { name: "", role: "", pid: 0, socket, open: true };
+  let buffer = "";
+  socket.setEncoding("utf8");
+  socket.on("error", () => {});
+  socket.on("close", () => {
+    entry.open = false;
+  });
+  socket.on("data", (chunk) => {
+    buffer += chunk;
+    for (let end; (end = buffer.indexOf("\n")) !== -1;) {
+      const line = buffer.slice(0, end);
+      buffer = buffer.slice(end + 1);
+      let message = {};
+      try {
+        message = JSON.parse(line);
+      } catch {
+        continue;
+      }
+      if (message.listening) {
+        entry.listening = true;
+      } else if (!entry.name) {
+        Object.assign(entry, {
+          name: String(message.name),
+          role: String(message.role),
+          pid: Number(message.pid),
+        });
+        standIns.push(entry);
+      }
     }
-  }
-  orphanGroups.clear();
+  });
+});
+await new Promise((resolve) => lifeline.listen(lifelinePath, resolve));
+
+const standIn = (name, role) =>
+  standIns.find((entry) => entry.name === name && entry.role === role);
+const running = (entry) => Boolean(entry?.open);
+
+// The stand-ins registered under `name`, once every role has connected.
+async function standInsOf(name, roles, { listening = "" } = {}) {
+  await waitUntil(
+    () =>
+      roles.every((role) => standIn(name, role)) &&
+      (!listening || standIn(name, listening)?.listening),
+  );
+  return Object.fromEntries(
+    roles.map((role) => [role, standIn(name, role) ?? { pid: 0, open: false }]),
+  );
 }
 
+// Close the lifelines this check holds, and wait for those stand-ins to end.
+async function release(entries) {
+  for (const entry of entries) entry.socket.destroy();
+  return waitUntil(() => entries.every((entry) => !running(entry)));
+}
+
+// Supervisors and direct children are stopped through their ChildProcess
+// handles: kill is a no-op once the child is reaped, so the pid cannot be
+// reused under it. Stand-ins are stopped by their lifelines. Also runs when
+// the check itself is interrupted, so a killed run leaves nothing behind.
 function teardown() {
   for (const { child } of supervised) child?.kill("SIGTERM");
-  stopOrphans();
-  for (const leader of groups) stopGroup(leader);
   for (const child of children) child.kill("SIGTERM");
+  for (const entry of standIns) entry.socket.destroy();
 }
 for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) {
   process.on(signal, () => {
@@ -346,69 +378,74 @@ function sleeper(cwd) {
   );
 }
 
-// A stand-in app: optionally serves the three pages doctor reads, and starts
-// a grandchild so a stop is seen to reach the whole group.
+// A stand-in app. Mode "html" serves the three pages doctor reads, "silent"
+// serves nothing, and "escape" starts a grandchild that leaves the process
+// group (setsid) and serves the pages itself. Otherwise the grandchild stays
+// in the group, so a stop is seen to reach the whole group.
 const fakeApp = path.join(scratch, "fake-app.cjs");
 writeFileSync(
   fakeApp,
   `const http = require("http");
-const fs = require("fs");
+const net = require("net");
 const { spawn } = require("child_process");
-const [port, mode, pidFile] = process.argv.slice(2);
+const [port, mode, name, role = "app"] = process.argv.slice(2);
 const pages = {
   "/": "<main>URL to analyze</main>",
   "/about": "<h1>How a scan becomes a verdict.</h1>",
   "/privacy": '<header><a aria-current="page" href="/privacy">Privacy</a></header><main id="main-content"><h1>Privacy</h1></main>',
 };
-const grandchild = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], { stdio: "ignore" });
-const ready = () => fs.writeFileSync(pidFile, JSON.stringify({ app: process.pid, grandchild: grandchild.pid }));
-if (mode === "html") {
+// The check's lifeline: this process exits as soon as the check closes it.
+const lifeline = net.connect(${JSON.stringify(lifelinePath)});
+const say = (message) =>
+  lifeline.write(JSON.stringify({ name, role, pid: process.pid, ...message }) + "\\n");
+say({});
+lifeline.once("close", () => process.exit(0));
+lifeline.on("error", () => {});
+function serve() {
   http
     .createServer((req, res) => {
       const body = pages[req.url];
       res.writeHead(body ? 200 : 404, { "content-type": "text/html" });
       res.end(body || "not found");
     })
-    .listen(Number(port), "127.0.0.1", ready);
-} else {
-  ready();
+    .listen(Number(port), "127.0.0.1", () => say({ listening: true }));
+}
+if (role === "app") {
+  const escape = mode === "escape";
+  spawn(
+    process.execPath,
+    [__filename, port, escape ? "html" : "idle", name, escape ? "escaped" : "grandchild"],
+    { stdio: "ignore", detached: escape },
+  );
+  if (mode === "html") serve();
+} else if (mode === "html") {
+  serve();
 }
 setInterval(() => {}, 1000);
 `,
 );
 
-async function readPids(file) {
-  await waitUntil(() => existsSync(file));
-  try {
-    return JSON.parse(readFileSync(file, "utf8"));
-  } catch {
-    return { app: 0, grandchild: 0 };
-  }
-}
-
 // A server started by this check, not by any supervisor: same executable and
 // same cwd (this checkout) as the app. The old design would have owned it.
-// It leads its own group, so teardown can stop it with its grandchild.
 async function stranger(port, name) {
-  const pidFile = path.join(scratch, `${name}.json`);
-  const child = spawn(
-    process.execPath,
-    [fakeApp, String(port), "html", pidFile],
-    { cwd: runtime.repoRoot, stdio: "ignore", detached: true },
+  const child = track(
+    spawn(process.execPath, [fakeApp, String(port), "html", name], {
+      cwd: runtime.repoRoot,
+      stdio: "ignore",
+    }),
   );
-  groups.push(child);
-  const pids = await readPids(pidFile);
-  await waitUntil(() => runtime.tcpOpen(port));
+  const pids = await standInsOf(name, ["app", "grandchild"], {
+    listening: "app",
+  });
   return { child, pids };
 }
 
 async function supervise(dir, port, mode, name, extra = {}) {
-  const pidFile = path.join(scratch, `${name}.json`);
   const entry = { dir, state: null, child: null };
   supervised.push(entry);
   const started = await runtime.startSupervisor({
     command: process.execPath,
-    args: [fakeApp, String(port), mode, pidFile],
+    args: [fakeApp, String(port), mode, name],
     env: process.env,
     port,
     baseUrl: `http://127.0.0.1:${port}`,
@@ -420,8 +457,10 @@ async function supervise(dir, port, mode, name, extra = {}) {
     ...extra,
   });
   entry.state = started.state;
-  const pids = await readPids(pidFile);
-  if (mode === "html") await waitUntil(() => runtime.tcpOpen(port));
+  const second = mode === "escape" ? "escaped" : "grandchild";
+  const pids = await standInsOf(name, ["app", second], {
+    listening: mode === "html" ? "app" : mode === "escape" ? "escaped" : "",
+  });
   return { ...started, pids };
 }
 
@@ -507,7 +546,7 @@ check(
     unsafeCleanup.stderr.includes("refusing to read") &&
     unsafeCleanup.stderr.includes("Nothing was stopped") &&
     unsafeSocket.connections.count === 0 &&
-    alive(victim.pid),
+    !exited(victim),
   `${output(unsafeCleanup)}\nconnections ${unsafeSocket.connections.count}`,
 );
 unsafeSocket.close();
@@ -518,7 +557,7 @@ check(
   "cleanup refuses a symlinked run.json and contacts nothing",
   symlinkCleanup.status === 2 &&
     symlinkSocket.connections.count === 0 &&
-    alive(victim.pid),
+    !exited(victim),
   `${output(symlinkCleanup)}\nconnections ${symlinkSocket.connections.count}`,
 );
 symlinkSocket.close();
@@ -547,7 +586,7 @@ check(
   forgedCleanup.status === 1 &&
     forged.connections.count === 1 &&
     forgedCleanup.stderr.includes("did not prove") &&
-    alive(victim.pid),
+    !exited(victim),
   `${output(forgedCleanup)}\nconnections ${forged.connections.count}`,
 );
 const forgedDoctor = await runtime.runOwnership("http://127.0.0.1:3000", {
@@ -579,7 +618,7 @@ check(
   legacyCleanup.status === 1 &&
     legacyCleanup.stderr.includes("tmux version") &&
     legacyCleanup.stderr.includes(`recorded pids ${victim.pid}`) &&
-    alive(victim.pid),
+    !exited(victim),
   output(legacyCleanup),
 );
 
@@ -603,15 +642,15 @@ const supervisorPid = run.state.supervisorPid;
 check(
   "supervisor leads its own process group, with the app and grandchild in it",
   runtime.processGroup(supervisorPid) === supervisorPid &&
-    runtime.processGroup(run.pids.app) === supervisorPid &&
-    runtime.processGroup(run.pids.grandchild) === supervisorPid,
-  JSON.stringify({ supervisorPid, pids: run.pids }),
+    runtime.processGroup(run.pids.app.pid) === supervisorPid &&
+    runtime.processGroup(run.pids.grandchild.pid) === supervisorPid,
+  JSON.stringify({ supervisorPid, app: run.pids.app.pid }),
 );
 check(
   "status names the app's listener on 127.0.0.1 as its own",
   status?.listeners.own.some(
     (listener) =>
-      listener.pid === run.pids.app && listener.address === "127.0.0.1",
+      listener.pid === run.pids.app.pid && listener.address === "127.0.0.1",
   ) && status.listeners.foreign.length === 0,
   JSON.stringify(status),
 );
@@ -622,7 +661,7 @@ check(
 );
 check(
   "the stranger is outside the run's group",
-  runtime.processGroup(strangerB.pids.app) !== supervisorPid,
+  runtime.processGroup(strangerB.pids.app.pid) !== supervisorPid,
 );
 
 const doctorOwn = await runCli(
@@ -674,34 +713,34 @@ await delay(300);
 check(
   "a stop without the run token is refused and stops nothing",
   wrongToken.proven === false &&
-    alive(run.pids.app) &&
-    alive(run.pids.grandchild) &&
-    alive(supervisorPid),
+    running(run.pids.app) &&
+    running(run.pids.grandchild) &&
+    !exited(run.child),
   JSON.stringify(wrongToken),
 );
 
 const runCleanup = await runCli("cleanup.mjs", [], envFor(runDir));
 await waitUntil(
   () =>
-    !alive(run.pids.app) &&
-    !alive(run.pids.grandchild) &&
-    !alive(supervisorPid),
+    !running(run.pids.app) &&
+    !running(run.pids.grandchild) &&
+    exited(run.child),
 );
 check(
   "cleanup stops the app, its grandchild, and the supervisor",
   runCleanup.status === 0 &&
     runCleanup.stdout.includes(`stopped run ${run.state.runId}`) &&
-    !alive(run.pids.app) &&
-    !alive(run.pids.grandchild) &&
-    !alive(supervisorPid),
+    !running(run.pids.app) &&
+    !running(run.pids.grandchild) &&
+    exited(run.child),
   output(runCleanup),
 );
 check(
   "cleanup leaves a same-checkout server, its child, and an outside process running",
-  alive(strangerB.pids.app) &&
-    alive(strangerB.pids.grandchild) &&
-    alive(outsider.pid) &&
-    alive(victim.pid),
+  running(strangerB.pids.app) &&
+    running(strangerB.pids.grandchild) &&
+    !exited(outsider) &&
+    !exited(victim),
 );
 check(
   "the run's port is free and its socket and token are gone",
@@ -730,7 +769,7 @@ check(
   takenOwnership.owned === false &&
     takenOwnership.reason.includes("outside this run") &&
     takenOwnership.body?.listeners.foreign.some(
-      (listener) => listener.pid === strangerC.pids.app,
+      (listener) => listener.pid === strangerC.pids.app.pid,
     ),
   JSON.stringify(takenOwnership),
 );
@@ -745,37 +784,42 @@ check(
   output(takenDoctor),
 );
 const takenCleanup = await runCli("cleanup.mjs", [], envFor(takenDir));
-await waitUntil(() => !alive(taken.pids.app));
+await waitUntil(() => !running(taken.pids.app));
 check(
   "cleanup stops only the run's app and reports the stranger on the port",
   takenCleanup.status === 1 &&
-    !alive(taken.pids.app) &&
-    !alive(taken.state.supervisorPid) &&
-    alive(strangerC.pids.app) &&
+    !running(taken.pids.app) &&
+    exited(taken.child) &&
+    running(strangerC.pids.app) &&
     takenCleanup.stderr.includes(`port ${portC} is still open`) &&
-    takenCleanup.stderr.includes(`pid ${strangerC.pids.app}, started`),
+    takenCleanup.stderr.includes(`pid ${strangerC.pids.app.pid}, started`),
   output(takenCleanup),
 );
 
 // Finding 4: when the supervisor is gone, nothing is re-found by identity.
-// The orphaned app keeps running and is reported.
+// The orphaned app keeps running and is reported. The check then ends the
+// orphans through their lifelines: their group has no living leader, so its
+// id no longer names only them.
 const portD = await freePort();
 const orphanDir = privateDir("orphan");
 const orphan = await supervise(orphanDir, portD, "html", "app-d");
-orphanGroups.add(orphan.state.supervisorPid);
 orphan.child.kill("SIGKILL");
-await waitUntil(() => !alive(orphan.state.supervisorPid));
+await waitUntil(() => exited(orphan.child));
 const orphanCleanup = await runCli("cleanup.mjs", [], envFor(orphanDir));
 check(
   "cleanup never signals a pid itself when the supervisor is gone",
   orphanCleanup.status === 1 &&
     orphanCleanup.stdout.includes("already gone") &&
     orphanCleanup.stderr.includes(`port ${portD} is still open`) &&
-    alive(orphan.pids.app) &&
-    alive(orphan.pids.grandchild),
+    running(orphan.pids.app) &&
+    running(orphan.pids.grandchild),
   output(orphanCleanup),
 );
-stopOrphans();
+check(
+  "the orphans exit when the check closes their lifelines",
+  (await release([orphan.pids.app, orphan.pids.grandchild])) &&
+    !(await runtime.tcpOpen(portD)),
+);
 
 // `kill <supervisor pid>` is the manual stop: the group goes with it.
 const portE = await freePort();
@@ -784,15 +828,15 @@ const signalled = await supervise(signalDir, portE, "html", "app-e");
 signalled.child.kill("SIGTERM");
 await waitUntil(
   () =>
-    !alive(signalled.state.supervisorPid) &&
-    !alive(signalled.pids.app) &&
-    !alive(signalled.pids.grandchild),
+    exited(signalled.child) &&
+    !running(signalled.pids.app) &&
+    !running(signalled.pids.grandchild),
 );
 check(
   "SIGTERM to the supervisor stops its group and removes its socket",
-  !alive(signalled.state.supervisorPid) &&
-    !alive(signalled.pids.app) &&
-    !alive(signalled.pids.grandchild) &&
+  exited(signalled.child) &&
+    !running(signalled.pids.app) &&
+    !running(signalled.pids.grandchild) &&
     !existsSync(runtime.socketPath(signalDir)),
 );
 
@@ -848,11 +892,25 @@ check(
 );
 
 for (const { dir, state, child } of supervised) {
-  if (state && child && child.exitCode === null && child.signalCode === null) {
-    await runtime.stopRun(state, { dir });
-  }
+  if (state && child && !exited(child)) await runtime.stopRun(state, { dir });
 }
 teardown();
+check(
+  "every stand-in this check started has exited",
+  (await release(standIns)) && standIns.length > 0,
+  standIns
+    .filter(running)
+    .map((entry) => `${entry.name}/${entry.role}`)
+    .join(", "),
+);
+lifeline.close();
+// Finding 1 of round 3: the check never signals a process group it saved.
+check(
+  "the check signals no process group",
+  !/process\.kill\(\s*-/.test(
+    readFileSync(fileURLToPath(import.meta.url), "utf8"),
+  ),
+);
 
 // ---- Redaction --------------------------------------------------------------
 
