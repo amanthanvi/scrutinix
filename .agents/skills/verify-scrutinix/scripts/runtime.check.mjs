@@ -492,13 +492,18 @@ for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) {
   });
 }
 
-function sleeper(cwd) {
-  return track(
-    spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], {
+// A process that only waits, in `cwd`. Like every stand-in it holds a
+// lifeline (finding 6 of round 4): it exits when the check closes it, or
+// when the check dies, so a SIGKILLed check leaves no sleeper behind.
+async function sleeper(cwd, name) {
+  const child = track(
+    spawn(process.execPath, [fakeApp, "0", "idle", name, "sleeper"], {
       cwd,
       stdio: "ignore",
     }),
   );
+  await standInsOf(name, ["sleeper"]);
+  return child;
 }
 
 // A stand-in app. Mode "html" serves the three pages doctor reads, "silent"
@@ -658,7 +663,7 @@ async function forgedSocket(dir) {
   return { connections, close: () => server.close() };
 }
 
-const victim = sleeper(runtime.repoRoot);
+const victim = await sleeper(runtime.repoRoot, "victim");
 await waitUntil(() => runtime.processIdentity(victim.pid)?.cwd);
 const victimIdentity = runtime.processIdentity(victim.pid);
 
@@ -773,7 +778,7 @@ check(
 const portA = await freePort();
 const portB = await freePort();
 const strangerB = await stranger(portB, "stranger-b");
-const outsider = sleeper("/tmp");
+const outsider = await sleeper("/tmp", "outsider");
 const runDir = privateDir("run");
 const run = await supervise(runDir, portA, "html", "app-a");
 check(
@@ -1398,13 +1403,18 @@ check(
 );
 foreignSocket.close();
 
-// Another next dev on a port is named by pid and cwd, never stopped.
+// Another next dev on a port is named by pid and cwd, never stopped. It
+// holds a lifeline like every other stand-in.
 const holderScript = path.join(scratch, "next");
 const holderPortFile = path.join(scratch, "holder-port");
 writeFileSync(
   holderScript,
   `const net = require("net");
 const fs = require("fs");
+const lifeline = net.connect(${JSON.stringify(lifelinePath)});
+lifeline.write(JSON.stringify({ name: "holder", role: "next", pid: process.pid }) + "\\n");
+lifeline.once("close", () => process.exit(0));
+lifeline.on("error", () => {});
 const server = net.createServer();
 server.listen(0, "127.0.0.1", () => {
   fs.writeFileSync(${JSON.stringify(holderPortFile)}, String(server.address().port));
@@ -1419,6 +1429,7 @@ const holder = track(
   }),
 );
 await waitUntil(() => existsSync(holderPortFile));
+await standInsOf("holder", ["next"]);
 const holderPort = Number(readFileSync(holderPortFile, "utf8"));
 const foreignNext = runtime.formatForeignNext(holderPort);
 check(
@@ -1427,6 +1438,23 @@ check(
     foreignNext.includes("another next dev") &&
     !foreignNext.includes(holderScript),
   foreignNext,
+);
+
+// Finding 6 of round 4: the sleepers and the fake next end through their
+// lifelines alone. Nothing signals them here; their exits are read from the
+// ChildProcess handles.
+const helpers = [
+  standIn("victim", "sleeper"),
+  standIn("outsider", "sleeper"),
+  standIn("holder", "next"),
+];
+const helpersHeld = helpers.every(running);
+await release(helpers.filter(Boolean));
+await waitUntil(() => exited(victim) && exited(outsider) && exited(holder));
+check(
+  "the sleepers and the fake next hold lifelines and exit when they close",
+  helpersHeld && exited(victim) && exited(outsider) && exited(holder),
+  `held ${helpersHeld}`,
 );
 
 for (const { dir, state, child } of supervised) {
