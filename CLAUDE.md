@@ -39,15 +39,14 @@ npm run icons                      # Regenerate favicons/app icons from lib/bran
 app/
   layout.tsx              # Root layout (ThemeProvider + lazy Sonner; system sans/mono, no page web fonts)
   page.tsx                # Single-column home: header, headline, ScanForm, ResultsSection, history; ?shared= metadata;
-                          #   ?url= prefill + launch grant (redeemed once); a shared link opens recipient-first
+                          #   ?url= prefill (waits for Analyze); a shared link opens recipient-first
   scrutinix.css           # CSS-only motion/utility layer (sx-* classes)
   globals.css             # Tailwind v4 + semantic --sx-* theme tokens
   api/analyze/            # POST NDJSON stream (single + batch routes)
   opengraph-image.tsx     # Default OG card (lib/og/cards.tsx, bundled Geist)
   og/result/route.tsx     # Per-result share image for ?shared= links (payload-capped)
-  share/route.ts          # Web Share Target (POST /share): first link -> /?url=; launch grant only for Sec-Fetch-Site: none
-proxy.ts                  # Rate limiting (scan tier for /api/analyze, image tier for /og/result) + CSP nonces;
-                          #   hands `/` the share-launch grant (x-sx-share-launch) and clears its cookie
+  share/route.ts          # Web Share Target (POST /share): first link -> /?url= (prefill only; no cookie)
+proxy.ts                  # Rate limiting (scan tier for /api/analyze, image tier for /og/result) + CSP nonces
 
 components/
   ui/                     # Minimal primitives: button, input, textarea, tabs, sonner
@@ -100,14 +99,13 @@ lib/
     impersonated-brands.ts # Shared brand list (look-alike ccTLD runs, structure-risk scoring)
     registrable-domain.ts # Server wrapper over link-anatomy's registrableDomainOf
     copy.ts               # countOf / formatList / capitalize / formatAge for user-facing copy
-    share-launch.ts       # Share-target link extraction, Sec-Fetch-Site gate, ?url= prefill, launch cookie/header names
+    share-launch.ts       # Share-target link extraction (extractSharedLink) and ?url= prefill (resolvePrefill)
   og/                     # Share-card renderers (cards.tsx) and bundled-Geist loader (fonts.ts)
   server/                 # Orchestrator, providers, signals, cache, local ONNX ML
-    share-launch-grant.ts # Launch grant: <id>.<issuedAt>.<sha256(link)>; readLaunchGrant checks digest + minute (no server store)
     share-metadata.ts     # ?shared= verify + validate → SharedView, page metadata, image cap
     share-signing.ts      # HMAC sign/verify for share links; attaches result.share to streamed results
     rate-limit.ts         # Upstash/in-memory limiter with "scan" and "image" tiers
-  client/                 # NDJSON parser, export utilities, launch-claims (scan each launch id once, within its minute)
+  client/                 # NDJSON parser, export utilities
   config/                 # Environment validation
 
 scripts/
@@ -294,43 +292,22 @@ tests/
   fact per row, explicit `now`); TXT values are counted and named by
   kind, never dumped.
 
-- **Links from outside**: `/?url=` prefills the Single field (normalized
-  on the server, focused) and never scans; an invalid or unscannable
-  value prefills nothing, silently. The installed app's share target
-  (`share_target` in `public/site.webmanifest` → `POST /share`) takes the
-  first http(s) link from `url` (whole), `text`, then `title`
-  (`extractSharedLink`; only a link inside prose is trimmed) and
-  redirects to `/?url=`; the body is counted as it streams
-  (`readBoundedBody`, 16 KiB) and the response is `no-store`. Only a
-  share-sheet launch auto-scans: `isShareTargetLaunch` (POST and
-  `Sec-Fetch-Site: none`) lets the route set the 60-second, `HttpOnly`
-  `sx-share-launch` cookie holding a grant (`issueLaunchGrant`: a random
-  id, the server's issue time in ms, and the SHA-256 of the link, 80
-  characters; never the link, which can pass 4 KiB encoded). `proxy.ts` spends it on the first request for
-  `/`: it hands the grant to the page in `x-sx-share-launch` and clears
-  the cookie in that response, matching or not (a proxy-cleared cookie is
-  already gone from `cookies()` in the same render, so the header is the
-  only way through); the server stores nothing else. The page passes the
-  grant's id and issue time, with its own `renderedAt`, only when
-  `readLaunchGrant` finds the digest equals `?url=` and the grant is
-  within a minute. The browser (`lib/client/launch-claims.ts`) scans each
-  id once, and only within a minute of the share (`launchAge`: the
-  server's issue-to-render time plus the document's time since its
-  navigation, the larger of `performance.now()` and the wall clock's;
-  never compares a client clock with the server's). It
-  records the id in a module-level set (Back restores the cached render
-  into a new component, which only prefills) and in IndexedDB
-  (`scrutinix-launches`, `id → issuedAt`), checked and written in one
-  `readwrite` transaction so tabs can't interleave. An id is dropped only
-  by a page rendered over 10 minutes after its issue (server clock),
-  never evicted; 32 kept ids, no IndexedDB, or a late grant only
-  prefill (the field takes focus).
-  `normalizeUrlInput` holds the 2,048 limit on the normalized link, so
-  every boundary agrees on a link that grows when percent-encoded. Never gate on the header at the page itself: a link
-  tapped in another app is a browser-initiated GET that also carries
-  `none`. `?shared=` outranks `?url=`. No service worker (not needed to
-  install), and the site never mentions installing; the README documents
-  Android, the iOS Shortcut, and the bookmarklet.
+- **Links from outside**: nothing starts a scan on its own. `/?url=`
+  fills in the Single field (normalized on the server by
+  `resolvePrefill`), focuses it, and the anatomy on paste takes the link
+  apart; it scans only when the person taps Analyze. An invalid or
+  unscannable value prefills nothing, silently. The installed app's
+  share target (`share_target` in `public/site.webmanifest` →
+  `POST /share`) takes the first http(s) link from `url` (whole), `text`,
+  then `title` (`extractSharedLink`; only a link inside prose is trimmed)
+  and redirects (303, relative, `no-store`) to `/?url=`, so it behaves
+  exactly like the bookmarklet and the iOS Shortcut; the body is counted
+  as it streams (`readBoundedBody`, 16 KiB), and it sets no cookie for
+  any poster. `normalizeUrlInput` holds the 2,048 limit on the normalized
+  link, so every boundary agrees on a link that grows when
+  percent-encoded. `?shared=` outranks `?url=`. No service worker (not
+  needed to install), and the site never mentions installing; the README
+  documents Android, the iOS Shortcut steps, and the bookmarklet.
 - **Recipient-first shared view**: when the page opens on a shared link
   (verified, unverified, or expired), `app/page.tsx` renders the results
   section first (band, anatomy, strip when verified) and the form under
