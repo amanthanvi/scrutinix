@@ -773,9 +773,12 @@ describe("ResultsSection", () => {
     expect(document.activeElement).toBe(cells[1]);
     fireEvent.keyDown(cells[1]!, { key: "End" });
     expect(document.activeElement).toBe(cells[7]);
-    // Each cell shows its number, 1-8 in signal order: the Summary cites it.
+    // Each cell shows its number, 1-8 in signal order: the Summary cites
+    // it. It is drawn from data-n, so the cell's visible text is its name.
     expect(
-      cells.map((cell) => cell.querySelector(".sx-tag")?.textContent),
+      cells.map((cell) =>
+        cell.querySelector(".sx-tag")?.getAttribute("data-n"),
+      ),
     ).toEqual(["1", "2", "3", "4", "5", "6", "7", "8"]);
     // Phones (no wide-layout media match here) run the cells down two
     // columns: Down steps in order and wraps; Up from the first cell wraps

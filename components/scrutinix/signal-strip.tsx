@@ -72,7 +72,7 @@ function CellLabel({
 }) {
   return (
     <span aria-hidden="true" className="sx-cell-label">
-      <span className="sx-tag">{cellNumber(name)}</span>
+      <span className="sx-tag" data-n={cellNumber(name)} />
       <span className="sx-cell-name" data-notable={NOTABLE.has(severity)}>
         {cellNames[name]}
       </span>

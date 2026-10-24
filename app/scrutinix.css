@@ -923,6 +923,13 @@ main:has(#sx-verdict-heading) > .sx-hero-form {
   color: var(--sx-text-muted);
 }
 
+/* Inside a control whose name is set (a strip cell, a check row), the
+   number is drawn, not text: the control's visible text stays its name, so
+   "click VirusTotal" finds it (WCAG 2.5.3) and the name needs no digit. */
+.sx-tag[data-n]::before {
+  content: attr(data-n);
+}
+
 /* ---------------------------------------------------------------------
  * The link line, the owner sentence, and the Summary's questions on a
  * rail: static layout kept out of the first-load script.
