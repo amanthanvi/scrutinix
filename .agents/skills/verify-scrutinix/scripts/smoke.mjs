@@ -19,8 +19,8 @@ Usage:
 --drive runs scripts/drive.spec.ts (the feature map).
 Without --drive, scripts/smoke.spec.ts runs one safe scan.
 --port is an integer from 1024 to 65535 (default: the port this checkout
-last launched on, else 3000); --base-url exits 2. Other arguments are passed
-to Playwright.
+last launched on, else 3000); --base-url exits 2. Only a title filter,
+-g/--grep <pattern>, is passed to Playwright; anything else exits 2.
 
 Playwright's own output goes to smoke.log or drive.log in the state
 directory (mode 0600), not to this terminal, and its HTML report and traces

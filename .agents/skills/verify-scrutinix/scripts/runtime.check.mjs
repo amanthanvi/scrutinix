@@ -233,7 +233,7 @@ const parsedRest = runtime.parseCliArgs(
   { flags: ["--drive"], rest: true },
 );
 check(
-  "smoke passes other arguments on to Playwright",
+  "smoke hands its other arguments to suite.mjs, which allows only a title filter",
   parsedRest.ok &&
     parsedRest.port === 3421 &&
     parsedRest.flags.has("--drive") &&
