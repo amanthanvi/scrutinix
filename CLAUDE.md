@@ -218,12 +218,14 @@ tests/
 - **Evidence is not a score**: `dns.hosting` (Team Cymru IP-to-ASN over
   DNS, `lib/server/providers/team-cymru.ts`) and feed `listedAt` are
   evidence only; no scoring path reads them. Hosting looks up the first
-  public address (IPv4 preferred), never a private one, with a 2 s
-  abort-aware resolver; only the IP leaves the server. NXDOMAIN is
-  recorded as `asn: null` ("no network routes this address"); a timeout or
-  malformed answer leaves `hosting` unset and never fails the DNS signal.
-  The country is the network's registration: "registered in NL", never
-  "located in". Full-view rows come from `getSignalDetailEntries` (one
+  public address (IPv4 preferred; IPv6 only inside global unicast
+  2000::/3), never a private one, with a 2 s abort-aware resolver; only
+  the IP leaves the server. NXDOMAIN is recorded as `asn: null` ("no
+  network routes this address"); a timeout or malformed answer leaves
+  `hosting` unset and never fails the DNS signal, and a stored record with
+  a missing or invalid ASN is dropped, never read as `null`. The country
+  is the AS record's registration ("registered in NL", never "located
+  in"); the origin prefix's country is never a stand-in. Full-view rows come from `getSignalDetailEntries` (one
   fact per row, explicit `now`); TXT values are counted and named by
   kind, never dumped.
 - **UI danger is not a verdict**: form/stream errors and destructive
