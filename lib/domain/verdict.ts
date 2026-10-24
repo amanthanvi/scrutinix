@@ -1300,7 +1300,8 @@ function countDataRichSignals(signals: SignalResults) {
   }).length;
 }
 
-function scoreToConfidenceLabel(
+/** The word shown for a confidence figure; /about states these cut-offs. */
+export function scoreToConfidenceLabel(
   confidence: number,
 ): ThreatInfo["confidenceLabel"] {
   if (confidence >= 0.85) {
