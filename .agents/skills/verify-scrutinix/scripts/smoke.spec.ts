@@ -3,19 +3,16 @@ import { expect, test } from "@playwright/test";
 import { capture } from "./evidence";
 import { fillSingle, gotoApp, historyState } from "./support";
 
-test.use({
-  permissions: ["clipboard-read", "clipboard-write"],
-});
-
 test("smoke home and safe scan", async ({ page }) => {
   await gotoApp(page);
   await expect(
     page.getByRole("region", { name: "Scan console" }),
   ).toBeVisible();
   await expect(
-    page.getByText(
-      "Check a link against eight security signals before you open it.",
-    ),
+    page.getByRole("heading", {
+      level: 1,
+      name: "Check a link before you click.",
+    }),
   ).toBeVisible();
   await capture(page, "smoke-home.png");
 
@@ -24,9 +21,9 @@ test("smoke home and safe scan", async ({ page }) => {
 
   const verdict = page.getByRole("region", { name: /^scan result: safe$/i });
   await expect(verdict).toBeVisible();
-  await expect(verdict).toContainText("example.com");
+  await expect(verdict.getByText("Looks safe to open.")).toBeVisible();
   await expect(page.getByRole("meter", { name: "Threat score" })).toBeVisible();
-  await expect(page.getByLabel(/VirusTotal signal:/i)).toBeVisible();
+  await expect(page.getByText("All 8 checks found nothing.")).toBeVisible();
 
   const history = page.getByRole("region", { name: "Scan history" });
   await expect(history.getByText(/example\.com/i).first()).toBeVisible();

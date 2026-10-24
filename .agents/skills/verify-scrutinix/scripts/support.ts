@@ -1,6 +1,11 @@
 import { expect, type Page } from "@playwright/test";
 
+import { isolateRateLimit } from "../../../../tests/e2e/helpers";
+
+// Each test presents its own rate-limit identity, as tests/e2e does, so a
+// full drive never spends one client's per-minute scan budget.
 export async function gotoApp(page: Page) {
+  await isolateRateLimit(page);
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await expect(
     page.getByRole("button", { name: /switch to (light|dark) theme/i }),
