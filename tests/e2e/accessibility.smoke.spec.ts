@@ -51,8 +51,9 @@ test("result view accessibility @smoke", async ({ page }) => {
 
 /**
  * No sideways scrolling on the home, a result, the Full list with every
- * check's details open, and a filtered history, at each default text size
- * and width given.
+ * check's details open, a filtered history, and a shared look-alike
+ * (verified, unverified, and expired), at each default text size and
+ * width given.
  */
 async function expectReflow(
   page: Page,
@@ -75,6 +76,24 @@ async function expectReflow(
     await submitSingleScan(page, link);
     await expect(page.getByLabel(verdict)).toBeVisible({ timeout: 15_000 });
   }
+
+  // A look-alike whose registered domain ("secure-login.xyz") is kept
+  // whole where it fits.
+  const shared = (capturedAt: Date) =>
+    encodeSharedPayload({
+      verdict: "malicious",
+      url: "https://paypal.com.secure-login.xyz/verify",
+      summary: "Google Safe Browsing flagged this link.",
+      capturedAt: capturedAt.toISOString(),
+      signature: Array(8).fill("malicious"),
+    });
+  const fresh = shared(new Date());
+  const old = shared(new Date(Date.now() - 4 * 24 * 60 * 60 * 1000));
+  const sharedViews = [
+    ["verified", sharedPath(fresh, signSharedPayload(fresh))],
+    ["unverified", sharedPath(fresh, null)],
+    ["expired", sharedPath(old, signSharedPayload(old))],
+  ] as const;
 
   for (const [standard, width] of sizes) {
     const at = `${standard}px text at ${width}px`;
@@ -104,6 +123,14 @@ async function expectReflow(
       page.getByRole("button", { name: "Export filtered history JSON" }),
     ).toBeVisible();
     expect(await scrollsSideways(), `filtered history, ${at}`).toBe(false);
+
+    for (const [view, path] of sharedViews) {
+      await page.goto(path, { waitUntil: "domcontentloaded" });
+      await expect(
+        page.getByRole("heading", { name: "Check another link" }),
+      ).toBeVisible();
+      expect(await scrollsSideways(), `${view} shared link, ${at}`).toBe(false);
+    }
   }
 }
 

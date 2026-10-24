@@ -17,9 +17,40 @@ const PATH_LIMIT = 48;
 /** A registered domain longer than this may wrap or truncate. */
 const LONG_DOMAIN = 26;
 
-/** A domain in a sentence never breaks at its hyphen unless it can't fit. */
-function keepWhole(domain: string): string {
-  return domain.length <= LONG_DOMAIN ? "whitespace-nowrap" : "break-all";
+/**
+ * A domain kept whole where it fits: it moves to the next line as a unit,
+ * never breaking at its hyphen, and breaks only on a line too narrow for
+ * it (a larger text size) rather than run off the page. `trail` is the
+ * punctuation that must stay with it. A longer domain breaks anywhere.
+ */
+function WholeDomain({
+  domain,
+  className,
+  trail = "",
+}: {
+  domain: string;
+  className?: string;
+  trail?: string;
+}) {
+  if (domain.length > LONG_DOMAIN) {
+    return (
+      <>
+        <span className={cn(className, "break-all")}>{domain}</span>
+        {trail}
+      </>
+    );
+  }
+  return (
+    <span className="inline-block max-w-full wrap-anywhere">
+      <span className={className}>{domain}</span>
+      {trail}
+    </span>
+  );
+}
+
+/** Punctuation that opens `text`, kept with the domain before it. */
+function leadingPunctuation(text: string): string {
+  return /^[.,;:!?]*/.exec(text)?.[0] ?? "";
 }
 
 function shorten(value: string, limit = PATH_LIMIT): string {
@@ -50,22 +81,25 @@ function OwnershipSentence({
   const sentence = ownershipSentence(registeredDomain, impersonates);
   const ownerAt = sentence.indexOf(registeredDomain);
   const brandAt = sentence.lastIndexOf(impersonates);
+  const between = sentence.slice(ownerAt + registeredDomain.length, brandAt);
+  const end = sentence.slice(brandAt + impersonates.length);
+  const ownerTrail = leadingPunctuation(between);
+  const brandTrail = leadingPunctuation(end);
   return (
     <>
       {sentence.slice(0, ownerAt)}
-      <span
-        className={cn(
-          "font-mono text-[0.86em] font-bold",
-          keepWhole(registeredDomain),
-        )}
-      >
-        {registeredDomain}
-      </span>
-      {sentence.slice(ownerAt + registeredDomain.length, brandAt)}
-      <span className={cn("font-mono text-[0.86em]", keepWhole(impersonates))}>
-        {impersonates}
-      </span>
-      {sentence.slice(brandAt + impersonates.length)}
+      <WholeDomain
+        domain={registeredDomain}
+        className="font-mono text-[0.86em] font-bold"
+        trail={ownerTrail}
+      />
+      {between.slice(ownerTrail.length)}
+      <WholeDomain
+        domain={impersonates}
+        className="font-mono text-[0.86em]"
+        trail={brandTrail}
+      />
+      {end.slice(brandTrail.length)}
     </>
   );
 }
@@ -160,16 +194,10 @@ export function LinkAnatomyView({
                 </span>
               ) : null}
               {/* The owner never splits mid-name unless it cannot fit. */}
-              <span
-                className={cn(
-                  "font-bold text-[var(--sx-text)]",
-                  anatomy.registeredDomain.length <= LONG_DOMAIN
-                    ? "whitespace-nowrap"
-                    : "break-all",
-                )}
-              >
-                {anatomy.registeredDomain}
-              </span>
+              <WholeDomain
+                domain={anatomy.registeredDomain}
+                className="font-bold text-[var(--sx-text)]"
+              />
               {anatomy.port ? <span>{anatomy.port}</span> : null}
               {anatomy.path ? (
                 <span className="break-all">
@@ -280,16 +308,10 @@ function CaptionedLink({
         </LinkPart>
       ) : null}
       <LinkPart caption="Registered domain" owner>
-        <span
-          className={cn(
-            "font-bold text-[var(--sx-text)]",
-            anatomy.registeredDomain.length <= LONG_DOMAIN
-              ? "whitespace-nowrap"
-              : "break-all",
-          )}
-        >
-          {anatomy.registeredDomain}
-        </span>
+        <WholeDomain
+          domain={anatomy.registeredDomain}
+          className="font-bold text-[var(--sx-text)]"
+        />
       </LinkPart>
       {anatomy.port ? <span>{anatomy.port}</span> : null}
       {path ? (
