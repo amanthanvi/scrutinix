@@ -690,6 +690,15 @@ describe("ResultsSection", () => {
       expect(text("https")).toContain(
         "A brand-new certificate on a brand-new domain",
       );
+
+      // Full counts its ages from the same moment; expiry still counts from now.
+      fireEvent.click(screen.getByRole("switch", { name: /^summary full/i }));
+      const rows = await screen.findByRole("list", { name: "Signals" });
+      const row = (name: string) =>
+        rows.querySelector(`li[data-signal="${name}"]`)?.textContent ?? "";
+      expect(row("threatFeeds")).toContain("Listed6 hours ago");
+      expect(row("ssl")).toContain("Certificate age0 days");
+      expect(row("ssl")).not.toMatch(/Certificate age30 days/);
     } finally {
       vi.useRealTimers();
     }

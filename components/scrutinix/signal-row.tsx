@@ -19,6 +19,8 @@ interface SignalRowProps<N extends SignalName> {
   index: number;
   /** The verdict engine scored this check against the link. */
   scored?: boolean;
+  /** When the evidence was gathered; ages count from it. Defaults to now. */
+  evidenceTime?: number;
 }
 
 /**
@@ -31,6 +33,7 @@ export function SignalRow<N extends SignalName>({
   result,
   index,
   scored = false,
+  evidenceTime,
 }: SignalRowProps<N>) {
   const label = signalLabels[name];
   const severity = getSignalSeverity(result.status, result.data, name, scored);
@@ -38,7 +41,7 @@ export function SignalRow<N extends SignalName>({
 
   const entries =
     result.status === "success" && result.data
-      ? getSignalDetailEntries(name, result.data)
+      ? getSignalDetailEntries(name, result.data, undefined, evidenceTime)
       : [];
   // Timing is reference detail: it lives in the expanded evidence only.
   if (entries.length > 0 && result.durationMs > 0) {

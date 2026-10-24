@@ -59,11 +59,13 @@ const BatchTable = dynamic(
 );
 
 function RuntimeSignalRow<N extends SignalName>({
+  evidenceTime,
   index,
   name,
   scored,
   signals,
 }: {
+  evidenceTime: number | undefined;
   index: number;
   name: N;
   scored: boolean;
@@ -75,6 +77,7 @@ function RuntimeSignalRow<N extends SignalName>({
       result={signals[name]}
       index={index}
       scored={scored}
+      evidenceTime={evidenceTime}
     />
   );
 }
@@ -265,14 +268,21 @@ export function ResultsSection() {
     hasSignalActivity &&
     viewMode === "summary" &&
     !(active?.verdict === "error");
+  // One clock for every relative age, in Summary and Full: a finished
+  // result's own check time, or the server's start time while a scan
+  // streams, so ages don't jump when the verdict lands.
+  const evidenceTime = active
+    ? evidenceTimeOf(active.metadata)
+    : scan.state.isStreaming && scan.state.startedAt
+      ? evidenceTimeOf({ checkedAt: scan.state.startedAt })
+      : undefined;
   const parse = getLoadedLinkParser();
   const questions =
     showQuestions && linkUrl
       ? getSummaryQuestions({
           url: linkUrl,
           signals,
-          // A finished result's ages count from its own check time.
-          now: active ? evidenceTimeOf(active.metadata) : undefined,
+          now: evidenceTime,
           registeredDomainOf: parse
             ? (host) => registrableDomainOf(parse, host)
             : null,
@@ -432,6 +442,7 @@ export function ResultsSection() {
                         signals={signals}
                         scored={scored.has(signalName)}
                         index={index}
+                        evidenceTime={evidenceTime}
                       />
                     ))}
                   </ul>

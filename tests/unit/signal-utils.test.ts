@@ -213,6 +213,25 @@ describe("evidence rows", () => {
     expect(describeTxtRecords(["v=spf1 -all"])).toBe("1 record: SPF");
   });
 
+  it("dates what was seen from the check time, and expiry from now", () => {
+    const checkedAt = NOW - 30 * 24 * HOUR;
+    const rows = rowsOf(
+      getSignalDetailEntries(
+        "ssl",
+        buildSsl({
+          validFrom: new Date(checkedAt - 2 * HOUR).toISOString(),
+          validTo: new Date(NOW + 10 * 24 * HOUR).toISOString(),
+        }),
+        NOW,
+        checkedAt,
+      ),
+    );
+    expect(rows).toMatchObject({
+      "Certificate age": "0 days",
+      "Expires in": "10 days",
+    });
+  });
+
   it("adds certificate facts, self-signed only when true", () => {
     const rows = rowsOf(getSignalDetailEntries("ssl", buildSsl({}), NOW));
     expect(rows).toMatchObject({

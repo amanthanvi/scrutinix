@@ -224,13 +224,16 @@ export function rankVirusTotalResults<T extends { category: string }>(
 
 /**
  * The expanded evidence for one check: one plain fact per row. `now`
- * anchors relative times ("listed 6 hours ago") so tests stay
- * deterministic.
+ * anchors what is still running (certificate expiry); `evidenceTime`
+ * anchors ages of what was seen ("listed 6 hours ago", certificate age),
+ * so a reopened result's ages count from its check time, as Summary's do.
+ * Tests pass fixed times.
  */
 export function getSignalDetailEntries(
   name: SignalName,
   data: SignalPayloadMap[SignalName],
   now: number = Date.now(),
+  evidenceTime: number = now,
 ): DetailEntry[] {
   switch (name) {
     case "virusTotal": {
@@ -301,7 +304,7 @@ export function getSignalDetailEntries(
             ? [
                 {
                   label: "Listed",
-                  value: `${formatElapsed(now - listedAt)} ago`,
+                  value: `${formatElapsed(evidenceTime - listedAt)} ago`,
                 },
               ]
             : []),
@@ -344,7 +347,7 @@ export function getSignalDetailEntries(
       if (expiry) {
         entries.push(expiry);
       }
-      const certAgeDays = getCertificateAgeDays(d.validFrom, now);
+      const certAgeDays = getCertificateAgeDays(d.validFrom, evidenceTime);
       if (certAgeDays !== null) {
         entries.push({
           label: "Certificate age",
