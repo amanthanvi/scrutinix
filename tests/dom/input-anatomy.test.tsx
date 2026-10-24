@@ -110,6 +110,13 @@ describe("the link, taken apart on paste", () => {
     const owner = "This link belongs to secure-login.xyz, not paypal.com.";
     expect(region.textContent?.split(owner)).toHaveLength(2);
 
+    // Another site: answered, and the owner still stated once.
+    fireEvent.change(expected, { target: { value: "google.com" } });
+    expect(
+      screen.getByText("No. This link doesn't belong to google.com."),
+    ).toBeTruthy();
+    expect(region.textContent?.match(/This link belongs to/g)).toHaveLength(1);
+
     fireEvent.change(expected, { target: { value: "secure-login.xyz" } });
     expect(screen.getByText("Matches secure-login.xyz.")).toBeTruthy();
   });

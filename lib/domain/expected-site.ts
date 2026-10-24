@@ -66,12 +66,15 @@ export function compareExpectedSite(
     if (domain === owner) {
       return { outcome: "match", sentence: `Matches ${domain}.` };
     }
-    // The anatomy beside this answer already says whose site the link is
-    // and that it spells out this one: answer without saying it twice.
-    if (domain === anatomy.impersonates) {
+    // A look-alike's anatomy, beside this answer, already says whose site
+    // the link is: answer without saying it twice.
+    if (anatomy.impersonates) {
       return {
         outcome: "mismatch",
-        sentence: `No. The link only spells out ${domain}.`,
+        sentence:
+          domain === anatomy.impersonates
+            ? `No. The link only spells out ${domain}.`
+            : `No. This link doesn't belong to ${domain}.`,
       };
     }
     return { outcome: "mismatch", sentence: ownershipSentence(owner, domain) };

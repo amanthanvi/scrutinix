@@ -42,9 +42,10 @@ describe("compareExpectedSite", () => {
       outcome: "mismatch",
       sentence: "No. The link only spells out paypal.com.",
     });
+    // Any other domain: still no second owner sentence.
     expect(compareExpectedSite(parse, lookAlike, "apple.com")).toEqual({
       outcome: "mismatch",
-      sentence: "This link belongs to secure-login.xyz, not apple.com.",
+      sentence: "No. This link doesn't belong to apple.com.",
     });
   });
 
