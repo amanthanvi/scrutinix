@@ -131,6 +131,7 @@ if (!sameCheckout(state)) {
 }
 
 let leftRunning = 0;
+let reported = false;
 
 if (legacyState(state)) {
   const pids = legacyPids(state);
@@ -142,6 +143,12 @@ if (legacyState(state)) {
   const result = await stopRun(state);
   if (result.action === "refused") {
     leftRunning += 1;
+    process.stderr.write(`cleanup: ${result.message}\n`);
+  } else if (result.action === "incomplete") {
+    // Something still answers. It is reported, and the token is kept while
+    // the socket answers, so nothing else is mistaken for this run.
+    if (result.socket) leftRunning += 1;
+    reported = result.port;
     process.stderr.write(`cleanup: ${result.message}\n`);
   } else {
     process.stdout.write(`cleanup: ${result.message}\n`);
@@ -163,10 +170,10 @@ if (!legacyState(state) && leftRunning === 0) {
 restoreDeclaration();
 
 process.stdout.write(`cleanup: evidence directory ${evidenceDir}\n`);
-if (stillOpen) {
+if (stillOpen && !reported) {
   const owners = portDetails(port);
   process.stderr.write(
     `cleanup: port ${port} is still open, and this skill did not stop its listener. It stops only its own supervisor's process group.${owners ? `\n${owners}` : ""}\n`,
   );
 }
-process.exit(leftRunning || stillOpen ? 1 : 0);
+process.exit(leftRunning || stillOpen || reported ? 1 : 0);

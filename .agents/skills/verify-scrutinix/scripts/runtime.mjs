@@ -1351,8 +1351,41 @@ function socketAnswers(file) {
   });
 }
 
+// After a stop, nothing may still answer for the run: its socket is gone or
+// refuses, and its port is free. The supervisor stops the processes still in
+// its process group. A descendant that left the group (it ran setsid, or was
+// spawned detached) is not stopped, and is not looked for by pid, name, or
+// cwd; when it still holds the port or the socket it shows up here and is
+// reported, never signalled. One that holds neither is not seen at all.
+async function leftAfterStop(state, dir, waitMs) {
+  const socket = socketPath(dir);
+  const port = validPort(state.port) ? state.port : null;
+  const deadline = Date.now() + waitMs;
+  for (;;) {
+    const socketLive = existsSync(socket) && (await socketAnswers(socket));
+    const portOpen = port !== null && (await tcpOpen(port));
+    if (!socketLive && !portOpen)
+      return { socket: false, port: false, left: [] };
+    if (Date.now() >= deadline) {
+      const left = [];
+      if (socketLive) left.push(`its socket ${socket} still answers`);
+      if (portOpen) {
+        const owners = portDetails(port);
+        left.push(
+          `port ${port} still answers${owners ? ` (${owners.replaceAll("\n", "; ")})` : ""}`,
+        );
+      }
+      return { socket: socketLive, port: portOpen, left };
+    }
+    await delay(200);
+  }
+}
+
 // Ask this run's supervisor to stop its process group and wait for it to go.
-export async function stopRun(state, { dir = stateDir } = {}) {
+// "stopped" means the supervisor proved the token, stopped its group, and
+// afterwards nothing answers on the run's socket or port; "incomplete" means
+// something still does, and it was left running.
+export async function stopRun(state, { dir = stateDir, waitMs = 5_000 } = {}) {
   const reply = await supervisorRequest(state, "stop", {
     dir,
     timeoutMs: 30_000,
@@ -1370,10 +1403,17 @@ export async function stopRun(state, { dir = stateDir } = {}) {
     };
   }
   const leftover = Number(reply.body.leftover) || 0;
-  return {
-    action: "stopped",
-    message: `stopped run ${state.runId}: supervisor pid ${reply.body.supervisorPid} signalled its own process group${leftover ? `; ${leftover} member${leftover === 1 ? "" : "s"} ignored SIGTERM and got SIGKILL` : ""}`,
-  };
+  const stopped = `run ${state.runId}: supervisor pid ${reply.body.supervisorPid} signalled its own process group${leftover ? `; ${leftover} member${leftover === 1 ? "" : "s"} ignored SIGTERM and got SIGKILL` : ""}`;
+  const after = await leftAfterStop(state, dir, waitMs);
+  if (after.left.length) {
+    return {
+      action: "incomplete",
+      socket: after.socket,
+      port: after.port,
+      message: `stopped ${stopped}, but cleanup is incomplete: ${after.left.join("; ")}. Whatever answers there is not in the run's process group (a process that ran setsid or was spawned detached leaves it), so this skill did not stop it and left it running.`,
+    };
+  }
+  return { action: "stopped", message: `stopped ${stopped}` };
 }
 
 // ---- next-env.d.ts snapshot -------------------------------------------------

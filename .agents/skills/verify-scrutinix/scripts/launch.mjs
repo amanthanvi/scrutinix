@@ -183,8 +183,12 @@ if (legacyState(state)) {
       "launch: restarting the run this checkout's supervisor owns\n",
     );
     const stopped = await stopRun(state);
-    process.stdout.write(`launch: ${stopped.message}\n`);
-    if (stopped.action === "refused") process.exit(2);
+    (stopped.action === "stopped" ? process.stdout : process.stderr).write(
+      `launch: ${stopped.message}\n`,
+    );
+    if (stopped.action === "refused" || stopped.action === "incomplete") {
+      process.exit(2);
+    }
     await waitFor(async () => !(await tcpOpen(port)), 15_000);
   } else if (!live.gone) {
     process.stderr.write(

@@ -917,8 +917,10 @@ check(
     !running(taken.pids.app) &&
     exited(taken.child) &&
     running(strangerC.pids.app) &&
-    takenCleanup.stderr.includes(`port ${portC} is still open`) &&
-    takenCleanup.stderr.includes(`pid ${strangerC.pids.app.pid}, started`),
+    takenCleanup.stderr.includes("cleanup is incomplete") &&
+    takenCleanup.stderr.includes(
+      `port ${portC} still answers (pid ${strangerC.pids.app.pid}, started`,
+    ),
   output(takenCleanup),
 );
 
@@ -946,6 +948,85 @@ check(
   (await release([orphan.pids.app, orphan.pids.grandchild])) &&
     !(await runtime.tcpOpen(portD)),
 );
+
+// Finding 6 of round 3: a grandchild that leaves the run's process group
+// (setsid) is not stopped, and is not looked for. It still holds the port,
+// so cleanup reports the stop as incomplete, names the listener, exits 1, and
+// leaves it running. The check then ends it through its lifeline.
+const portF = await freePort();
+const escapeDir = privateDir("escape");
+const escape = await supervise(escapeDir, portF, "escape", "app-f");
+check(
+  "an escaped grandchild leads its own group, outside the run's",
+  runtime.processGroup(escape.pids.escaped.pid) === escape.pids.escaped.pid &&
+    runtime.processGroup(escape.pids.app.pid) === escape.state.supervisorPid,
+);
+const escapeCleanup = await runCli("cleanup.mjs", [], envFor(escapeDir));
+await waitUntil(() => exited(escape.child));
+check(
+  "cleanup reports an escaped grandchild on the port as incomplete and leaves it running",
+  escapeCleanup.status === 1 &&
+    escapeCleanup.stderr.includes("cleanup is incomplete") &&
+    escapeCleanup.stderr.includes(
+      `port ${portF} still answers (pid ${escape.pids.escaped.pid}, started`,
+    ) &&
+    !escapeCleanup.stdout.includes(`stopped run`) &&
+    exited(escape.child) &&
+    !running(escape.pids.app) &&
+    running(escape.pids.escaped),
+  output(escapeCleanup),
+);
+check(
+  "the escaped grandchild exits through its lifeline and the port frees",
+  (await release([escape.pids.escaped])) && !(await runtime.tcpOpen(portF)),
+);
+
+// A supervisor that proves the token and says it stopped, yet keeps
+// answering on the socket, is reported too, and its token is kept.
+const lingerDir = privateDir("linger");
+const lingerPort = await freePort();
+const lingerState = runRecord({
+  port: lingerPort,
+  baseUrl: `http://127.0.0.1:${lingerPort}`,
+});
+writeFileSync(path.join(lingerDir, "run.json"), JSON.stringify(lingerState), {
+  mode: 0o600,
+});
+const lingering = net.createServer((connection) => {
+  connection.setEncoding("utf8");
+  connection.on("error", () => {});
+  connection.once("data", (line) => {
+    let nonce = "";
+    try {
+      nonce = String(JSON.parse(line).nonce);
+    } catch {
+      nonce = "";
+    }
+    const body = {
+      ok: true,
+      runId: lingerState.runId,
+      supervisorPid: 1,
+      stopped: true,
+      leftover: 0,
+    };
+    connection.end(
+      `${JSON.stringify({ body, proof: runtime.serverProof(lingerState.token, nonce, body) })}\n`,
+    );
+  });
+});
+await new Promise((resolve) =>
+  lingering.listen(runtime.socketPath(lingerDir), resolve),
+);
+const lingerCleanup = await runCli("cleanup.mjs", [], envFor(lingerDir));
+check(
+  "cleanup reports a socket that still answers after a stop, and keeps the token",
+  lingerCleanup.status === 1 &&
+    lingerCleanup.stderr.includes("cleanup is incomplete") &&
+    lingerCleanup.stderr.includes("supervisor.sock still answers") &&
+    runtime.readState(lingerDir)?.token === lingerState.token,
+  output(lingerCleanup),
+);
+lingering.close();
 
 // Finding 4 of round 3: two launches race for one state directory. Both
 // start before either supervisor listens, so without the lock both would
