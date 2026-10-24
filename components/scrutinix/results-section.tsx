@@ -101,9 +101,13 @@ function prefersReducedMotion(): boolean {
   );
 }
 
-/** Text the person must see to decide: the verdict word and instruction. */
+/**
+ * Text the person must see to decide: the verdict word through the
+ * instruction (the domain line sits between them).
+ */
 function bringVerdictIntoView(heading: HTMLElement) {
-  const answer = heading.nextElementSibling ?? heading;
+  const answer =
+    heading.closest("section")?.querySelector(".sx-band-imperative") ?? heading;
   const top = heading.getBoundingClientRect().top;
   const bottom = answer.getBoundingClientRect().bottom;
   if (top >= 0 && bottom <= window.innerHeight) return;

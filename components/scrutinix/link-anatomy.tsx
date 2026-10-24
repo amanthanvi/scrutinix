@@ -255,7 +255,15 @@ function CaptionedLink({
   className?: string;
 }) {
   return (
-    <p id={id} title={anatomy.href} className={cn("sx-anat", className)}>
+    <p
+      id={id}
+      title={anatomy.href}
+      className={cn(
+        "sx-anat",
+        hasShortMiddlePart(anatomy, path) && "sx-anat-stacked",
+        className,
+      )}
+    >
       {/* Phones stack the named parts; the bare scheme steps out of sight
           there (the certificate fact below still speaks for it). */}
       <span className="max-sm:sr-only">{anatomy.scheme}://</span>
@@ -291,6 +299,22 @@ function CaptionedLink({
       ) : null}
     </p>
   );
+}
+
+/**
+ * Whether a captioned part with another after it is too short to carry its
+ * caption inline. The caption never widens its part, so its longest word
+ * must fit over the part's text at the form's smaller size: "anyone" over
+ * four mono characters, "browsers" over five, "Registered" over seven.
+ * Otherwise the link is shown stacked, as on phones.
+ */
+function hasShortMiddlePart(anatomy: LinkAnatomy, path: string): boolean {
+  const middle: [string | null, number][] = [
+    [anatomy.userinfo ? `${anatomy.userinfo}@` : null, 5],
+    [anatomy.subdomain ? `${anatomy.subdomain}.` : null, 4],
+    [path ? anatomy.registeredDomain : null, 7],
+  ];
+  return middle.some(([part, min]) => part !== null && part.length < min);
 }
 
 /**

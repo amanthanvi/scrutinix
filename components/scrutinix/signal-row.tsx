@@ -117,7 +117,7 @@ export function SignalRow<N extends SignalName>({
           {entries.map((entry, entryIndex) => (
             <div key={`${entryIndex}-${entry.label}`} className="contents">
               <dt className="text-[var(--sx-text-soft)]">{entry.label}</dt>
-              <dd className="min-w-0 break-all text-[var(--sx-text-muted)]">
+              <dd className="min-w-0 [overflow-wrap:anywhere] text-[var(--sx-text-muted)]">
                 {entry.value}
               </dd>
             </div>
