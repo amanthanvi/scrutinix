@@ -58,6 +58,11 @@ function envFor(dir, extra = {}) {
   };
 }
 
+const children = [];
+const groups = [];
+const orphanGroups = new Set();
+const supervised = [];
+
 // CLI runs are asynchronous so servers in this process (the forged socket)
 // keep answering while the child runs.
 function runCli(script, args = [], env = process.env) {
@@ -70,6 +75,7 @@ function runCli(script, args = [], env = process.env) {
         stdio: ["ignore", "pipe", "pipe"],
       },
     );
+    children.push(child);
     let stdout = "";
     let stderr = "";
     child.stdout.setEncoding("utf8").on("data", (chunk) => (stdout += chunk));
@@ -285,10 +291,50 @@ check(
 
 // ---- Processes this check starts --------------------------------------------
 
-const children = [];
 function track(child) {
   children.push(child);
   return child;
+}
+
+// Stops everything this check started, only through handles that keep the
+// pid from being reused: ChildProcess.kill is a no-op once the child is
+// reaped, and a group is signalled only while its leader is still unreaped.
+// A supervisor's own stop path is SIGTERM. Also runs when the check itself is
+// interrupted, so a killed run leaves nothing behind.
+function stopGroup(leader, signal = "SIGTERM") {
+  if (leader.exitCode !== null || leader.signalCode !== null) return;
+  try {
+    process.kill(-leader.pid, signal);
+  } catch {
+    // The group is already empty.
+  }
+}
+
+// An orphaned run's group outlives its supervisor. Its id stays held while
+// any member lives, so it still names exactly those members.
+function stopOrphans() {
+  for (const pgid of orphanGroups) {
+    try {
+      process.kill(-pgid, "SIGKILL");
+    } catch {
+      // Already gone.
+    }
+  }
+  orphanGroups.clear();
+}
+
+function teardown() {
+  for (const { child } of supervised) child?.kill("SIGTERM");
+  stopOrphans();
+  for (const leader of groups) stopGroup(leader);
+  for (const child of children) child.kill("SIGTERM");
+}
+for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) {
+  process.on(signal, () => {
+    teardown();
+    rmSync(scratch, { recursive: true, force: true });
+    process.exit(1);
+  });
 }
 
 function sleeper(cwd) {
@@ -342,22 +388,24 @@ async function readPids(file) {
 
 // A server started by this check, not by any supervisor: same executable and
 // same cwd (this checkout) as the app. The old design would have owned it.
+// It leads its own group, so teardown can stop it with its grandchild.
 async function stranger(port, name) {
   const pidFile = path.join(scratch, `${name}.json`);
-  const child = track(
-    spawn(process.execPath, [fakeApp, String(port), "html", pidFile], {
-      cwd: runtime.repoRoot,
-      stdio: "ignore",
-    }),
+  const child = spawn(
+    process.execPath,
+    [fakeApp, String(port), "html", pidFile],
+    { cwd: runtime.repoRoot, stdio: "ignore", detached: true },
   );
+  groups.push(child);
   const pids = await readPids(pidFile);
   await waitUntil(() => runtime.tcpOpen(port));
   return { child, pids };
 }
 
-const supervised = [];
 async function supervise(dir, port, mode, name, extra = {}) {
   const pidFile = path.join(scratch, `${name}.json`);
+  const entry = { dir, state: null, child: null };
+  supervised.push(entry);
   const started = await runtime.startSupervisor({
     command: process.execPath,
     args: [fakeApp, String(port), mode, pidFile],
@@ -365,9 +413,13 @@ async function supervise(dir, port, mode, name, extra = {}) {
     port,
     baseUrl: `http://127.0.0.1:${port}`,
     dir,
+    // Held from the moment of spawn, so an interrupted check still stops it.
+    onSpawn: (child) => {
+      entry.child = child;
+    },
     ...extra,
   });
-  supervised.push({ dir, state: started.state });
+  entry.state = started.state;
   const pids = await readPids(pidFile);
   if (mode === "html") await waitUntil(() => runtime.tcpOpen(port));
   return { ...started, pids };
@@ -710,7 +762,8 @@ check(
 const portD = await freePort();
 const orphanDir = privateDir("orphan");
 const orphan = await supervise(orphanDir, portD, "html", "app-d");
-process.kill(orphan.state.supervisorPid, "SIGKILL");
+orphanGroups.add(orphan.state.supervisorPid);
+orphan.child.kill("SIGKILL");
 await waitUntil(() => !alive(orphan.state.supervisorPid));
 const orphanCleanup = await runCli("cleanup.mjs", [], envFor(orphanDir));
 check(
@@ -722,15 +775,13 @@ check(
     alive(orphan.pids.grandchild),
   output(orphanCleanup),
 );
-for (const pid of [orphan.pids.app, orphan.pids.grandchild]) {
-  if (alive(pid)) process.kill(pid, "SIGKILL");
-}
+stopOrphans();
 
 // `kill <supervisor pid>` is the manual stop: the group goes with it.
 const portE = await freePort();
 const signalDir = privateDir("signal");
 const signalled = await supervise(signalDir, portE, "html", "app-e");
-process.kill(signalled.state.supervisorPid, "SIGTERM");
+signalled.child.kill("SIGTERM");
 await waitUntil(
   () =>
     !alive(signalled.state.supervisorPid) &&
@@ -796,13 +847,12 @@ check(
   foreignNext,
 );
 
-for (const { dir, state } of supervised) {
-  if (alive(state.supervisorPid)) await runtime.stopRun(state, { dir });
+for (const { dir, state, child } of supervised) {
+  if (state && child && child.exitCode === null && child.signalCode === null) {
+    await runtime.stopRun(state, { dir });
+  }
 }
-for (const child of children) child.kill("SIGTERM");
-for (const pids of [strangerB.pids, strangerC.pids]) {
-  if (alive(pids.grandchild)) process.kill(pids.grandchild, "SIGTERM");
-}
+teardown();
 
 // ---- Redaction --------------------------------------------------------------
 

@@ -1152,6 +1152,7 @@ export async function startSupervisor({
   logName = "next.log",
   lingerMs = 120_000,
   record = {},
+  onSpawn = () => {},
 }) {
   ensureDirs([dir]);
   const socket = socketPath(dir);
@@ -1176,6 +1177,23 @@ export async function startSupervisor({
   const runId = randomBytes(6).toString("hex");
   const appLog = path.join(dir, logName);
   const supervisorLog = path.join(dir, "supervisor.log");
+  const state = {
+    version: stateVersion,
+    runId,
+    token,
+    repoRoot: canonicalPath(root),
+    baseUrl,
+    port,
+    supervisorPid: null,
+    appLog,
+    supervisorLog,
+    evidenceDir,
+    startedAt: new Date().toISOString(),
+    ...record,
+  };
+  // Recorded before the supervisor exists, so an interrupted launch or a
+  // failed boot is still cleaned up through the socket.
+  writeState(state, dir);
   const logFd = openSync(
     supervisorLog,
     constants.O_WRONLY |
@@ -1195,6 +1213,7 @@ export async function startSupervisor({
   } finally {
     closeSync(logFd);
   }
+  onSpawn(child);
   child.stdin.end(
     JSON.stringify({
       token,
@@ -1210,30 +1229,17 @@ export async function startSupervisor({
     }),
   );
   child.unref();
-  const state = {
-    version: stateVersion,
-    runId,
-    token,
-    repoRoot: canonicalPath(root),
-    baseUrl,
-    port,
-    supervisorPid: child.pid,
-    appLog,
-    supervisorLog,
-    evidenceDir,
-    startedAt: new Date().toISOString(),
-    ...record,
-  };
-  // Recorded before the app is up, so a failed boot is still cleaned up.
+  // The pid is for diagnostics only; stopping always goes through the socket.
+  state.supervisorPid = child.pid;
   writeState(state, dir);
   const deadline = Date.now() + 10_000;
   while (Date.now() < deadline) {
     const reply = await supervisorRequest(state, "status", { dir });
-    if (reply.proven) return { state, status: reply.body };
+    if (reply.proven) return { state, status: reply.body, child };
     if (child.exitCode !== null || child.signalCode !== null) break;
     await delay(100);
   }
-  return { state, status: null };
+  return { state, status: null, child };
 }
 
 function socketAnswers(file) {
