@@ -178,7 +178,16 @@ tests/
   (`result-row.tsx`): the subdomain truncates from its left so the owner
   never gets cut. Shared
   links get their anatomy from the server (`SharedView.anatomy`) so the
-  hedge is in the first paint; verdict announcements wait for the parser.
+  hedge is in the first paint. Elsewhere absent anatomy never means "not a
+  look-alike": `useLinkAnatomy` reports a `status` of `"pending"`,
+  `"ready"`, or `"failed"` (a failed import retries once after 1s, and
+  stays "failed" until a later load succeeds). While pending, a Safe band
+  holds in its Checking state ("Checking the link's address", no word,
+  tint, score, or confidence), rows hold "—", and the announcement waits;
+  other verdicts show at once. If it failed, a Safe result reads "Unconfirmed"
+  (`addressUnchecked`): neutral tone, no score, "Check the link's address
+  before you open it.", and a note that we couldn't check the address, on
+  the band, rows, live region, and history search; CSV says "Not checked".
 - **Signed shares**: a `?shared=` payload is plain base64 anyone can write,
   so Scrutinix states a shared verdict only when `&sig=` is its own HMAC
   (`lib/server/share-signing.ts`, `SHARE_SIGNING_SECRET`). The server builds
