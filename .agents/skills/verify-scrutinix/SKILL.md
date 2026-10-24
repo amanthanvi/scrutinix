@@ -160,7 +160,7 @@ One feature, after doctor is `READY`:
 npm run verify:drive -- -g "batch scan"
 ```
 
-`npm run verify:smoke -- -g "smoke home"` filters by test title. A title filter (`-g`/`--grep <pattern>`) is the only Playwright argument passed through: another `--config`, a spec path, a reporter, or an output option is refused before Playwright starts, so the suite, the report destinations, and the titles smoke prints are always this skill's own. `--port <n>` is read and not forwarded. Inherited `PLAYWRIGHT_*` and `PW_*` variables (which Playwright reads ahead of its config) are not passed on, except the browsers path. The config file is `playwright.config.mjs` next to this skill.
+`npm run verify:smoke -- -g "smoke home"` filters by test title. A title filter (`-g`/`--grep <pattern>`) is the only Playwright argument passed through: another `--config`, a spec path, a reporter, or an output option is refused before Playwright starts, so the suite, the report destinations, and the titles smoke prints are always this skill's own. `--port <n>` is read and not forwarded. Inherited Playwright settings, which Playwright reads ahead of its config (`PLAYWRIGHT_*`, `PW*` such as `PWDEBUG`, `DEBUG_FILE`, and their `npm_config_` / `npm_package_config_` spellings), are not passed on, except the browsers path and the host-requirement switch, so nothing inherited can move a report, write a debug log into the evidence directory, or start the inspector. The config file is `playwright.config.mjs` next to this skill.
 
 Stable handles:
 
