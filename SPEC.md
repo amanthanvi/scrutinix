@@ -114,7 +114,7 @@ Both personas use the same tool. A **view mode toggle** (Summary / Full Report) 
 1. User lands on a scanner-first home route with the dock in the first viewport and only minimal supporting context above the fold
 2. Pastes URL, client-side validation, submits
 3. Streaming results appear: verdict first, then enrichment signals populate as they resolve
-4. Default: Summary view (verdict, a one-line instruction, and only the signals that drove the verdict, with the other checks folded into one line). Toggle to Full Report for all data
+4. Default: Summary view (verdict, a one-line instruction, and five plain questions about the link, each answered with why it matters and the checks it rests on). Toggle to Full Report for all data
 5. Option to share result or scan another URL
 
 **Flow 2: Batch Scan**
@@ -135,7 +135,7 @@ Both personas use the same tool. A **view mode toggle** (Summary / Full Report) 
 ### 2.3 UX states checklist
 
 - **Loading/streaming:** Pending signal rows update independently as each source resolves. A transform-only progress line shows aggregate completion; the polite live region reports "N of 8 checks finished." and, on completion, the host, verdict, score, and instruction ("Result for evil.example: Malicious, 73 out of 100. Don't open this link."); reopening a stored result re-announces it
-- **Verdict:** every verdict shows one imperative line under the verdict word (Malicious/Critical "Don't open this link.", Suspicious "Don't sign in or enter payment details here.", Critical adds "— it's a known threat" only when a reputation source confirmed it, Safe "Looks safe to open." or, when confidence is below high, coverage was partial, or minor warning signs turned up, "Probably safe — still check who sent it.", Unknown "We couldn't check this link — treat it as unsafe.", Error "The scan failed — try again."). Unknown and Error show no score. The summary sentence names the evidence in plain words; it never repeats the instruction, and a clean, fully covered Safe omits it because the quiet-checks line says the same thing. Reasons live under Details ("What we found"); Caveats lists only real limitations, and "Why {level} confidence" names shortfalls by check rather than restating the check count. Unknown says its cause once: "The site didn't respond, so we couldn't look at the page itself."
+- **Verdict:** every verdict shows one imperative line under the verdict word (Malicious/Critical "Don't open this link.", Suspicious "Don't sign in or enter payment details here.", Critical adds "— it's a known threat" only when a reputation source confirmed it, Safe "Looks safe to open." or, when confidence is below high, coverage was partial, or minor warning signs turned up, "Probably safe — still check who sent it.", Unknown "We couldn't check this link — treat it as unsafe.", Error "The scan failed — try again."). Unknown and Error show no score. The summary sentence names the evidence in plain words; it never repeats the instruction, and the band shows it only when no evidence is shown beneath (the Summary questions and the Full rows already state it), so in practice only a record saved before checks were kept shows it. It stays in the data for shares, exports, and history search. Reasons live under Details ("What we found"); Caveats lists only real limitations, and "Why {level} confidence" names shortfalls by check rather than restating the check count. Unknown says its cause once: "The site didn't respond, so we couldn't look at the page itself."
 - **Empty:** Scanner-first landing state in the centered product shell, with brief framing and links to privacy/methodology; deeper explanation lives on `/about` and `/privacy`. Analyze stays enabled; an empty submit shows "Paste a link to check." inline
 - **Error (partial):** Failed or non-applicable sources show their reason as the row's finding. Verdict is computed from available data, safe-result confidence is capped when primary reputation coverage is missing, one caveat line names the checks that limited coverage ("VirusTotal didn't finish."; absent when every check ran in full), and the user can rerun the full scan from the primary controls
 - **Error (total):** All sources failed — show error message with "Retry All" button and suggestion to check network
@@ -144,10 +144,28 @@ Both personas use the same tool. A **view mode toggle** (Summary / Full Report) 
 
 ### 2.4 View modes
 
-| Mode            | Content                                                                                                                                                                                                                                                                                                                                                                      | Target                     |
-| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- |
-| **Summary**     | Overall verdict with a one-line instruction and confidence, plus only the signals that drove it (every check the verdict engine scored, plus any malicious, suspicious, or failed one — fixed order) as disclosure rows; every other check folds into one line ("6 other checks found nothing." / "All 8 checks found nothing.") that opens Full. A clean scan shows no rows | Casual users, quick checks |
-| **Full Report** | All eight signals in fixed-order disclosure rows, with engine results, classifier details, WHOIS/SSL/DNS evidence, redirect hops, and threat-feed matches                                                                                                                                                                                                                    | Power users, investigation |
+| Mode            | Content                                                                                                                                                                                                                                                                                                                                                   | Target                     |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- |
+| **Summary**     | Overall verdict with a one-line instruction and confidence, plus five plain questions in fixed order (see §2.5), each with a short answer, one clause on why it matters, its sources (strip cell names), and, when checks conflict, one sentence on why. Error results show the eight rows instead; legacy records and shared snapshots show no questions | Casual users, quick checks |
+| **Full Report** | All eight signals in fixed-order disclosure rows, with engine results, classifier details, WHOIS/SSL/DNS evidence, redirect hops, and threat-feed matches                                                                                                                                                                                                 | Power users, investigation |
+
+### 2.5 Summary questions
+
+`lib/domain/summary-questions.ts` builds every Summary string. Fixed order and a fixed mapping, so each check is cited by exactly one question:
+
+| Question                        | Checks cited                                   | Answers with                                                                                                                                                                                                                      |
+| ------------------------------- | ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Has it been reported?           | VirusTotal, Google Safe Browsing, Threat Feeds | Who lists it and how many engines ("7 of 70 VirusTotal engines…"), feed wording via `feed-copy.ts`, listing age when known; "Not on any list we checked." only when all three answered cleanly; names any list that didn't answer |
+| Where would it take me?         | Redirect Chain (including the final page)      | The final site when its registered domain differs, sites passed through, plain-HTTP legs, password forms that send elsewhere, hidden page parts; "couldn't reach" when unreachable                                                |
+| What else raises concern?       | Link Pattern Model, Domain Registration        | The link pattern model's and structure checks' view, and the registration age                                                                                                                                                     |
+| Does HTTPS make it safe?        | TLS Certificate                                | Always "No." first, then the certificate state and the leaf certificate's age ("This certificate was issued 2 hours ago", never "first"); plain HTTP or no TLS said plainly                                                       |
+| What did the other checks find? | DNS Profile                                    | Unusual records, and the hosting network ("network AS64500 EXAMPLE-NET, registered in NL", never "located in")                                                                                                                    |
+
+- A question is pending (a quiet placeholder in the same space) until every check it cites lands; answers fill in as checks stream.
+- Disagreement sentences appear once, under the question where the conflict shows, only once every check involved has answered: clean lists on a domain under 7 days old ("Blocklists usually lag new sites by a day or two; this one is 3 days old."), a list hit while VirusTotal shows fewer than 5 engines (unless every dated listing is over 7 days old), the link pattern model or structure checks flagging a link every list passed (naming whichever flagged it), and a VirusTotal conviction no list shares.
+- Listing age, certificate age, and the hosting network are evidence only: they appear in answers and disagreement sentences and never move a score or verdict. The questions read the signals only, never `threatInfo.scoredSignals`, so a weak scored hit under a Safe verdict is never called a threat report.
+- The link anatomy states the owner and any look-alike; no question repeats them, and the anatomy's own facts step aside once the evidence below states them.
+- Unknown results get questions with honest "couldn't reach" answers. A strip cell moves focus to the question citing its check (Summary) or opens its row (Full).
 
 ## 3) Functional Requirements
 
@@ -446,7 +464,7 @@ Then they see streaming results with each signal populating independently, and a
 **AC-2: View mode toggle**
 Given a completed scan result
 When the user toggles between Summary and Full Report
-Then Summary shows verdict + top 3 signals, Full Report shows all 8 signal sections with detailed data
+Then Summary shows the verdict and the five questions (§2.5), Full Report shows all 8 signal sections with detailed data
 
 **AC-3: Partial failure handling**
 Given a scan where VirusTotal times out but other sources succeed

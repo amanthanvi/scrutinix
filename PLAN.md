@@ -21,7 +21,7 @@ state plus the landed analysis-hardening and review-remediation work.
 ## Current Snapshot
 
 - Date: 2026-10-06
-- Execution status: `P21-P27 complete; P28 canonical redesign implemented, verified locally, and documented (DESIGN.md); P29 layer 0 (public errors) implemented and verified locally; P29.2a evidence data (layer 2, part A) implemented and verified locally`
+- Execution status: `P21-P27 complete; P28 canonical redesign implemented, verified locally, and documented (DESIGN.md); P29 layer 0 (public errors) implemented and verified locally; P29.2a evidence data (layer 2, part A) implemented and verified locally; P29.2b Summary questions (layer 2, part B) implemented and verified locally`
 - Platform:
   - Next.js `16.3.4`
   - React `19.2.x`
@@ -35,7 +35,7 @@ state plus the landed analysis-hardening and review-remediation work.
   - The ML ensemble uses a bundled quantized ONNX URL classifier plus lexical heuristics (shown to people as "link pattern model" and "structure checks"); scans do not call hosted inference.
   - Threat-feed coverage combines URLhaus, cached OpenPhish, ThreatFox, and Spamhaus DBL (via DQS when `SPAMHAUS_DQS_KEY` is set) / SURBL DNSBL lookups. On path-tenanted shared platforms only exact-URL feed evidence scores.
   - Complete, non-partial results use a 15-minute process-local LRU plus optional shared Redis cache; error, partial-failure, and aborted results are never reused. Production uses the Vercel-connected Upstash store (`KV_REST_API_*`) for rate limiting and the shared cache. Cached results are namespaced per environment (and per preview commit).
-  - The home page renders as the canonical minimal product tool in a `46rem` column (P28): a display headline, the scan form, then the verdict band, link anatomy, the eight-cell strip, Summary/Full evidence rows, and local history in one flow. Method and caveat notes live on `/about`.
+  - The home page renders as the canonical minimal product tool in a `46rem` column (P28): a display headline, the scan form, then the verdict band, link anatomy, the eight-cell strip, the evidence (Summary's five questions, P29.2b, or Full's eight rows), and local history in one flow. Method and caveat notes live on `/about`.
   - The public site shares one column, header, and footer across `/`, `/about`, and `/privacy` (`public-page-shell.tsx`), so the method and privacy pages stay visually aligned with the scanner.
   - The UI is its own token system (P28), not a shadcn preset: `app/globals.css` holds the cool-white light and deep neutral-cool dark tokens, one blue accent, per-verdict graphic/`-fg`/`-surface`/`-edge` tokens, a non-verdict `--sx-danger-*` pair for UI errors, and the eight-cell ramp; `app/scrutinix.css` holds CSS-only motion and the cell shapes. `scripts/check-contrast.mjs` guards every pair in both themes.
   - Geist Sans carries UI and display type on a custom scale; Geist Mono is reserved for links, the registered domain, scores, and other data.
@@ -260,6 +260,26 @@ is evidence only.
 - [x] Verified (`E2E_PORT=3108`): format, lint, typecheck clean; unit 44 files / 527 tests, integration 3 / 44, DOM 11 / 73, e2e 29 passed, build green. Full view checked by eye in both themes on the `feed-hit` fixture.
 - [x] Review round (independent review, 7 findings): a certificate that lapsed under 12 hours ago is "Expired" (decided before rounding; durations floored); IPv6 hosting lookups only inside global unicast 2000::/3 (IANA special-purpose registry checked; IPv4-mapped, -compatible, and NAT64 forms rejected, not unwrapped); a stored `hosting` with a missing or invalid ASN (outside 1–4294967295) is dropped instead of reading as unrouted; `registeredCountry` comes only from the AS record (the prefix's registration, AS15133 EU vs US, is never a stand-in); impossible abuse.ch dates (Feb 30/31, non-leap Feb 29) are rejected; the AS query never starts after an abort; `/privacy` says only complete results are cached and SPEC's recipient and PII lines match the code. Verified (`E2E_PORT=3116`): format, lint, typecheck clean; unit 44 files / 533 tests, integration 3 / 44, DOM 11 / 73, e2e 29 passed, build green.
 - [x] Second review round: `/privacy` no longer promises a retry "asks every service afresh" (the OpenPhish list is reused for up to 15 minutes, network names for up to a day); an IPv6 literal is read without its URL brackets (`bareHostname`), so DNS takes the literal-IP path and looks up its hosting network, registration is skipped, and TLS sends no bracketed server name. Logged error text no longer carries IP literals (layer 0, `redactForLogs`).
+
+### P29.2b Summary questions (layer 2, part B)
+
+Summary answers five plain questions instead of listing driver rows; Full
+keeps the eight per-check rows unchanged. Owner decisions (bake-off P04):
+the HTTPS question set, a "why it matters" clause per finding, one-sentence
+disagreement explanations, evidence-only new facts, leaf-certificate age
+with careful wording, and "registered in" for the hosting network. Not
+built: the "already clicked / typed a password" line and a plain-words
+score band. No score or verdict changes.
+
+- [x] `lib/domain/summary-questions.ts` (pure, client-safe; no verdict engine or tldts, the registered-domain lookup is passed in): five questions in fixed order with a fixed mapping (each check cited once: reported → VirusTotal, Safe Browsing, threat feeds; destination → redirects and page; concern → link pattern model, registration; HTTPS → certificate; other → DNS). Each has state (pending until every cited check lands), answer, why clause, sources in strip order, and an optional disagreement. Every Summary string lives there.
+- [x] Disagreement sentences, shown once and only when every check involved answered: clean lists on a domain under 7 days ("Blocklists usually lag new sites by a day or two; this one is 3 days old."), a list hit VirusTotal shows fewer than 5 engines for (not when every dated listing is over 7 days old), the pattern model or structure checks flagging what every list passed (naming whichever flagged it; suppressed when the lists-lag sentence already says it), and a VirusTotal conviction no list shares. The listing age is stated once, in the answer.
+- [x] Review round (independent reviewer): rebased onto the seven Part A review fixes; "These findings don't cancel the threat reports" only after a confirmed reputation hit (a single suspicious engine under Safe no longer triggers it), so the module no longer reads `scoredSignals`; the pattern disagreement names the member that flagged; a name with no public address reads "We found no address" or "only private or reserved addresses" (`PRIVATE_ADDRESSES_OMITTED` now shared from `lib/domain/blocked-address.ts`); a plain-HTTP link that redirects to HTTPS says so and still gives the certificate; no "different site" why without the parser; "code written to be hard to read" instead of claiming intent.
+- [x] `components/scrutinix/summary-questions.tsx`: a "Questions" list, an `h4` per question, a held placeholder while pending, one `QuestionSources` component (cell names; layer 6 numbers them). No severity colour.
+- [x] Strip cells focus the citing question in Summary and open the row in Full (hint text follows the view). The band's "because" line yields whenever evidence is shown (`shouldShowVerdictSummary(result, evidenceShown)`). The anatomy's facts step aside once the evidence states them; the owner and look-alike stay anatomy-only.
+- [x] Error results keep their eight rows in Summary; legacy records and shared snapshots render as before (no questions). Unknown gets honest "couldn't reach" answers.
+- [x] Retired `components/shared/signal-selection.ts` and its tests (the engine invariants for `getScoredSignals`/`withScoredSignals` moved to `tests/unit/verdict.test.ts`); the runtime keeps only the scored set for the strip and rows. `NEW_DOMAIN_DAYS` (30) is now shared by the engine, the registration dot, and the questions (behaviour-identical).
+- [x] First-load JS for `/` (`.next/diagnostics/route-bundle-stats.json`, base `sx/2-evidence` 33d66b8 vs this branch): 769,884 → 782,645 B uncompressed (+12,761, +1.7%); 233,306 → 237,405 B gzip (+4,099, +1.8%), all question copy (no verdict engine or tldts in the eager chunks). Lazy-loading it after scan start is an option for layer 4's budget.
+- [x] Verified (`E2E_PORT=3112`): format, lint, typecheck clean; unit 44 files / 563 tests, integration 3 / 44, DOM 11 / 74, e2e 29 passed (axe clean on Summary and Full in both themes), build green. Summary checked by eye on the flagged, clean, look-alike, and unreachable fixtures at 1280px and 390px in light and dark.
 
 ### P24 Resolve September dependency maintenance
 
