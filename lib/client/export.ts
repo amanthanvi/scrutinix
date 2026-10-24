@@ -36,8 +36,11 @@ function escapeCsvCell(value: unknown): string {
  * `parse` (the Public Suffix List parser, when loaded) fills "Look-alike
  * of": the site a link's address imitates. The stored verdict and score
  * stay as data; a reader of the sheet still sees that a "safe" row's
- * address is a look-alike.
+ * address is a look-alike. Without the parser the column says so, since
+ * a blank cell would read as "not a look-alike".
  */
+const NOT_CHECKED = "Not checked";
+
 export function resultsToCsv(
   results: AnalysisResult[],
   parse: ParseHostname | null = null,
@@ -56,7 +59,9 @@ export function resultsToCsv(
     ...results.map((result) => [
       result.url,
       result.verdict,
-      (parse && splitLinkAnatomy(parse, result.url)?.impersonates) || "",
+      parse
+        ? (splitLinkAnatomy(parse, result.url)?.impersonates ?? "")
+        : NOT_CHECKED,
       String(result.threatInfo?.score ?? 0),
       String(result.threatInfo?.confidence ?? 0),
       String(result.metadata?.cacheHit ?? false),

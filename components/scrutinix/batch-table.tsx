@@ -84,7 +84,7 @@ function BatchRow({
   isStreaming: boolean;
   onSelectResult: (result: AnalysisResult) => void;
 }) {
-  const { anatomy, ready: anatomyReady } = useRowAnatomy(item.url);
+  const { anatomy, status: anatomyStatus } = useRowAnatomy(item.url);
   const impersonates = anatomy?.impersonates ?? null;
   const live = !item.result && isStreaming;
   const lookAlike = item.result
@@ -103,7 +103,7 @@ function BatchRow({
       <RowVerdict
         verdict={item.result?.verdict ?? null}
         impersonates={impersonates}
-        anatomyReady={anatomyReady}
+        anatomyStatus={anatomyStatus}
         label={isStreaming ? "Checking" : "Not checked"}
       />
       <RowLink url={item.url} anatomy={anatomy} />

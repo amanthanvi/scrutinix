@@ -14,7 +14,10 @@ import { toast } from "sonner";
 import { sanitizeHistoryEntry } from "@/lib/domain/runtime-safety";
 import type { AnalysisResult, HistoryEntry } from "@/lib/domain/types";
 import { normalizeUrlInput } from "@/lib/domain/url";
-import { getLoadedLinkParser } from "@/hooks/use-link-anatomy";
+import {
+  getLinkParserStatus,
+  getLoadedLinkParser,
+} from "@/hooks/use-link-anatomy";
 import { splitLinkAnatomy } from "@/lib/domain/link-anatomy";
 import { verdictWord } from "@/lib/domain/verdict-guidance";
 
@@ -165,13 +168,17 @@ export function useScanHistory() {
           ? entry.threatInfo.summary
           : "";
       const verdict = typeof entry.verdict === "string" ? entry.verdict : "";
-      // Rows show "Look-alike" for a Safe look-alike: match what is shown.
+      // Rows show "Look-alike" for a Safe look-alike, and "Unconfirmed"
+      // once the parser has failed: match what is shown.
       const parse = getLoadedLinkParser();
       const shown =
-        parse && verdict
+        verdict && (parse || getLinkParserStatus() === "failed")
           ? verdictWord({
               verdict: entry.verdict,
-              impersonates: splitLinkAnatomy(parse, url)?.impersonates ?? null,
+              impersonates: parse
+                ? (splitLinkAnatomy(parse, url)?.impersonates ?? null)
+                : null,
+              addressUnchecked: !parse,
             })
           : "";
       return (

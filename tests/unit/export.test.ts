@@ -72,4 +72,13 @@ describe("resultsToCsv", () => {
     expect(lookAlike).toContain('"safe","paypal.com"');
     expect(plain).toContain('"safe",""');
   });
+
+  it("says the look-alike column wasn't checked when the parser isn't there", () => {
+    const csv = resultsToCsv([
+      buildResult("https://paypal.com.secure-login.xyz/verify"),
+    ]);
+    const [, row] = csv.replace(/^\uFEFF/, "").split("\r\n");
+    // A blank cell would read as "not a look-alike".
+    expect(row).toContain('"safe","Not checked"');
+  });
 });

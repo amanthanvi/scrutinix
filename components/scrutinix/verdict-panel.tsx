@@ -4,6 +4,7 @@ import Link from "next/link";
 import type { CSSProperties, ReactNode } from "react";
 
 import { SIGNAL_COUNT } from "@/components/shared/scrutinix-types";
+import type { LinkParserStatus } from "@/hooks/use-link-anatomy";
 import { capitalize } from "@/lib/domain/copy";
 import { SHARE_MAX_AGE_WORDS } from "@/lib/domain/signal-signature";
 import type {
@@ -12,6 +13,7 @@ import type {
   Verdict,
 } from "@/lib/domain/types";
 import {
+  ADDRESS_CHECK_PENDING,
   clampScore,
   getConfidenceReasons,
   getCoverageCaveat,
@@ -126,6 +128,40 @@ function Band({
   );
 }
 
+/**
+ * The band before there is a verdict to state: "Checking" in soft ink on
+ * the neutral surface, a progress line, and the confidence line's slot
+ * held, so the verdict changes the band's tone in place rather than
+ * growing it. Called as a function, not rendered as a component, so the
+ * root stays a `Band` and the heading node (and its focus) survives.
+ */
+function heldBand({
+  label,
+  line,
+  aside,
+}: {
+  label: string;
+  line: ReactNode;
+  aside?: ReactNode;
+}) {
+  return (
+    <Band
+      label={label}
+      tone="pending"
+      heading={<span>Checking</span>}
+      headingClassName="text-[var(--sx-text-soft)]"
+      aside={aside}
+      imperative={
+        <span className="text-[var(--sx-text-muted)] tabular-nums">{line}</span>
+      }
+    >
+      <p aria-hidden="true" className="text-meta invisible mt-5">
+        &nbsp;
+      </p>
+    </Band>
+  );
+}
+
 /** A shared band's one primary action. */
 function RunSharedScanButton({
   onClick,
@@ -163,6 +199,12 @@ interface VerdictBandProps {
   completedSignals?: number;
   /** Look-alike domain from the link anatomy; hedges Safe and Unknown. */
   impersonates?: string | null;
+  /**
+   * Whether `impersonates` is final. A Safe result holds in the Checking
+   * state while it is "pending" and reads "Unconfirmed" if it "failed";
+   * every other verdict shows at once.
+   */
+  addressCheck?: LinkParserStatus;
   /** Rows Summary shows; the "because" line yields to them. */
   driverRows?: number;
   onRunSharedScan?: () => void;
@@ -184,41 +226,25 @@ export function VerdictBand({
   expiredShare = false,
   completedSignals = 0,
   impersonates = null,
+  addressCheck = "ready",
   driverRows = 0,
   onRunSharedScan,
   onCancelScan,
 }: VerdictBandProps) {
   if (isStreaming && !result) {
-    return (
-      <Band
-        label="Scanning URL"
-        tone="pending"
-        heading={<span>Checking</span>}
-        headingClassName="text-[var(--sx-text-soft)]"
-        aside={
-          onCancelScan ? (
-            <button
-              type="button"
-              onClick={onCancelScan}
-              className="sx-btn-press text-meta -mr-2 inline-flex min-h-11 items-center self-start rounded-md px-3 font-medium text-[var(--sx-text-muted)] hover:bg-[var(--sx-subtle)] hover:text-[var(--sx-text)]"
-            >
-              Cancel scan
-            </button>
-          ) : null
-        }
-        imperative={
-          <span className="text-[var(--sx-text-muted)] tabular-nums">
-            {completedSignals} of {SIGNAL_COUNT} checks finished
-          </span>
-        }
-      >
-        {/* Holds the confidence line's slot, so the verdict changes the
-            band's tone in place rather than growing it. */}
-        <p aria-hidden="true" className="text-meta invisible mt-5">
-          &nbsp;
-        </p>
-      </Band>
-    );
+    return heldBand({
+      label: "Scanning URL",
+      aside: onCancelScan ? (
+        <button
+          type="button"
+          onClick={onCancelScan}
+          className="sx-btn-press text-meta -mr-2 inline-flex min-h-11 items-center self-start rounded-md px-3 font-medium text-[var(--sx-text-muted)] hover:bg-[var(--sx-subtle)] hover:text-[var(--sx-text)]"
+        >
+          Cancel scan
+        </button>
+      ) : null,
+      line: `${completedSignals} of ${SIGNAL_COUNT} checks finished`,
+    });
   }
 
   if (!result && sharedSnapshot) {
@@ -296,9 +322,28 @@ export function VerdictBand({
 
   if (!result) return null;
 
+  // Safe is the one verdict a look-alike changes: until the address check
+  // settles, state nothing rather than a "Safe" that may turn into
+  // "Look-alike".
+  if (result.verdict === "safe" && addressCheck === "pending") {
+    return heldBand({
+      label: ADDRESS_CHECK_PENDING,
+      line: ADDRESS_CHECK_PENDING,
+    });
+  }
+
   const threatInfo = result.threatInfo;
-  const guidance = getVerdictGuidance({ ...result, impersonates });
-  const word = verdictWord({ verdict: result.verdict, impersonates });
+  const addressUnchecked = addressCheck === "failed";
+  const guidance = getVerdictGuidance({
+    ...result,
+    impersonates,
+    addressUnchecked,
+  });
+  const word = verdictWord({
+    verdict: result.verdict,
+    impersonates,
+    addressUnchecked,
+  });
   const score = clampScore(threatInfo?.score);
   // A failed scan has no confidence to state; nothing defaults to "low".
   const confidence =
@@ -388,11 +433,15 @@ export function VerdictBand({
 export function VerdictDetails({
   result,
   impersonates = null,
+  addressCheck = "ready",
 }: {
   result: AnalysisResult;
   /** Look-alike domain from the link anatomy; hedges "What to do". */
   impersonates?: string | null;
+  /** As on the band: "failed" states the checks' own verdict and score. */
+  addressCheck?: LinkParserStatus;
 }) {
+  const addressUnchecked = addressCheck === "failed";
   const threatInfo = result.threatInfo;
   const confidenceLabel = threatInfo?.confidenceLabel ?? "low";
   const reasons = threatInfo?.hasPositiveEvidence
@@ -403,10 +452,18 @@ export function VerdictDetails({
     impersonates,
   });
   const limitations = threatInfo?.limitations ?? [];
-  const confidenceReasons = getConfidenceReasons({ ...result, impersonates });
-  // A Safe look-alike's band says "Look-alike" with no score; its own
-  // verdict and score are stated here.
-  const underlying = getUnderlyingVerdictNote({ ...result, impersonates });
+  const confidenceReasons = getConfidenceReasons({
+    ...result,
+    impersonates,
+    addressUnchecked,
+  });
+  // A Safe look-alike's band says "Look-alike" with no score (an unchecked
+  // one "Unconfirmed"); its own verdict and score are stated here.
+  const underlying = getUnderlyingVerdictNote({
+    ...result,
+    impersonates,
+    addressUnchecked,
+  });
   const metadata = result.metadata;
   const completed = Object.values(result.signals).filter(
     (signal) => signal.status !== "pending",

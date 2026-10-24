@@ -12,10 +12,41 @@ describe("RowVerdict", () => {
 
   it("holds a Safe row's word until it is known not to be a look-alike", () => {
     render(
-      <RowVerdict verdict="safe" impersonates={null} anatomyReady={false} />,
+      <RowVerdict verdict="safe" impersonates={null} anatomyStatus="pending" />,
     );
     expect(screen.queryByText("Safe")).toBeNull();
     expect(screen.queryByText("Look-alike")).toBeNull();
+    expect(screen.getByText("—")).toBeTruthy();
+  });
+
+  it("says Unconfirmed, in the neutral colour, when the parser failed", () => {
+    render(
+      <RowVerdict verdict="safe" impersonates={null} anatomyStatus="failed" />,
+    );
+    expect(screen.queryByText("Safe")).toBeNull();
+    const word = screen.getByText("Unconfirmed");
+    expect(word.getAttribute("style")).toContain("var(--sx-unknown-fg)");
+  });
+
+  it("names every other verdict at once, whatever the parser's state", () => {
+    render(
+      <>
+        <RowVerdict
+          verdict="malicious"
+          impersonates={null}
+          anatomyStatus="pending"
+        />
+        <RowVerdict
+          verdict="suspicious"
+          impersonates={null}
+          anatomyStatus="failed"
+        />
+      </>,
+    );
+    expect(screen.getByText("Malicious")).toBeTruthy();
+    expect(screen.getByText("Suspicious").getAttribute("style")).toContain(
+      "var(--sx-suspicious-fg)",
+    );
   });
 
   it("names every other result by its verdict", () => {

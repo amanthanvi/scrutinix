@@ -696,3 +696,62 @@ describe("the verdict band's because line", () => {
     expect(shouldShowVerdictSummary(result, 1)).toBe(false);
   });
 });
+
+describe("an address the look-alike check couldn't reach (presentation only)", () => {
+  const safe = buildResult("safe", { score: 4, confidenceLabel: "high" });
+  const unchecked = { ...safe, addressUnchecked: true };
+
+  it("shows a Safe it couldn't check as Unconfirmed: neutral, no score, why", () => {
+    expect(verdictWord(unchecked)).toBe("Unconfirmed");
+    expect(getVerdictGuidance(unchecked)).toEqual({
+      imperative: "Check the link's address before you open it.",
+      showScore: false,
+      tone: "unknown",
+      confidenceNote:
+        "We couldn't check whether this address imitates another site.",
+    });
+    // The stored verdict and score are untouched, and stated in the details.
+    expect(unchecked.verdict).toBe("safe");
+    expect(getUnderlyingVerdictNote(unchecked)).toBe(
+      "No check flagged it: on their own, the checks scored it Safe, 4 out of 100.",
+    );
+    expect(getConfidenceReasons(unchecked).at(-1)).toBe(
+      "Confidence covers reputation only; we couldn't check whether the address imitates another site.",
+    );
+  });
+
+  it("says so in the announcement, with no score", () => {
+    expect(
+      getVerdictAnnouncement({
+        ...unchecked,
+        url: "https://paypal.com.safe.scrutinix.test/",
+      }),
+    ).toBe(
+      "Result for paypal.com.safe.scrutinix.test: Unconfirmed. Check the link's address before you open it. We couldn't check whether this address imitates another site.",
+    );
+  });
+
+  it("changes no other verdict, and yields to a known look-alike", () => {
+    for (const verdict of [
+      "suspicious",
+      "malicious",
+      "critical",
+      "unknown",
+      "error",
+    ] as const) {
+      const result = buildResult(verdict, { score: 60 });
+      expect(verdictWord({ ...result, addressUnchecked: true })).toBe(
+        verdictWord(result),
+      );
+      expect(getVerdictGuidance({ ...result, addressUnchecked: true })).toEqual(
+        getVerdictGuidance(result),
+      );
+      expect(
+        getVerdictAnnouncement({ ...result, addressUnchecked: true }),
+      ).toBe(getVerdictAnnouncement(result));
+    }
+    expect(verdictWord({ ...unchecked, impersonates: "paypal.com" })).toBe(
+      "Look-alike",
+    );
+  });
+});

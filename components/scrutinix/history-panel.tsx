@@ -55,7 +55,7 @@ function HistoryRow({
   entry: HistoryEntry;
   onSelect: (entry: HistoryEntry) => void;
 }) {
-  const { anatomy, ready: anatomyReady } = useRowAnatomy(entry.url);
+  const { anatomy, status: anatomyStatus } = useRowAnatomy(entry.url);
   return (
     <li>
       <button
@@ -70,7 +70,7 @@ function HistoryRow({
         <RowVerdict
           verdict={entry.verdict}
           impersonates={anatomy?.impersonates ?? null}
-          anatomyReady={anatomyReady}
+          anatomyStatus={anatomyStatus}
         />
         <RowLink url={entry.url} anatomy={anatomy} />
         <span

@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 import { gotoApp, submitSingleScan } from "./helpers";
 
@@ -154,4 +154,149 @@ test("strip cells open their evidence row", async ({ page }) => {
   // Names start with the visible cell label (WCAG 2.5.3 label in name).
   await strip.getByRole("button", { name: /^DNS:/ }).click();
   await expect(page.getByLabel(/DNS Profile:/i)).toBeFocused();
+});
+
+/** The lazily loaded link parser's chunk: tldts and its Public Suffix List. */
+const isParserChunk = (body: string) => body.includes("getPublicSuffix");
+
+/**
+ * Route every script chunk through `onParser` when it is the parser's, and
+ * record each word the band's heading shows, so a transient "Safe" between
+ * two renders is caught.
+ */
+async function interceptParser(
+  page: Page,
+  onParser: (
+    respond: () => Promise<void>,
+    abort: () => Promise<void>,
+  ) => Promise<void>,
+) {
+  await page.route("**/_next/static/chunks/**/*.js", async (route) => {
+    const response = await route.fetch();
+    const body = await response.text();
+    const respond = () => route.fulfill({ response, body });
+    if (isParserChunk(body)) {
+      await onParser(respond, () => route.abort("failed"));
+    } else {
+      await respond();
+    }
+  });
+  await page.addInitScript(() => {
+    const words: string[] = [];
+    Object.assign(window, { sxHeadings: words });
+    new MutationObserver(() => {
+      const text = document.getElementById("sx-verdict-heading")?.textContent;
+      if (text && words.at(-1) !== text) words.push(text);
+    }).observe(document, {
+      subtree: true,
+      childList: true,
+      characterData: true,
+    });
+  });
+}
+
+function headingWords(page: Page): Promise<string[]> {
+  return page.evaluate(
+    () => (window as unknown as { sxHeadings: string[] }).sxHeadings,
+  );
+}
+
+test("a slow link parser holds a Safe look-alike, never showing Safe", async ({
+  page,
+}) => {
+  let release = () => {};
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await interceptParser(page, async (respond) => {
+    await held;
+    await respond();
+  });
+  await gotoApp(page);
+  await submitSingleScan(page, "https://paypal.com.safe.scrutinix.test/login");
+
+  // The scan finished; the address check hasn't.
+  const waiting = page.getByLabel("Checking the link's address", {
+    exact: true,
+  });
+  await expect(waiting).toBeVisible();
+  await expect(waiting.getByRole("heading", { level: 2 })).toHaveText(
+    "Checking",
+  );
+  await expect(waiting.getByRole("meter")).toHaveCount(0);
+  await expect(waiting).not.toContainText(/Safe|confidence/);
+  const history = page.getByRole("region", { name: "Scan history" });
+  const row = history.getByRole("listitem").first();
+  await expect(row).toContainText("—");
+  await expect(row).not.toContainText("Safe");
+
+  release();
+  const verdict = page.getByLabel(/^scan result: look-alike$/i);
+  await expect(verdict).toBeVisible();
+  await expect(verdict.getByRole("meter")).toHaveCount(0);
+  await expect(row).toContainText("Look-alike");
+  await expect(page.locator("p[aria-live='polite']")).toHaveText(
+    /^Result for paypal\.com\.safe\.scrutinix\.test: Look-alike\./,
+  );
+  const words = await headingWords(page);
+  expect(words).not.toContain("Safe");
+  expect(words.at(-1)).toBe("Look-alike");
+});
+
+test("a link parser that fails to load leaves a Safe result Unconfirmed, never Safe", async ({
+  page,
+}) => {
+  let parserRequests = 0;
+  await interceptParser(page, async (_respond, abort) => {
+    parserRequests += 1;
+    await abort();
+  });
+  await gotoApp(page);
+  await submitSingleScan(page, "https://paypal.com.safe.scrutinix.test/login");
+
+  const verdict = page.getByLabel(/^scan result: unconfirmed$/i);
+  await expect(verdict).toBeVisible({ timeout: 15_000 });
+  await expect(
+    verdict.getByRole("heading", { level: 2, name: "Unconfirmed" }),
+  ).toBeVisible();
+  await expect(
+    verdict.getByText("Check the link's address before you open it."),
+  ).toBeVisible();
+  await expect(
+    verdict.getByText(
+      "We couldn't check whether this address imitates another site.",
+    ),
+  ).toBeVisible();
+  await expect(verdict.getByRole("meter")).toHaveCount(0);
+  await expect(verdict).not.toContainText(/Safe|High confidence|Looks safe/);
+  await expect(page.locator("p[aria-live='polite']")).toHaveText(
+    "Result for paypal.com.safe.scrutinix.test: Unconfirmed. Check the link's address before you open it. We couldn't check whether this address imitates another site.",
+  );
+
+  // The row says the same word, and it fits the verdict column.
+  const row = page
+    .getByRole("region", { name: "Scan history" })
+    .getByRole("listitem")
+    .first();
+  const word = row.getByText("Unconfirmed", { exact: true });
+  await expect(word).toBeVisible();
+  expect(
+    await word.evaluate((node) => node.scrollWidth <= node.clientWidth + 1),
+  ).toBe(true);
+
+  // Turbopack retries a chunk once itself; ours is a second, fresh load.
+  expect(parserRequests).toBeGreaterThanOrEqual(3);
+  expect(await headingWords(page)).not.toContain("Safe");
+
+  // The word fits the band at the narrowest phone width.
+  await page.setViewportSize({ width: 320, height: 640 });
+  const heading = verdict.getByRole("heading", { level: 2 });
+  expect(
+    await heading.evaluate((node) => node.scrollWidth <= node.clientWidth + 1),
+  ).toBe(true);
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
 });
