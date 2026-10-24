@@ -20,10 +20,12 @@ type GuidanceInput = Pick<AnalysisResult, "verdict" | "threatInfo"> & {
   /**
    * A domain the link spells out but does not belong to
    * (`LinkAnatomy.impersonates`). Presentation only, never the score or
-   * the verdict word: on a Safe verdict it hardens the instruction, swaps
-   * the reassuring confidence line for a plain note, and turns the band
-   * neutral. Unknown keeps its own instruction. The owner fact itself is
-   * said once, by `ownershipSentence`, in the anatomy line.
+   * the stored verdict: a Safe verdict is shown as "Look-alike"
+   * (`verdictWord`), with a hardened instruction, a plain note instead of
+   * the reassuring confidence line, a neutral band, and its score moved to
+   * the details (`getUnderlyingVerdictNote`). Unknown keeps its own word
+   * and instruction. The owner fact itself is said once, by
+   * `ownershipSentence`, in the anatomy line.
    */
   impersonates?: string | null;
   /**
@@ -71,20 +73,55 @@ export function isLookAlikeSafe(
   return result.verdict === "safe" && Boolean(result.impersonates);
 }
 
+/** The word a Safe look-alike is shown as, everywhere a verdict is named. */
+export const LOOK_ALIKE_WORD = "Look-alike";
+
 /**
- * What a share preview leads with: the verdict word, except that a Safe
- * look-alike never leads with "Safe" (many chat clients show only the
- * title and image). `short` is the card's one word, whose ownership line
- * names both domains; the title names the imitated site.
+ * The verdict word people see: the verdict, except that a Safe look-alike
+ * is shown as "Look-alike" on the band, in history and batch rows, in the
+ * live announcement, and on share cards. No check flagged it, so "Safe"
+ * would reassure while the instruction warns; the stored verdict and score
+ * are unchanged and stated in the details (`getUnderlyingVerdictNote`).
+ */
+export function verdictWord(
+  result: Pick<GuidanceInput, "verdict" | "impersonates">,
+): string {
+  return isLookAlikeSafe(result)
+    ? LOOK_ALIKE_WORD
+    : verdictLabel(result.verdict);
+}
+
+/**
+ * What a share preview leads with: the verdict word (`verdictWord`); a
+ * Safe look-alike's page title names the imitated site, since many chat
+ * clients show only the title and image. `short` is the card's one word,
+ * whose ownership line names both domains.
  */
 export function shareHeadline(
   result: Pick<GuidanceInput, "verdict" | "impersonates">,
   { short = false }: { short?: boolean } = {},
 ): string {
-  if (isLookAlikeSafe(result)) {
-    return short ? "Look-alike" : `Look-alike of ${result.impersonates}`;
+  if (isLookAlikeSafe(result) && !short) {
+    return `${LOOK_ALIKE_WORD} of ${result.impersonates}`;
   }
-  return verdictLabel(result.verdict);
+  return verdictWord(result);
+}
+
+/**
+ * Where a Safe look-alike's own verdict and score live, since its band
+ * shows "Look-alike" and no score: "No check flagged it: on their own, the
+ * checks scored it Safe, 12 out of 100." Null for every other result.
+ */
+export function getUnderlyingVerdictNote(
+  result: Pick<GuidanceInput, "verdict" | "impersonates" | "threatInfo">,
+): string | null {
+  if (!isLookAlikeSafe(result)) {
+    return null;
+  }
+  const score = result.threatInfo
+    ? `, ${clampScore(result.threatInfo.score)} out of 100`
+    : "";
+  return `No check flagged it: on their own, the checks scored it ${verdictLabel(result.verdict)}${score}.`;
 }
 
 /**
@@ -149,11 +186,12 @@ function getInstruction(
       };
     case "safe":
       if (result.impersonates) {
-        // No check flagged it, but a green band and "High confidence"
-        // would contradict the instruction. The score and word stay.
+        // No check flagged it, but a green band, "High confidence", and a
+        // low score would contradict the instruction. The word reads
+        // "Look-alike" (`verdictWord`); the score moves to the details.
         return {
           imperative: "Don't sign in or enter details here.",
-          showScore: true,
+          showScore: false,
           tone: "unknown",
           confidenceNote: "No check flagged it, but the name is misleading.",
         };
@@ -205,7 +243,7 @@ export function getVerdictAnnouncement(result: GuidanceInput): string {
     result.impersonates && result.registeredDomain
       ? ` ${ownershipSentence(result.registeredDomain, result.impersonates)}`
       : "";
-  return `${subject}: ${verdictLabel(result.verdict)}${score}. ${guidance.imperative}${owner}`;
+  return `${subject}: ${verdictWord(result)}${score}. ${guidance.imperative}${owner}`;
 }
 
 /**

@@ -16,9 +16,11 @@ import {
   getConfidenceReasons,
   getCoverageCaveat,
   getScoreBandText,
+  getUnderlyingVerdictNote,
   getVerdictGuidance,
   getVerdictRecommendations,
   shouldShowVerdictSummary,
+  verdictWord,
 } from "@/lib/domain/verdict-guidance";
 import { cn } from "@/lib/utils";
 
@@ -227,16 +229,17 @@ export function VerdictBand({
       threatInfo: null,
       impersonates,
     });
+    const word = verdictWord({ verdict: sharedSnapshot.verdict, impersonates });
     return (
       <Band
-        label={`Scan result: ${sharedSnapshot.verdict}`}
+        label={`Scan result: ${word}`}
         tone={guidance.tone}
         heading={
           <span
             key={`shared-${sharedSnapshot.verdict}`}
-            className="sx-band-arrive capitalize"
+            className="sx-band-arrive"
           >
-            {sharedSnapshot.verdict}
+            {word}
           </span>
         }
         imperative={guidance.imperative}
@@ -295,6 +298,7 @@ export function VerdictBand({
 
   const threatInfo = result.threatInfo;
   const guidance = getVerdictGuidance({ ...result, impersonates });
+  const word = verdictWord({ verdict: result.verdict, impersonates });
   const score = clampScore(threatInfo?.score);
   // A failed scan has no confidence to state; nothing defaults to "low".
   const confidence =
@@ -310,12 +314,12 @@ export function VerdictBand({
 
   return (
     <Band
-      label={`Scan result: ${result.verdict}`}
+      label={`Scan result: ${word}`}
       tone={guidance.tone}
       heading={
         // Keyed so the word remounts and arrives when a result lands.
-        <span key={result.id} className="sx-band-arrive capitalize">
-          {result.verdict}
+        <span key={result.id} className="sx-band-arrive">
+          {word}
         </span>
       }
       headingClassName="text-[var(--sx-text)]"
@@ -400,6 +404,9 @@ export function VerdictDetails({
   });
   const limitations = threatInfo?.limitations ?? [];
   const confidenceReasons = getConfidenceReasons({ ...result, impersonates });
+  // A Safe look-alike's band says "Look-alike" with no score; its own
+  // verdict and score are stated here.
+  const underlying = getUnderlyingVerdictNote({ ...result, impersonates });
   const metadata = result.metadata;
   const completed = Object.values(result.signals).filter(
     (signal) => signal.status !== "pending",
@@ -412,6 +419,7 @@ export function VerdictDetails({
       : null;
 
   if (
+    !underlying &&
     reasons.length === 0 &&
     recommendations.length === 0 &&
     limitations.length === 0 &&
@@ -434,6 +442,10 @@ export function VerdictDetails({
         How we reached this verdict
       </summary>
       <div className="mt-2 max-w-[62ch] space-y-5 pb-1 text-sm leading-6">
+        {underlying ? (
+          <p className="text-[var(--sx-text)]">{underlying}</p>
+        ) : null}
+
         {reasons.length > 0 ? (
           <div>
             <h3 className={DETAIL_HEADING}>What we found</h3>

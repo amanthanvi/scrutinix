@@ -199,7 +199,7 @@ describe("shared snapshot first paint", () => {
     );
 
     // Synchronous: no waiting on the lazily loaded parser.
-    const band = screen.getByLabelText(/^scan result: safe$/i);
+    const band = screen.getByLabelText(/^scan result: look-alike$/i);
     expect(
       within(band).getByText("Don't sign in or enter details here."),
     ).toBeTruthy();
@@ -617,7 +617,7 @@ describe("ResultsSection", () => {
       );
       const { unmount, container } = renderApp(<OpenStored result={result} />);
       fireEvent.click(screen.getByRole("button", { name: "open stored" }));
-      await screen.findByRole("heading", { level: 2, name: "malicious" });
+      await screen.findByRole("heading", { level: 2, name: "Malicious" });
 
       const visible = visibleText(container);
       expect(visible.match(pattern)?.length, `${host}: ${fact}`).toBe(1);
@@ -711,7 +711,7 @@ describe("ResultsSection", () => {
     });
     await waitFor(() => {
       expect(document.activeElement?.id).toBe(VERDICT_HEADING_ID);
-      expect(document.activeElement?.textContent).toBe("malicious");
+      expect(document.activeElement?.textContent).toBe("Malicious");
     });
   });
 });
@@ -759,7 +759,7 @@ describe("shared links and their signature", () => {
   it("states a signed snapshot's verdict, summary, strip, and verification", () => {
     renderApp(undefined, { payload: maliciousShare });
     const band = screen.getByLabelText(/^scan result: malicious$/i);
-    expect(within(band).getByRole("heading").textContent).toBe("malicious");
+    expect(within(band).getByRole("heading").textContent).toBe("Malicious");
     expect(band.getAttribute("style")).toContain("var(--sx-malicious-surface)");
     expect(
       within(band).getByText(
@@ -909,7 +909,7 @@ describe("ResultsSection focus and states", () => {
     });
     await waitFor(() => {
       expect(document.activeElement?.id).toBe(VERDICT_HEADING_ID);
-      expect(document.activeElement?.textContent).toBe("malicious");
+      expect(document.activeElement?.textContent).toBe("Malicious");
     });
   });
 

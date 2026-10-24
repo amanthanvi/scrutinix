@@ -83,7 +83,7 @@ for (const colorScheme of ["light", "dark"] as const) {
     await page.emulateMedia({ colorScheme });
     await gotoApp(page);
     await submitSingleScan(page, "https://paypal.com.secure-login.xyz/verify");
-    await expect(page.getByLabel(/^scan result: safe$/i)).toBeVisible();
+    await expect(page.getByLabel(/^scan result: look-alike$/i)).toBeVisible();
     await page.getByRole("switch", { name: /^summary full/i }).click();
     await settleAnimations(page);
     await page

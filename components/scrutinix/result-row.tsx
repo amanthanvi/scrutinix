@@ -5,7 +5,7 @@ import { verdictFg } from "@/components/shared/scrutinix-types";
 import { useLinkAnatomy } from "@/hooks/use-link-anatomy";
 import type { LinkAnatomy } from "@/lib/domain/link-anatomy";
 import type { Verdict } from "@/lib/domain/types";
-import { isLookAlikeSafe, verdictLabel } from "@/lib/domain/verdict-guidance";
+import { isLookAlikeSafe, verdictWord } from "@/lib/domain/verdict-guidance";
 import { cn } from "@/lib/utils";
 
 /**
@@ -58,7 +58,7 @@ export function RowVerdict({
           : verdictFg(lookAlike ? "unknown" : verdict),
       }}
     >
-      {verdict ? verdictLabel(verdict) : label}
+      {verdict ? verdictWord({ verdict, impersonates }) : label}
     </span>
   );
 }

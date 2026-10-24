@@ -74,18 +74,30 @@ test("a threat-feed listing renders a malicious verdict", async ({ page }) => {
   await expect(page.getByText(/listed.*listed/i)).toHaveCount(0);
 });
 
-test("a look-alike subdomain is named plainly and hedges a clean verdict", async ({
+test("a look-alike subdomain is named plainly and shown as Look-alike", async ({
   page,
 }) => {
   await gotoApp(page);
   await submitSingleScan(page, "https://paypal.com.secure-login.xyz/verify");
 
-  const verdict = page.getByLabel(/^scan result: safe$/i);
+  const verdict = page.getByLabel(/^scan result: look-alike$/i);
   await expect(verdict).toBeVisible();
+  await expect(
+    verdict.getByRole("heading", { level: 2, name: "Look-alike" }),
+  ).toBeVisible();
   await expect(
     verdict.getByText("Don't sign in or enter details here."),
   ).toBeVisible();
   await expect(verdict.getByText(/High confidence/)).toHaveCount(0);
+  // No check flagged it: the band shows no reassuring score, and the
+  // details state the checks' own verdict.
+  await expect(verdict.getByRole("meter")).toHaveCount(0);
+  await page.getByText("How we reached this verdict").click();
+  await expect(
+    page.getByText(
+      /^No check flagged it: on their own, the checks scored it Safe, \d+ out of 100\.$/,
+    ),
+  ).toBeVisible();
   await expect(
     page.getByText("This link belongs to secure-login.xyz, not paypal.com.", {
       exact: true,
@@ -99,11 +111,12 @@ test("a phone-width history row keeps a look-alike's real owner visible", async 
   await page.setViewportSize({ width: 390, height: 844 });
   await gotoApp(page);
   await submitSingleScan(page, "https://paypal.com.secure-login.xyz/verify");
-  await expect(page.getByLabel(/^scan result: safe$/i)).toBeVisible();
+  await expect(page.getByLabel(/^scan result: look-alike$/i)).toBeVisible();
 
   const history = page.getByRole("region", { name: "Scan history" });
   const row = history.getByRole("listitem").first();
   await expect(row).toContainText("secure-login.xyz");
+  await expect(row).toContainText("Look-alike");
   const owner = row.locator('[data-part="owner"]');
   await expect(owner).toHaveText("secure-login.xyz");
   const ownerBox = await owner.boundingBox();
