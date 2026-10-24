@@ -75,7 +75,8 @@ Honesty is the mechanism a neighboring scanner cannot truthfully copy:
 
 ## Brand Commitments
 
-- Name: **Scrutinix**. Tagline in use on the OG card: "Check a link before you
+- Name: **Scrutinix**. Home headline: "Is this link what it says it is?"
+  Tagline in use on the OG card and page title: "Check a link before you
   click."
 - Voice: plain, direct, calm; tells the person what to do. No fear-mongering,
   no hype, no security jargon where a plain word exists.
@@ -83,13 +84,18 @@ Honesty is the mechanism a neighboring scanner cannot truthfully copy:
   costume, terminal / CRT / radar / glow theater, cream-and-purple SaaS.
 - One encoding per fact: a number or severity renders once. No score rings,
   threat gauges, or stacked per-signal badges repeating the same fact.
-- Visual lane (standing preference, re-confirmed 2026-10-06): the canonical
-  minimal product tool, played straight at Linear/Vercel craft level — chosen
-  over three committed alternate worlds (disclosure label, road signage, transit
-  line) in a live draft round. Light theme uses a cool, crisp white ground, not
-  warm paper. "Minimal" must still answer the original brief: the verdict owns
-  the moment, the site a link really belongs to is legible, and the page is
-  not bland.
+- Visual lane (owner decision, 2026-10-24, P29.6): the editorial
+  fact-checker — the link is the claim under review, reported like a careful
+  fact-check (plain question, rated answer, every source named) with no
+  newspaper costume. Chosen from a 16-draft bake-off with blind panels: P09
+  editorial as the base, P11's registered-domain serif line under the verdict,
+  P09's link taken apart and numbered citations. Newsreader (two static cuts)
+  tells the story; the system sans runs the interface; the system mono carries
+  the link. Light stays a cool, crisp near-white sheet, not warm paper; dark is
+  warm paper ink on a cool ground. Buttons are ink; the accent marks links and
+  focus only. Supersedes the 2026-10-06 "canonical minimal product tool"
+  lane, which remains the record of why the page must not be bland and must
+  make the site a link belongs to legible.
 
 ## Evidence on Hand
 
