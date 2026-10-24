@@ -241,6 +241,29 @@ describe("evidence rows", () => {
     expect(shortenFingerprint("fixture")).toBe("fixture");
   });
 
+  it("calls a certificate expired the moment it lapses, not after a rounded day", () => {
+    const expiryAt = (offsetMs: number) => {
+      const rows = rowsOf(
+        getSignalDetailEntries(
+          "ssl",
+          buildSsl({ validTo: new Date(NOW + offsetMs).toISOString() }),
+          NOW,
+        ),
+      );
+      return rows["Expired"] !== undefined
+        ? { Expired: rows["Expired"] }
+        : { "Expires in": rows["Expires in"] };
+    };
+
+    expect(expiryAt(-6 * HOUR)).toEqual({ Expired: "less than a day ago" });
+    expect(expiryAt(-1)).toEqual({ Expired: "less than a day ago" });
+    expect(expiryAt(0)).toEqual({ "Expires in": "less than a day" });
+    expect(expiryAt(1)).toEqual({ "Expires in": "less than a day" });
+    expect(expiryAt(23 * HOUR)).toEqual({ "Expires in": "less than a day" });
+    expect(expiryAt(-36 * HOUR)).toEqual({ Expired: "1 day ago" });
+    expect(expiryAt(36 * HOUR)).toEqual({ "Expires in": "1 day" });
+  });
+
   it("names iframes and password receivers only when present", () => {
     const content = {
       title: null,

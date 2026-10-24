@@ -545,27 +545,29 @@ function describeEngineBreakdown(d: VirusTotalData): string | null {
 /**
  * Days until expiry, from `validTo` against `now` so a saved result does
  * not repeat the scan day's count; the stored `daysRemaining` otherwise.
+ * Expired is decided before rounding: a certificate that lapsed six hours
+ * ago is expired, not "less than a day" from expiring. `validTo` itself is
+ * the last valid instant (RFC 5280).
  */
 function describeCertificateExpiry(
   d: SSLData,
   now: number,
 ): DetailEntry | null {
   const validTo = d.validTo ? Date.parse(d.validTo) : Number.NaN;
-  const days = Number.isFinite(validTo)
-    ? Math.round((validTo - now) / DAY_MS)
-    : d.daysRemaining;
-  if (days === null) {
+  const remainingMs = Number.isFinite(validTo)
+    ? validTo - now
+    : d.daysRemaining === null
+      ? null
+      : d.daysRemaining * DAY_MS;
+  if (remainingMs === null) {
     return null;
   }
 
-  if (days < 0) {
-    return { label: "Expired", value: `${countOf(-days, "day")} ago` };
-  }
-
-  return {
-    label: "Expires in",
-    value: days === 0 ? "less than a day" : countOf(days, "day"),
-  };
+  const days = Math.floor(Math.abs(remainingMs) / DAY_MS);
+  const duration = days === 0 ? "less than a day" : countOf(days, "day");
+  return remainingMs < 0
+    ? { label: "Expired", value: `${duration} ago` }
+    : { label: "Expires in", value: duration };
 }
 
 /** "AB:CD:EF:01…6E:7F:80:91": enough to compare, short enough to read. */
