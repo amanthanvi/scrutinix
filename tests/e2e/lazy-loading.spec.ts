@@ -59,7 +59,8 @@ test("a failed notification chunk preserves the result and first notification", 
       };
     });
   expect(new Set(typography.widths).size).toBe(1);
-  expect(typography.display).toContain("system-ui");
+  // The identity layer fills layer 4's hook with the self-hosted serif.
+  expect(typography.display.toLowerCase()).toContain("newsreader");
   await page.waitForLoadState("networkidle");
   await page.route("**/_next/static/chunks/*.js", (route) => route.abort());
   await page.getByRole("button", { name: "Download result (JSON)" }).click();

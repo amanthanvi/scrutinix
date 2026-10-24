@@ -22,8 +22,9 @@
  */
 
 :root {
-  /* Newsreader (app/layout.tsx), falling back to the system serif. */
-  --font-display: var(--font-newsreader), Georgia, "Times New Roman", serif;
+  /* Newsreader (app/layout.tsx); next/font appends its metric-matched
+     fallback and the system serifs. */
+  --font-display: var(--font-newsreader);
   color-scheme: light;
   --radius: 0.25rem;
   --sx-ease: cubic-bezier(0.23, 1, 0.32, 1);

@@ -363,10 +363,9 @@ export function ResultsSection() {
           />
 
           {linkUrl ? (
-            <section
-              aria-labelledby="sx-link-anatomy-heading"
-              className="mt-9 sm:mt-11"
-            >
+            // A plain block under its own heading: the pasted link's
+            // breakdown is the region named "The link, taken apart".
+            <div className="mt-9 sm:mt-11">
               <h3 id="sx-link-anatomy-heading" className="sx-rail-heading">
                 The link, taken apart
               </h3>
@@ -380,7 +379,7 @@ export function ResultsSection() {
                 visibleSignals={hasSignalActivity ? signalNames : []}
                 streaming={scan.state.isStreaming && !active}
               />
-            </section>
+            </div>
           ) : null}
 
           {showShared && sharedSnapshot?.signature ? (

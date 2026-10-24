@@ -767,6 +767,17 @@ describe("ResultsSection", () => {
     expect(document.activeElement).toBe(cells[1]);
     fireEvent.keyDown(cells[1]!, { key: "End" });
     expect(document.activeElement).toBe(cells[7]);
+    // Each cell shows its number, 1-8 in signal order: the Summary cites it.
+    expect(
+      cells.map((cell) => cell.querySelector(".sx-tag")?.textContent),
+    ).toEqual(["1", "2", "3", "4", "5", "6", "7", "8"]);
+    // Phones (no wide-layout media match here) run the cells down two
+    // columns: Down steps in order and wraps; Up from the first cell wraps
+    // to the last.
+    fireEvent.keyDown(cells[7]!, { key: "ArrowDown" });
+    expect(document.activeElement).toBe(cells[0]);
+    fireEvent.keyDown(cells[0]!, { key: "ArrowUp" });
+    expect(document.activeElement).toBe(cells[7]);
 
     // Summary: a cell moves focus to the question that cites its check.
     expect(strip.getAttribute("aria-describedby")).toBe("sx-strip-hint");

@@ -251,9 +251,9 @@ test("a shared link opens recipient-first: the result, then Check another link @
     await expect(band).toBeVisible();
     await expect(another).toBeVisible();
     // The page's own headline is not drawn over the result.
-    await expect(page.getByText("Check a link before you click.")).toHaveCount(
-      0,
-    );
+    await expect(
+      page.getByText("Is this link what it says it is?"),
+    ).toHaveCount(0);
     await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
     await expect(input).toHaveValue("");
     await expect(input).not.toBeFocused();
@@ -299,7 +299,7 @@ test("a fresh scan from a shared link clears it from the address @smoke", async 
   await expect(await urlField(page)).toBeVisible();
   await expect(page.getByText(/verified scrutinix result/i)).toHaveCount(0);
   await expect(
-    page.getByRole("heading", { name: "Check a link before you click." }),
+    page.getByRole("heading", { name: "Is this link what it says it is?" }),
   ).toBeVisible();
 });
 

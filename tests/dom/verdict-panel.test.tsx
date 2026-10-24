@@ -67,7 +67,12 @@ function buildResult(
 
 function renderPanel(
   result: AnalysisResult,
-  props: { evidenceShown?: boolean; impersonates?: string | null } = {},
+  props: {
+    evidenceShown?: boolean;
+    impersonates?: string | null;
+    registeredDomain?: string | null;
+    holdDomain?: boolean;
+  } = {},
 ) {
   return render(
     <>
@@ -87,6 +92,37 @@ function renderPanel(
 }
 
 describe("VerdictBand", () => {
+  it("names the registered domain in the serif under the verdict, and only names it", () => {
+    renderPanel(buildResult("malicious", { score: 73 }), {
+      registeredDomain: "secure-login.xyz",
+      impersonates: "paypal.com",
+    });
+    const band = screen.getByRole("region", { name: "Scan result: Malicious" });
+    const heading = screen.getByRole("heading", { level: 2 });
+    const domain = heading.nextElementSibling as HTMLElement;
+    expect(domain.textContent).toBe("secure-login.xyz");
+    expect(domain.className).toContain("sx-band-domain");
+    // The owner sentence belongs to the link anatomy, said once there.
+    expect(band.textContent).not.toMatch(/belongs to/);
+  });
+
+  it("holds the domain line's height while the link parser loads", () => {
+    renderPanel(buildResult("safe", { score: 4 }), { holdDomain: true });
+    const placeholder = screen.getByRole("heading", { level: 2 })
+      .nextElementSibling as HTMLElement;
+    expect(placeholder.getAttribute("aria-hidden")).toBe("true");
+    expect(placeholder.className).toContain("invisible");
+  });
+
+  it("draws a verdict rule keyed to the result, over the band's track", () => {
+    renderPanel(buildResult("malicious", { score: 73 }));
+    const band = screen.getByRole("region", { name: "Scan result: Malicious" });
+    expect(band.querySelector(".sx-band-rule")).not.toBeNull();
+    expect(band.style.getPropertyValue("--sx-band-rule")).toBe(
+      "var(--sx-malicious)",
+    );
+  });
+
   it("puts the instruction under the verdict and explains the score in place", () => {
     renderPanel(
       buildResult("malicious", {
