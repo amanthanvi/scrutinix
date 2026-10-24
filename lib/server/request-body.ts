@@ -18,7 +18,7 @@ export async function readJsonBody<T = unknown>(
 export async function readBoundedBody(
   request: Request,
   maxBytes: number,
-): Promise<Uint8Array | null> {
+): Promise<Uint8Array<ArrayBuffer> | null> {
   const declared = request.headers.get("content-length");
   if (declared !== null && !(Number(declared) <= maxBytes)) return null;
   if (!request.body) return new Uint8Array();
