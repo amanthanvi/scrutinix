@@ -20,15 +20,27 @@ const sections = [
   },
   {
     title: "What the server does",
-    body: "To check a link, our server sends it to VirusTotal, Google Safe Browsing, and the abuse.ch threat feeds (URLhaus and ThreatFox). It sends the domain name to the Spamhaus and SURBL blocklists and the domain registry (WHOIS). It also visits the site to read its security certificate, DNS records, and redirects. Each of these services handles the link under its own privacy policy. We keep each result for about 15 minutes so a repeat check is fast. We never store your history.",
+    body: "To check a link, our server sends it to VirusTotal, Google Safe Browsing, and the abuse.ch URLhaus feed, and sends its hostname to the abuse.ch ThreatFox feed. It sends the domain name to the Spamhaus and SURBL blocklists and the domain registry (WHOIS). It sends only the IP address of the link's server to Team Cymru, to learn which network it belongs to. It downloads the OpenPhish list and matches the link against it on our server, so the link is not sent to OpenPhish. It also visits the site to read its security certificate and redirects, and looks up its DNS records. Each of these services handles what it receives under its own privacy policy. We never store your history.",
+  },
+  {
+    title: "Private and one-time links",
+    body: "Checking a link visits it, the way a browser would. That can use up a one-time link, such as a password reset or a sign-in link, so check those only if you are willing to lose them. If VirusTotal has never seen a link before, it scans it, and the link can then become visible to VirusTotal's users.",
+  },
+  {
+    title: "Cached results",
+    body: "We keep each finished result for 15 minutes so a repeat check is fast. When the shared cache is on, it deletes the result after those 15 minutes. A copy in the server's memory is never reused after 15 minutes, but it can stay in memory until the same link is checked again, newer results crowd it out, or the server restarts.",
   },
   {
     title: "Logging",
     body: "Our logs keep timings and a scrambled fingerprint of the link, never the link itself.",
   },
   {
+    title: "Rate limits",
+    body: "To limit how many checks one connection can run, we count requests by IP address. When the shared rate limiter is on, it stores that IP address with each count, and the counts expire after about 2 minutes (the per-minute limit) and about 48 hours (the daily limit). Otherwise the counts stay in the server's memory.",
+  },
+  {
     title: "Shared links",
-    body: `A shared link carries the result inside the link itself: the verdict, the link, a one-line summary, and the eight check results. We have no database of shared links. Our server signs each link it creates, so it can tell its own results from edited ones: a link without a valid signature opens as a link to check yourself, with no verdict and no preview of one. When a chat app previews a signed link, our server draws the preview image from what is in the link and doesn't save it, though the image may be cached for up to an hour so previews load fast. A shared result shows one moment in time, so a signed link shows its result for ${SHARE_MAX_AGE_WORDS} after the check, then opens as a link to check yourself.`,
+    body: `A shared link carries the result inside the link itself: the verdict, the link, a one-line summary, and the eight check results. We have no database of shared links. Our server signs each link it creates, so it can tell its own results from edited ones: a link without a valid signature opens as a link to check yourself, with no verdict and no preview of one. Opening a shared link sends it to our server so it can check the signature; the link inside is not scanned unless you choose to scan it. When a chat app previews a signed link, our server draws the preview image from what is in the link and doesn't save it, though the image may be cached for up to an hour so previews load fast. A shared result shows one moment in time, so a signed link shows its result for ${SHARE_MAX_AGE_WORDS} after the check, then opens as a link to check yourself.`,
   },
 ] as const;
 
