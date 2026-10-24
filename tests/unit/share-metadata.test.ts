@@ -268,6 +268,24 @@ describe("resolveSharedView", () => {
       ),
     ).toBeNull();
   });
+
+  it("opens nothing for a link Scrutinix could not check, signed or not", () => {
+    for (const url of [
+      "http://localhost:3000/admin",
+      "http://127.0.0.1/",
+      "http://192.168.1.1/router",
+      "https://intranet.local/",
+    ]) {
+      const payload = encodeSharedSnapshot({
+        ...snapshot,
+        url,
+        signature: [...snapshot.signature],
+      });
+      expect(resolveSharedView(payload, null, NOW), url).toBeNull();
+      expect(resolveSharedView(...signed(payload), NOW), url).toBeNull();
+      expect(getSharedMetadata(...signed(payload), NOW), url).toBeNull();
+    }
+  });
 });
 
 describe("signed snapshots expire after SHARE_MAX_AGE", () => {
