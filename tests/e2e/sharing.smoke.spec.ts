@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type BrowserContext, type Page } from "@playwright/test";
 
 import {
   encodeSharedPayload,
@@ -33,6 +33,51 @@ function recordLaunchGrants(page: Page): Promise<boolean>[] {
     }
   });
   return grants;
+}
+
+/**
+ * Launch the share target the way the share sheet does. The share target
+ * is a POST navigation the browser builds itself: turn a browser-initiated
+ * navigation to /share into that POST. Chromium's network stack still
+ * stamps it Sec-Fetch-Site: none, as it does for a real launch, so the
+ * route grants the launch.
+ */
+async function launchFromShareSheet(
+  page: Page,
+  fields: Record<string, string>,
+) {
+  await page.route("**/share", (route) =>
+    route.continue({
+      method: "POST",
+      headers: {
+        ...route.request().headers(),
+        "content-type": "application/x-www-form-urlencoded",
+      },
+      postData: new URLSearchParams(fields).toString(),
+    }),
+  );
+  await page.goto("/share");
+  await page.unroute("**/share");
+}
+
+/**
+ * A launch grant for `link` in this browser's cookie jar, without opening
+ * the page it redirects to (the request context shares the jar).
+ */
+async function grantLaunch(context: BrowserContext, link: string) {
+  const response = await context.request.post("/share", {
+    headers: { "sec-fetch-site": "none" },
+    form: { text: link },
+    maxRedirects: 0,
+  });
+  expect(response.status()).toBe(303);
+  expect(await launchCookieNames(context)).toEqual(["sx-share-launch"]);
+}
+
+async function launchCookieNames(context: BrowserContext) {
+  return (await context.cookies())
+    .map((cookie) => cookie.name)
+    .filter((name) => name === "sx-share-launch");
 }
 
 /** The Single field, hydrated (the theme toggle names its target once mounted). */
@@ -76,26 +121,12 @@ test("a share-sheet launch of the installed app scans the shared link @smoke", a
 }) => {
   await isolateRateLimit(page);
   const scans = recordScans(page);
-  // The share target is a POST navigation the browser builds itself. Turn
-  // a browser-initiated navigation to /share into that POST; Chromium's
-  // network stack still stamps it Sec-Fetch-Site: none, as it does for a
-  // real launch, so the route grants the launch.
   const grants = recordLaunchGrants(page);
-  await page.route("**/share", (route) =>
-    route.continue({
-      method: "POST",
-      headers: {
-        ...route.request().headers(),
-        "content-type": "application/x-www-form-urlencoded",
-      },
-      postData: new URLSearchParams({
-        title: "Delivery",
-        text: `Your parcel is waiting: ${LINK}`,
-        url: "",
-      }).toString(),
-    }),
-  );
-  await page.goto("/share");
+  await launchFromShareSheet(page, {
+    title: "Delivery",
+    text: `Your parcel is waiting: ${LINK}`,
+    url: "",
+  });
 
   await expect(page.getByLabel(/^scan result: malicious$/i)).toBeVisible();
   expect(await Promise.all(grants)).toEqual([true]);
@@ -104,13 +135,72 @@ test("a share-sheet launch of the installed app scans the shared link @smoke", a
   // The launch is spent: the address no longer carries it, and the cookie
   // that allowed it is gone, so a reload or a repeat only prefills.
   expect(new URL(page.url()).search).toBe("");
-  const cookies = await page.context().cookies();
-  expect(cookies.map((cookie) => cookie.name)).not.toContain("sx-share-launch");
-  await page.unroute("**/share");
+  expect(await launchCookieNames(page.context())).toEqual([]);
   await page.goto(`/?url=${encodeURIComponent(LINK)}`);
   await expect(await urlField(page)).toHaveValue(LINK);
   await page.waitForTimeout(500);
   expect(scans).toHaveLength(1);
+});
+
+test("a share-sheet launch of a long link still scans it @smoke", async ({
+  page,
+}) => {
+  await isolateRateLimit(page);
+  const scans = recordScans(page);
+  // Valid (under 2,048 characters), but over 4 KiB URI-encoded: a cookie
+  // holding the link itself is one Chromium refuses to store.
+  const long = `${LINK}${"/".repeat(1_500)}step`;
+  expect(encodeURIComponent(long).length).toBeGreaterThan(4_096);
+  await launchFromShareSheet(page, { url: long });
+
+  await expect(page.getByLabel(/^scan result: malicious$/i)).toBeVisible();
+  expect(scans).toHaveLength(1);
+  await expect(await urlField(page)).toHaveValue(long);
+});
+
+test("one share-sheet launch scans once, even in two tabs at once @smoke", async ({
+  page,
+}) => {
+  const context = page.context();
+  const other = await context.newPage();
+  const tabs = [page, other];
+  const scans: string[][] = [];
+  for (const tab of tabs) {
+    await isolateRateLimit(tab);
+    scans.push(recordScans(tab));
+  }
+  const total = () => scans.flat().length;
+  await grantLaunch(context, LINK);
+
+  // Hold both page loads until both are asked for, so both carry the
+  // cookie before either response can clear it.
+  let held = 0;
+  let release!: () => void;
+  const bothHeld = new Promise<void>((resolve) => (release = resolve));
+  for (const tab of tabs) {
+    await tab.route(
+      (url) => url.pathname === "/" && url.searchParams.has("url"),
+      async (route) => {
+        held += 1;
+        if (held === 2) release();
+        await bothHeld;
+        await route.continue();
+      },
+    );
+  }
+  const target = `/?url=${encodeURIComponent(LINK)}`;
+  const responses = await Promise.all(tabs.map((tab) => tab.goto(target)));
+  for (const response of responses) {
+    const sent = await response!.request().allHeaders();
+    expect(sent.cookie ?? "").toContain("sx-share-launch=");
+  }
+
+  for (const tab of tabs) await expect(await urlField(tab)).toHaveValue(LINK);
+  await expect.poll(total).toBe(1);
+  await page.waitForTimeout(750);
+  expect(total()).toBe(1);
+  expect(await launchCookieNames(context)).toEqual([]);
+  await other.close();
 });
 
 test("a form another site posts to the share target only prefills @smoke", async ({
@@ -238,4 +328,33 @@ test("a fresh scan from a shared link clears it from the address @smoke", async 
   await expect(
     page.getByRole("heading", { name: "Check a link before you click." }),
   ).toBeVisible();
+});
+
+test("a launch grant is spent by the first home page that loads, matching or not @smoke", async ({
+  page,
+}) => {
+  await isolateRateLimit(page);
+  const scans = recordScans(page);
+  const payload = encodeSharedPayload({
+    ...maliciousShare,
+    capturedAt: new Date().toISOString(),
+  });
+
+  for (const visit of [
+    // A different link in ?url=, a shared result, and the plain home page.
+    `/?url=${encodeURIComponent("https://other.scrutinix.test/")}`,
+    sharedPath(payload, signSharedPayload(payload)),
+    "/",
+  ]) {
+    await grantLaunch(page.context(), LINK);
+    await page.goto(visit);
+    await urlField(page);
+    expect(await launchCookieNames(page.context()), visit).toEqual([]);
+
+    // So the link the grant named, opened afterwards, only prefills.
+    await page.goto(`/?url=${encodeURIComponent(LINK)}`);
+    await expect(await urlField(page)).toHaveValue(LINK);
+  }
+  await page.waitForTimeout(500);
+  expect(scans).toEqual([]);
 });

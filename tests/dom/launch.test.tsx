@@ -13,7 +13,6 @@ import {
 } from "@/components/scrutinix/analyzer-runtime";
 import { ResultsSection } from "@/components/scrutinix/results-section";
 import { ScanForm } from "@/components/scrutinix/scan-form";
-import { SHARE_LAUNCH_COOKIE } from "@/lib/domain/share-launch";
 import {
   encodeSharedSnapshot,
   type SharedView,
@@ -103,7 +102,6 @@ const LINK = "https://parcel-help.example/track";
 
 beforeEach(() => {
   window.history.replaceState(null, "", "/");
-  document.cookie = `${SHARE_LAUNCH_COOKIE}=; Max-Age=0; Path=/`;
 });
 
 afterEach(() => {
@@ -136,9 +134,10 @@ describe("a /?url= link", () => {
 });
 
 describe("a share-target launch", () => {
-  it("scans once on arrival, spends its cookie, and clears the address", async () => {
+  // The grant itself is spent on the server (proxy.ts, redeemLaunchGrant);
+  // the page only acts on the decision it was rendered with.
+  it("scans once on arrival and clears the address", async () => {
     const fetchMock = stubScan(LINK);
-    document.cookie = `${SHARE_LAUNCH_COOKIE}=${encodeURIComponent(LINK)}; Path=/`;
     window.history.replaceState(
       null,
       "",
@@ -152,7 +151,6 @@ describe("a share-target launch", () => {
       RequestInit,
     ];
     expect(JSON.parse(String(init.body))).toMatchObject({ url: LINK });
-    expect(document.cookie).not.toContain(SHARE_LAUNCH_COOKIE);
     expect(window.location.search).toBe("?utm=1");
     await waitFor(() =>
       expect(screen.getByLabelText(/^scan result: /i)).toBeDefined(),

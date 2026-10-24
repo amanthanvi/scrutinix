@@ -30,7 +30,7 @@ import {
   type SignalName,
 } from "@/lib/domain/types";
 import { normalizeUrlInput } from "@/lib/domain/url";
-import { PREFILL_PARAM, SHARE_LAUNCH_COOKIE } from "@/lib/domain/share-launch";
+import { PREFILL_PARAM } from "@/lib/domain/share-launch";
 
 /** A link handed to the page from outside: `?url=`, or the share target. */
 export interface Launch {
@@ -215,15 +215,14 @@ function useCreateAnalyzerRuntime(
     [scan],
   );
 
-  // A share-target launch scans once, on arrival. The cookie that allowed
-  // it is spent first, so a reload (or the same link opened again) only
-  // prefills.
+  // A share-target launch scans once, on arrival. The server already spent
+  // the grant that allowed it (`proxy.ts`, `redeemLaunchGrant`), so a
+  // reload, another tab, or the same link opened again only prefills.
   const autoScanRef = useRef(launch?.autoScan ? launch.url : null);
   useEffect(() => {
     const url = autoScanRef.current;
     if (!url) return;
     autoScanRef.current = null;
-    document.cookie = `${SHARE_LAUNCH_COOKIE}=; Max-Age=0; Path=/; SameSite=Strict`;
     clearLaunchParams();
     void rescanUrl(url);
   }, [rescanUrl]);

@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { cookies } from "next/headers";
+import { headers } from "next/headers";
 
 import { AnalyzerRuntimeProvider } from "@/components/scrutinix/analyzer-runtime";
 import { AppFooter } from "@/components/scrutinix/app-footer";
@@ -10,9 +10,10 @@ import { ResultsSection } from "@/components/scrutinix/results-section";
 import { ScanForm } from "@/components/scrutinix/scan-form";
 import {
   PREFILL_PARAM,
-  SHARE_LAUNCH_COOKIE,
-  resolveLaunch,
+  SHARE_LAUNCH_HEADER,
+  resolvePrefill,
 } from "@/lib/domain/share-launch";
+import { redeemLaunchGrant } from "@/lib/server/share-launch-grant";
 import {
   getSharedMetadata,
   resolveSharedView,
@@ -70,14 +71,22 @@ export default async function HomePage({
   );
 
   // `?url=` prefills the Single field and waits for a tap. Only the
-  // installed app's share target (`app/share/route.ts`) leaves the cookie
-  // that starts the scan too; a shared result outranks both.
-  const launch = shared
+  // installed app's share target (`app/share/route.ts`) leaves the grant
+  // that starts the scan too, and it scans once: `proxy.ts` has already
+  // cleared its cookie from this response, and redeeming spends it. A
+  // shared result outranks both (its grant, if any, is cleared unused).
+  const prefill = shared
     ? null
-    : resolveLaunch(
-        paramOf(params, PREFILL_PARAM),
-        (await cookies()).get(SHARE_LAUNCH_COOKIE)?.value,
-      );
+    : resolvePrefill(paramOf(params, PREFILL_PARAM));
+  const launch = prefill
+    ? {
+        url: prefill,
+        autoScan: await redeemLaunchGrant(
+          (await headers()).get(SHARE_LAUNCH_HEADER),
+          prefill,
+        ),
+      }
+    : null;
 
   const lead = (
     <p className="text-lead mt-3 max-w-[34rem] text-pretty text-[var(--sx-text-muted)]">

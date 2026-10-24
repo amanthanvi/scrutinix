@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   extractSharedLink,
   isShareTargetLaunch,
-  resolveLaunch,
+  resolvePrefill,
 } from "@/lib/domain/share-launch";
 
 describe("extractSharedLink", () => {
@@ -134,28 +134,19 @@ describe("isShareTargetLaunch", () => {
   });
 });
 
-describe("resolveLaunch", () => {
-  it("prefills a checkable link, normalized, without scanning", () => {
-    expect(resolveLaunch("example.com/a", undefined)).toEqual({
-      url: "https://example.com/a",
-      autoScan: false,
-    });
-  });
-
-  it("scans only when the launch cookie names this exact link", () => {
-    expect(
-      resolveLaunch("https://example.com/a", "https://example.com/a"),
-    ).toEqual({ url: "https://example.com/a", autoScan: true });
-    expect(
-      resolveLaunch("https://example.com/b", "https://example.com/a"),
-    ).toEqual({ url: "https://example.com/b", autoScan: false });
+describe("resolvePrefill", () => {
+  it("prefills a checkable link, normalized", () => {
+    expect(resolvePrefill("example.com/a")).toBe("https://example.com/a");
+    expect(resolvePrefill("HTTPS://Example.com:443/a#x")).toBe(
+      "https://example.com/a",
+    );
   });
 
   it("prefills nothing for a missing, invalid, or unscannable value", () => {
-    expect(resolveLaunch(null, null)).toBeNull();
-    expect(resolveLaunch("", null)).toBeNull();
-    expect(resolveLaunch("javascript:alert(1)", null)).toBeNull();
-    expect(resolveLaunch("http://127.0.0.1/", "http://127.0.0.1/")).toBeNull();
-    expect(resolveLaunch("not a link at all", null)).toBeNull();
+    expect(resolvePrefill(null)).toBeNull();
+    expect(resolvePrefill("")).toBeNull();
+    expect(resolvePrefill("javascript:alert(1)")).toBeNull();
+    expect(resolvePrefill("http://127.0.0.1/")).toBeNull();
+    expect(resolvePrefill("not a link at all")).toBeNull();
   });
 });

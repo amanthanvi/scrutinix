@@ -3,11 +3,13 @@ import { NextResponse } from "next/server";
 import {
   PREFILL_PARAM,
   SHARE_LAUNCH_COOKIE,
+  SHARE_LAUNCH_COOKIE_ATTRIBUTES,
   SHARE_LAUNCH_MAX_AGE_SECONDS,
   extractSharedLink,
   isShareTargetLaunch,
 } from "@/lib/domain/share-launch";
 import { readBoundedBody } from "@/lib/server/request-body";
+import { issueLaunchGrant } from "@/lib/server/share-launch-grant";
 
 export const runtime = "nodejs";
 
@@ -51,9 +53,10 @@ async function readSharedFields(request: Request) {
  * `public/site.webmanifest`). Takes the first http(s) link from what was
  * shared and redirects to `/?url=<link>`, which prefills the Single field.
  * Only a share-sheet launch (`isShareTargetLaunch`) also sets the
- * short-lived launch cookie that lets the page start the scan; a form
- * another site posts here prefills and waits for a tap. Nothing is logged
- * or stored.
+ * short-lived launch cookie, a one-use grant bound to that link
+ * (`issueLaunchGrant`), that lets the page start the scan; a form another
+ * site posts here prefills and waits for a tap. Nothing is logged or
+ * stored.
  */
 export async function POST(request: Request) {
   const link = extractSharedLink(await readSharedFields(request));
@@ -63,10 +66,9 @@ export async function POST(request: Request) {
 
   const response = redirectTo(location);
   if (link && isShareTargetLaunch(request.method, request.headers)) {
-    response.cookies.set(SHARE_LAUNCH_COOKIE, link, {
+    response.cookies.set(SHARE_LAUNCH_COOKIE, issueLaunchGrant(link), {
+      ...SHARE_LAUNCH_COOKIE_ATTRIBUTES,
       maxAge: SHARE_LAUNCH_MAX_AGE_SECONDS,
-      path: "/",
-      sameSite: "strict",
       secure: new URL(request.url).protocol === "https:",
     });
   }

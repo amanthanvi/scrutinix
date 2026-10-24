@@ -11,16 +11,34 @@ import { normalizeUrlInput } from "@/lib/domain/url";
 export const PREFILL_PARAM = "url";
 
 /**
- * Set by `POST /share` on a genuine share-target launch, holding the exact
- * normalized link it redirects with. The page starts a scan only when this
- * cookie matches `?url=`; nothing a third-party page can send sets it, so a
- * plain `/?url=` link (or a crafted one) only prefills. The page clears it
- * as soon as the scan starts, so it is readable by script (no `HttpOnly`).
+ * Set by `POST /share` on a genuine share-target launch, holding a
+ * one-use grant bound to the exact normalized link it redirects with
+ * (`lib/server/share-launch-grant.ts`). Nothing a third-party page can
+ * send sets it, so a plain `/?url=` link (or a crafted one) only prefills.
+ * It is spent on the server: `proxy.ts` takes it off every request for
+ * `/`, hands it to the page in `SHARE_LAUNCH_HEADER`, and clears it in
+ * that same response, whether or not it matches; the page starts a scan
+ * only when the grant names `?url=` and has not been redeemed before.
+ * No script reads it (`HttpOnly`).
  */
 export const SHARE_LAUNCH_COOKIE = "sx-share-launch";
 
+/**
+ * The request header `proxy.ts` hands the launch grant to the page in. The
+ * proxy removes any copy a request arrives with; a navigation can't add
+ * one, so a page can't make another site's visitor send it.
+ */
+export const SHARE_LAUNCH_HEADER = "x-sx-share-launch";
+
 /** How long a share-target launch may take to reach the page. */
 export const SHARE_LAUNCH_MAX_AGE_SECONDS = 60;
+
+/** Set and cleared with the same attributes, so clearing always matches. */
+export const SHARE_LAUNCH_COOKIE_ATTRIBUTES = {
+  path: "/",
+  sameSite: "strict",
+  httpOnly: true,
+} as const;
 
 /** The share-target fields, in the order a link is looked for in them. */
 export interface SharedFields {
@@ -115,17 +133,14 @@ export function isShareTargetLaunch(method: string, headers: Headers): boolean {
 }
 
 /**
- * What the home page does with `?url=` and the launch cookie: the link to
- * prefill (null when absent or not checkable, which says nothing), and
- * whether to start scanning it.
+ * The link `?url=` prefills, normalized, or null when it is absent or not
+ * checkable (which says nothing). Whether it also scans is the launch
+ * grant's to say (`redeemLaunchGrant`).
  */
-export function resolveLaunch(
+export function resolvePrefill(
   param: string | null | undefined,
-  launchCookie: string | null | undefined,
-): { url: string; autoScan: boolean } | null {
+): string | null {
   if (!param) return null;
   const normalized = normalizeUrlInput(param);
-  if (!normalized.ok) return null;
-  const url = normalized.value.normalizedUrl;
-  return { url, autoScan: launchCookie === url };
+  return normalized.ok ? normalized.value.normalizedUrl : null;
 }
