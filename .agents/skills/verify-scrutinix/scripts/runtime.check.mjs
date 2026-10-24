@@ -214,7 +214,14 @@ check(
 
 // The real npm entry point. npm echoes a script's arguments in its banner
 // and error footer unless it runs with --silent, which SKILL.md documents.
+// The caller's own npm log level (npm --silent run verify:check exports
+// npm_config_loglevel=silent) is dropped, so each call says its own.
 function runNpm(args, env = process.env) {
+  env = Object.fromEntries(
+    Object.entries(env).filter(
+      ([key]) => key.toLowerCase() !== "npm_config_loglevel",
+    ),
+  );
   const npmCli = process.env.npm_execpath;
   const [command, prefix] =
     npmCli && /\.c?js$/.test(npmCli)
