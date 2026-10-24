@@ -115,9 +115,14 @@ for (const width of [390, 1280]) {
     await expect(questions.locator('li[aria-busy="true"]')).toHaveCount(5);
     const pending = await headingOffsets(page);
 
-    // One check at a time: no heading moves as answers fill in.
+    // One check at a time: no heading moves as answers fill in. Each
+    // measurement waits until that check has landed in the strip.
+    const landed = page
+      .getByRole("toolbar", { name: "Checks" })
+      .locator('[data-severity]:not([data-severity="pending"])');
     for (let check = 0; check < 8; check += 1) {
       await release(page, 1);
+      await expect(landed).toHaveCount(check + 1);
       await nextFrame(page);
       expect(await headingOffsets(page), `after check ${check + 1}`).toEqual(
         pending,
