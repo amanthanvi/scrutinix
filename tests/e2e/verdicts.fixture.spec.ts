@@ -158,6 +158,42 @@ test("a pasted link is taken apart before any scan, then hands over to the resul
   await expect(pasted).toHaveCount(0);
 });
 
+test("neighbouring captions keep a gap when a short part's caption wraps", async ({
+  page,
+}) => {
+  // "malicious." is narrower than "A label anyone can add", so that caption
+  // wraps inside its part; the next caption must not read on from it.
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await gotoApp(page);
+  await page
+    .getByRole("textbox", { name: "URL to analyze" })
+    .fill("https://malicious.scrutinix.test/login");
+  const pasted = page.getByRole("region", { name: "The link, taken apart" });
+  await expect(pasted).toContainText("Registered domain");
+  const gaps = await pasted.evaluate((region) => {
+    const textRects = [...region.querySelectorAll(".sx-anat-caption")].map(
+      (caption) => {
+        const range = document.createRange();
+        range.selectNodeContents(caption);
+        return [...range.getClientRects()];
+      },
+    );
+    const found: number[] = [];
+    for (let i = 0; i + 1 < textRects.length; i += 1) {
+      for (const left of textRects[i]!) {
+        for (const right of textRects[i + 1]!) {
+          if (Math.abs(left.top - right.top) < 2) {
+            found.push(right.left - left.right);
+          }
+        }
+      }
+    }
+    return found;
+  });
+  expect(gaps.length).toBeGreaterThan(0);
+  for (const gap of gaps) expect(gap).toBeGreaterThanOrEqual(12);
+});
+
 test("a long expected site wraps its answer instead of widening a phone", async ({
   page,
 }) => {

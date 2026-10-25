@@ -769,6 +769,20 @@ main:has(#sx-verdict-heading) > .sx-hero-form {
 }
 
 /*
+ * Inline, a caption that wraps fills its part's width, so the next part's
+ * caption would start right beside it and read as one sentence ("A label
+ * anyone can Registered domain"). Each caption but the last keeps a gap at
+ * its end; the brackets above still span the whole part.
+ */
+@media (min-width: 40rem) {
+  .sx-anat:not(.sx-anat-stacked)
+    .sx-anat-part:not(:last-child)
+    .sx-anat-caption {
+    padding-inline-end: 0.75rem;
+  }
+}
+
+/*
  * Inline: nothing follows the last part, so its caption may run past its
  * text, to the end of its line, and wraps there rather than past the
  * column. The part fills the rest of its line, so its bracket is drawn
