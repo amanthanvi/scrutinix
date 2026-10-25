@@ -731,6 +731,8 @@ test("error and critical verdicts", async ({ page }) => {
   );
   await expect(error.getByText("The scan failed — try again.")).toBeVisible();
   await expect(error.getByRole("meter")).toHaveCount(0);
+  // Its last line offers what the instruction says.
+  await expect(error.getByRole("button", { name: "Try again" })).toBeVisible();
   await expect(page.getByRole("list", { name: "Questions" })).toHaveCount(0);
   await expect(
     page.getByRole("list", { name: "Signals" }).getByRole("listitem"),

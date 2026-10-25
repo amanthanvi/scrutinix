@@ -219,6 +219,32 @@ export function getVerdictGuidance(result: GuidanceInput): VerdictGuidance {
   return { ...base, ...getInstruction(result) };
 }
 
+/**
+ * Every instruction a band can give. While a scan runs the band holds the
+ * room the longest of them takes (`BAND_IMPERATIVES`), so whichever lands
+ * never moves the page.
+ */
+const IMPERATIVE = {
+  knownThreat: "Don't open this link — it's a known threat.",
+  dontOpen: "Don't open this link.",
+  noPayment: "Don't sign in or enter payment details here.",
+  lookAlike: "Don't sign in or enter details here.",
+  unchecked: "Check the link's address before you open it.",
+  provisionalSafe: "Probably safe — still check who sent it.",
+  safe: "Looks safe to open.",
+  unknown: "We couldn't check this link — treat it as unsafe.",
+  error: "The scan failed — try again.",
+} as const;
+
+/** Every note that can take the place of a band's confidence label. */
+const CONFIDENCE_NOTE = {
+  lookAlike: "No check flagged it, but the name is misleading.",
+  lookAlikeMinor:
+    "The checks found nothing serious, but the name is misleading.",
+  /** Why an "Unconfirmed" Safe carries no score or confidence on its band. */
+  unchecked: "We couldn't check whether this address imitates another site.",
+} as const;
+
 function getInstruction(
   result: GuidanceInput,
 ): Pick<VerdictGuidance, "imperative" | "showScore"> &
@@ -230,29 +256,26 @@ function getInstruction(
       return {
         imperative:
           result.signals && hasConfirmedReputationHit(result.signals)
-            ? "Don't open this link — it's a known threat."
-            : "Don't open this link.",
+            ? IMPERATIVE.knownThreat
+            : IMPERATIVE.dontOpen,
         showScore: true,
       };
     case "malicious":
-      return { imperative: "Don't open this link.", showScore: true };
+      return { imperative: IMPERATIVE.dontOpen, showScore: true };
     case "suspicious":
-      return {
-        imperative: "Don't sign in or enter payment details here.",
-        showScore: true,
-      };
+      return { imperative: IMPERATIVE.noPayment, showScore: true };
     case "safe":
       if (result.impersonates) {
         // No check flagged it, but a green band, "High confidence", and a
         // low score would contradict the instruction. The word reads
         // "Look-alike" (`verdictWord`); the score moves to the details.
         return {
-          imperative: "Don't sign in or enter details here.",
+          imperative: IMPERATIVE.lookAlike,
           showScore: false,
           tone: "unknown",
           confidenceNote: nothingFlagged(result)
-            ? "No check flagged it, but the name is misleading."
-            : "The checks found nothing serious, but the name is misleading.",
+            ? CONFIDENCE_NOTE.lookAlike
+            : CONFIDENCE_NOTE.lookAlikeMinor,
         };
       }
       if (result.addressUnchecked) {
@@ -261,31 +284,67 @@ function getInstruction(
         // checked; say what to do and why, and move the score to the
         // details.
         return {
-          imperative: "Check the link's address before you open it.",
+          imperative: IMPERATIVE.unchecked,
           showScore: false,
           tone: "unknown",
-          confidenceNote: UNCHECKED_ADDRESS_NOTE,
+          confidenceNote: CONFIDENCE_NOTE.unchecked,
         };
       }
       return {
         imperative: isProvisionalSafe(result)
-          ? "Probably safe — still check who sent it."
-          : "Looks safe to open.",
+          ? IMPERATIVE.provisionalSafe
+          : IMPERATIVE.safe,
         showScore: true,
       };
     case "unknown":
-      return {
-        imperative: "We couldn't check this link — treat it as unsafe.",
-        showScore: false,
-      };
+      return { imperative: IMPERATIVE.unknown, showScore: false };
     default:
-      return { imperative: "The scan failed — try again.", showScore: false };
+      return { imperative: IMPERATIVE.error, showScore: false };
   }
 }
 
-/** Why an "Unconfirmed" Safe carries no score or confidence on its band. */
-const UNCHECKED_ADDRESS_NOTE =
-  "We couldn't check whether this address imitates another site.";
+/**
+ * Everything a band can say, grouped the way a band shows it: a verdict
+ * with a score (its word, its instruction, the score, a confidence label)
+ * or one without (its word, its instruction, and a confidence label or a
+ * note in its place). While a scan runs the band holds the room of the
+ * tallest of each group (`components/scrutinix/verdict-panel.tsx`), so
+ * the verdict that lands, whichever it is, fills it in place.
+ * `tests/unit/verdict-guidance.test.ts` checks every branch against it.
+ */
+export const BAND_SAYS = {
+  scored: {
+    words: (["safe", "suspicious", "malicious", "critical"] as const).map(
+      verdictLabel,
+    ),
+    imperatives: [
+      IMPERATIVE.knownThreat,
+      IMPERATIVE.dontOpen,
+      IMPERATIVE.noPayment,
+      IMPERATIVE.provisionalSafe,
+      IMPERATIVE.safe,
+    ],
+  },
+  unscored: {
+    words: [
+      verdictLabel("unknown"),
+      verdictLabel("error"),
+      LOOK_ALIKE_WORD,
+      UNCONFIRMED_WORD,
+    ],
+    imperatives: [
+      IMPERATIVE.lookAlike,
+      IMPERATIVE.unchecked,
+      IMPERATIVE.unknown,
+      IMPERATIVE.error,
+    ],
+    notes: Object.values(CONFIDENCE_NOTE),
+  },
+  /** "High confidence", … */
+  confidenceLabels: (["high", "moderate", "low"] as const).map(
+    (label) => `${capitalize(label)} confidence`,
+  ),
+} as const;
 
 /** Clamp a stored score into the 0-100 range the meter promises. */
 export function clampScore(score: number | null | undefined): number {
@@ -299,6 +358,11 @@ export function getScoreBandText(score: number): string {
   if (score >= 25) return "Suspicious band 25–54";
   return "Safe band 0–24";
 }
+
+/** Every score band's wording (one score from each band). */
+export const SCORE_BANDS: readonly string[] = [100, 79, 54, 24].map(
+  getScoreBandText,
+);
 
 /**
  * What the polite live region says when a result is shown, e.g.
@@ -319,7 +383,7 @@ export function getVerdictAnnouncement(result: GuidanceInput): string {
     result.impersonates && result.registeredDomain
       ? ` ${ownershipSentence(result.registeredDomain, result.impersonates)}`
       : isUncheckedSafe(result)
-        ? ` ${UNCHECKED_ADDRESS_NOTE}`
+        ? ` ${CONFIDENCE_NOTE.unchecked}`
         : "";
   return `${subject}: ${verdictWord(result)}${score}. ${guidance.imperative}${owner}`;
 }

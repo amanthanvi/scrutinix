@@ -1,5 +1,5 @@
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   VERDICT_HEADING_ID,
@@ -8,6 +8,7 @@ import {
   formatSnapshotTime,
 } from "@/components/scrutinix/verdict-panel";
 import { createErrorAnalysisResult } from "@/lib/domain/analysis-result";
+import { BAND_SAYS, SCORE_BANDS } from "@/lib/domain/verdict-guidance";
 import {
   createPendingSignalResults,
   type AnalysisResult,
@@ -140,10 +141,10 @@ describe("VerdictBand", () => {
     });
     expect(heading.id).toBe(VERDICT_HEADING_ID);
     expect(heading.getAttribute("tabindex")).toBe("-1");
-    // The instruction sits directly under the verdict word.
-    expect(heading.nextElementSibling?.textContent).toBe(
-      "Don't open this link.",
-    );
+    // The instruction sits directly under the verdict word and domain.
+    expect(
+      heading.closest(".sx-band-head")?.nextElementSibling?.textContent,
+    ).toBe("Don't open this link.");
     // One colour encoding: the band is tinted, the word stays ink.
     expect(heading.className).toContain("text-[var(--sx-text)]");
     expect(heading.closest("section")?.getAttribute("style")).toContain(
@@ -500,6 +501,121 @@ describe("VerdictBand", () => {
     expect(verdict).toBe(checking);
     expect(verdict.textContent).toBe("Malicious");
     expect(document.activeElement).toBe(verdict);
+  });
+
+  /** The room a band holds: each stand-in's text, which is never text. */
+  function heldRoom(band: HTMLElement): string[] {
+    const standIns = [...band.querySelectorAll<HTMLElement>("[data-stand-in]")];
+    for (const standIn of standIns) {
+      // Generated content only: nothing to select, find, or hear.
+      expect(standIn.textContent).toBe("");
+      expect(standIn.closest('[aria-hidden="true"]')).not.toBeNull();
+    }
+    return standIns.map((node) => node.dataset.standIn ?? "").sort();
+  }
+
+  it("holds the same room in Checking and in every verdict it can land as", () => {
+    const { rerender } = render(
+      <VerdictBand
+        result={null}
+        isStreaming
+        sharedSnapshot={null}
+        completedSignals={3}
+        onCancelScan={() => {}}
+      />,
+    );
+    const checking = heldRoom(screen.getByRole("region"));
+    // The longest of everything a band can say, whichever verdict lands.
+    for (const text of [
+      ...BAND_SAYS.scored.words,
+      ...BAND_SAYS.scored.imperatives,
+      ...BAND_SAYS.unscored.words,
+      ...BAND_SAYS.unscored.imperatives,
+      ...BAND_SAYS.unscored.notes,
+      ...BAND_SAYS.confidenceLabels,
+      ...SCORE_BANDS,
+    ]) {
+      expect(checking).toContain(text);
+    }
+    // None of it is text the band says.
+    expect(screen.getByRole("region").textContent).not.toContain(
+      "Looks safe to open.",
+    );
+
+    const results = [
+      buildResult("malicious", { score: 73 }),
+      buildResult("safe", { score: 3 }),
+      buildResult("unknown", { score: 20 }),
+      createErrorAnalysisResult({
+        url: "https://example.com/",
+        scanId: "error-scan",
+        startedAt: "2026-08-02T12:00:00.000Z",
+        message: "Scan failed.",
+      }),
+    ];
+    for (const result of results) {
+      rerender(
+        <VerdictBand
+          result={result}
+          isStreaming={false}
+          sharedSnapshot={null}
+          completedSignals={8}
+          impersonates={result.verdict === "safe" ? "paypal.com" : null}
+        />,
+      );
+      expect(heldRoom(screen.getByRole("region")), result.verdict).toEqual(
+        checking,
+      );
+    }
+  });
+
+  it("holds no room in a shared band, which only a tap replaces", () => {
+    render(
+      <VerdictBand
+        result={null}
+        isStreaming={false}
+        sharedSnapshot={{
+          verdict: "malicious",
+          url: "https://malicious.scrutinix.test/",
+          summary: "7 VirusTotal engines flagged this link.",
+          capturedAt: "2026-10-06T00:00:00.000Z",
+        }}
+      />,
+    );
+    expect(heldRoom(screen.getByRole("region"))).toEqual([]);
+  });
+
+  it("offers a failed scan's Try again on its last line", () => {
+    const onRetry = vi.fn();
+    const result = createErrorAnalysisResult({
+      url: "https://example.com/",
+      scanId: "error-scan",
+      startedAt: "2026-08-02T12:00:00.000Z",
+      message: "Scan failed.",
+    });
+    const { rerender } = render(
+      <VerdictBand
+        result={result}
+        isStreaming={false}
+        sharedSnapshot={null}
+        onRetry={onRetry}
+      />,
+    );
+    const retry = screen.getByRole("button", { name: "Try again" });
+    expect(retry.closest("p")?.className).toContain("sx-band-line");
+    fireEvent.click(retry);
+    expect(onRetry).toHaveBeenCalledTimes(1);
+
+    // Only a failed scan offers it.
+    rerender(
+      <VerdictBand
+        result={buildResult("malicious", { score: 73 })}
+        isStreaming={false}
+        sharedSnapshot={null}
+        onRetry={onRetry}
+      />,
+    );
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
   });
 });
 

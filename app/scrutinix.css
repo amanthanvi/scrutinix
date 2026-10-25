@@ -529,14 +529,79 @@ main:has(#sx-verdict-heading) > .sx-hero-form {
   container-type: inline-size;
 }
 
+/*
+ * The band's grid. Phones: the word and domain; the instruction; the aside
+ * (the score, or Cancel while checking) on its own row; then the band's
+ * last block (caveat and confidence line) at its foot. From 56rem the
+ * aside takes a column beside the word, domain, and instruction, and the
+ * last block spans the band.
+ *
+ * A scan's band holds room (`.sx-band-room`): the same layout drawn twice
+ * more, invisibly, over the whole band and sharing its columns (subgrid),
+ * filled with the longest of everything the band can say. Checking and
+ * every verdict are therefore one height and nothing moves when a verdict
+ * lands. The last row is the only flexible one, so the room a verdict
+ * doesn't use opens there, above the hairline: the word, the site, the
+ * instruction, and the score stay together at the top.
+ */
 .sx-band-body {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem 2.5rem;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto auto auto 1fr;
 }
 
-.sx-band-body > div:first-child {
+.sx-band-head {
+  grid-area: 1 / 1;
   min-width: 0;
+}
+
+.sx-band-imperative {
+  grid-area: 2 / 1;
+}
+
+.sx-band-aside {
+  grid-area: 3 / 1;
+  align-self: start;
+  justify-self: start;
+  margin-top: 1rem;
+}
+
+.sx-band-tail {
+  grid-area: 4 / 1;
+  align-self: end;
+  min-width: 0;
+}
+
+.sx-band-room {
+  display: grid;
+  grid-template-columns: subgrid;
+  grid-row: 1 / -1;
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+
+/* A slot: everything in it shares one cell, so it is as tall as its
+   tallest child, shown or stand-in. */
+.sx-slot {
+  display: grid;
+  align-items: start;
+}
+
+.sx-slot > * {
+  grid-area: 1 / 1;
+  min-width: 0;
+}
+
+/* Holds the room its text takes; drawn as generated content, so it is
+   never text to select, find, or hear. */
+.sx-stand-in {
+  visibility: hidden;
+  pointer-events: none;
+  user-select: none;
+}
+
+[data-stand-in]::before {
+  content: attr(data-stand-in);
 }
 
 /*
@@ -598,7 +663,6 @@ main:has(#sx-verdict-heading) > .sx-hero-form {
 
 .sx-score {
   display: flex;
-  flex-shrink: 0;
   flex-wrap: wrap;
   align-items: baseline;
   gap: 0.25rem 0.75rem;
@@ -607,7 +671,7 @@ main:has(#sx-verdict-heading) > .sx-hero-form {
   color: var(--sx-band-ink);
 }
 
-.sx-score [role="meter"] {
+.sx-score-value {
   font-size: 2.5rem;
   font-weight: 600;
   line-height: 1;
@@ -616,7 +680,7 @@ main:has(#sx-verdict-heading) > .sx-hero-form {
   color: var(--sx-text);
 }
 
-.sx-score [role="meter"] > span {
+.sx-score-value > span {
   margin-left: 0.25rem;
   font-size: 1.375rem;
   font-weight: 400;
@@ -651,14 +715,14 @@ main:has(#sx-verdict-heading) > .sx-hero-form {
     line-height: var(--text-body--line-height);
   }
 
-  .sx-score [role="meter"] {
+  .sx-score-value {
     font-size: var(--text-score);
   }
 }
 
 /* The verdict's full size from 768px, a px width (48rem at the default
    text size), so a larger text size can't switch it back to the smaller
-   cap. The score's column below still waits for 48rem of text. */
+   cap. The score's column below still waits for 56rem of text. */
 @media (min-width: 768px) {
   .sx-band-heading {
     font-size: clamp(2rem, 16.4cqi, var(--text-verdict));
@@ -667,13 +731,25 @@ main:has(#sx-verdict-heading) > .sx-hero-form {
   }
 }
 
-/* The score takes its own column only once the longest word
-   ("Suspicious") and a three-digit score both fit. */
-@media (min-width: 48rem) {
+/* The score takes its own column only once the longest word any band can
+   show ("Unconfirmed": a scan's band holds its room, scored or not) and a
+   three-digit score with its band both fit, with a wider system sans to
+   spare. */
+@media (min-width: 56rem) {
   .sx-band-body {
-    flex-direction: row;
-    align-items: flex-start;
-    justify-content: space-between;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: auto auto 1fr;
+    column-gap: 2.5rem;
+  }
+
+  .sx-band-aside {
+    grid-area: 1 / 2 / 3 / 3;
+    justify-self: end;
+    margin-top: 0;
+  }
+
+  .sx-band-tail {
+    grid-area: 3 / 1 / 4 / -1;
   }
 
   .sx-score {

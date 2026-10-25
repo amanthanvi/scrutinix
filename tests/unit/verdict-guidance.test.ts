@@ -9,6 +9,8 @@ import {
 } from "@/lib/domain/types";
 import { sanitizeHistoryEntry } from "@/lib/domain/runtime-safety";
 import {
+  BAND_SAYS,
+  SCORE_BANDS,
   clampScore,
   getConfidenceReasons,
   getCoverageCaveat,
@@ -135,6 +137,85 @@ describe("getVerdictGuidance", () => {
   it("never shows a score for Unknown or Error", () => {
     expect(getVerdictGuidance(buildResult("unknown")).showScore).toBe(false);
     expect(getVerdictGuidance(buildResult("error")).showScore).toBe(false);
+  });
+});
+
+describe("what a band can say", () => {
+  // A scan's band holds the room the tallest band with a score, and the
+  // tallest without one, takes, so a verdict lands without moving the page.
+  // Each list must be exactly what such a band can show: a missing entry
+  // could outgrow the room, a stale one holds room for nothing.
+  it("lists every word, instruction, and note the band can show, by whether it shows a score", async () => {
+    const confirmed = await fixtureSignals("critical.scrutinix.test");
+    const seen = {
+      scored: { words: new Set<string>(), imperatives: new Set<string>() },
+      unscored: {
+        words: new Set<string>(),
+        imperatives: new Set<string>(),
+        notes: new Set<string>(),
+      },
+    };
+    for (const verdict of [
+      "safe",
+      "suspicious",
+      "malicious",
+      "critical",
+      "unknown",
+      "error",
+    ] as const) {
+      for (const signals of [completeSignals(), confirmed]) {
+        for (const confidenceLabel of ["high", "moderate", "low"] as const) {
+          for (const hasPositiveEvidence of [false, true]) {
+            for (const impersonates of [null, "paypal.com"]) {
+              for (const addressUnchecked of [false, true]) {
+                const result = {
+                  ...buildResult(verdict, {
+                    confidenceLabel,
+                    hasPositiveEvidence,
+                    signals,
+                  }),
+                  impersonates,
+                  addressUnchecked,
+                };
+                const guidance = getVerdictGuidance(result);
+                const group = guidance.showScore ? seen.scored : seen.unscored;
+                group.words.add(verdictWord(result));
+                group.imperatives.add(guidance.imperative);
+                if (guidance.confidenceNote) {
+                  // Only a band without a score shows a note.
+                  expect(guidance.showScore).toBe(false);
+                  seen.unscored.notes.add(guidance.confidenceNote);
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    const sorted = (values: Iterable<string>) => [...values].sort();
+    for (const group of ["scored", "unscored"] as const) {
+      expect(sorted(seen[group].words), group).toEqual(
+        sorted(BAND_SAYS[group].words),
+      );
+      expect(sorted(seen[group].imperatives), group).toEqual(
+        sorted(BAND_SAYS[group].imperatives),
+      );
+    }
+    expect(sorted(seen.unscored.notes)).toEqual(
+      sorted(BAND_SAYS.unscored.notes),
+    );
+  });
+
+  it("lists every score band and confidence label", () => {
+    const bands = new Set(
+      Array.from({ length: 101 }, (_, score) => getScoreBandText(score)),
+    );
+    expect([...bands].sort()).toEqual([...SCORE_BANDS].sort());
+    expect(BAND_SAYS.confidenceLabels).toEqual([
+      "High confidence",
+      "Moderate confidence",
+      "Low confidence",
+    ]);
   });
 });
 

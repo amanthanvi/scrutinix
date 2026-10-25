@@ -356,6 +356,7 @@ export function ResultsSection() {
               scan.cancelScan();
               document.getElementById("sx-url-input")?.focus();
             }}
+            onRetry={active ? () => rescanFromBand(active.url) : undefined}
             onRunSharedScan={
               shared
                 ? () => {
