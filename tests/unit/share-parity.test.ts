@@ -277,6 +277,31 @@ describe("the signed basis", () => {
       confirmed: false,
     });
   });
+
+  it("ages a VirusTotal conviction at the scan's check time, not when it is read", async () => {
+    // Analysed 29 days before the check: current then (30-day limit),
+    // stale by the time the sender reopens it, or the recipient opens the
+    // share, three days later. Both must still read "known threat".
+    const signals = await fixtureSignals("example.com");
+    if (signals.virusTotal.data) {
+      signals.virusTotal.data.malicious = 7;
+      signals.virusTotal.data.lastAnalysisDate = new Date(
+        Date.parse(CHECKED_AT) - 29 * 86_400_000,
+      ).toISOString();
+    }
+    const result = resultFrom(signals);
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      vi.setSystemTime(Date.parse(CHECKED_AT) + 3 * 86_400_000);
+      expect(getVerdictBasis(result).confirmed).toBe(true);
+      // Undated evidence is aged as of now.
+      expect(getVerdictBasis({ ...result, metadata: null }).confirmed).toBe(
+        false,
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
 
 describe("snapshots signed before the basis existed", () => {

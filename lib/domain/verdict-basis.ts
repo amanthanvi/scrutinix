@@ -16,14 +16,19 @@ import type {
  *
  * Missing evidence never reassures: no threatInfo reads as "low"
  * confidence and not clean, and no signals as not confirmed, which is the
- * hedged wording a snapshot without a basis has always had.
+ * hedged wording a snapshot without a basis has always had. A VirusTotal
+ * analysis is aged as of the scan's own check time, so a result reopened
+ * days later (or shared) reads as it did when it was checked.
  */
 export function getVerdictBasis(result: {
   threatInfo?: Pick<
     ThreatInfo,
     "confidenceLabel" | "hasPositiveEvidence"
   > | null;
-  metadata?: Pick<ScanMetadata, "partialFailure"> | null;
+  metadata?:
+    | (Pick<ScanMetadata, "partialFailure"> &
+        Partial<Pick<ScanMetadata, "checkedAt" | "completedAt">>)
+    | null;
   signals?: SignalResults | null;
 }): VerdictBasis {
   const threatInfo = result.threatInfo;
@@ -32,7 +37,22 @@ export function getVerdictBasis(result: {
     clean: Boolean(threatInfo && !threatInfo.hasPositiveEvidence),
     partial: Boolean(result.metadata?.partialFailure),
     confirmed: result.signals
-      ? hasConfirmedReputationHit(result.signals)
+      ? hasConfirmedReputationHit(
+          result.signals,
+          checkedAt(result.metadata) ?? Date.now(),
+        )
       : false,
   };
+}
+
+/** When the evidence was gathered: `checkedAt`, else `completedAt`. */
+function checkedAt(
+  metadata:
+    Partial<Pick<ScanMetadata, "checkedAt" | "completedAt">> | null | undefined,
+): number | undefined {
+  for (const value of [metadata?.checkedAt, metadata?.completedAt]) {
+    const time = value ? Date.parse(value) : Number.NaN;
+    if (Number.isFinite(time)) return time;
+  }
+  return undefined;
 }

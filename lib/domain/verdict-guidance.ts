@@ -17,7 +17,11 @@ import { getVerdictBasis } from "@/lib/domain/verdict-basis";
  */
 
 type GuidanceInput = Pick<AnalysisResult, "verdict" | "threatInfo"> & {
-  metadata?: Pick<AnalysisResult["metadata"], "partialFailure"> | null;
+  /** `checkedAt`/`completedAt` date the evidence (`getVerdictBasis`). */
+  metadata?:
+    | (Pick<AnalysisResult["metadata"], "partialFailure"> &
+        Partial<Pick<AnalysisResult["metadata"], "checkedAt" | "completedAt">>)
+    | null;
   /** Optional: shared snapshots and legacy records carry no signals. */
   signals?: AnalysisResult["signals"] | null;
   /** When present, the announcement names the host it is about. */
