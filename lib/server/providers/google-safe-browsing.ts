@@ -38,7 +38,7 @@ export async function runGoogleSafeBrowsingProvider(
       body: JSON.stringify({
         client: {
           clientId: "scrutinix",
-          clientVersion: "3.0.0",
+          clientVersion: "4.0.0",
         },
         threatInfo: {
           threatTypes: [

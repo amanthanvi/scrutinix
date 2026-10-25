@@ -4,7 +4,7 @@
 
 - Status update: the current implementation is live, verified locally, and deployed to Vercel preview and production.
 - Rationale: the audit confirmed meaningful drift between docs and code, including missing batch API support, no test harness, vulnerable production dependencies, missing metadata assets, and misleading error-to-threat behavior.
-- Toolchain decision: the current implementation targets `next@16.3.4`, `react@19.2.8`, and Node `24.x` for local development, CI, and Vercel deployment; `@types/node` stays on the same major and a unit guard enforces the contract.
+- Toolchain decision: the current implementation targets `next@16.4.2`, `react@19.3.1`, and Node `24.x` for local development, CI, and Vercel deployment; `@types/node` stays on the same major and a unit guard enforces the contract.
 - Native-runtime decision: `onnxruntime-node` is the only explicitly approved install script because the bundled local classifier requires its platform binary.
 - Linting decision: use ESLint 10 directly with peer-compatible Next.js, React, hooks, TypeScript, and JSX accessibility plugins; do not use `next lint` or the ESLint 9-only `eslint-config-next` dependency graph.
 - Streaming decision: API responses stream `application/x-ndjson` over `fetch`, not SSE.
