@@ -1111,9 +1111,9 @@ check(
   "an unmarked VERIFY_EVIDENCE_DIR exits 2 with a recovery hint",
   unmarked.status === 2 &&
     unmarked.stderr.includes("has no .verify-evidence marker") &&
-    unmarked.stderr.includes(
-      "Point VERIFY_EVIDENCE_DIR at an empty or new directory",
-    ) &&
+    unmarked.stderr.includes("drive: verify: evidence directory") &&
+    unmarked.stderr.includes("Point VERIFY_EVIDENCE_DIR at a new directory") &&
+    !unmarked.stderr.includes("empty or") &&
     unmarked.stderr.includes("unset it to use the default") &&
     unmarked.stderr.includes("Refusing to clear") &&
     !unmarked.stdout.includes("cleared") &&
@@ -1122,38 +1122,26 @@ check(
     !existsSync(path.join(unmarkedDir, runtime.evidenceMarkerName)),
   cli(unmarked),
 );
-const emptyDir = path.join(scratch, "empty-evidence");
-mkdirSync(emptyDir, { mode: 0o700 });
+const emptyOverride = path.join(scratch, "empty-unmarked");
+mkdirSync(emptyOverride, { mode: 0o700 });
 const emptyRun = await runSuiteWith(
   fakePlaywright,
   ["--drive", "--port", String(portA)],
-  envFor(runDir, { VERIFY_EVIDENCE_DIR: emptyDir }),
+  envFor(runDir, { VERIFY_EVIDENCE_DIR: emptyOverride }),
 );
 check(
-  "an empty VERIFY_EVIDENCE_DIR is marked and then cleared",
-  emptyRun.status === 1 &&
-    emptyRun.stdout.includes("cleared 0 previous files") &&
-    emptyRun.stderr.includes("Playwright exited") &&
-    runtime.hasEvidenceMarker(emptyDir),
+  "an empty unmarked VERIFY_EVIDENCE_DIR exits 2 with a recovery hint",
+  emptyRun.status === 2 &&
+    emptyRun.stderr.includes("drive: verify: evidence directory") &&
+    emptyRun.stderr.includes("Point VERIFY_EVIDENCE_DIR at a new directory") &&
+    !emptyRun.stderr.includes("empty or") &&
+    emptyRun.stderr.includes("unset it to use the default") &&
+    emptyRun.stderr.includes("Refusing to clear") &&
+    !emptyRun.stdout.includes("cleared") &&
+    !emptyRun.stderr.includes("Playwright exited") &&
+    readdirSync(emptyOverride).length === 0 &&
+    !existsSync(path.join(emptyOverride, runtime.evidenceMarkerName)),
   cli(emptyRun),
-);
-const dottedDir = path.join(scratch, "dotted-evidence");
-mkdirSync(dottedDir, { mode: 0o700 });
-writeFileSync(path.join(dottedDir, ".keep"), "keep");
-let dottedRefused = false;
-try {
-  runtime.clearEvidenceFiles(dottedDir);
-} catch (error) {
-  dottedRefused =
-    error instanceof runtime.UnsafeStateError &&
-    error.message.includes("has no .verify-evidence marker");
-}
-check(
-  "an unmarked override that only has a dotfile is refused",
-  dottedRefused &&
-    readFileSync(path.join(dottedDir, ".keep"), "utf8") === "keep" &&
-    !runtime.hasEvidenceMarker(dottedDir),
-  { refused: dottedRefused },
 );
 const adoptState = path.join(scratch, "adopt-state");
 mkdirSync(adoptState, { mode: 0o700 });
