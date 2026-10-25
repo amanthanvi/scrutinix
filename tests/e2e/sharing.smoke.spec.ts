@@ -82,7 +82,9 @@ async function expectWaitingForAnalyze(
   await page.waitForTimeout(750);
   expect(scans).toEqual([]);
   await expect(page.getByLabel(/^scan result/i)).toHaveCount(0);
-  await expect(input).toBeFocused();
+  // Analyze holds focus; the field doesn't, so no keyboard covers the link.
+  await expect(page.getByRole("button", { name: "Analyze URL" })).toBeFocused();
+  await expect(input).not.toBeFocused();
   await expect(
     page.getByRole("region", { name: "The link, taken apart" }),
   ).toContainText("scrutinix.test");

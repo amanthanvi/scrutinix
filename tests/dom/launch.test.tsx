@@ -105,6 +105,10 @@ function urlInput() {
   });
 }
 
+function analyzeButton() {
+  return screen.getByRole("button", { name: /analyze url/i });
+}
+
 /** The links each scan request asked for, in order. */
 function scannedUrls(fetchMock: ReturnType<typeof stubScan>) {
   return (fetchMock.mock.calls as unknown as [string, RequestInit][]).map(
@@ -140,7 +144,8 @@ describe("a link handed to the page (?url=, or the share target's redirect to it
 
     const input = urlInput();
     expect(input.value).toBe(LINK);
-    await waitFor(() => expect(document.activeElement).toBe(input));
+    // Analyze takes focus, not the field: no phone keyboard over the link.
+    await waitFor(() => expect(document.activeElement).toBe(analyzeButton()));
     const anatomy = await screen.findByRole("region", {
       name: "The link, taken apart",
     });
@@ -170,7 +175,7 @@ describe("a link handed to the page (?url=, or the share target's redirect to it
     for (let visit = 0; visit < 2; visit += 1) {
       const view = renderApp({ prefill: LINK });
       expect(urlInput().value).toBe(LINK);
-      await waitFor(() => expect(document.activeElement).toBe(urlInput()));
+      await waitFor(() => expect(document.activeElement).toBe(analyzeButton()));
       await settle();
       view.unmount();
     }
@@ -183,6 +188,7 @@ describe("a link handed to the page (?url=, or the share target's redirect to it
     expect(urlInput().value).toBe("");
     await settle();
     expect(document.activeElement).not.toBe(urlInput());
+    expect(document.activeElement).not.toBe(analyzeButton());
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });

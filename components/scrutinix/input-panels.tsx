@@ -111,6 +111,7 @@ export function SingleInput({
             While a scan runs it is aria-disabled, not disabled, so keyboard
             focus stays here instead of falling to <body>. */}
         <Button
+          id="sx-analyze"
           type="button"
           aria-label="Analyze URL"
           onClick={() => {

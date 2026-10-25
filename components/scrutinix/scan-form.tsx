@@ -85,10 +85,11 @@ export function ScanForm() {
     updateSingleUrl,
   } = useAnalyzerRuntime();
 
-  // Arrived through `?url=`: the link is in the field, ready for the tap
-  // that scans it (and taken apart below meanwhile).
+  // Arrived through `?url=`: the link is in the field and taken apart
+  // below it, and Analyze holds focus for the tap (or Enter) that scans it.
+  // Not the field: on a phone that would raise the keyboard over the link.
   useEffect(() => {
-    if (prefilled) document.getElementById("sx-url-input")?.focus();
+    if (prefilled) document.getElementById("sx-analyze")?.focus();
   }, [prefilled]);
 
   // The link in the field, taken apart before a scan: only while it is a

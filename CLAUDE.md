@@ -294,8 +294,9 @@ tests/
 
 - **Links from outside**: nothing starts a scan on its own. `/?url=`
   fills in the Single field (normalized on the server by
-  `resolvePrefill`), focuses it, and the anatomy on paste takes the link
-  apart; it scans only when the person taps Analyze. An invalid or
+  `resolvePrefill`), the anatomy on paste takes the link apart, and
+  Analyze takes focus (not the field, so a phone's keyboard doesn't cover
+  the link); it scans only when the person taps Analyze. An invalid or
   unscannable value prefills nothing, silently. The installed app's
   share target (`share_target` in `public/site.webmanifest` →
   `POST /share`) takes the first http(s) link from `url` (whole), `text`,
