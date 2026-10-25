@@ -318,8 +318,8 @@ export function DefaultCard() {
             maxWidth: 880,
           }}
         >
-          Eight independent checks tell you whether it&apos;s safe to open, and
-          who really owns it.
+          Eight separate checks tell you whether it&apos;s safe to open, and
+          which site it really belongs to.
         </div>
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
@@ -431,7 +431,7 @@ export function ResultCard({
             {clip(domain)}
           </div>
           <div style={{ display: "flex", fontSize: 24, color: C.muted }}>
-            The registered domain that owns this link.
+            The site this link belongs to.
           </div>
         </div>
       )}

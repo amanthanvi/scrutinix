@@ -78,7 +78,10 @@ function renderPanel(
         completedSignals={8}
         {...props}
       />
-      <VerdictDetails result={result} />
+      <VerdictDetails
+        result={result}
+        impersonates={props.impersonates ?? null}
+      />
     </>,
   );
 }
@@ -97,7 +100,7 @@ describe("VerdictBand", () => {
 
     const heading = screen.getByRole("heading", {
       level: 2,
-      name: "malicious",
+      name: "Malicious",
     });
     expect(heading.id).toBe(VERDICT_HEADING_ID);
     expect(heading.getAttribute("tabindex")).toBe("-1");
@@ -279,7 +282,7 @@ describe("VerdictBand", () => {
 
     const heading = screen.getByRole("heading", {
       level: 2,
-      name: "malicious",
+      name: "Malicious",
     });
     expect(heading.id).toBe(VERDICT_HEADING_ID);
     expect(heading.getAttribute("tabindex")).toBe("-1");
@@ -371,11 +374,14 @@ describe("VerdictBand", () => {
     ).toBeNull();
   });
 
-  it("hedges a Safe verdict for a look-alike link without touching the score", () => {
+  it("shows a look-alike Safe as Look-alike, its own verdict and score in the details", () => {
     renderPanel(buildResult("safe", { score: 3, confidenceLabel: "high" }), {
       impersonates: "paypal.com",
     });
-    const heading = screen.getByRole("heading", { level: 2, name: "safe" });
+    const heading = screen.getByRole("heading", {
+      level: 2,
+      name: "Look-alike",
+    });
     const band = heading.closest("section");
     expect(
       screen.getByText("Don't sign in or enter details here."),
@@ -389,9 +395,15 @@ describe("VerdictBand", () => {
     ).toBeTruthy();
     // The owner fact belongs to the anatomy line, not the band.
     expect(band?.textContent).not.toMatch(/isn't really|paypal\.com/);
+    // A low score beside "Look-alike" would reassure: the band shows none,
+    // and the details state the checks' own verdict and score.
+    expect(screen.queryByRole("meter", { name: "Threat score" })).toBeNull();
+    expect(band?.textContent).not.toMatch(/\bSafe\b|3\/100/);
     expect(
-      screen.getByRole("meter", { name: "Threat score" }).textContent,
-    ).toBe("3/100");
+      screen.getByText(
+        "No check flagged it: on their own, the checks scored it Safe, 3 out of 100.",
+      ),
+    ).toBeTruthy();
   });
 
   it("states no confidence on a failed scan", () => {
@@ -410,7 +422,7 @@ describe("VerdictBand", () => {
       />,
     );
     expect(
-      screen.getByRole("heading", { level: 2, name: "error" }),
+      screen.getByRole("heading", { level: 2, name: "Error" }),
     ).toBeTruthy();
     expect(screen.queryByText(/confidence/i)).toBeNull();
     expect(
@@ -450,7 +462,7 @@ describe("VerdictBand", () => {
     );
     const verdict = screen.getByRole("heading", { level: 2 });
     expect(verdict).toBe(checking);
-    expect(verdict.textContent).toBe("malicious");
+    expect(verdict.textContent).toBe("Malicious");
     expect(document.activeElement).toBe(verdict);
   });
 });

@@ -2,16 +2,25 @@
 
 import { LinkAnatomyCompact } from "@/components/scrutinix/link-anatomy";
 import { verdictFg } from "@/components/shared/scrutinix-types";
-import { useLinkAnatomy } from "@/hooks/use-link-anatomy";
+import {
+  useLinkAnatomy,
+  type LinkAnatomyState,
+  type LinkParserStatus,
+} from "@/hooks/use-link-anatomy";
 import type { LinkAnatomy } from "@/lib/domain/link-anatomy";
 import type { Verdict } from "@/lib/domain/types";
-import { isLookAlikeSafe, verdictLabel } from "@/lib/domain/verdict-guidance";
+import {
+  isLookAlikeSafe,
+  isUncheckedSafe,
+  verdictWord,
+} from "@/lib/domain/verdict-guidance";
 import { cn } from "@/lib/utils";
 
 /**
  * Shared parts of a history or batch row, so both lists state a result
- * the same way: the verdict word (a look-alike Safe takes the neutral tone, as
- * its band does, never a reassuring green) and the compact link anatomy.
+ * the same way: the verdict word (a look-alike or unconfirmed Safe takes
+ * the neutral tone, as its band does, never a reassuring green) and the
+ * compact link anatomy.
  *
  * Row layout: below `sm` the row wraps to two lines - glyph, verdict, and
  * the trailing item on the first; the link alone on the full-width second
@@ -28,23 +37,43 @@ export const ROW_LINK =
 /** The trailing item (time, Open) sits right on the phone's first line. */
 export const ROW_TRAILING = "ml-auto shrink-0 sm:ml-0";
 
-/** The anatomy of a row's link; null until the parser loads. */
-export function useRowAnatomy(url: string): LinkAnatomy | null {
-  return useLinkAnatomy(url).anatomy;
+/**
+ * The anatomy of a row's link (null until the parser loads), and whether
+ * that answer is final: a row cannot tell a Safe look-alike from a Safe
+ * link until its status is "ready".
+ */
+export function useRowAnatomy(url: string): LinkAnatomyState {
+  return useLinkAnatomy(url);
 }
 
 export function RowVerdict({
   verdict,
   impersonates,
+  anatomyStatus = "ready",
   label,
 }: {
   verdict: Verdict | null;
   impersonates: string | null;
+  /**
+   * "pending" while the link parser loads: a Safe row waits rather than
+   * flash a reassuring "Safe" that turns into "Look-alike". "failed": the
+   * row says "Unconfirmed", as the band does.
+   */
+  anatomyStatus?: LinkParserStatus;
   /** Shown instead of a verdict while there is none ("Checking"). */
   label?: string;
 }) {
-  const lookAlike = verdict
-    ? isLookAlikeSafe({ verdict, impersonates })
+  if (verdict === "safe" && anatomyStatus === "pending") {
+    return (
+      <span className="text-meta w-auto shrink-0 font-semibold text-[var(--sx-text-soft)] sm:w-[5.5rem]">
+        <span aria-hidden="true">—</span>
+      </span>
+    );
+  }
+  const addressUnchecked = anatomyStatus === "failed";
+  const neutral = verdict
+    ? isLookAlikeSafe({ verdict, impersonates }) ||
+      isUncheckedSafe({ verdict, impersonates, addressUnchecked })
     : false;
   return (
     <span
@@ -55,10 +84,12 @@ export function RowVerdict({
       style={{
         color: !verdict
           ? "var(--sx-text-soft)"
-          : verdictFg(lookAlike ? "unknown" : verdict),
+          : verdictFg(neutral ? "unknown" : verdict),
       }}
     >
-      {verdict ? verdictLabel(verdict) : label}
+      {verdict
+        ? verdictWord({ verdict, impersonates, addressUnchecked })
+        : label}
     </span>
   );
 }

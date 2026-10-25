@@ -20,12 +20,24 @@ type GuidanceInput = Pick<AnalysisResult, "verdict" | "threatInfo"> & {
   /**
    * A domain the link spells out but does not belong to
    * (`LinkAnatomy.impersonates`). Presentation only, never the score or
-   * the verdict word: on a Safe verdict it hardens the instruction, swaps
-   * the reassuring confidence line for a plain note, and turns the band
-   * neutral. Unknown keeps its own instruction. The owner fact itself is
-   * said once, by `ownershipSentence`, in the anatomy line.
+   * the stored verdict: a Safe verdict is shown as "Look-alike"
+   * (`verdictWord`), with a hardened instruction, a plain note instead of
+   * the reassuring confidence line, a neutral band, and its score moved to
+   * the details (`getUnderlyingVerdictNote`). Unknown keeps its own word
+   * and instruction. The owner fact itself is said once, by
+   * `ownershipSentence`, in the anatomy line.
    */
   impersonates?: string | null;
+  /**
+   * The look-alike check couldn't run: the link parser failed to load, so
+   * whether the address imitates another site is unknown. Presentation
+   * only, like `impersonates`: a Safe verdict is shown as "Unconfirmed"
+   * (`verdictWord`) with a neutral band, no score, an instruction to check
+   * the address, and a note saying why in place of the confidence line.
+   * While the parser is still loading nothing is stated at all
+   * (`ADDRESS_CHECK_PENDING`).
+   */
+  addressUnchecked?: boolean;
   /**
    * The link's registered domain (`LinkAnatomy.registeredDomain`). Channels
    * with no anatomy line (the live region) append the ownership sentence.
@@ -71,20 +83,102 @@ export function isLookAlikeSafe(
   return result.verdict === "safe" && Boolean(result.impersonates);
 }
 
+/** The word a Safe look-alike is shown as, everywhere a verdict is named. */
+export const LOOK_ALIKE_WORD = "Look-alike";
+
 /**
- * What a share preview leads with: the verdict word, except that a Safe
- * look-alike never leads with "Safe" (many chat clients show only the
- * title and image). `short` is the card's one word, whose ownership line
- * names both domains; the title names the imitated site.
+ * A Safe verdict on a link whose address couldn't be checked for a
+ * look-alike (`addressUnchecked`). An actual look-alike outranks it.
+ */
+export function isUncheckedSafe(
+  result: Pick<GuidanceInput, "verdict" | "impersonates" | "addressUnchecked">,
+): boolean {
+  return (
+    result.verdict === "safe" &&
+    !result.impersonates &&
+    Boolean(result.addressUnchecked)
+  );
+}
+
+/**
+ * The word a Safe verdict is shown as when its address couldn't be checked:
+ * the checks found nothing, but we can't say the link is what it claims.
+ */
+export const UNCONFIRMED_WORD = "Unconfirmed";
+
+/**
+ * What the band says in place of a Safe verdict while the address check
+ * is still loading. Nothing reassuring (or alarming) is stated until it
+ * settles; rows hold "—" the same way.
+ */
+export const ADDRESS_CHECK_PENDING = "Checking the link's address";
+
+/**
+ * The verdict word people see: the verdict, except that a Safe look-alike
+ * is shown as "Look-alike" on the band, in history and batch rows, in the
+ * live announcement, and on share cards. No check flagged it, so "Safe"
+ * would reassure while the instruction warns; the stored verdict and score
+ * are unchanged and stated in the details (`getUnderlyingVerdictNote`).
+ * A Safe link whose address couldn't be checked reads "Unconfirmed" on
+ * the same surfaces, for the same reason.
+ */
+export function verdictWord(
+  result: Pick<GuidanceInput, "verdict" | "impersonates" | "addressUnchecked">,
+): string {
+  if (isLookAlikeSafe(result)) return LOOK_ALIKE_WORD;
+  if (isUncheckedSafe(result)) return UNCONFIRMED_WORD;
+  return verdictLabel(result.verdict);
+}
+
+/**
+ * What a share preview leads with: the verdict word (`verdictWord`); a
+ * Safe look-alike's page title names the imitated site, since many chat
+ * clients show only the title and image. `short` is the card's one word,
+ * whose ownership line names both domains.
  */
 export function shareHeadline(
   result: Pick<GuidanceInput, "verdict" | "impersonates">,
   { short = false }: { short?: boolean } = {},
 ): string {
-  if (isLookAlikeSafe(result)) {
-    return short ? "Look-alike" : `Look-alike of ${result.impersonates}`;
+  if (isLookAlikeSafe(result) && !short) {
+    return `${LOOK_ALIKE_WORD} of ${result.impersonates}`;
   }
-  return verdictLabel(result.verdict);
+  return verdictWord(result);
+}
+
+/**
+ * Whether we may say no check flagged the link: only when the verdict
+ * engine scored nothing against it. A Safe verdict can still carry minor
+ * findings (one VirusTotal engine, a few structure points), and a shared
+ * snapshot carries no evidence to say either way.
+ */
+function nothingFlagged(result: Pick<GuidanceInput, "threatInfo">): boolean {
+  return Boolean(result.threatInfo && !result.threatInfo.hasPositiveEvidence);
+}
+
+/**
+ * Where a Safe look-alike's own verdict and score live, since its band
+ * shows "Look-alike" and no score: "No check flagged it: on their own, the
+ * checks scored it Safe, 4 out of 100." It only says nothing was flagged
+ * when that is true. An "Unconfirmed" Safe states them the same way. Null
+ * for every other result.
+ */
+export function getUnderlyingVerdictNote(
+  result: Pick<
+    GuidanceInput,
+    "verdict" | "impersonates" | "addressUnchecked" | "threatInfo"
+  >,
+): string | null {
+  if (!isLookAlikeSafe(result) && !isUncheckedSafe(result)) {
+    return null;
+  }
+  const score = result.threatInfo
+    ? `, ${clampScore(result.threatInfo.score)} out of 100`
+    : "";
+  const scored = `the checks scored it ${verdictLabel(result.verdict)}${score}.`;
+  return nothingFlagged(result)
+    ? `No check flagged it: on their own, ${scored}`
+    : `On their own, ${scored}`;
 }
 
 /**
@@ -149,13 +243,28 @@ function getInstruction(
       };
     case "safe":
       if (result.impersonates) {
-        // No check flagged it, but a green band and "High confidence"
-        // would contradict the instruction. The score and word stay.
+        // No check flagged it, but a green band, "High confidence", and a
+        // low score would contradict the instruction. The word reads
+        // "Look-alike" (`verdictWord`); the score moves to the details.
         return {
           imperative: "Don't sign in or enter details here.",
-          showScore: true,
+          showScore: false,
           tone: "unknown",
-          confidenceNote: "No check flagged it, but the name is misleading.",
+          confidenceNote: nothingFlagged(result)
+            ? "No check flagged it, but the name is misleading."
+            : "The checks found nothing serious, but the name is misleading.",
+        };
+      }
+      if (result.addressUnchecked) {
+        // The parser that spots look-alikes failed to load. "Looks safe to
+        // open" and "High confidence" would vouch for an address nobody
+        // checked; say what to do and why, and move the score to the
+        // details.
+        return {
+          imperative: "Check the link's address before you open it.",
+          showScore: false,
+          tone: "unknown",
+          confidenceNote: UNCHECKED_ADDRESS_NOTE,
         };
       }
       return {
@@ -173,6 +282,10 @@ function getInstruction(
       return { imperative: "The scan failed — try again.", showScore: false };
   }
 }
+
+/** Why an "Unconfirmed" Safe carries no score or confidence on its band. */
+const UNCHECKED_ADDRESS_NOTE =
+  "We couldn't check whether this address imitates another site.";
 
 /** Clamp a stored score into the 0-100 range the meter promises. */
 export function clampScore(score: number | null | undefined): number {
@@ -200,12 +313,15 @@ export function getVerdictAnnouncement(result: GuidanceInput): string {
     : "";
   const host = result.url ? announcementHost(result.url) : null;
   const subject = host ? `Result for ${host}` : "Result";
-  // The live region has no anatomy line: it states the owner itself.
+  // The live region has no anatomy line: it states the owner itself, or
+  // that the address couldn't be checked.
   const owner =
     result.impersonates && result.registeredDomain
       ? ` ${ownershipSentence(result.registeredDomain, result.impersonates)}`
-      : "";
-  return `${subject}: ${verdictLabel(result.verdict)}${score}. ${guidance.imperative}${owner}`;
+      : isUncheckedSafe(result)
+        ? ` ${UNCHECKED_ADDRESS_NOTE}`
+        : "";
+  return `${subject}: ${verdictWord(result)}${score}. ${guidance.imperative}${owner}`;
 }
 
 /**
@@ -229,16 +345,23 @@ export function getVerdictRecommendations(result: GuidanceInput): string[] {
 /**
  * "Why <X> confidence" in the details. Confidence measures reputation
  * coverage only, so a look-alike Safe says that its address still imitates
- * another site.
+ * another site, and an "Unconfirmed" Safe that its address wasn't checked.
  */
 export function getConfidenceReasons(result: GuidanceInput): string[] {
   const reasons = result.threatInfo?.confidenceReasons ?? [];
-  return isLookAlikeSafe(result)
-    ? [
-        ...reasons.slice(0, 3),
-        `Confidence covers reputation only; the address still imitates ${result.impersonates}.`,
-      ]
-    : reasons;
+  if (isLookAlikeSafe(result)) {
+    return [
+      ...reasons.slice(0, 3),
+      `Confidence covers reputation only; the address still imitates ${result.impersonates}.`,
+    ];
+  }
+  if (isUncheckedSafe(result)) {
+    return [
+      ...reasons.slice(0, 3),
+      "Confidence covers reputation only; we couldn't check whether the address imitates another site.",
+    ];
+  }
+  return reasons;
 }
 
 function announcementHost(url: string): string | null {

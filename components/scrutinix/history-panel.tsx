@@ -16,6 +16,7 @@ import {
   useRowAnatomy,
 } from "@/components/scrutinix/result-row";
 import { SignalGlyph } from "@/components/scrutinix/signal-strip";
+import { loadLinkParser } from "@/hooks/use-link-anatomy";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
@@ -54,7 +55,7 @@ function HistoryRow({
   entry: HistoryEntry;
   onSelect: (entry: HistoryEntry) => void;
 }) {
-  const anatomy = useRowAnatomy(entry.url);
+  const { anatomy, status: anatomyStatus } = useRowAnatomy(entry.url);
   return (
     <li>
       <button
@@ -69,6 +70,7 @@ function HistoryRow({
         <RowVerdict
           verdict={entry.verdict}
           impersonates={anatomy?.impersonates ?? null}
+          anatomyStatus={anatomyStatus}
         />
         <RowLink url={entry.url} anatomy={anatomy} />
         <span
@@ -219,9 +221,15 @@ export function HistoryPanel({
           <div className="mt-2 -ml-2.5 flex flex-wrap items-center gap-1">
             <Button
               type="button"
-              onClick={() =>
-                downloadTextFile("scan-history.csv", resultsToCsv(entries))
-              }
+              onClick={async () => {
+                // Waits for the address parser, so a cold visit's export
+                // still names every look-alike.
+                const parse = await loadLinkParser();
+                downloadTextFile(
+                  "scan-history.csv",
+                  resultsToCsv(entries, parse),
+                );
+              }}
               variant="ghost"
               size="sm"
             >

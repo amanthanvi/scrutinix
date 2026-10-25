@@ -119,10 +119,11 @@ export function ResultsSection() {
   const parsed = useLinkAnatomy(
     activeTab === "single" && !serverAnatomy ? linkUrl : null,
   );
-  // Prefer the server's result: with a null URL the hook can report ready
-  // while its anatomy is null.
-  const anatomy = serverAnatomy ?? (parsed.ready ? parsed.anatomy : null);
-  const anatomyReady = serverAnatomy !== null || parsed.ready;
+  const anatomy = serverAnatomy ?? parsed.anatomy;
+  // Whether `impersonates` is final. A Safe band holds while "pending" and
+  // reads "Unconfirmed" if the parser "failed": absent anatomy never means
+  // "not a look-alike".
+  const addressCheck = serverAnatomy ? "ready" : parsed.status;
   const impersonates = anatomy?.impersonates ?? null;
 
   // Batch rows can be opened as results: have the parser ready by then.
@@ -137,11 +138,15 @@ export function ResultsSection() {
   // same entry) is a real change and gets spoken again. The region itself
   // stays mounted: a freshly inserted live region is announced unreliably.
   const [announcedRequest, setAnnouncedRequest] = useState(0);
-  // Hold a verdict announcement until the link's anatomy is known, so a
-  // look-alike is spoken with its hedge, never first without it.
+  // Hold a Safe verdict's announcement until the link's anatomy is settled,
+  // so a look-alike is spoken with its hedge, never first as "Safe". A
+  // failed parser settles it too: the announcement then says so. Any other
+  // verdict is already a warning and is spoken at once.
   const reannouncing =
     verdictFocusRequest !== announcedRequest ||
-    Boolean(active && activeTab === "single" && !anatomyReady);
+    (active?.verdict === "safe" &&
+      activeTab === "single" &&
+      addressCheck === "pending");
   useEffect(() => {
     if (verdictFocusRequest === 0) return;
     document.getElementById(VERDICT_HEADING_ID)?.focus();
@@ -278,6 +283,7 @@ export function ResultsSection() {
                 batchDone: batch.state.results.length,
                 batchTotal: batch.state.items.length,
                 impersonates,
+                addressUnchecked: addressCheck === "failed",
                 registeredDomain: anatomy?.registeredDomain ?? null,
               })
         }
@@ -300,6 +306,7 @@ export function ResultsSection() {
             expiredShare={shared?.expired ?? false}
             completedSignals={done}
             impersonates={impersonates}
+            addressCheck={addressCheck}
             driverRows={summarySelection.drivers.length}
             onCancelScan={() => {
               // Cancel unmounts with its band: hand focus back to the input.
@@ -436,7 +443,11 @@ export function ResultsSection() {
           {active ? (
             <>
               <div className="mt-6">
-                <VerdictDetails result={active} impersonates={impersonates} />
+                <VerdictDetails
+                  result={active}
+                  impersonates={impersonates}
+                  addressCheck={addressCheck}
+                />
               </div>
               <div className="mt-4 flex flex-wrap items-center gap-2">
                 <Button
@@ -494,6 +505,7 @@ function getLiveStatus({
   batchDone,
   batchTotal,
   impersonates,
+  addressUnchecked,
   registeredDomain,
 }: {
   activeTab: "single" | "batch";
@@ -504,6 +516,7 @@ function getLiveStatus({
   batchDone: number;
   batchTotal: number;
   impersonates: string | null;
+  addressUnchecked: boolean;
   registeredDomain: string | null;
 }): string {
   if (activeTab === "batch") {
@@ -524,6 +537,11 @@ function getLiveStatus({
   }
 
   return active
-    ? getVerdictAnnouncement({ ...active, impersonates, registeredDomain })
+    ? getVerdictAnnouncement({
+        ...active,
+        impersonates,
+        addressUnchecked,
+        registeredDomain,
+      })
     : "";
 }

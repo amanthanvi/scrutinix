@@ -3,6 +3,7 @@ import "fake-indexeddb/auto";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { preloadLinkParser } from "@/hooks/use-link-anatomy";
 import {
   resetHistoryDatabaseForTests,
   useScanHistory,
@@ -115,6 +116,26 @@ describe("useScanHistory", () => {
     await waitFor(() => {
       expect(result.current.filteredEntries.map((entry) => entry.id)).toEqual([
         "uppercase-verdict",
+      ]);
+    });
+  });
+
+  it("finds a Safe look-alike by the word its row shows", async () => {
+    await preloadLinkParser();
+    const { result } = renderHook(() => useScanHistory());
+    await act(async () => {
+      await result.current.addResult(
+        buildResult("look-alike", "https://paypal.com.secure-login.xyz/verify"),
+      );
+      await result.current.addResult(
+        buildResult("plain", "https://example.com/"),
+      );
+    });
+    act(() => result.current.setHistoryQuery("look-alike"));
+
+    await waitFor(() => {
+      expect(result.current.filteredEntries.map((entry) => entry.id)).toEqual([
+        "look-alike",
       ]);
     });
   });

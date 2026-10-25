@@ -76,8 +76,9 @@ export default async function HomePage({
             Check a link before you click.
           </h1>
           <p className="text-lead mt-3 max-w-[34rem] text-pretty text-[var(--sx-text-muted)]">
-            Paste a link from an email, text, or chat. Eight independent checks
-            tell you whether it&apos;s safe to open, and who really owns it.
+            Paste a link from an email, text, or chat. Eight separate checks
+            tell you whether it&apos;s safe to open, and which site it really
+            belongs to.
           </p>
 
           <div className="sx-hero-form mt-8 sm:mt-10">

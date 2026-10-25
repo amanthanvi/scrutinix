@@ -228,6 +228,21 @@ design on #59's code with the independent review's fixes.
 - [x] Verified (`E2E_PORT=3107`): format, lint, typecheck clean; unit 42 files / 484 tests, integration 3 / 42, DOM 10 / 69, e2e 29 passed, build green.
 - [x] Review round: shared-cache keys carry a version (`v2`) so results cached before public errors (possibly holding raw TLS text) are never replayed after deploy; an unexpected TLS probe failure marks `ssl.probeFailed`, so the result is partial (shows its reference, never cached); local-classifier fallback logs carry the scan id.
 
+### P29.1 Honesty fixes (2026-10-24, layer 1 of the distinctiveness stack)
+
+The distinctiveness programme (bake-off of 16 identity drafts, blind panels,
+polish round; decisions recorded in the session) ships as a stack on top of
+the redesign (#59): layer 0 ports #63's public errors, then seven layers in
+order: honesty fixes, evidence, anatomy on paste, speed, sharing, identity,
+open methodology.
+
+- [x] VirusTotal evidence lists engines that flagged the link first (malicious, then suspicious; `rankVirusTotalResults`), so the five shown can no longer hide every flagging engine; results saved earlier sort too.
+- [x] Fresh VirusTotal analyses drop engines that found nothing, as report lookups already did, so ~90 empty engine rows no longer ride in streams, cache entries, and history.
+- [x] Removed the never-filled VirusTotal `domain` field, its detail rows, and its scoring path (production never fetched `/domains`; fetching it would halve free-tier capacity).
+- [x] Tightened two claims everywhere they appear: "eight separate checks" (not "independent": the sources don't vote independently) and "which site it really belongs to" (we know the registered domain, not the organisation behind it).
+- [x] A Safe look-alike is shown as "Look-alike" (`verdictWord`) on the band, history and batch rows, the live announcement, and share cards; its band shows no score, and the details state the checks' own verdict and score (`getUnderlyingVerdictNote`). The stored verdict and score are unchanged.
+- [x] Review round: "No check flagged it" only when the engine scored nothing (a Safe can carry minor findings); history/batch rows hold a Safe word until the link parser loads; history filtering matches the shown word; CSV exports gain "Look-alike of". Second round (P1, a delayed or failed parser let a look-alike read "Safe"): `useLinkAnatomy` reports `pending | ready | failed` (one retry after 1s; a failed import is never ready); a Safe band holds in its Checking state while pending, and reads "Unconfirmed" (neutral, no score, "Check the link's address before you open it.") if the parser failed, as do rows, the announcement, and history search; CSV says "Not checked" without the parser. DOM and e2e cover a held and an aborted parser chunk. Third round: only a Safe announcement waits for the parser (a Malicious result is spoken while it loads), and history search re-runs when the parser loads or fails (`useLinkParserStatus`), not only when the query changes.
+
 ### P24 Resolve September dependency maintenance
 
 - [x] Merge the green minor-and-patch dependency group, including the Next.js `16.3.3` security update.

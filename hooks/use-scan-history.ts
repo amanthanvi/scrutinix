@@ -14,6 +14,12 @@ import { toast } from "sonner";
 import { sanitizeHistoryEntry } from "@/lib/domain/runtime-safety";
 import type { AnalysisResult, HistoryEntry } from "@/lib/domain/types";
 import { normalizeUrlInput } from "@/lib/domain/url";
+import {
+  getLoadedLinkParser,
+  useLinkParserStatus,
+} from "@/hooks/use-link-anatomy";
+import { splitLinkAnatomy } from "@/lib/domain/link-anatomy";
+import { verdictWord } from "@/lib/domain/verdict-guidance";
 
 interface HistoryDatabase extends DBSchema {
   scans: {
@@ -51,6 +57,7 @@ export function useScanHistory() {
   );
   const [historyUnavailable, setHistoryUnavailable] = useState(false);
   const failureNotified = useRef(false);
+  const parserStatus = useLinkParserStatus();
 
   // IndexedDB can be blocked (private browsing, storage pressure). Every
   // failure lands here instead of an unhandled rejection: the user gets one
@@ -162,13 +169,27 @@ export function useScanHistory() {
           ? entry.threatInfo.summary
           : "";
       const verdict = typeof entry.verdict === "string" ? entry.verdict : "";
+      // Rows show "Look-alike" for a Safe look-alike, and "Unconfirmed"
+      // once the parser has failed: match what is shown.
+      const parse = parserStatus === "ready" ? getLoadedLinkParser() : null;
+      const shown =
+        verdict && parserStatus !== "pending"
+          ? verdictWord({
+              verdict: entry.verdict,
+              impersonates: parse
+                ? (splitLinkAnatomy(parse, url)?.impersonates ?? null)
+                : null,
+              addressUnchecked: !parse,
+            })
+          : "";
       return (
         url.toLowerCase().includes(query) ||
         verdict.toLowerCase().includes(query) ||
+        shown.toLowerCase().includes(query) ||
         summary.toLowerCase().includes(query)
       );
     });
-  }, [entries, historyQuery]);
+  }, [entries, historyQuery, parserStatus]);
 
   return {
     entries,

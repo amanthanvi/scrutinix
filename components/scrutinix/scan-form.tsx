@@ -7,6 +7,7 @@ import {
   useAnalyzerRuntime,
 } from "@/components/scrutinix/analyzer-runtime";
 import { BatchInput, SingleInput } from "@/components/scrutinix/input-panels";
+import { loadLinkParser } from "@/hooks/use-link-anatomy";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   downloadTextFile,
@@ -100,8 +101,10 @@ export function ScanForm() {
             onSubmit={() => void startBatchScan()}
             onCancel={batch.cancelBatch}
             hasResults={batch.state.results.length > 0}
-            onCsv={() => {
-              downloadTextFile("batch.csv", resultsToCsv(batch.state.results));
+            onCsv={async () => {
+              const results = batch.state.results;
+              const parse = await loadLinkParser();
+              downloadTextFile("batch.csv", resultsToCsv(results, parse));
               toast.success("Downloaded batch.csv");
             }}
             onJson={() => {

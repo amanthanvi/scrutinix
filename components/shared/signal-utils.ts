@@ -196,6 +196,25 @@ export interface DetailEntry {
   value: string;
 }
 
+const VIRUSTOTAL_CATEGORY_RANK: Record<string, number> = {
+  malicious: 0,
+  suspicious: 1,
+};
+
+/**
+ * Engines that flagged the link first (malicious, then suspicious), the
+ * rest in VirusTotal's order. Details show only the first few, and VT
+ * returns engines alphabetically, so an unsorted slice could hide every
+ * engine that flagged it. Sorting here, not in the provider, also orders
+ * results saved before this ranking existed.
+ */
+export function rankVirusTotalResults<T extends { category: string }>(
+  results: readonly T[],
+): T[] {
+  const rank = (category: string) => VIRUSTOTAL_CATEGORY_RANK[category] ?? 2;
+  return [...results].sort((a, b) => rank(a.category) - rank(b.category));
+}
+
 export function getSignalDetailEntries(
   name: SignalName,
   data: SignalPayloadMap[SignalName],
@@ -203,27 +222,17 @@ export function getSignalDetailEntries(
   switch (name) {
     case "virusTotal": {
       const d = data as VirusTotalData;
-      const entries: DetailEntry[] = (d.results ?? []).slice(0, 5).map((r) => ({
-        label: r.engine,
-        value: r.result ?? r.category,
-      }));
+      const entries: DetailEntry[] = rankVirusTotalResults(d.results ?? [])
+        .slice(0, 5)
+        .map((r) => ({
+          label: r.engine,
+          value: r.result ?? r.category,
+        }));
       if (d.lastAnalysisDate) {
         entries.push({
           label: "Last analyzed",
           value: new Date(d.lastAnalysisDate).toLocaleDateString(),
         });
-      }
-      if (d.domain) {
-        entries.push({
-          label: "Domain reputation",
-          value: `${countOf(d.domain.malicious, "malicious engine")}, reputation ${d.domain.reputation}`,
-        });
-        if (d.domain.categories.length) {
-          entries.push({
-            label: "Domain categories",
-            value: d.domain.categories.join(", "),
-          });
-        }
       }
       return entries;
     }

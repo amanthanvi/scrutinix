@@ -13,12 +13,15 @@ import {
   getConfidenceReasons,
   getCoverageCaveat,
   getScoreBandText,
+  getUnderlyingVerdictNote,
   getVerdictAnnouncement,
   getVerdictGuidance,
   getVerdictRecommendations,
   isProvisionalSafe,
   ownershipSentence,
+  shareHeadline,
   shouldShowVerdictSummary,
+  verdictWord,
 } from "@/lib/domain/verdict-guidance";
 import { buildThreatAssessment } from "@/lib/domain/verdict";
 import { fixtureSignals } from "@/tests/fixtures/scenario-signals";
@@ -480,7 +483,7 @@ describe("shouldShowVerdictSummary", () => {
 });
 
 describe("look-alike hedging (presentation only)", () => {
-  it("turns a look-alike Safe neutral and action-only, keeping its score", () => {
+  it("turns a look-alike Safe neutral and action-only, its score kept for the details", () => {
     const safe = buildResult("safe", { score: 4, confidenceLabel: "high" });
     expect(getVerdictGuidance(safe)).toMatchObject({
       imperative: "Looks safe to open.",
@@ -492,13 +495,78 @@ describe("look-alike hedging (presentation only)", () => {
       {
         // The owner fact is said once, by the anatomy: not here.
         imperative: "Don't sign in or enter details here.",
-        showScore: true,
+        // A low score beside "Look-alike" would reassure; the details state it.
+        showScore: false,
         tone: "unknown",
         confidenceNote: "No check flagged it, but the name is misleading.",
       },
     );
     // The score itself is untouched.
     expect(safe.threatInfo?.score).toBe(4);
+  });
+
+  it("shows a look-alike Safe as Look-alike, and every other result as its verdict", () => {
+    expect(verdictWord({ verdict: "safe", impersonates: "paypal.com" })).toBe(
+      "Look-alike",
+    );
+    expect(verdictWord({ verdict: "safe", impersonates: null })).toBe("Safe");
+    expect(
+      verdictWord({ verdict: "unknown", impersonates: "paypal.com" }),
+    ).toBe("Unknown");
+    expect(
+      verdictWord({ verdict: "malicious", impersonates: "paypal.com" }),
+    ).toBe("Malicious");
+  });
+
+  it("names the imitated site in a share title, one word on the card", () => {
+    const lookAlike = { verdict: "safe" as const, impersonates: "paypal.com" };
+    expect(shareHeadline(lookAlike)).toBe("Look-alike of paypal.com");
+    expect(shareHeadline(lookAlike, { short: true })).toBe("Look-alike");
+    expect(shareHeadline({ verdict: "malicious", impersonates: null })).toBe(
+      "Malicious",
+    );
+  });
+
+  it("never says nothing was flagged when a check found something", () => {
+    // One VirusTotal engine can leave a link Safe at 12: true minor evidence.
+    const minor = buildResult("safe", {
+      score: 12,
+      confidenceLabel: "moderate",
+      hasPositiveEvidence: true,
+    });
+    const lookAlike = { ...minor, impersonates: "paypal.com" };
+    expect(getUnderlyingVerdictNote(lookAlike)).toBe(
+      "On their own, the checks scored it Safe, 12 out of 100.",
+    );
+    expect(getVerdictGuidance(lookAlike).confidenceNote).toBe(
+      "The checks found nothing serious, but the name is misleading.",
+    );
+    // A shared snapshot carries no evidence either way.
+    expect(
+      getVerdictGuidance({
+        verdict: "safe",
+        threatInfo: null,
+        impersonates: "paypal.com",
+      }).confidenceNote,
+    ).toBe("The checks found nothing serious, but the name is misleading.");
+  });
+
+  it("states a look-alike Safe's own verdict and score in the details only", () => {
+    const safe = buildResult("safe", { score: 4, confidenceLabel: "high" });
+    expect(
+      getUnderlyingVerdictNote({ ...safe, impersonates: "paypal.com" }),
+    ).toBe(
+      "No check flagged it: on their own, the checks scored it Safe, 4 out of 100.",
+    );
+    expect(
+      getUnderlyingVerdictNote({ ...safe, impersonates: null }),
+    ).toBeNull();
+    expect(
+      getUnderlyingVerdictNote({
+        ...buildResult("suspicious", { score: 40 }),
+        impersonates: "paypal.com",
+      }),
+    ).toBeNull();
   });
 
   it("keeps Unknown's own instruction for a look-alike", () => {
@@ -537,7 +605,7 @@ describe("look-alike hedging (presentation only)", () => {
         registeredDomain: "secure-login.xyz",
       }),
     ).toBe(
-      "Result for paypal.com.secure-login.xyz: Safe, 4 out of 100. Don't sign in or enter details here. This link belongs to secure-login.xyz, not paypal.com.",
+      "Result for paypal.com.secure-login.xyz: Look-alike. Don't sign in or enter details here. This link belongs to secure-login.xyz, not paypal.com.",
     );
     expect(
       getVerdictAnnouncement({
@@ -626,5 +694,64 @@ describe("the verdict band's because line", () => {
     });
     expect(shouldShowVerdictSummary(result)).toBe(true);
     expect(shouldShowVerdictSummary(result, 1)).toBe(false);
+  });
+});
+
+describe("an address the look-alike check couldn't reach (presentation only)", () => {
+  const safe = buildResult("safe", { score: 4, confidenceLabel: "high" });
+  const unchecked = { ...safe, addressUnchecked: true };
+
+  it("shows a Safe it couldn't check as Unconfirmed: neutral, no score, why", () => {
+    expect(verdictWord(unchecked)).toBe("Unconfirmed");
+    expect(getVerdictGuidance(unchecked)).toEqual({
+      imperative: "Check the link's address before you open it.",
+      showScore: false,
+      tone: "unknown",
+      confidenceNote:
+        "We couldn't check whether this address imitates another site.",
+    });
+    // The stored verdict and score are untouched, and stated in the details.
+    expect(unchecked.verdict).toBe("safe");
+    expect(getUnderlyingVerdictNote(unchecked)).toBe(
+      "No check flagged it: on their own, the checks scored it Safe, 4 out of 100.",
+    );
+    expect(getConfidenceReasons(unchecked).at(-1)).toBe(
+      "Confidence covers reputation only; we couldn't check whether the address imitates another site.",
+    );
+  });
+
+  it("says so in the announcement, with no score", () => {
+    expect(
+      getVerdictAnnouncement({
+        ...unchecked,
+        url: "https://paypal.com.safe.scrutinix.test/",
+      }),
+    ).toBe(
+      "Result for paypal.com.safe.scrutinix.test: Unconfirmed. Check the link's address before you open it. We couldn't check whether this address imitates another site.",
+    );
+  });
+
+  it("changes no other verdict, and yields to a known look-alike", () => {
+    for (const verdict of [
+      "suspicious",
+      "malicious",
+      "critical",
+      "unknown",
+      "error",
+    ] as const) {
+      const result = buildResult(verdict, { score: 60 });
+      expect(verdictWord({ ...result, addressUnchecked: true })).toBe(
+        verdictWord(result),
+      );
+      expect(getVerdictGuidance({ ...result, addressUnchecked: true })).toEqual(
+        getVerdictGuidance(result),
+      );
+      expect(
+        getVerdictAnnouncement({ ...result, addressUnchecked: true }),
+      ).toBe(getVerdictAnnouncement(result));
+    }
+    expect(verdictWord({ ...unchecked, impersonates: "paypal.com" })).toBe(
+      "Look-alike",
+    );
   });
 });

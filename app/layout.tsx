@@ -15,7 +15,7 @@ export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: "Scrutinix — Check a link before you click",
   description:
-    "Paste a link from an email, text, or chat. Eight independent checks tell you whether it's safe to open, and who really owns it.",
+    "Paste a link from an email, text, or chat. Eight separate checks tell you whether it's safe to open, and which site it really belongs to.",
   icons: {
     icon: [
       { url: "/favicon.ico", sizes: "any" },
@@ -36,7 +36,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Scrutinix — Check a link before you click",
     description:
-      "Check a link before you click. Eight independent checks, one plain verdict.",
+      "Check a link before you click. Eight separate checks, one plain verdict.",
     url: siteUrl,
     siteName: "Scrutinix",
     images: ["/opengraph-image"],
@@ -45,7 +45,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Scrutinix — Check a link before you click",
     description:
-      "Check a link before you click. Eight independent checks, one plain verdict.",
+      "Check a link before you click. Eight separate checks, one plain verdict.",
     images: ["/opengraph-image"],
   },
 };

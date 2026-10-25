@@ -196,7 +196,6 @@ function buildCleanSignals(target: NormalizedUrl): SignalPayloadMap {
       results: [],
       permalink: `https://www.virustotal.com/gui/url/fixture-${target.hostname}`,
       lastAnalysisDate: checkedAt,
-      domain: null,
     },
     mlEnsemble: {
       transformerModel: {

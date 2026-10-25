@@ -3,11 +3,11 @@
 ## Project Overview
 
 **Scrutinix** — a FOSS multi-signal URL threat analyzer, live at
-https://www.scrutinix.net. It streams 8 independent security signals
+https://www.scrutinix.net. It streams 8 separate security signals
 (VirusTotal, ML ensemble, Google Safe Browsing, threat feeds, SSL, WHOIS,
 DNS, redirect chain) over NDJSON into a minimal, single-column product UI:
 the canonical minimal product tool on a cool crisp white ground, with the
-verdict band, the link's real owner, and an eight-cell signal strip as the
+verdict band, the site the link really belongs to, and an eight-cell signal strip as the
 one signature. Light and dark themes receive equal treatment.
 
 Operating conventions and learned gotchas live in [`AGENTS.md`](./AGENTS.md).
@@ -165,16 +165,32 @@ tests/
   in). Every contiguous run of 2+ subdomain labels is tested; a two-letter
   country-code run counts only for a listed brand (`amazon.de`), so
   regional/tenant hosts (`acme.us.auth0.com`) never read as look-alikes.
-  Look-alikes hedge presentation only; scores and the verdict word never
-  change. On Safe, `getVerdictGuidance` returns the action-only imperative,
-  `tone: "unknown"` (the band and OG card use it, never the raw verdict),
-  and a `confidenceNote` in place of "High confidence". The owner fact is
+  Look-alikes change presentation only; the stored verdict and score never
+  change. A Safe look-alike is shown as "Look-alike" (`verdictWord`) on the
+  band, history/batch rows, the live region, and the share card; its band
+  shows no score, and the details state the checks' own verdict and score
+  (`getUnderlyingVerdictNote`). `getVerdictGuidance` returns the
+  action-only imperative, `tone: "unknown"` (the band, rows, and OG card
+  use it, never the raw verdict), and a `confidenceNote` in place of "High
+  confidence". The owner fact is
   stated once, by `ownershipSentence` (anatomy, live region, share
   description, OG card). History/batch rows use `LinkAnatomyCompact`
   (`result-row.tsx`): the subdomain truncates from its left so the owner
   never gets cut. Shared
   links get their anatomy from the server (`SharedView.anatomy`) so the
-  hedge is in the first paint; verdict announcements wait for the parser.
+  hedge is in the first paint. Elsewhere absent anatomy never means "not a
+  look-alike": `useLinkAnatomy` reports a `status` of `"pending"`,
+  `"ready"`, or `"failed"` (a failed import retries once after 1s, and
+  stays "failed" until a later load succeeds). While pending, a Safe band
+  holds in its Checking state ("Checking the link's address", no word,
+  tint, score, or confidence), rows hold "—", and its announcement waits;
+  other verdicts show and are announced at once. If it failed, a Safe
+  result reads "Unconfirmed" (`addressUnchecked`): neutral tone, no score,
+  "Check the link's address before you open it.", and a note that we
+  couldn't check the address, on
+  the band, rows, live region, and history search (which re-runs on each
+  status change, `useLinkParserStatus`). CSV export waits for the parser
+  (`loadLinkParser`) and says "Not checked" only if it still can't load.
 - **Signed shares**: a `?shared=` payload is plain base64 anyone can write,
   so Scrutinix states a shared verdict only when `&sig=` is its own HMAC
   (`lib/server/share-signing.ts`, `SHARE_SIGNING_SECRET`). The server builds

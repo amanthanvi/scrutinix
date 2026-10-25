@@ -300,9 +300,7 @@ function parseVirusTotalReport(
     harmless: Number(stats.harmless ?? 0),
     undetected: Number(stats.undetected ?? 0),
     timeout: Number(stats.timeout ?? 0),
-    results: parseVirusTotalResults(results).filter(
-      (entry) => entry.category !== "undetected",
-    ),
+    results: parseVirusTotalResults(results),
     permalink: `https://www.virustotal.com/gui/url/${urlId}`,
     lastAnalysisDate: lastAnalysisUnix
       ? new Date(lastAnalysisUnix * 1000).toISOString()
@@ -331,12 +329,19 @@ function parseVirusTotalAnalysis(
   };
 }
 
+/**
+ * Per-engine results, minus engines that found nothing: the counts above
+ * already cover them, and a fresh analysis lists every engine (~90), which
+ * would ride along in every stream, cache entry, and history record.
+ */
 function parseVirusTotalResults(
   results: Record<string, VirusTotalEngineResultPayload>,
 ) {
-  return Object.entries(results).map(([engine, data]) => ({
-    engine,
-    category: String(data.category ?? "unknown"),
-    result: data.result ?? null,
-  }));
+  return Object.entries(results)
+    .map(([engine, data]) => ({
+      engine,
+      category: String(data.category ?? "unknown"),
+      result: data.result ?? null,
+    }))
+    .filter((entry) => entry.category !== "undetected");
 }
