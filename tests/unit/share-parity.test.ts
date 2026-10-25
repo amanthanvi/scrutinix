@@ -15,7 +15,8 @@ import {
   type Verdict,
 } from "@/lib/domain/types";
 import { buildThreatAssessment } from "@/lib/domain/verdict";
-import { getVerdictBasis } from "@/lib/domain/verdict-basis";
+import { getSummaryQuestions } from "@/lib/domain/summary-questions";
+import { evidenceTimeOf, getVerdictBasis } from "@/lib/domain/verdict-basis";
 import {
   getSharedGuidance,
   getVerdictGuidance,
@@ -290,10 +291,30 @@ describe("the signed basis", () => {
       ).toISOString();
     }
     const result = resultFrom(signals);
+    const summaryWhy = () => {
+      const questions = getSummaryQuestions({
+        url: result.url,
+        signals: result.signals,
+        now: evidenceTimeOf(result.metadata),
+      });
+      const why = (id: string) =>
+        questions.find((question) => question.id === id)?.why;
+      return { reported: why("reported"), other: why("other") };
+    };
+    const asChecked = summaryWhy();
+    expect(asChecked.reported).toBe(
+      "Direct threat reports are a reason to stay away.",
+    );
+    expect(asChecked.other).toBe(
+      "These findings don't cancel the threat reports.",
+    );
     vi.useFakeTimers({ toFake: ["Date"] });
     try {
       vi.setSystemTime(Date.parse(CHECKED_AT) + 3 * 86_400_000);
       expect(getVerdictBasis(result).confirmed).toBe(true);
+      // Summary, beside the band, reads the report the same way: never
+      // "known threat" above "One report can be a mistake".
+      expect(summaryWhy()).toEqual(asChecked);
       // Undated evidence is aged as of now.
       expect(getVerdictBasis({ ...result, metadata: null }).confirmed).toBe(
         false,

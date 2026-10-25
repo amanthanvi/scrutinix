@@ -286,6 +286,17 @@ describe("getCoverageCaveat", () => {
     } finally {
       vi.useRealTimers();
     }
+    // A cache hit served later keeps the original check time: the
+    // analysis is aged at `checkedAt`, as the verdict and its basis are.
+    const cacheHit = buildResult("safe", {
+      signals: withAnalysisDate(daysBefore(29)),
+    });
+    cacheHit.metadata = {
+      ...cacheHit.metadata,
+      checkedAt: cacheHit.metadata.completedAt,
+      completedAt: new Date(completedAt + 2 * 86_400_000).toISOString(),
+    };
+    expect(getCoverageCaveat(cacheHit)).toBeNull();
   });
 
   it("stays silent for Error, whose verdict line already says it failed", () => {

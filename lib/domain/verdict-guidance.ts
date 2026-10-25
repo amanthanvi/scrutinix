@@ -7,7 +7,7 @@ import type {
   VerdictBasis,
 } from "@/lib/domain/types";
 import { isLegacySignalRecord } from "@/lib/domain/signal-signature";
-import { getVerdictBasis } from "@/lib/domain/verdict-basis";
+import { evidenceTimeOf, getVerdictBasis } from "@/lib/domain/verdict-basis";
 
 /**
  * Pure presentation logic for a finished verdict: the one-line instruction,
@@ -458,22 +458,24 @@ export function shouldShowVerdictSummary(
  * records get no caveat either: their checks finished but were never
  * stored (the sanitizer fills each as a "missing" error), and the legacy
  * notice beside the result says exactly that. A stale
- * VirusTotal analysis is aged at the scan's completion time, so a reopened
- * result says what its verdict was built on.
+ * VirusTotal analysis is aged at the result's check time (`evidenceTimeOf`),
+ * the clock its verdict, basis, and Summary use, so a reopened result says
+ * what its verdict was built on.
  */
 export function getCoverageCaveat(
   result: Pick<AnalysisResult, "verdict" | "signals"> & {
-    metadata?: Pick<AnalysisResult["metadata"], "completedAt"> | null;
+    metadata?: Partial<
+      Pick<AnalysisResult["metadata"], "checkedAt" | "completedAt">
+    > | null;
   },
 ): string | null {
   if (result.verdict === "error" || isLegacySignalRecord(result.signals)) {
     return null;
   }
 
-  const completedAt = Date.parse(result.metadata?.completedAt ?? "");
   const checks = getLimitedChecks(
     result.signals,
-    Number.isNaN(completedAt) ? Date.now() : completedAt,
+    evidenceTimeOf(result.metadata ?? {}) ?? Date.now(),
   ).filter(
     // Unknown's summary already says the site didn't respond.
     (check) => !(result.verdict === "unknown" && check.kind === "unreachable"),

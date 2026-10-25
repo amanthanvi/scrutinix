@@ -157,10 +157,11 @@ export interface SummaryQuestionInput {
   url: string;
   signals: SignalResults;
   /**
-   * Anchors "issued 2 hours ago" and "listed 6 hours ago". For a finished
-   * result, pass its check time (`evidenceTimeOf`) so every age counts
-   * from the same moment as the domain age the server stored; while a scan
-   * streams, now. Tests pass a fixed time.
+   * Anchors "issued 2 hours ago", "listed 6 hours ago", and whether a
+   * VirusTotal analysis is still current. For a finished result, pass its
+   * check time (`evidenceTimeOf`) so every age counts from the same moment
+   * as the domain age the server stored and the band's "known threat";
+   * while a scan streams, now. Tests pass a fixed time.
    */
   now?: number;
   /**
@@ -437,7 +438,8 @@ function answerReported({ signals, lists, now }: Context): Answer {
         setAside,
         ...unanswered,
       ]),
-      why: hasConfirmedReputationHit(signals)
+      // Aged by the evidence clock, as the band's "known threat" is.
+      why: hasConfirmedReputationHit(signals, now)
         ? "Direct threat reports are a reason to stay away."
         : onlyElsewhere
           ? "A listed link elsewhere on the same site is a warning sign, not proof about this one."
@@ -914,7 +916,7 @@ function answerCertificate(
 // ---------------------------------------------------------------------------
 // What did the other checks find? (DNS, with the hosting network)
 
-function answerOther({ signals }: Context): Answer {
+function answerOther({ signals, now }: Context): Answer {
   const signal = signals.dns;
   if (signal.status === "skipped") {
     return {
@@ -970,7 +972,8 @@ function answerOther({ signals }: Context): Answer {
 
   // Only a confirmed report: a single engine or a listing elsewhere on
   // the host can sit under a Safe verdict, and this must not contradict it.
-  const reportsStand = hasConfirmedReputationHit(signals);
+  // Aged by the evidence clock, as the band's "known threat" is.
+  const reportsStand = hasConfirmedReputationHit(signals, now);
 
   let why: string;
   if (anomalies.some((anomaly) => /punycode/i.test(anomaly))) {
