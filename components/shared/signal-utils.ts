@@ -14,6 +14,7 @@ import {
   humanizeToken,
   isElsewhereOnHost,
 } from "@/lib/domain/feed-copy";
+import { REDIRECT_STATUSES } from "@/lib/domain/signal-severity";
 import type {
   DNSData,
   GoogleSafeBrowsingData,
@@ -153,8 +154,20 @@ export function getSignalSummary(
     }
     case "redirectChain": {
       const d = data as RedirectData;
+      // Where a chain stopped is not where it ends (Summary says the same):
+      // a last response that still redirects points somewhere the probe
+      // doesn't open, and a chain cut off after a redirect never got there.
+      const last = d.hops?.at(-1);
+      if (d.reachable && last?.location && REDIRECT_STATUSES.has(last.status)) {
+        const followed = Math.max(0, d.totalHops - 1);
+        return followed > 0
+          ? `${countOf(followed, "redirect")}, then one to an address we don't open.`
+          : "It redirects to an address we don't open.";
+      }
       if (!d.reachable) {
-        return "The site didn't respond when we tried to open it.";
+        return d.totalHops > 0
+          ? `We followed ${countOf(d.totalHops, "redirect")} but couldn't reach the end.`
+          : "The site didn't respond when we tried to open it.";
       }
 
       return d.totalHops === 0

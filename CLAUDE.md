@@ -37,7 +37,7 @@ npm run icons                      # Regenerate favicons/app icons from lib/bran
 
 ```
 app/
-  layout.tsx              # Root layout (ThemeProvider + Sonner + Geist Sans/Mono)
+  layout.tsx              # Root layout (ThemeProvider + Sonner; system sans/mono, no page web fonts)
   page.tsx                # Single-column home: header, headline, ScanForm, ResultsSection, history; ?shared= metadata
   scrutinix.css           # CSS-only motion/utility layer (sx-* classes)
   globals.css             # Tailwind v4 + semantic --sx-* theme tokens

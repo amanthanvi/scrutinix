@@ -49,6 +49,99 @@ function buildRedirectData(overrides: Partial<RedirectData>): RedirectData {
   };
 }
 
+describe("the redirect finding", () => {
+  const finding = (data: RedirectData) =>
+    getSignalFinding("redirectChain", {
+      status: "success",
+      data,
+      error: null,
+      durationMs: 1,
+    });
+
+  it("never names where an unfinished chain stopped as its end", () => {
+    // A redirect to mailto: or to a Location that isn't a link: the probe
+    // stops there, but a browser would go on.
+    const toMail = buildRedirectData({
+      finalUrl: "https://short.example/x",
+      totalHops: 1,
+      hops: [
+        {
+          url: "https://short.example/x",
+          status: 302,
+          location: "mailto:help@short.example",
+        },
+      ],
+    });
+    expect(finding(toMail)).toBe("It redirects to an address we don't open.");
+    expect(finding(toMail)).not.toContain(
+      "redirect to https://short.example/x",
+    );
+
+    const afterOne = buildRedirectData({
+      finalUrl: "https://landing.example/",
+      totalHops: 2,
+      hops: [
+        {
+          url: "https://short.example/x",
+          status: 301,
+          location: "https://landing.example/",
+        },
+        {
+          url: "https://landing.example/",
+          status: 302,
+          location: "intent://open#Intent;end",
+        },
+      ],
+    });
+    expect(finding(afterOne)).toBe(
+      "1 redirect, then one to an address we don't open.",
+    );
+  });
+
+  it("never says a site didn't respond after it answered with a redirect", () => {
+    // The next address was private (or failed): a response was recorded.
+    const blocked = buildRedirectData({
+      finalUrl: "https://short.example/x",
+      totalHops: 1,
+      reachable: false,
+      terminalStatus: 302,
+      hops: [
+        {
+          url: "https://short.example/x",
+          status: 302,
+          location: "http://10.0.0.8/",
+        },
+      ],
+    });
+    expect(finding(blocked)).toBe(
+      "We followed 1 redirect but couldn't reach the end.",
+    );
+
+    const silent = buildRedirectData({
+      reachable: false,
+      totalHops: 0,
+      hops: [],
+    });
+    expect(finding(silent)).toBe(
+      "The site didn't respond when we tried to open it.",
+    );
+  });
+
+  it("still states a finished chain's end", () => {
+    expect(finding(buildRedirectData({}))).toBe(
+      "1 redirect to https://landing.example/.",
+    );
+    expect(
+      finding(
+        buildRedirectData({
+          totalHops: 0,
+          hops: [{ url: "https://landing.example/", status: 200 }],
+        }),
+      ),
+    ).toBe("Resolved without redirects.");
+  });
+});
+
 describe("getSignalDetailEntries", () => {
   it("lists every redirect hop in order", () => {
     // SignalRow renders exactly these entries; without the hop rows the
