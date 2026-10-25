@@ -953,6 +953,37 @@ describe("Has it been reported?", () => {
     });
   });
 
+  it("never calls a host listing set aside on a shared host clean", () => {
+    const signals = cleanSignals();
+    // The provider moved the host listing to observations: other people's
+    // sites share this host.
+    signals.threatFeeds.data!.sharedPlatformListingsIgnored = true;
+    const setAside =
+      "This link's host is on a threat list, but many people's sites share that host, so we set the listing aside.";
+    expect(byId(ask(signals), "reported")).toMatchObject({
+      answer: `VirusTotal and Safe Browsing have no match. ${setAside}`,
+      why: "A listing for a shared host is usually about someone else's page, not proof about this one.",
+    });
+
+    signals.virusTotal = {
+      status: "error",
+      data: null,
+      error: "Timed out.",
+      durationMs: 1,
+    };
+    signals.googleSafeBrowsing = {
+      status: "error",
+      data: null,
+      error: "Timed out.",
+      durationMs: 1,
+    };
+    // Never "None of these lists could be checked": the feeds answered.
+    expect(byId(ask(signals), "reported")).toMatchObject({
+      answer: `${setAside} VirusTotal and Safe Browsing didn't answer.`,
+      why: "A list that didn't answer can't rule out a known threat.",
+    });
+  });
+
   it("counts a single engine in the singular", () => {
     const signals = cleanSignals();
     signals.virusTotal.data!.malicious = 1;

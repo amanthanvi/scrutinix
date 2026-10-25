@@ -253,7 +253,12 @@ const sentences = (parts: readonly (string | null | false)[]) =>
 // ---------------------------------------------------------------------------
 // Has it been reported? (VirusTotal, Safe Browsing, threat feeds)
 
-type ListState = "hit" | "clean" | "partial" | "failed" | "skipped";
+/**
+ * "set-aside": the feeds' only listing was for the host, and many people's
+ * sites share it, so the provider set it aside. Neither a hit nor clean.
+ */
+type ListState =
+  "hit" | "clean" | "partial" | "set-aside" | "failed" | "skipped";
 
 interface ListReading {
   name: (typeof questionSources.reported)[number];
@@ -280,7 +285,9 @@ function readLists(signals: SignalResults): ListReading[] {
   let feedState = stateOf(feeds.status, Boolean(feeds.data), () =>
     Boolean(feeds.data?.matches.length),
   );
-  if (feedState === "clean" && (feeds.data?.warnings.length ?? 0) > 0) {
+  if (feedState === "clean" && feeds.data?.sharedPlatformListingsIgnored) {
+    feedState = "set-aside";
+  } else if (feedState === "clean" && (feeds.data?.warnings.length ?? 0) > 0) {
     feedState = "partial";
   }
 
@@ -375,6 +382,12 @@ function describeFeeds(matches: readonly FeedMatch[], now: number): string[] {
     : direct;
 }
 
+/** A host listing the feeds set aside: never "not on any list". */
+const SHARED_HOST_LISTING =
+  "This link's host is on a threat list, but many people's sites share that host, so we set the listing aside.";
+const SHARED_HOST_WHY =
+  "A listing for a shared host is usually about someone else's page, not proof about this one.";
+
 function answerReported({ signals, lists, now }: Context): Answer {
   const hits = lists.filter((list) => list.state === "hit");
   const clean = lists.filter(
@@ -382,6 +395,8 @@ function answerReported({ signals, lists, now }: Context): Answer {
   );
   const failed = lists.filter((list) => list.state === "failed");
   const skipped = lists.filter((list) => list.state === "skipped");
+  const setAside =
+    lists.some((list) => list.state === "set-aside") && SHARED_HOST_LISTING;
 
   const findings: string[] = [];
   const vt = signals.virusTotal.data;
@@ -415,6 +430,7 @@ function answerReported({ signals, lists, now }: Context): Answer {
         ...findings,
         clean.length > 0 &&
           `${cleanPhrase.text} ${cleanPhrase.plural ? "have" : "has"} no match.`,
+        setAside,
         ...unanswered,
       ]),
       why: hasConfirmedReputationHit(signals)
@@ -432,7 +448,7 @@ function answerReported({ signals, lists, now }: Context): Answer {
     };
   }
 
-  if (clean.length === 0) {
+  if (clean.length === 0 && !setAside) {
     return {
       answer: "None of these lists could be checked.",
       why: "A list that didn't answer can't rule out a known threat.",
@@ -442,10 +458,15 @@ function answerReported({ signals, lists, now }: Context): Answer {
   const cleanPhrase = listPhrase(clean);
   return {
     answer: sentences([
-      `${cleanPhrase.text} ${cleanPhrase.plural ? "have" : "has"} no match.`,
+      clean.length > 0 &&
+        `${cleanPhrase.text} ${cleanPhrase.plural ? "have" : "has"} no match.`,
+      setAside,
       ...unanswered,
     ]),
-    why: "A list that didn't answer can't rule out a known threat.",
+    why:
+      setAside && !unanswered.some(Boolean)
+        ? SHARED_HOST_WHY
+        : "A list that didn't answer can't rule out a known threat.",
   };
 }
 
