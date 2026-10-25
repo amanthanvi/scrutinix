@@ -189,7 +189,8 @@ tests/
   "Check the link's address before you open it.", and a note that we
   couldn't check the address, on
   the band, rows, live region, and history search (which re-runs on each
-  status change, `useLinkParserStatus`); CSV says "Not checked".
+  status change, `useLinkParserStatus`). CSV export waits for the parser
+  (`loadLinkParser`) and says "Not checked" only if it still can't load.
 - **Signed shares**: a `?shared=` payload is plain base64 anyone can write,
   so Scrutinix states a shared verdict only when `&sig=` is its own HMAC
   (`lib/server/share-signing.ts`, `SHARE_SIGNING_SECRET`). The server builds

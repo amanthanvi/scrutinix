@@ -77,9 +77,18 @@ export function warmLinkParser(): void {
 }
 
 /**
+ * The parser for a one-off task over many links (CSV export): waits for a
+ * load in progress, tries again after a failure, and gives null only if it
+ * still can't load, so the caller says the address wasn't checked.
+ */
+export function loadLinkParser(): Promise<ParseHostname | null> {
+  return preloadLinkParser().catch(() => null);
+}
+
+/**
  * The parser if it has loaded, else null (still loading, or failed). For
- * synchronous work over many links (history filtering, CSV export) on
- * screens whose rows have already loaded it.
+ * synchronous work over many links (history filtering) that re-runs when
+ * `useLinkParserStatus` changes.
  */
 export function getLoadedLinkParser(): ParseHostname | null {
   return loadedParse;
