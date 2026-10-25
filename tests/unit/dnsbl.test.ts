@@ -70,6 +70,22 @@ describe("queryDnsbls", () => {
     expect(outcome.warnings).toEqual([]);
   });
 
+  it("reads an answer with several Spamhaus codes as its strongest listing", async () => {
+    routeLookups({
+      "phish.example.dbl.spamhaus.org": ["127.0.1.2", "127.0.1.4"],
+    });
+
+    const outcome = await queryDnsbls("phish.example");
+
+    expect(outcome.matches).toContainEqual(
+      expect.objectContaining({
+        feed: "spamhaus-dbl",
+        detail: "lists this domain as a phishing domain",
+        confidence: "high",
+      }),
+    );
+  });
+
   it("decodes the SURBL bitmask", async () => {
     routeLookups({ "phish.example.multi.surbl.org": ["127.0.0.8"] });
 

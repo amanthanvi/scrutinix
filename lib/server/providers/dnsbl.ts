@@ -73,8 +73,9 @@ const ZONE_DEFINITIONS: Array<
     zone: spamhausZone,
     testRecord: "dbltest.com",
     describe: (codes) => {
+      // Strongest first: an answer can carry several codes, and a domain
+      // listed for phishing and spam is a phishing domain.
       const known: Array<[string, string, "medium" | "high"]> = [
-        ["127.0.1.2", "lists this domain as a spam domain", "medium"],
         ["127.0.1.4", "lists this domain as a phishing domain", "high"],
         ["127.0.1.5", "lists this domain as a malware domain", "high"],
         [
@@ -82,6 +83,7 @@ const ZONE_DEFINITIONS: Array<
           "lists this domain as a botnet command-and-control domain",
           "high",
         ],
+        ["127.0.1.2", "lists this domain as a spam domain", "medium"],
       ];
       for (const [code, detail, confidence] of known) {
         if (codes.includes(code)) {

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { Fragment } from "react";
 
 import {
   LIST_MEASURE,
@@ -10,21 +11,28 @@ import {
 } from "@/components/scrutinix/public-page-shell";
 import { SignalCell, cellNames } from "@/components/scrutinix/signal-cell";
 import { capitalize } from "@/lib/domain/copy";
+import {
+  CONFIDENCE,
+  RULES,
+  SCORE_BANDS,
+  SCORING_TABLES,
+  type ScoringTable,
+} from "@/lib/domain/methodology";
 import { severityWords } from "@/lib/domain/signal-signature";
 import { signalLabels, signalNames } from "@/lib/domain/types";
 
 export const metadata: Metadata = {
   title: "About Scrutinix",
   description:
-    "How Scrutinix checks a link against eight sources and turns what they find into a verdict.",
+    "The exact points, thresholds, and rules Scrutinix uses to turn eight checks into a verdict.",
 };
 
-const scoreBands = [
-  { range: "0–24", label: "Safe", color: "var(--sx-safe-fg)" },
-  { range: "25–54", label: "Suspicious", color: "var(--sx-suspicious-fg)" },
-  { range: "55–79", label: "Malicious", color: "var(--sx-malicious-fg)" },
-  { range: "80–100", label: "Critical", color: "var(--sx-critical-fg)" },
-] as const;
+const BAND_COLOR = {
+  safe: "var(--sx-safe-fg)",
+  suspicious: "var(--sx-suspicious-fg)",
+  malicious: "var(--sx-malicious-fg)",
+  critical: "var(--sx-critical-fg)",
+} as const;
 
 // The same words the strip's accessible names and titles use.
 const cellLegend = (
@@ -36,6 +44,56 @@ const cellLegend = (
 
 const DT = "font-medium text-[var(--sx-text)]";
 const DD = "text-[var(--sx-text-muted)]";
+const TERMS = `${LIST_MEASURE} text-body grid grid-cols-[minmax(0,1fr)] gap-x-6 gap-y-3 wrap-break-word sm:grid-cols-[10rem_minmax(0,1fr)]`;
+const BULLETS = `${PROSE_MEASURE} text-body flex list-disc flex-col gap-2.5 pl-5 text-[var(--sx-text-muted)] marker:text-[var(--sx-text-soft)]`;
+
+function ScoringTableView({ table }: { table: ScoringTable }) {
+  return (
+    <div className="flex flex-col gap-3">
+      <table
+        id={`points-${table.id}`}
+        className={`${LIST_MEASURE} text-body w-full table-fixed border-collapse wrap-break-word`}
+      >
+        <caption className="text-body pb-3 text-left font-medium text-[var(--sx-text)]">
+          {table.caption}
+        </caption>
+        <thead>
+          <tr className="text-meta border-b border-[var(--sx-border)] text-left text-[var(--sx-text-soft)]">
+            <th scope="col" className="pb-2 font-normal">
+              Finding
+            </th>
+            <th scope="col" className="w-[38%] pb-2 pl-4 font-normal sm:w-56">
+              Points
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {table.rows.map((row) => (
+            <tr
+              key={row.id}
+              className="border-b border-[var(--sx-border)] align-baseline"
+            >
+              <th
+                scope="row"
+                className="py-2.5 text-left font-normal text-pretty text-[var(--sx-text-muted)]"
+              >
+                {row.finding}
+              </th>
+              <td className="py-2.5 pl-4 font-medium text-pretty text-[var(--sx-text)] tabular-nums">
+                {row.points}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {table.notes.map((note) => (
+        <p key={note} className={`${PROSE} text-meta`}>
+          {note}
+        </p>
+      ))}
+    </div>
+  );
+}
 
 export default function AboutPage() {
   return (
@@ -45,9 +103,7 @@ export default function AboutPage() {
     >
       <section id="scoring" className="flex scroll-mt-6 flex-col gap-4">
         <SectionHeading>Scoring</SectionHeading>
-        <dl
-          className={`${LIST_MEASURE} text-body grid gap-x-6 gap-y-3 sm:grid-cols-[10rem_minmax(0,1fr)]`}
-        >
+        <dl className={TERMS}>
           <dt className={DT}>Moves the verdict</dt>
           <dd className={DD}>
             Google Safe Browsing; threat feeds (URLhaus, OpenPhish, ThreatFox,
@@ -59,10 +115,10 @@ export default function AboutPage() {
             The site&apos;s security certificate, domain age and registrar,
             unusual DNS records, redirects.
           </dd>
-          <dt className={DT}>Feed matches</dt>
+          <dt className={DT}>Adding up</dt>
           <dd className={DD}>
-            A feed listing this exact link counts strongly; a listing of another
-            page on the same site counts less.
+            Every finding adds points, listed in full below. The total is kept
+            between 0 and 100 and sets the band.
           </dd>
         </dl>
       </section>
@@ -76,23 +132,118 @@ export default function AboutPage() {
           results and are listed with the result.
         </p>
         <dl className="max-w-xs border-t border-b border-t-[var(--sx-text)] border-b-[var(--sx-border)]">
-          {scoreBands.map((band) => (
+          {SCORE_BANDS.map((band) => (
             <div
-              key={band.range}
+              key={band.verdict}
               className="flex items-center justify-between gap-3 border-b border-[var(--sx-border)] py-2.5 last:border-b-0"
             >
               <dt className="text-body font-mono text-[var(--sx-text-muted)]">
-                {band.range}
+                {band.min}–{band.max}
               </dt>
               <dd
                 className="text-body font-semibold"
-                style={{ color: band.color }}
+                style={{ color: BAND_COLOR[band.verdict] }}
               >
                 {band.label}
               </dd>
             </div>
           ))}
         </dl>
+      </section>
+
+      <section id="points" className="flex scroll-mt-6 flex-col gap-10">
+        <div className="flex flex-col gap-4">
+          <SectionHeading>Points for each finding</SectionHeading>
+          <p className={PROSE}>
+            These are the numbers the scanner uses, not a simplified version. A
+            check that found nothing adds nothing.
+          </p>
+        </div>
+        {SCORING_TABLES.map((table) => (
+          <ScoringTableView key={table.id} table={table} />
+        ))}
+      </section>
+
+      <section id="rules" className="flex scroll-mt-6 flex-col gap-4">
+        <SectionHeading>The rules</SectionHeading>
+        <dl className={TERMS}>
+          {RULES.map((rule) => (
+            <Fragment key={rule.term}>
+              <dt className={DT}>{rule.term}</dt>
+              <dd className={DD}>{rule.text}</dd>
+            </Fragment>
+          ))}
+        </dl>
+      </section>
+
+      <section id="confidence" className="flex scroll-mt-6 flex-col gap-4">
+        <SectionHeading>Confidence</SectionHeading>
+        <p className={PROSE}>
+          Confidence says how much of the picture we saw. It&apos;s a figure
+          from 0 to 100% that we show as a word: High from {CONFIDENCE.high}%,
+          Moderate from {CONFIDENCE.moderate}%, Low below that.
+        </p>
+        <ul className={BULLETS}>
+          {CONFIDENCE.caps.map((cap) => (
+            <li key={cap}>{cap}</li>
+          ))}
+        </ul>
+        <details className="sx-disclosure">
+          <summary className="text-body inline-flex min-h-11 items-center gap-2 font-medium text-[var(--sx-text-muted)] hover:text-[var(--sx-text)]">
+            <svg
+              aria-hidden="true"
+              viewBox="0 0 8 8"
+              className="sx-chevron size-2 fill-current"
+            >
+              <path d="M2 0l4 4-4 4z" />
+            </svg>
+            How the figure adds up
+          </summary>
+          <table
+            className={`${LIST_MEASURE} text-body mt-2 w-full table-fixed border-collapse wrap-break-word`}
+          >
+            <caption className="sr-only">
+              How the confidence figure adds up, before the limits above. The
+              major lists are VirusTotal, Google Safe Browsing, and the threat
+              feeds.
+            </caption>
+            <thead>
+              <tr className="text-meta border-b border-[var(--sx-border)] text-left text-[var(--sx-text-soft)]">
+                <th scope="col" className="pb-2 font-normal">
+                  For
+                </th>
+                <th
+                  scope="col"
+                  className="w-[38%] pb-2 pl-4 font-normal sm:w-56"
+                >
+                  Percentage points
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {CONFIDENCE.steps.map((row) => (
+                <tr
+                  key={row.step}
+                  className="border-b border-[var(--sx-border)] align-baseline"
+                >
+                  <th
+                    scope="row"
+                    className="py-2.5 text-left font-normal text-pretty text-[var(--sx-text-muted)]"
+                  >
+                    {row.step}
+                  </th>
+                  <td className="py-2.5 pl-4 font-medium text-pretty text-[var(--sx-text)] tabular-nums">
+                    {row.value}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p className={`${PROSE} text-meta mt-3`}>{CONFIDENCE.footnote}</p>
+        </details>
+        <p className={PROSE}>
+          Any check that didn&apos;t finish is named next to the verdict.
+        </p>
       </section>
 
       <section className="flex flex-col gap-4">
@@ -146,20 +297,8 @@ export default function AboutPage() {
       </section>
 
       <section className="flex flex-col gap-4">
-        <SectionHeading>Confidence</SectionHeading>
-        <p className={PROSE}>
-          Confidence says how much of the picture we saw. A Safe result loses
-          confidence when a major reputation source doesn&apos;t answer; a risky
-          result gains confidence when separate sources agree. Any check that
-          didn&apos;t finish is named next to the verdict.
-        </p>
-      </section>
-
-      <section className="flex flex-col gap-4">
         <SectionHeading>Using the scanner</SectionHeading>
-        <ul
-          className={`${PROSE_MEASURE} text-body flex list-disc flex-col gap-2.5 pl-5 text-[var(--sx-text-muted)] marker:text-[var(--sx-text-soft)]`}
-        >
+        <ul className={BULLETS}>
           <li>
             Summary answers five plain questions, each naming the checks it
             rests on; Full lists all eight checks. Each Full row expands to its
@@ -181,6 +320,14 @@ export default function AboutPage() {
             for what the server still processes.
           </li>
         </ul>
+      </section>
+
+      <section id="name" className="flex scroll-mt-6 flex-col gap-4">
+        <SectionHeading>The name</SectionHeading>
+        <p className={PROSE}>
+          Scrutinix (SCROO-tih-nix), from scrutiny: looking closely before you
+          trust something.
+        </p>
       </section>
     </PublicPageShell>
   );

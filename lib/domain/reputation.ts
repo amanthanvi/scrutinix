@@ -14,6 +14,9 @@ export const VT_STALE_ANALYSIS_DAYS = 30;
 /** VirusTotal engines that convict on their own. */
 export const VT_CONVICTION_ENGINES = 5;
 
+/** ThreatFox confidence (0-100) at which a listing counts as high confidence. */
+export const THREATFOX_HIGH_CONFIDENCE = 75;
+
 type FeedMatch = ThreatFeedsData["matches"][number];
 
 /**

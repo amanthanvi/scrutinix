@@ -1,6 +1,7 @@
 import { getEnv } from "@/lib/config/env";
 import { threatIndicatorPhrase } from "@/lib/domain/feed-copy";
 import { PublicError } from "@/lib/domain/public-error";
+import { THREATFOX_HIGH_CONFIDENCE } from "@/lib/domain/reputation";
 import type { ThreatFeedsData } from "@/lib/domain/types";
 import { simplifyUrlForMatching } from "@/lib/domain/url";
 import { fetchWithTimeout } from "@/lib/server/http";
@@ -147,7 +148,8 @@ function toMatch(
     feed: "threatfox",
     matchedUrl,
     detail: `lists ${subject} as ${threatIndicatorPhrase(threatType, malware)}`,
-    confidence: confidenceLevel(entry) >= 75 ? "high" : "medium",
+    confidence:
+      confidenceLevel(entry) >= THREATFOX_HIGH_CONFIDENCE ? "high" : "medium",
     matchType,
     ...(listedAt ? { listedAt } : {}),
   };

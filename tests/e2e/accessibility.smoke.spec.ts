@@ -51,9 +51,9 @@ test("result view accessibility @smoke", async ({ page }) => {
 
 /**
  * No sideways scrolling on the home, a result, the Full list with every
- * check's details open, a filtered history, and a shared look-alike
- * (verified, unverified, and expired), at each default text size and
- * width given.
+ * check's details open, a filtered history, a shared look-alike
+ * (verified, unverified, and expired), and /about and /privacy with every
+ * disclosure open, at each default text size and width given.
  */
 async function expectReflow(
   page: Page,
@@ -130,6 +130,17 @@ async function expectReflow(
         page.getByRole("heading", { name: "Check another link" }),
       ).toBeVisible();
       expect(await scrollsSideways(), `${view} shared link, ${at}`).toBe(false);
+    }
+
+    // The methodology's fixed-layout tables, every disclosure open.
+    for (const path of ["/about", "/privacy"]) {
+      await page.goto(path, { waitUntil: "domcontentloaded" });
+      await page.evaluate(() => {
+        for (const part of document.querySelectorAll("details")) {
+          part.open = true;
+        }
+      });
+      expect(await scrollsSideways(), `${path}, ${at}`).toBe(false);
     }
   }
 }

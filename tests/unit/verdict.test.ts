@@ -1864,3 +1864,70 @@ describe("withScoredSignals (history saved before scoredSignals)", () => {
     expect(withScoredSignals(failed)).toBe(failed);
   });
 });
+
+describe("redirects over plain HTTP", () => {
+  function scoreWithHop(hop: {
+    url: string;
+    status: number;
+    location: string;
+  }) {
+    const signals = createPendingSignalResults();
+    signals.redirectChain = {
+      status: "success",
+      error: null,
+      durationMs: 5,
+      data: {
+        finalUrl: "http://site.com/b",
+        totalHops: 1,
+        httpsUpgraded: false,
+        reachable: true,
+        terminalStatus: 200,
+        terminalError: null,
+        hops: [hop],
+        observations: [],
+      },
+    };
+    return buildThreatAssessment(signals).threatInfo?.score;
+  }
+
+  it("counts a relative redirect that stays on HTTP like an absolute one", () => {
+    const absolute = scoreWithHop({
+      url: "http://site.com/a",
+      status: 301,
+      location: "http://site.com/b",
+    });
+    expect(absolute).toBe(10);
+    expect(
+      scoreWithHop({ url: "http://site.com/a", status: 301, location: "/b" }),
+    ).toBe(absolute);
+  });
+
+  it("doesn't count a relative redirect on HTTPS, or an unreadable hop", () => {
+    expect(
+      scoreWithHop({ url: "https://site.com/a", status: 301, location: "/b" }),
+    ).toBe(0);
+    // A hop saved without its own address still reads an absolute location.
+    expect(
+      scoreWithHop({ url: "", status: 301, location: "http://site.com/b" }),
+    ).toBe(10);
+    expect(scoreWithHop({ url: "", status: 301, location: "/b" })).toBe(0);
+  });
+
+  it("doesn't count a response that doesn't redirect, whatever its Location says", () => {
+    expect(
+      scoreWithHop({ url: "http://site.com/a", status: 200, location: "/b" }),
+    ).toBe(0);
+    expect(
+      scoreWithHop({
+        url: "https://site.com/a",
+        status: 200,
+        location: "http://site.com/b",
+      }),
+    ).toBe(0);
+    for (const status of [302, 303, 307, 308]) {
+      expect(
+        scoreWithHop({ url: "http://site.com/a", status, location: "/b" }),
+      ).toBe(10);
+    }
+  });
+});

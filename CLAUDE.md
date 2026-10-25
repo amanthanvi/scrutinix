@@ -102,6 +102,7 @@ lib/
     registrable-domain.ts # Server wrapper over link-anatomy's registrableDomainOf
     copy.ts               # countOf / formatList / capitalize / formatAge for user-facing copy
     share-launch.ts       # Share-target link extraction (extractSharedLink) and ?url= prefill (resolvePrefill)
+    methodology.ts        # /about's scoring tables, rules, bands, confidence caps (engine-checked by tests/unit/methodology.test.ts)
   og/                     # Share-card renderers (cards.tsx) and font loader (fonts.ts: Newsreader TTF + Geist)
   server/                 # Orchestrator, providers, signals, cache, local ONNX ML
     share-metadata.ts     # ?shared= verify + validate → SharedView, page metadata, image cap
@@ -350,6 +351,15 @@ tests/
   TTF.
 - **Type scale**: custom `text-*` steps live in `@theme`; `lib/utils.ts`
   teaches them to tailwind-merge or `cn()` silently drops them.
+- **Open methodology**: `/about` prints every weight and rule from
+  `lib/domain/methodology.ts`. Point rows are copy:
+  `tests/unit/methodology.test.ts` runs each through
+  `buildThreatAssessment` (both sides of each threshold), checks every
+  number a row prints, and checks which rows are weak signs
+  (`scoredFindings`), so change a weight and its row together. Confidence
+  prints the engine's own `CONFIDENCE_POLICY`; provider thresholds the
+  page names are exported (`THREATFOX_HIGH_CONFIDENCE`,
+  `MANY_ADDRESS_RECORDS`).
 - **Contrast guard**: `scripts/check-contrast.mjs` (unit suite) asserts every
   token pair in both themes; extend its `PAIRS` when adding a token.
 - **Ink buttons, static accent**: filled controls use `--sx-button*` (ink);
