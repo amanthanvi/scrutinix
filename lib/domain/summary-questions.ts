@@ -210,7 +210,9 @@ export function getSummaryQuestions(
   return summaryQuestionIds.map((id) => {
     const sources = questionSources[id];
     const base = { id, question: questionText[id], sources };
-    if (sources.some((name) => !isSettled(input.signals, name))) {
+    if (
+      waitsFor(id, input.url).some((name) => !isSettled(input.signals, name))
+    ) {
       return {
         ...base,
         state: "pending",
@@ -241,6 +243,21 @@ function answerFor(id: SummaryQuestionId, context: Context): Answer {
     case "other":
       return answerOther(context);
   }
+}
+
+const startsOnPlainHttp = (url: string) =>
+  url.toLowerCase().startsWith("http://");
+
+/**
+ * The checks a question waits for: the ones it cites, and for a link that
+ * starts on plain HTTP, the redirect chain too, since only it says whether
+ * the link moves to HTTPS. Answering first would flip "isn't encrypted" to
+ * "moves to HTTPS" once the redirects land.
+ */
+function waitsFor(id: SummaryQuestionId, url: string): readonly SignalName[] {
+  return id === "https" && startsOnPlainHttp(url)
+    ? [...questionSources.https, "redirectChain"]
+    : questionSources[id];
 }
 
 function isSettled(signals: SignalResults, name: SignalName): boolean {
@@ -808,7 +825,7 @@ const FRESH_SETUP =
 
 function answerHttps({ url, signals, now }: Context): Answer {
   const redirect = signals.redirectChain.data;
-  if (url.toLowerCase().startsWith("http://")) {
+  if (startsOnPlainHttp(url)) {
     // Plain HTTP that moves to HTTPS: only the first request is exposed.
     if (!redirect?.finalUrl.toLowerCase().startsWith("https://")) {
       // A plain-HTTP link to a TLS port can still present a certificate,

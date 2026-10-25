@@ -359,6 +359,32 @@ describe("pending questions", () => {
     });
   });
 
+  it("hold a plain-HTTP link's HTTPS answer until the redirects land", () => {
+    const clean = cleanSignals();
+    const signals = createPendingSignalResults();
+    signals.ssl = clean.ssl;
+    const url = "http://example.com/";
+
+    // Only the redirects say whether it moves to HTTPS; answering first
+    // would say "isn't encrypted" and then change its mind.
+    expect(byId(ask(signals, { url }), "https")).toMatchObject({
+      state: "pending",
+      answer: null,
+    });
+    // An HTTPS link's answer rests on the certificate alone.
+    expect(byId(ask(signals), "https").state).toBe("settled");
+
+    signals.redirectChain = {
+      ...clean.redirectChain,
+      data: { ...clean.redirectChain.data!, finalUrl: "https://example.com/" },
+    };
+    const https = byId(ask(signals, { url }), "https");
+    expect(https.state).toBe("settled");
+    expect(https.answer).toMatch(
+      /^No\. This link starts on plain HTTP, then moves to HTTPS\. /,
+    );
+  });
+
   it("hold a disagreement until every check it compares has answered", () => {
     const clean = cleanSignals();
     withDomainAge(clean, 3);
