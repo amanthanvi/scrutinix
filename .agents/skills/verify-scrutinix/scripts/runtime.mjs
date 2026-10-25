@@ -210,14 +210,32 @@ export function ensureDirs(dirs = [stateDir, evidenceDir]) {
   }
 }
 
-// A new smoke or drive replaces the previous run's files. The directory
-// itself stays, and so does anything that is not a file or a symlink at
-// the top (cleanup still never deletes this directory). Unlink does not
-// follow a symlink, so a link's target is left alone.
+// Screenshots and downloads from the previous smoke or drive. The directory
+// itself stays. Recovery copies cleanup writes here (next-env-*.snapshot)
+// stay, and so does anything that is not a screenshot or a download. Unlink
+// does not follow a symlink, so a link's target is left alone. The state
+// directory is never this directory: run.json lives there.
+const EVIDENCE_DOWNLOAD = /\.(?:png|csv|json)$/;
+
+function keptEvidenceName(name) {
+  return (
+    name === "run.json" ||
+    name === "next-env.json" ||
+    name === "verify.lock" ||
+    /^next-env-[0-9a-z]+\.snapshot$/.test(name)
+  );
+}
+
 export function clearEvidenceFiles(dir = evidenceDir) {
   ensureDirs([dir]);
+  if (canonicalPath(dir) === canonicalPath(stateDir)) {
+    throw new UnsafeStateError(
+      `verify: evidence directory ${dir} is the state directory. Refusing to clear it.`,
+    );
+  }
   let removed = 0;
   for (const name of readdirSync(dir)) {
+    if (keptEvidenceName(name) || !EVIDENCE_DOWNLOAD.test(name)) continue;
     const file = path.join(dir, name);
     let stat;
     try {

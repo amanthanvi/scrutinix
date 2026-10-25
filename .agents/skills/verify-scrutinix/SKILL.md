@@ -184,7 +184,7 @@ The full e2e contract remains `npm run test:e2e` (production build, same fixture
 
 ## Evidence
 
-Proof artifacts go to the evidence directory (`/tmp/scrutinix-verify/evidence/`, or `VERIFY_EVIDENCE_DIR`). Each `verify:smoke` or `verify:drive` removes the previous files there after doctor is `READY` and before Playwright starts, so the directory holds that run only. A symlink is removed and its target is left in place. A doctor failure leaves the previous files alone. Cleanup never deletes the directory.
+Proof artifacts go to the evidence directory (`/tmp/scrutinix-verify/evidence/`, or `VERIFY_EVIDENCE_DIR`). Each `verify:smoke` or `verify:drive` removes the previous screenshots and downloads there (`.png`, `.csv`, `.json`) after doctor is `READY` and before Playwright starts, so the directory holds that run's shots. It leaves `next-env-*.snapshot` recovery copies, and it refuses to clear anything when the evidence directory is the state directory. A symlink is removed and its target is left in place. A doctor failure leaves the previous files alone. Cleanup never deletes the directory.
 
 - `*.png` screenshots taken by the specs (`smoke-home.png`, `smoke-safe.png`, and the drive shots such as `anatomy-paste.png`, `verdict-look-alike.png`, `share-target-prefilled.png`, and `single-shared-verified.png`; each feature file lists its own)
 - `scan.json`, `scan-history.csv`, and `batch.csv` saved from the download the UI produced

@@ -917,7 +917,13 @@ const staleShot = path.join(driveEvidence, "stale-from-last-run.png");
 writeFileSync(staleShot, "old");
 const keptOutside = path.join(scratch, "outside-evidence.txt");
 writeFileSync(keptOutside, "keep");
-symlinkSync(keptOutside, path.join(driveEvidence, "linked.txt"));
+symlinkSync(keptOutside, path.join(driveEvidence, "linked.png"));
+const keptSnapshot = path.join(driveEvidence, "next-env-abc.snapshot");
+writeFileSync(keptSnapshot, "snapshot");
+const keptRun = path.join(driveEvidence, "run.json");
+writeFileSync(keptRun, "{}\n");
+const keptNote = path.join(driveEvidence, "notes.txt");
+writeFileSync(keptNote, "keep");
 mkdirSync(path.join(driveEvidence, "nested"));
 writeFileSync(path.join(driveEvidence, "nested", "keep.png"), "keep");
 const driveRun = await runSuiteWith(
@@ -941,16 +947,54 @@ check(
   cli(driveRun),
 );
 check(
-  "a drive replaces previous evidence files and leaves the directory",
+  "a drive replaces previous screenshots and leaves state copies",
   driveRun.stdout.includes("cleared 2 previous files") &&
     !existsSync(staleShot) &&
-    !existsSync(path.join(driveEvidence, "linked.txt")) &&
+    !existsSync(path.join(driveEvidence, "linked.png")) &&
     readFileSync(keptOutside, "utf8") === "keep" &&
+    readFileSync(keptSnapshot, "utf8") === "snapshot" &&
+    readFileSync(keptRun, "utf8") === "{}\n" &&
+    readFileSync(keptNote, "utf8") === "keep" &&
     readFileSync(path.join(driveEvidence, "nested", "keep.png"), "utf8") ===
       "keep" &&
     existsSync(driveEvidence),
   { cleared: driveRun.stdout.includes("cleared 2 previous files") },
 );
+const stateMarker = path.join(runtime.stateDir, "marker-do-not-clear.png");
+writeFileSync(stateMarker, "keep");
+let stateClearRefused = false;
+try {
+  runtime.clearEvidenceFiles(runtime.stateDir);
+} catch (error) {
+  stateClearRefused =
+    error instanceof runtime.UnsafeStateError &&
+    error.message.includes("is the state directory");
+}
+check(
+  "clearing evidence refuses the state directory",
+  stateClearRefused &&
+    existsSync(stateMarker) &&
+    readFileSync(stateMarker, "utf8") === "keep",
+  { refused: stateClearRefused },
+);
+rmSync(stateMarker, { force: true });
+const overlapShot = path.join(runDir, "overlap-keep.png");
+writeFileSync(overlapShot, "keep");
+const overlap = await runSuiteWith(
+  fakePlaywright,
+  ["--drive", "--port", String(portA)],
+  envFor(runDir, { VERIFY_EVIDENCE_DIR: runDir }),
+);
+check(
+  "drive refuses to clear when evidence is the state directory",
+  overlap.status === 2 &&
+    overlap.stderr.includes("is the state directory") &&
+    !overlap.stderr.includes("Playwright exited") &&
+    existsSync(path.join(runDir, "run.json")) &&
+    readFileSync(overlapShot, "utf8") === "keep",
+  cli(overlap),
+);
+rmSync(overlapShot, { force: true });
 check(
   "Playwright's output is kept in a 0600 log",
   existsSync(driveLog) &&

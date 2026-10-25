@@ -125,7 +125,17 @@ export function runSuite(argv, cli) {
 
   // Doctor failed above, so a NOT_READY run keeps the previous evidence.
   // This run's directory should not still hold an earlier run's shots.
-  const removed = clearEvidenceFiles();
+  // Overlapping the state directory is a misconfiguration: stop before
+  // Playwright, and leave run.json where it is.
+  let removed;
+  try {
+    removed = clearEvidenceFiles();
+  } catch (error) {
+    process.stderr.write(
+      `smoke: ${error instanceof Error ? error.message : String(error)}\n`,
+    );
+    return 2;
+  }
   process.stdout.write(
     `${suite}: cleared ${removed} previous file${removed === 1 ? "" : "s"} from the evidence directory\n`,
   );
