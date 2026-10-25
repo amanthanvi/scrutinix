@@ -1108,15 +1108,58 @@ const unmarked = await runSuiteWith(
   envFor(runDir, { VERIFY_EVIDENCE_DIR: unmarkedDir }),
 );
 check(
-  "drive refuses to clear an evidence directory it did not create",
+  "an unmarked VERIFY_EVIDENCE_DIR exits 2 with a recovery hint",
   unmarked.status === 2 &&
     unmarked.stderr.includes("has no .verify-evidence marker") &&
+    unmarked.stderr.includes(
+      "Point VERIFY_EVIDENCE_DIR at an empty or new directory",
+    ) &&
+    unmarked.stderr.includes("unset it to use the default") &&
     unmarked.stderr.includes("Refusing to clear") &&
     !unmarked.stdout.includes("cleared") &&
     !unmarked.stderr.includes("Playwright exited") &&
     readFileSync(unmarkedFile, "utf8") === '{"name":"keep"}\n' &&
     !existsSync(path.join(unmarkedDir, runtime.evidenceMarkerName)),
   cli(unmarked),
+);
+const adoptState = path.join(scratch, "adopt-state");
+mkdirSync(adoptState, { mode: 0o700 });
+const adoptEvidence = path.join(adoptState, "evidence");
+mkdirSync(adoptEvidence, { mode: 0o700 });
+writeFileSync(path.join(adoptEvidence, "notes.txt"), "keep-note\n");
+writeFileSync(path.join(adoptEvidence, "package.json"), '{"name":"keep"}\n');
+writeFileSync(path.join(adoptEvidence, "stale-shot.png"), "old\n");
+writeFileSync(
+  path.join(scratch, "adopt-evidence.mjs"),
+  `delete process.env.VERIFY_EVIDENCE_DIR;
+process.env.VERIFY_STATE_DIR = process.argv[2];
+const runtime = await import(process.argv[3]);
+const removed = runtime.clearEvidenceFiles();
+process.stdout.write(removed + "\\n");
+process.stdout.write(
+  (runtime.hasEvidenceMarker(runtime.evidenceDir) ? "marked" : "unmarked") +
+    "\\n",
+);
+`,
+);
+const adoptEnv = { ...process.env, VERIFY_STATE_DIR: adoptState };
+delete adoptEnv.VERIFY_EVIDENCE_DIR;
+const adopted = await runCli(
+  path.join(scratch, "adopt-evidence.mjs"),
+  [adoptState, new URL("./runtime.mjs", import.meta.url).href],
+  adoptEnv,
+);
+check(
+  "an unmarked default evidence directory is adopted",
+  adopted.status === 0 &&
+    adopted.stdout === "1\nmarked\n" &&
+    readFileSync(path.join(adoptEvidence, "notes.txt"), "utf8") ===
+      "keep-note\n" &&
+    readFileSync(path.join(adoptEvidence, "package.json"), "utf8") ===
+      '{"name":"keep"}\n' &&
+    !existsSync(path.join(adoptEvidence, "stale-shot.png")) &&
+    runtime.hasEvidenceMarker(adoptEvidence),
+  { status: adopted.status },
 );
 check(
   "Playwright's output is kept in a 0600 log",

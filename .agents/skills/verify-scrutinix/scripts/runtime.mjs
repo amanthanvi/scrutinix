@@ -193,9 +193,12 @@ function assertPrivateDir(dir) {
 }
 
 // The evidence directory this skill created carries this regular file. A
-// directory that already existed does not, and is never given one: that would
-// claim a folder VERIFY_EVIDENCE_DIR was pointed at. evidence.ts writes the
-// same name when a screenshot creates the directory. A symlink does not count.
+// symlink does not count. An existing VERIFY_EVIDENCE_DIR is never given one:
+// that would claim a folder the variable was pointed at. The default evidence
+// directory, when VERIFY_EVIDENCE_DIR is unset, is adopted by
+// clearEvidenceFiles: a directory left by an older version of this skill gets
+// the marker once. evidence.ts writes the same name when a screenshot creates
+// the directory.
 export const evidenceMarkerName = ".verify-evidence";
 
 // Download filenames saveDownload is called with in drive.spec.ts. Anything
@@ -269,29 +272,51 @@ function refuseToClear(dir, reason) {
   );
 }
 
+// Empty and unset are the default. A set VERIFY_EVIDENCE_DIR, even one that
+// names the same path, is an override and is not adopted.
+function evidenceDirOverridden() {
+  const value = process.env.VERIFY_EVIDENCE_DIR;
+  return typeof value === "string" && value.length > 0;
+}
+
+function isDefaultEvidencePath(dir) {
+  if (evidenceDirOverridden()) return false;
+  return canonicalPath(dir) === canonicalPath(path.join(stateDir, "evidence"));
+}
+
+const unmarkedEvidenceReason =
+  "has no .verify-evidence marker, so this skill did not create it. Point VERIFY_EVIDENCE_DIR at an empty or new directory, or unset it to use the default evidence directory.";
+
 // Previous screenshots and the downloads this skill saved. The directory
 // itself stays. A *.png screenshot is removed, and so are the exact download
 // names above. Every other file stays, including next-env-*.snapshot recovery
 // copies and the marker. Unlink does not follow a symlink, so a link's target
 // is left alone. The state directory is never cleared: run.json lives there.
-// An existing directory without the marker is not cleared either.
+// An unmarked VERIFY_EVIDENCE_DIR is not cleared either. The default evidence
+// directory is adopted: the marker is written once, then only skill artifacts
+// are removed.
 export function clearEvidenceFiles(dir = evidenceDir) {
-  const assertClearable = () => {
-    if (canonicalPath(dir) === canonicalPath(stateDir)) {
-      refuseToClear(dir, "is the state directory.");
-    }
-    if (!hasEvidenceMarker(dir)) {
-      refuseToClear(
-        dir,
-        "has no .verify-evidence marker, so this skill did not create it.",
-      );
-    }
-  };
-  // Refuse before ensureDirs so an existing unmarked directory is not marked
-  // on the way to a clear, and nothing in it is removed.
-  if (existsSync(dir)) assertClearable();
+  if (existsSync(dir) && canonicalPath(dir) === canonicalPath(stateDir)) {
+    refuseToClear(dir, "is the state directory.");
+  }
+  // Refuse an override before ensureDirs so it is not marked and nothing in
+  // it is removed. The default directory is left for adoption after the
+  // privacy checks.
+  if (
+    existsSync(dir) &&
+    !hasEvidenceMarker(dir) &&
+    !isDefaultEvidencePath(dir)
+  ) {
+    refuseToClear(dir, unmarkedEvidenceReason);
+  }
   ensureDirs([dir]);
-  assertClearable();
+  if (canonicalPath(dir) === canonicalPath(stateDir)) {
+    refuseToClear(dir, "is the state directory.");
+  }
+  if (!hasEvidenceMarker(dir)) {
+    if (isDefaultEvidencePath(dir)) writeEvidenceMarker(dir);
+    else refuseToClear(dir, unmarkedEvidenceReason);
+  }
   let removed = 0;
   for (const name of readdirSync(dir)) {
     if (!skillEvidenceArtifact(name)) continue;
