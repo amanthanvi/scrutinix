@@ -8,6 +8,7 @@ import type { ThreatFeedsData } from "@/lib/domain/types";
 import { simplifyUrlForMatching } from "@/lib/domain/url";
 import { checkFailureMessage } from "@/lib/server/client-error";
 import { fetchWithTimeout } from "@/lib/server/http";
+import { parseAbuseChTimestamp } from "@/lib/server/providers/abuse-ch";
 import { queryDnsbls } from "@/lib/server/providers/dnsbl";
 import { checkOpenPhishFeed } from "@/lib/server/providers/openphish-feed";
 import { checkThreatFox } from "@/lib/server/providers/threatfox";
@@ -169,6 +170,7 @@ async function checkUrlhaus(
   const urlStatus =
     typeof payload?.url_status === "string" ? payload.url_status : null;
   const threat = typeof payload?.threat === "string" ? payload.threat : null;
+  const listedAt = parseAbuseChTimestamp(payload?.date_added);
 
   if (queryStatus === "ok") {
     return {
@@ -178,6 +180,7 @@ async function checkUrlhaus(
         detail: urlhausUrlClause(threat, urlStatus),
         confidence: "high" as const,
         matchType: "url" as const,
+        ...(listedAt ? { listedAt } : {}),
       },
       noListingObservation: false,
     };

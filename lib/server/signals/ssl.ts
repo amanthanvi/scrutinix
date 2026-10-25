@@ -2,6 +2,7 @@ import tls from "node:tls";
 import { isIP } from "node:net";
 
 import type { SSLData } from "@/lib/domain/types";
+import { bareHostname } from "@/lib/domain/url";
 import {
   checkFailureMessage,
   type CheckFailureOptions,
@@ -17,7 +18,7 @@ export function getTlsProbeTarget(url: string): {
   port: number;
 } {
   const target = new URL(url);
-  const hostname = target.hostname;
+  const hostname = bareHostname(target);
   const defaultPort = target.protocol === "https:" ? 443 : 80;
   // WHATWG URL leaves port as "" when absent and otherwise guarantees an
   // in-range numeric string, so only emptiness signals "use the default" -

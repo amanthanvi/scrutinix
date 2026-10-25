@@ -12,7 +12,6 @@ import {
 } from "react";
 import { toast } from "sonner";
 
-import { selectSummarySignals } from "@/components/shared/signal-selection";
 import { useBatchStream } from "@/hooks/use-batch-stream";
 import { warmLinkParser } from "@/hooks/use-link-anatomy";
 import { useScanStream } from "@/hooks/use-scan-stream";
@@ -27,6 +26,7 @@ import {
   signalNames,
   type AnalysisResult,
   type HistoryEntry,
+  type SignalName,
 } from "@/lib/domain/types";
 import { normalizeUrlInput } from "@/lib/domain/url";
 
@@ -118,16 +118,12 @@ function useCreateAnalyzerRuntime(shared: SharedView | null) {
     [signals],
   );
 
+  // The checks the verdict engine scored against the link: the strip and
+  // the Full rows never draw them as "found nothing".
   const scoredSignals = active?.threatInfo?.scoredSignals;
-  const summarySelection = useMemo(
-    () => selectSummarySignals(signals, scoredSignals),
-    [signals, scoredSignals],
-  );
-
-  const visibleSignals = useMemo(
-    () =>
-      viewMode === "summary" ? summarySelection.drivers : [...signalNames],
-    [summarySelection, viewMode],
+  const scored = useMemo<ReadonlySet<SignalName>>(
+    () => new Set(scoredSignals ?? []),
+    [scoredSignals],
   );
 
   const updateSingleUrl = useCallback((value: string) => {
@@ -328,6 +324,7 @@ function useCreateAnalyzerRuntime(shared: SharedView | null) {
     openStoredResult,
     rescanUrl,
     scan,
+    scored,
     selectedResult,
     selectHistoryEntry,
     setActiveTab,
@@ -344,10 +341,8 @@ function useCreateAnalyzerRuntime(shared: SharedView | null) {
     singleUrl,
     startBatchScan,
     startSingleScan,
-    summarySelection,
     verdictFocusRequest,
     viewMode,
-    visibleSignals,
   };
 }
 

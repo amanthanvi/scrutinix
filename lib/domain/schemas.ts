@@ -189,6 +189,12 @@ export const threatFeedsDataSchema = z.object({
       matchType: z.enum(["url", "host"]).optional().catch(undefined),
       /** Host-level only because a different URL on the host is listed. */
       listedElsewhereOnHost: z.boolean().optional().catch(undefined),
+      /**
+       * ISO time the feed first listed this entry (URLhaus `date_added`,
+       * ThreatFox `first_seen`). Unset for feeds that publish no dates
+       * (OpenPhish, the DNSBLs). Evidence only: never scored.
+       */
+      listedAt: z.iso.datetime().optional().catch(undefined),
     }),
   ),
   /** Informational notes (e.g. URLhaus responded but this exact URL is not listed). */
@@ -246,6 +252,27 @@ export const whoisDataSchema = z.object({
 
 export type WhoisData = z.infer<typeof whoisDataSchema>;
 
+/**
+ * The network that announces the address the DNS signal resolved (Team
+ * Cymru IP-to-ASN). `asn: null` means the lookup answered that no network
+ * routes the address. `registeredCountry` is registry data about the
+ * network, never where the server is: word it "registered in". Evidence
+ * only: never scored.
+ *
+ * `asn` has no fallback: a missing or invalid one fails the whole object,
+ * so the DNS schema drops `hosting` instead of reading corruption as "no
+ * network routes this". AS0 never originates a route (RFC 7607).
+ */
+export const hostingNetworkSchema = z.object({
+  ip: z.string(),
+  asn: z.number().int().min(1).max(4_294_967_295).nullable(),
+  asName: nullableString,
+  prefix: nullableString,
+  registeredCountry: nullableString,
+});
+
+export type HostingNetwork = z.infer<typeof hostingNetworkSchema>;
+
 export const dnsDataSchema = z.object({
   subjectType: z.enum(["hostname", "ip"]).catch("hostname"),
   addresses: stringArray,
@@ -256,6 +283,8 @@ export const dnsDataSchema = z.object({
   reverseHostnames: stringArray,
   anomalies: stringArray,
   observations: stringArray,
+  /** Unset when the lookup failed or timed out, or for results saved before it existed. */
+  hosting: hostingNetworkSchema.optional().catch(undefined),
 });
 
 export type DNSData = z.infer<typeof dnsDataSchema>;

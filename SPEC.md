@@ -41,6 +41,7 @@
 - Verdict decision:
   - Clean verdict confidence must be capped when a primary reputation source such as VirusTotal, Google Safe Browsing, or threat feeds does not complete, even if the remaining signals stay clean.
 - Provider decision: an uncached VirusTotal report lookup uses the primary URL report endpoint only; domain enrichment is not fetched (it would spend two of the free tier's four requests per minute), and its never-filled schema field and scoring path were removed. Per-engine evidence lists engines that flagged the link first (malicious, then suspicious); engines that found nothing are dropped from both report and fresh-analysis results.
+- Evidence decision (P29.2a): the Full view surfaces data the checks already collect (DNS CNAME targets, nameservers, a TXT count naming recognised kinds, certificate expiry/TLS version/self-signed/shortened SHA-256, iframes and password-receiving hosts, feed listing times, a VirusTotal engine breakdown). Two cheap facts are kept that providers used to drop: the hosting network (Team Cymru IP-to-ASN over DNS, `dns.hosting`) and feed listing dates (`threatFeeds.matches[].listedAt`). Both are evidence only: no scoring path reads them.
 - Redirect decision: once the five-response redirect budget is exhausted, retain the last probed URL as the final URL and report the unprobed next location only as hop metadata.
 - Security decision: generate per-request nonce CSP in `proxy.ts` via `lib/server/csp.ts`; keep the remaining browser-hardening headers in `next.config.ts`.
 - Verification note: the shipped baseline passed lint, format, typecheck, unit, integration, E2E smoke, production build, audit, and Lighthouse; current P21 revalidation and review status are tracked in `PLAN.md`.
@@ -113,7 +114,7 @@ Both personas use the same tool. A **view mode toggle** (Summary / Full Report) 
 1. User lands on a scanner-first home route with the dock in the first viewport and only minimal supporting context above the fold
 2. Pastes URL, client-side validation, submits
 3. Streaming results appear: verdict first, then enrichment signals populate as they resolve
-4. Default: Summary view (verdict, a one-line instruction, and only the signals that drove the verdict, with the other checks folded into one line). Toggle to Full Report for all data
+4. Default: Summary view (verdict, a one-line instruction, and five plain questions about the link, each answered with why it matters and the checks it rests on). Toggle to Full Report for all data
 5. Option to share result or scan another URL
 
 **Flow 2: Batch Scan**
@@ -134,7 +135,7 @@ Both personas use the same tool. A **view mode toggle** (Summary / Full Report) 
 ### 2.3 UX states checklist
 
 - **Loading/streaming:** Pending signal rows update independently as each source resolves. A transform-only progress line shows aggregate completion; the polite live region reports "N of 8 checks finished." and, on completion, the host, verdict, score, and instruction ("Result for evil.example: Malicious, 73 out of 100. Don't open this link."); reopening a stored result re-announces it
-- **Verdict:** every verdict shows one imperative line under the verdict word (Malicious/Critical "Don't open this link.", Suspicious "Don't sign in or enter payment details here.", Critical adds "— it's a known threat" only when a reputation source confirmed it, Safe "Looks safe to open." or, when confidence is below high, coverage was partial, or minor warning signs turned up, "Probably safe — still check who sent it.", Unknown "We couldn't check this link — treat it as unsafe.", Error "The scan failed — try again."). Unknown and Error show no score. The summary sentence names the evidence in plain words; it never repeats the instruction, and a clean, fully covered Safe omits it because the quiet-checks line says the same thing. Reasons live under Details ("What we found"); Caveats lists only real limitations, and "Why {level} confidence" names shortfalls by check rather than restating the check count. Unknown says its cause once: "The site didn't respond, so we couldn't look at the page itself."
+- **Verdict:** every verdict shows one imperative line under the verdict word (Malicious/Critical "Don't open this link.", Suspicious "Don't sign in or enter payment details here.", Critical adds "— it's a known threat" only when a reputation source confirmed it, Safe "Looks safe to open." or, when confidence is below high, coverage was partial, or minor warning signs turned up, "Probably safe — still check who sent it.", Unknown "We couldn't check this link — treat it as unsafe.", Error "The scan failed — try again."). Unknown and Error show no score. The summary sentence names the evidence in plain words; it never repeats the instruction, and the band shows it only when no evidence is shown beneath (the Summary questions and the Full rows already state it), so in practice only a record saved before checks were kept shows it. It stays in the data for shares, exports, and history search. Reasons live under Details ("What we found"); Caveats lists only real limitations, and "Why {level} confidence" names shortfalls by check rather than restating the check count. Unknown says its cause once: "The site didn't respond, so we couldn't look at the page itself."
 - **Empty:** Scanner-first landing state in the centered product shell, with brief framing and links to privacy/methodology; deeper explanation lives on `/about` and `/privacy`. Analyze stays enabled; an empty submit shows "Paste a link to check." inline
 - **Error (partial):** Failed or non-applicable sources show their reason as the row's finding. Verdict is computed from available data, safe-result confidence is capped when primary reputation coverage is missing, one caveat line names the checks that limited coverage ("VirusTotal didn't finish."; absent when every check ran in full), and the user can rerun the full scan from the primary controls
 - **Error (total):** All sources failed — show error message with "Retry All" button and suggestion to check network
@@ -143,10 +144,31 @@ Both personas use the same tool. A **view mode toggle** (Summary / Full Report) 
 
 ### 2.4 View modes
 
-| Mode            | Content                                                                                                                                                                                                                                                                                                                                                                      | Target                     |
-| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- |
-| **Summary**     | Overall verdict with a one-line instruction and confidence, plus only the signals that drove it (every check the verdict engine scored, plus any malicious, suspicious, or failed one — fixed order) as disclosure rows; every other check folds into one line ("6 other checks found nothing." / "All 8 checks found nothing.") that opens Full. A clean scan shows no rows | Casual users, quick checks |
-| **Full Report** | All eight signals in fixed-order disclosure rows, with engine results, classifier details, WHOIS/SSL/DNS evidence, redirect hops, and threat-feed matches                                                                                                                                                                                                                    | Power users, investigation |
+| Mode            | Content                                                                                                                                                                                                                                                                                                                                                   | Target                     |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- |
+| **Summary**     | Overall verdict with a one-line instruction and confidence, plus five plain questions in fixed order (see §2.5), each with a short answer, one clause on why it matters, its sources (strip cell names), and, when checks conflict, one sentence on why. Error results show the eight rows instead; legacy records and shared snapshots show no questions | Casual users, quick checks |
+| **Full Report** | All eight signals in fixed-order disclosure rows, with engine results, classifier details, WHOIS/SSL/DNS evidence, redirect hops, and threat-feed matches                                                                                                                                                                                                 | Power users, investigation |
+
+### 2.5 Summary questions
+
+`lib/domain/summary-questions.ts` builds every Summary string. Fixed order and a fixed mapping, so each check is cited by exactly one question:
+
+| Question                        | Checks cited                                   | Answers with                                                                                                                                                                                                                                                                                                                                              |
+| ------------------------------- | ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Has it been reported?           | VirusTotal, Google Safe Browsing, Threat Feeds | Who lists it and how many engines ("7 of 70 VirusTotal engines…"), feed wording via `feed-copy.ts`, listing age when known; "Not on any list we checked." only when all three answered cleanly; names any list that didn't answer; a host listing set aside on a shared host is said, never read as clean                                                 |
+| Where would it take me?         | Redirect Chain (including the final page)      | The final site when its registered domain differs and the redirect count, sites passed through, plain-HTTP legs, password forms that send elsewhere, hidden frames and hard-to-read code, three or more frames; "couldn't reach" only when nothing answered, and a chain that stopped partway keeps the hops it saw with the destination left unconfirmed |
+| What else raises concern?       | Link Pattern Model, Domain Registration        | The link pattern model's and structure checks' readings, each from its own label (agreement only when they match), their combined reading when it differs, and the registration age                                                                                                                                                                       |
+| Does HTTPS make it safe?        | TLS Certificate                                | Always "No." first, then the certificate state and the leaf certificate's age ("This certificate was issued 2 hours ago", never "first"); plain HTTP or no TLS said plainly                                                                                                                                                                               |
+| What did the other checks find? | DNS Profile                                    | Unusual records, and the hosting network ("network AS64500 EXAMPLE-NET, registered in NL", never "located in")                                                                                                                                                                                                                                            |
+
+- A question is pending until every check it cites lands; for a link that starts on plain HTTP, the HTTPS question also waits for the redirect chain, so it never changes from "isn't encrypted" to "moves to HTTPS". Its placeholder holds room shaped like a typical clean answer (`PLACEHOLDER_SHAPE`, drawn as invisible generated content under "Checking…"), so in the common case (a clean link) no later heading moves as answers fill in. Findings, disagreements, and long hostnames still grow a question (measured at 390px: up to 72px for a flagged reported answer), and short "couldn't check" answers shrink one (up to 40px for an unreachable host).
+- Disagreement sentences appear once, under the question where the conflict shows, only once every check involved has answered: clean lists on a domain under 7 days old ("Blocklists usually lag new sites by a day or two; this one is 3 days old."), a list hit while VirusTotal shows fewer than 5 engines (unless every dated listing is over 7 days old), the link pattern model or structure checks flagging a link every list passed (naming whichever flagged it), and a VirusTotal conviction no list shares.
+- Listing age, certificate age, and the hosting network add no score contribution: they appear in answers and disagreement sentences only. The certificate's age was already scored before them by one existing rule, a certificate under 7 days old on a domain under 30 days old (+12, "a brand-new certificate on a brand-new domain"); the HTTPS question's why names that pairing when it applies, unless a certificate error (also scored) takes the why. A plain-HTTP link to a TLS port still states the certificate it presented. The questions read the signals only, never `threatInfo.scoredSignals`, so a weak scored hit under a Safe verdict is never called a threat report.
+- Every finding the engine scores is named by the question citing its check, and a page finding the engine doesn't count (one sign of hard-to-read script, fewer than three visible frames) isn't raised; `tests/unit/summary-questions.test.ts` walks every scorer branch (`getScoredFindings`) and fails on an unnamed finding or a scorer with no Summary wording. The thresholds the questions name are shared with the engine (`lib/domain/signal-severity.ts`).
+- Relative ages of what was seen ("issued 2 hours ago", "listed 6 hours ago"), in Summary and in Full's rows alike, count from the result's check time (`metadata.checkedAt`, else `completedAt`), the same moment as the stored domain age, so reopening it later reads the same; a streaming scan counts from its server start time. Certificate expiry still counts from now.
+- Question text wraps anywhere, so a long hostname breaks rather than widening a phone screen, and is never truncated. A sources line copies and reads as "Sources: VirusTotal, Safe Browsing, Threat feeds": the dot between names is drawn, not text.
+- The link anatomy states the owner and any look-alike; no question repeats them, and the anatomy's own facts step aside once the evidence below states them.
+- Unknown results get questions with honest "couldn't reach" answers. A strip cell moves focus to the question citing its check (Summary) or opens its row (Full).
 
 ## 3) Functional Requirements
 
@@ -267,6 +289,28 @@ interface SignalResult<T> {
 }
 ```
 
+**Evidence-only fields** (optional, `.optional().catch(undefined)`, so cached results, history, and shared payloads saved earlier still load; never scored):
+
+```typescript
+interface DNSData {
+  // ...addresses, cnames, mx, txt, nameservers, reverseHostnames, anomalies, observations
+  hosting?: {
+    ip: string; // first public IPv4 resolved, else the first global unicast (2000::/3) IPv6; mapped/NAT64 forms never queried
+    asn: number | null; // integer 1–4294967295; null = Team Cymru answered NXDOMAIN: no network routes the address. A missing or invalid asn drops `hosting`
+    asName: string | null; // "EXAMPLE-NET" (country suffix dropped)
+    prefix: string | null; // most specific announced prefix
+    registeredCountry: string | null; // the AS record's registry country only (null if that lookup failed; the prefix's country, which can differ, is never substituted); worded "registered in", never "located in"
+  };
+}
+
+interface ThreatFeedMatch {
+  // ...feed, matchedUrl, detail, confidence, matchType, listedElsewhereOnHost
+  listedAt?: string; // ISO; URLhaus date_added (exact URL) or ThreatFox first_seen; unset for OpenPhish and DNSBLs
+}
+```
+
+`hosting` is unset when there is no public address, the lookup timed out or failed, or the answer was malformed; that never fails the DNS signal or marks the scan partial. Private, reserved, and documentation addresses are never queried.
+
 **Invariants:**
 
 - `id` is unique per scan (not per URL — rescanning generates new ID)
@@ -333,6 +377,7 @@ Implementation note: every stream ends with one terminal event (`scan_complete`/
 | ThreatFox API                | External          | abuse.ch account key   | Source warning recorded; other threat feeds still contribute                  |
 | Spamhaus DBL / SURBL DNSBL   | External DNS      | Public DNS             | Blocked/wildcard resolvers are treated as unavailable, not clean              |
 | DNS resolution               | Self-computed     | N/A                    | Prefer success-with-observation over hard failure where possible              |
+| Team Cymru IP-to-ASN (DNS)   | External DNS      | Free, no key           | 2 s per query, abort-aware; failure leaves `dns.hosting` unset, never partial |
 | SSL cert inspection          | Self-computed     | N/A                    | Prefer success-with-validation-state over hard failure                        |
 | WHOIS lookup                 | Self-computed/API | Varies                 | Prefer success-with-observation or skipped where applicable                   |
 | Redirect chain               | Self-computed     | N/A                    | Prefer success-with-observation over hard failure where possible              |
@@ -341,8 +386,14 @@ Implementation note: every stream ends with one terminal event (`scan_complete`/
 ## 5) Security, Privacy, Compliance
 
 - **Authn/authz:** None. Anonymous usage. No user accounts
-- **PII:** No PII collected or stored server-side. URLs attached to eligible complete results may be cached for up to 15 minutes, then discarded; partial/error/aborted scans are not cached. Client-side history is user-controlled
+- **PII:** No accounts and no per-user records. Two server-side stores can still hold personal data, both disclosed on `/privacy`: complete results (not partial, error, or aborted), including the scanned URL, which may itself carry personal data, are cached for 15 minutes (the in-memory copy can outlive that unserved; see the privacy contract), and rate limiting stores the client IP address with each count. Logs carry a URL hash, never the URL. Client-side history is user-controlled
 - **Public disclosure:** `/privacy` explains local history, hashed server logging, and signed, server-less share links; `/about` explains the scoring and signal model
+- **Privacy contract (`/privacy` must stay true to the code):**
+  - Recipients: the full link goes to VirusTotal, Google Safe Browsing, and URLhaus (which also gets a hostname lookup); only the hostname to ThreatFox (`search_ioc`); the registrable domain to Spamhaus DBL, SURBL, and rdap.org (`whois.ts` queries `https://rdap.org/domain/…`, which forwards to the domain's registry); only the IP address of the link's server to Team Cymru (as a DNS query name); nothing to OpenPhish, whose list is downloaded and matched on our server.
+  - Checking a link visits it (redirect chain GET, TLS handshake), which can use up a one-time link. A link VirusTotal has never seen is submitted for analysis (`virustotal.ts` POSTs `/urls` on a 404 report), which can make it visible to VirusTotal's users.
+  - Only complete results are cached, for 15 minutes; error, partial (`partialFailure`), and aborted scans never are (`lib/server/analyze.ts`). Upstash deletes its copy at the TTL; an in-memory copy is never served after 15 minutes but stays until it is read again, crowded out of the 200-entry LRU, or the process ends (`lib/server/cache.ts`).
+  - Rate limiting counts requests by IP address. With Upstash, `@upstash/ratelimit` 2.2.0's sliding window sets `PEXPIRE window × 2 + 1 s` on each key (`dist/index.js`), so per-minute keys expire after 121 s and per-day keys after 48 h + 1 s. Without Upstash the counts stay in process memory.
+  - Opening a shared link sends it to our server to verify its signature; the link inside is not scanned until the visitor chooses to scan it.
 - **Shared links:** a `?shared=` payload is attacker-writable, so it is never rendered as Scrutinix's statement unless `sig` verifies (`lib/server/share-signing.ts`: HMAC-SHA256, domain-separated, `timingSafeEqual`, canonical 43-character base64url only, never throws, never logs the secret, payload, or URL). `SHARE_SIGNING_SECRET` must be at least 32 characters (shorter values are ignored with one warning that omits the value); `SHARE_SIGNING_SECRET_PREVIOUS` verifies, never signs, during rotation. With no secret configured, shares are unsigned and every shared link opens neutral. A signed result is a statement about one moment: the view and card show when the evidence was gathered (`metadata.checkedAt`, kept from the original scan on a cache hit, dated with its year in UTC), and still offer a fresh scan. It also expires: a genuine signature over a Safe captured while a link was benign (or cloaked) would otherwise keep previewing "Safe" after the link turns, so a verified snapshot whose `capturedAt` (inside the HMAC) is older than `SHARE_MAX_AGE` (72 hours) or more than 5 minutes in the future is treated exactly like an unverified one: neutral band ("This shared result is more than 3 days old, so we're not showing it."), default metadata, and `/og/result` redirecting to the default card. Test-fixture mode (`SCRUTINIX_TEST_FIXTURES=1`) scores unknown hosts Safe, so it and real signing are mutually exclusive: with fixtures on, only the published e2e key signs (any other key is ignored with one value-free warning), and with fixtures off the published e2e key is always ignored. The signing keys belong in the Vercel Production environment only; any deployment holding the key (an unreviewed preview branch included) can mint links production verifies, so Preview/Development leave them unset or use a separate key, and the committed e2e key is ignored outside fixture mode. Share images are cached `public, max-age=3600, s-maxage=3600` (never `immutable`) so forged images age out after a revocation. **Routine rotation:** set the new key as `SHARE_SIGNING_SECRET` and the old one as `SHARE_SIGNING_SECRET_PREVIOUS`, and keep the previous key for at least `SHARE_MAX_AGE` (72 hours), so no link still inside its window stops verifying while its sender was told it shows the result; then remove it. **Revocation runbook:** on a leaked `SHARE_SIGNING_SECRET`, unset it and `SHARE_SIGNING_SECRET_PREVIOUS` (or replace them), redeploy, and purge the `/og/result` CDN cache if the deploy does not. Chat platforms' own unfurl caches are outside our control and may keep showing already-fetched previews
 - **Abuse cases + mitigations:**
 
@@ -416,7 +467,7 @@ Then they see streaming results with each signal populating independently, and a
 **AC-2: View mode toggle**
 Given a completed scan result
 When the user toggles between Summary and Full Report
-Then Summary shows verdict + top 3 signals, Full Report shows all 8 signal sections with detailed data
+Then Summary shows the verdict and the five questions (§2.5), Full Report shows all 8 signal sections with detailed data
 
 **AC-3: Partial failure handling**
 Given a scan where VirusTotal times out but other sources succeed

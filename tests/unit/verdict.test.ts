@@ -1,15 +1,27 @@
 import { describe, expect, it } from "vitest";
 
-import { selectSummarySignals } from "@/components/shared/signal-selection";
 import { analyzePageContent } from "@/lib/domain/content-analysis";
-import { buildThreatAssessment } from "@/lib/domain/verdict";
+import { sanitizeHistoryEntry } from "@/lib/domain/runtime-safety";
+import { getSignalSeverity } from "@/lib/domain/signal-severity";
+import { getSummaryQuestions } from "@/lib/domain/summary-questions";
+import {
+  buildThreatAssessment,
+  getScoredSignals,
+  withScoredSignals,
+} from "@/lib/domain/verdict";
 import {
   getCoverageCaveat,
   getVerdictGuidance,
 } from "@/lib/domain/verdict-guidance";
+import {
+  cleanSignals,
+  withDomainAge,
+  withLureRedirect,
+} from "@/tests/fixtures/lure-signals";
 import { fixtureSignals } from "@/tests/fixtures/scenario-signals";
 import {
   createPendingSignalResults,
+  signalNames,
   type SignalResults,
   type ThreatFeedsData,
   type VirusTotalData,
@@ -1417,9 +1429,6 @@ describe("verdict copy", () => {
 });
 
 describe("confidence reasons and coverage", () => {
-  const COUNT =
-    /(\d+) (?:of \d+ )?(?:other )?(?:checks?|major reputation sources?)/g;
-
   it("states the Unknown cause once and never calls clean sources 'other'", async () => {
     const signals = await fixtureSignals("unreachable.scrutinix.test");
     const { verdict, threatInfo } = buildThreatAssessment(signals);
@@ -1439,18 +1448,13 @@ describe("confidence reasons and coverage", () => {
       "VirusTotal, Google Safe Browsing, and Threat Feeds found nothing, but they can't vouch for the page itself.",
     );
 
-    // Any count left in the reasons agrees with the Summary line's counts.
-    const selection = selectSummarySignals(signals, threatInfo?.scoredSignals);
-    const allowed = new Set([
-      selection.clear,
-      selection.limited,
-      selection.drivers.length,
-    ]);
-    for (const reason of reasons) {
-      for (const [, count] of reason.matchAll(COUNT)) {
-        expect(allowed).toContain(Number(count));
-      }
-    }
+    // The Summary question about the lists says the same thing.
+    const reported = getSummaryQuestions({
+      url: "https://unreachable.scrutinix.test/",
+      signals,
+      now: Date.parse("2026-10-24T12:00:00.000Z"),
+    })[0];
+    expect(reported?.answer).toBe("Not on any list we checked.");
   });
 
   it("only says 'other' sources when a previous line named one", () => {
@@ -1769,5 +1773,94 @@ describe("limited coverage: summary and caveat agree", () => {
     expect(getCoverageCaveat({ verdict, signals }) ?? "").not.toMatch(
       /couldn't reach the site/,
     );
+  });
+});
+
+describe("scored signals (the strip and rows read them)", () => {
+  it("never shows a scored check with the gray found-nothing dot", () => {
+    const signals = cleanSignals();
+    withLureRedirect(signals, { hiddenIframe: true });
+    withDomainAge(signals, 100);
+
+    const scored = getScoredSignals(signals);
+    expect([...scored].sort()).toEqual(["redirectChain", "whois"]);
+    for (const name of scored) {
+      const signal = signals[name];
+      expect(
+        getSignalSeverity(signal.status, signal.data, name, true),
+      ).not.toBe("clear");
+    }
+  });
+
+  it("matches the stored scored list to the engine for every signal", () => {
+    const signals = cleanSignals();
+    withLureRedirect(signals, { hiddenIframe: true });
+    const { threatInfo } = buildThreatAssessment(signals);
+    const scored = getScoredSignals(signals);
+
+    expect(threatInfo?.scoredSignals).toEqual(
+      signalNames.filter((name) => scored.has(name)),
+    );
+  });
+});
+
+/** A result as history stored it before `scoredSignals` existed. */
+function legacyHistoryEntry(signals: SignalResults) {
+  const { verdict, threatInfo } = buildThreatAssessment(signals);
+  const legacyThreatInfo: Record<string, unknown> = { ...threatInfo };
+  delete legacyThreatInfo.scoredSignals;
+  const entry = sanitizeHistoryEntry({
+    id: "legacy",
+    url: "https://short.example/a",
+    verdict,
+    signals,
+    threatInfo: legacyThreatInfo,
+    metadata: {
+      scanId: "legacy",
+      startedAt: "2026-09-01T00:00:00.000Z",
+      completedAt: "2026-09-01T00:00:01.000Z",
+      cacheHit: false,
+      partialFailure: false,
+      signalCount: 8,
+      durationMs: 1_000,
+    },
+    savedAt: "2026-09-01T00:00:01.000Z",
+  });
+  if (!entry) throw new Error("legacy entry failed to sanitize");
+  return entry;
+}
+
+describe("withScoredSignals (history saved before scoredSignals)", () => {
+  it("re-derives the scored checks so the strip and rows show the evidence", () => {
+    const signals = cleanSignals();
+    withLureRedirect(signals, { hiddenIframe: true });
+    withDomainAge(signals, 100);
+    const legacy = legacyHistoryEntry(signals);
+    expect(legacy.threatInfo?.scoredSignals).toBeUndefined();
+
+    const entry = withScoredSignals(legacy);
+
+    // Signal order, exactly as a fresh scan stores it.
+    expect(entry.threatInfo?.scoredSignals).toEqual(
+      buildThreatAssessment(signals).threatInfo?.scoredSignals,
+    );
+    expect(entry.threatInfo?.scoredSignals).toEqual(["whois", "redirectChain"]);
+    // Stored verdict, score, and copy stay exactly as saved.
+    expect(entry.verdict).toBe(legacy.verdict);
+    expect(entry.threatInfo?.score).toBe(legacy.threatInfo?.score);
+    expect(entry.threatInfo?.summary).toBe(legacy.threatInfo?.summary);
+  });
+
+  it("keeps an explicit empty list and results without threat info", () => {
+    const safe = cleanSignals();
+    const { verdict, threatInfo } = buildThreatAssessment(safe);
+    expect(threatInfo?.scoredSignals).toEqual([]);
+    const stored = { ...legacyHistoryEntry(safe), verdict, threatInfo };
+    // Even if the engine would now score something, a stored [] stands.
+    withDomainAge(stored.signals, 100);
+    expect(withScoredSignals(stored)).toBe(stored);
+
+    const failed = { ...stored, threatInfo: null };
+    expect(withScoredSignals(failed)).toBe(failed);
   });
 });

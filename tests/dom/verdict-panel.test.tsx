@@ -67,7 +67,7 @@ function buildResult(
 
 function renderPanel(
   result: AnalysisResult,
-  props: { driverRows?: number; impersonates?: string | null } = {},
+  props: { evidenceShown?: boolean; impersonates?: string | null } = {},
 ) {
   return render(
     <>
@@ -164,13 +164,13 @@ describe("VerdictBand", () => {
     expect(screen.queryByText(/No direct malicious indicators/i)).toBeNull();
   });
 
-  it("leaves a clean Safe to the imperative and the quiet-checks line", () => {
+  it("leaves a clean Safe to the imperative", () => {
     renderPanel(
       buildResult("safe", { score: 4, summary: "No check flagged this link." }),
     );
 
     expect(screen.getByText("Looks safe to open.")).toBeTruthy();
-    // "All 8 checks found nothing." (results section) already says it.
+    // "Looks safe to open." and the Summary questions already say it.
     expect(screen.queryByText(/flagged this link|indicators/i)).toBeNull();
   });
 
@@ -356,19 +356,19 @@ describe("VerdictBand", () => {
     expect(screen.queryByText(/more than 3 days old/)).toBeNull();
   });
 
-  it("drops the because line when Summary already shows the driver row", () => {
+  it("drops the because line when the evidence below states it", () => {
     const result = buildResult("malicious", {
       score: 73,
       hasPositiveEvidence: true,
       summary: "7 VirusTotal engines flagged this link.",
     });
-    const { unmount } = renderPanel(result, { driverRows: 0 });
+    const { unmount } = renderPanel(result, { evidenceShown: false });
     expect(
       screen.getByText("7 VirusTotal engines flagged this link."),
     ).toBeTruthy();
     unmount();
 
-    renderPanel(result, { driverRows: 1 });
+    renderPanel(result, { evidenceShown: true });
     expect(
       screen.queryByText("7 VirusTotal engines flagged this link."),
     ).toBeNull();

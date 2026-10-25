@@ -15,6 +15,34 @@ import type { SignalName, SignalPayloadMap } from "@/lib/domain/types";
  */
 export const YOUNG_DOMAIN_DAYS = 180;
 
+/**
+ * A domain younger than this is brand new: the verdict engine's strongest
+ * domain-age tier, the registration warning dot, and the Summary's
+ * "blocklists lag new sites" sentence share it.
+ */
+export const NEW_DOMAIN_DAYS = 30;
+
+/**
+ * The verdict engine's page and certificate rules that the Summary
+ * questions name, shared so the copy can never disagree with the score: a
+ * redirect chain this long, this many frames on the final page (hidden or
+ * not), this many signs of deliberately hard-to-read script, and a
+ * certificate younger than this on a brand-new domain.
+ */
+export const LONG_REDIRECT_CHAIN_HOPS = 3;
+/**
+ * The statuses the redirect probe follows. A hop with one of these and a
+ * Location redirected; when the chain's last hop still does, the probe
+ * stopped there (a non-web or unreadable address) and the chain is not
+ * finished, though the host answered.
+ */
+export const REDIRECT_STATUSES: ReadonlySet<number> = new Set([
+  301, 302, 303, 307, 308,
+]);
+export const MANY_FRAMES = 3;
+export const OBFUSCATION_HINTS = 2;
+export const FRESH_CERTIFICATE_DAYS = 7;
+
 export const severities = [
   "clear",
   "neutral",
@@ -92,7 +120,7 @@ function getBaseSeverity(
   if (name === "whois") {
     const d = data as { available?: boolean; ageDays: number | null };
     if (d.available === false) return "neutral";
-    if (d.ageDays !== null && d.ageDays < 30) return "suspicious";
+    if (d.ageDays !== null && d.ageDays < NEW_DOMAIN_DAYS) return "suspicious";
     return "clear";
   }
   if (name === "redirectChain") {

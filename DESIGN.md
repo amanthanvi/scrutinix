@@ -104,81 +104,81 @@ colors:
   dark-cell-track: "oklch(0.25 0.011 264)"
 typography:
   display:
-    fontFamily: "Geist, sans-serif"
+    fontFamily: "system-ui, sans-serif"
     fontSize: "2.75rem"
     fontWeight: 600
     lineHeight: 1.06
     letterSpacing: "-0.032em"
   headline:
-    fontFamily: "Geist, sans-serif"
+    fontFamily: "system-ui, sans-serif"
     fontSize: "2.125rem"
     fontWeight: 600
     lineHeight: 1.1
     letterSpacing: "-0.028em"
   verdict:
-    fontFamily: "Geist, sans-serif"
+    fontFamily: "system-ui, sans-serif"
     fontSize: "3.25rem"
     fontWeight: 600
     lineHeight: 1
     letterSpacing: "-0.036em"
   verdict-sm:
-    fontFamily: "Geist, sans-serif"
+    fontFamily: "system-ui, sans-serif"
     fontSize: "2.5rem"
     fontWeight: 600
     lineHeight: 1
     letterSpacing: "-0.032em"
   score:
-    fontFamily: "Geist, sans-serif"
+    fontFamily: "system-ui, sans-serif"
     fontSize: "2rem"
     fontWeight: 500
     lineHeight: 1
     letterSpacing: "-0.02em"
     fontFeature: '"tnum"'
   imperative:
-    fontFamily: "Geist, sans-serif"
+    fontFamily: "system-ui, sans-serif"
     fontSize: "1.3125rem"
     fontWeight: 500
     lineHeight: "1.75rem"
     letterSpacing: "-0.012em"
   title:
-    fontFamily: "Geist, sans-serif"
+    fontFamily: "system-ui, sans-serif"
     fontSize: "1.25rem"
     fontWeight: 600
     lineHeight: "1.75rem"
     letterSpacing: "-0.012em"
   lead:
-    fontFamily: "Geist, sans-serif"
+    fontFamily: "system-ui, sans-serif"
     fontSize: "1.0625rem"
     fontWeight: 400
     lineHeight: "1.625rem"
   body:
-    fontFamily: "Geist, sans-serif"
+    fontFamily: "system-ui, sans-serif"
     fontSize: "0.9375rem"
     fontWeight: 400
     lineHeight: "1.5rem"
   meta:
-    fontFamily: "Geist, sans-serif"
+    fontFamily: "system-ui, sans-serif"
     fontSize: "0.8125rem"
     fontWeight: 500
     lineHeight: "1.25rem"
   caption:
-    fontFamily: "Geist, sans-serif"
+    fontFamily: "system-ui, sans-serif"
     fontSize: "0.75rem"
     fontWeight: 400
     lineHeight: "1rem"
   link-data:
-    fontFamily: "Geist Mono, monospace"
+    fontFamily: "ui-monospace, monospace"
     fontSize: "0.9375rem"
     fontWeight: 400
     lineHeight: "1.5rem"
     fontFeature: '"tnum"'
   owner-domain:
-    fontFamily: "Geist Mono, monospace"
+    fontFamily: "ui-monospace, monospace"
     fontSize: "1.0625rem"
     fontWeight: 600
     lineHeight: "1.625rem"
   evidence-data:
-    fontFamily: "Geist Mono, monospace"
+    fontFamily: "ui-monospace, monospace"
     fontSize: "0.75rem"
     fontWeight: 400
     lineHeight: "1.25rem"
@@ -317,7 +317,7 @@ components:
 
 Scrutinix is the canonical minimal product tool, played straight at Linear and Vercel craft level and made sharper. A person holding a suspicious link gets one answer, said plainly and big, on a precise instrument: a cool, crisp white ground (light) or a deep neutral-cool ground (dark), near-black ink, hairline structure, one static blue accent, and verdict colour only where a verdict is stated. Each theme is designed on its own; dark is not an inversion.
 
-The page is one centred column that reads top to bottom as the task does: a display headline and one supporting line, the Single/Batch scan form, then the verdict band, the link anatomy (which site the link really belongs to), the eight-cell strip, the Summary/Full evidence rows, the actions, and local history. Density is calm at rest and exact under load: UI type sits on tight 12–17px steps, while the headline and the verdict word jump to display sizes so the answer outranks the chrome. Nothing is costume. Monospace appears only where the content is data.
+The page is one centred column that reads top to bottom as the task does: a display headline and one supporting line, the Single/Batch scan form, then the verdict band, the link anatomy (which site the link really belongs to), the eight-cell strip, the evidence (Summary's five questions or Full's eight rows), the actions, and local history. Density is calm at rest and exact under load: UI type sits on tight 12–17px steps, while the headline and the verdict word jump to display sizes so the answer outranks the chrome. Nothing is costume. Monospace appears only where the content is data.
 
 The signature is the eight-cell strip. One cell per check, in a fixed order, with a fixed shape for every state. It is the streaming progress, the evidence index, the row marker, the history and batch glyph, the brand mark, the app icon, and the share-image motif: one grammar at every scale.
 
@@ -327,7 +327,7 @@ The signature is the eight-cell strip. One cell per check, in a fixed order, wit
 
 - One 46rem column; the verdict band is the only tinted container.
 - Cool white / deep neutral-cool grounds, blue-black ink, one blue accent for actions, links, and focus.
-- Geist Sans on a real scale with confident display steps; Geist Mono for links, domains, evidence, and counts.
+- The system sans on a real scale with confident display steps; the system mono for links, domains, evidence, and counts. The page loads no web fonts.
 - Verdict hue appears as a low-chroma band surface; the verdict word itself stays ink.
 - The eight-cell strip carries every state by shape as well as hue.
 - CSS-only motion under 300ms with one authored moment: the cells fill, then the band takes its colour and the verdict word arrives.
@@ -393,9 +393,9 @@ Each verdict owns four tokens: a graphic hue (`<v>`, 3:1 on the ground), a text 
 
 ## Typography
 
-**Display Font:** Geist Sans (self-hosted through the `geist` package, `--font-geist-sans`)
-**Body Font:** Geist Sans
-**Label/Mono Font:** Geist Mono (`--font-geist-mono`)
+**Display Font:** `--font-display`, defaulting to the system `--font-sans` stack (P29.4; identity layer may replace this hook).
+**Body Font:** system `--font-sans` stack (`system-ui`, -apple-system, BlinkMacSystemFont, "Segoe UI")
+**Label/Mono Font:** system `--font-mono` stack (`ui-monospace`, SFMono-Regular, Menlo, Consolas).
 
 **Character:** One neo-grotesque family does everything a word does; its mono sibling does everything a measurement does. The pairing reads as a precise instrument, not a terminal.
 
@@ -404,7 +404,7 @@ Each verdict owns four tokens: a graphic hue (`<v>`, 3:1 on the ground), a text 
 - **Verdict** (600, 52px from 40rem, 40px below; line-height 1; −0.036em / −0.032em): the verdict word in the band, the largest type on any result.
 - **Display** (600, 44px, 1.06, −0.032em): the home headline and public page titles from 40rem.
 - **Headline** (600, 34px, 1.1, −0.028em): the same headlines on phones, and the home headline once a verdict band is on the page.
-- **Score** (500, 32px, 1, −0.02em, tabular): the threat score numeral. Set in Geist Sans because Geist Mono's slashed zero reads as "Ø" at this size; the "/100" beside it is mono meta.
+- **Score** (500, 32px, 1, −0.02em, tabular): the threat score numeral. Set in the sans because a monospace slashed zero can read as "Ø" at this size; the "/100" beside it is mono meta.
 - **Imperative** (500, 21px, 28px, −0.012em): the one instruction under the verdict word ("Don't open this link.").
 - **Title** (600, 20px, 28px, −0.012em): History, batch, and public-page section headings.
 - **Lead** (400, 17px, 26px): the supporting line under a headline; also the registered domain in the anatomy line (mono, 600).
@@ -416,7 +416,7 @@ Each verdict owns four tokens: a graphic hue (`<v>`, 3:1 on the ground), a text 
 
 **The One Display Moment Rule.** Once the verdict band mounts, the home headline steps down from display to headline size (CSS `:has(#sx-verdict-heading)` from 40rem), so one display size owns the moment. The step happens when the scan starts, never after the verdict lands.
 
-**The Mono Is Data Rule.** Geist Mono sets links, registered domains, evidence entries, counts, scores' "/100", and timestamps, always with tabular numerals. Never use it to make prose look technical.
+**The Mono Is Data Rule.** The system mono sets links, registered domains, evidence entries, counts, scores' "/100", and timestamps, always with tabular numerals. Never use it to make prose look technical.
 
 **The Taught Scale Rule.** Every custom `text-*` step lives in `@theme` and is registered with tailwind-merge in `lib/utils.ts`; otherwise `cn()` silently drops it when a colour class follows.
 
@@ -476,7 +476,7 @@ The header is the column at 56px: the eight-square mark and the "Scrutinix" word
 
 ### Verdict band (signature, S1)
 
-A column-wide section on `<verdict>-surface` with its 1px `<verdict>-edge`, 12px radius, 28px padding (20px × 24px on phones). Inside: the verdict word in ink at Verdict size (`h2#sx-verdict-heading`, focusable), the imperative directly beneath, and on the right the score numeral with its band text ("Malicious band 55–79") only when `getVerdictGuidance().showScore` (never for Unknown or Error). Below: a "because" sentence only when Summary shows no driver row, a coverage caveat in Graphite only when coverage was limited, then the confidence line with "How scoring works". While checks run, the same element tree reads "Checking" in Soft Slate on the Checking surface, with "3 of 8 checks finished" and Cancel scan, so focus survives the switch. A look-alike Safe reads "Look-alike" (never "Safe"), takes the Unknown surface, shows no score, and replaces the confidence line with "No check flagged it, but the name is misleading."; its own verdict and score are stated first in the details ("No check flagged it: on their own, the checks scored it Safe, 4 out of 100."). A Safe result waits for the link parser: until it loads the band keeps the Checking tree ("Checking", "Checking the link's address", the confidence slot held), so neither "Safe" nor green shows before a look-alike is ruled out; if the parser fails it reads "Unconfirmed" on the Unknown surface, no score, "Check the link's address before you open it.", and "We couldn't check whether this address imitates another site." in place of the confidence line. Shared links come in two states, decided on the server. A **verified** snapshot (its `sig` is Scrutinix's own) shows the verdict word on its surface, the hedged imperative, the snapshot's summary, no score, a primary "Run a fresh scan", and a quiet Graphite note "Verified Scrutinix result · checked <UTC date and time, with the year>. It may be out of date.", with the snapshot strip below. A verified snapshot is shown for 3 days after its check (`SHARE_MAX_AGE`); after that it gets the unverified band below with its own sentence, "This shared result is more than 3 days old, so we're not showing it.", and the label "Shared result, expired". An **unverified** link (unsigned, tampered, or shared before signing) is someone's claim, not ours: the band takes the neutral Checking surface, the heading reads "Check this shared link yourself" at Headline size in ink (never Verdict size, never a verdict word), one plain sentence "We can't confirm the result in this link came from Scrutinix. It may be old or edited, so we're not showing it.", and the primary "Scan this link" (the viewer saw no earlier scan, so nothing is "fresh"; the verified band keeps "Run a fresh scan"). Nothing from the payload is drawn (no verdict word, tint, score, summary, or strip); the link anatomy below it is Scrutinix's own computation and stays, so a look-alike's real owner is still stated. Its label is "Shared link, not verified"; neither state speaks through the live region on load. "How we reached this verdict" is a native disclosure below the evidence, never between the band and its evidence. Every verdict string comes from `lib/domain/verdict-guidance.ts` and `lib/domain/verdict.ts`.
+A column-wide section on `<verdict>-surface` with its 1px `<verdict>-edge`, 12px radius, 28px padding (20px × 24px on phones). Inside: the verdict word in ink at Verdict size (`h2#sx-verdict-heading`, focusable), the imperative directly beneath, and on the right the score numeral with its band text ("Malicious band 55–79") only when `getVerdictGuidance().showScore` (never for Unknown or Error). Below: a "because" sentence only when no evidence is shown beneath (a legacy record), a coverage caveat in Graphite only when coverage was limited, then the confidence line with "How scoring works". While checks run, the same element tree reads "Checking" in Soft Slate on the Checking surface, with "3 of 8 checks finished" and Cancel scan, so focus survives the switch. A look-alike Safe reads "Look-alike" (never "Safe"), takes the Unknown surface, shows no score, and replaces the confidence line with "No check flagged it, but the name is misleading."; its own verdict and score are stated first in the details ("No check flagged it: on their own, the checks scored it Safe, 4 out of 100."). A Safe result waits for the link parser: until it loads the band keeps the Checking tree ("Checking", "Checking the link's address", the confidence slot held), so neither "Safe" nor green shows before a look-alike is ruled out; if the parser fails it reads "Unconfirmed" on the Unknown surface, no score, "Check the link's address before you open it.", and "We couldn't check whether this address imitates another site." in place of the confidence line. Shared links come in two states, decided on the server. A **verified** snapshot (its `sig` is Scrutinix's own) shows the verdict word on its surface, the hedged imperative, the snapshot's summary, no score, a primary "Run a fresh scan", and a quiet Graphite note "Verified Scrutinix result · checked <UTC date and time, with the year>. It may be out of date.", with the snapshot strip below. A verified snapshot is shown for 3 days after its check (`SHARE_MAX_AGE`); after that it gets the unverified band below with its own sentence, "This shared result is more than 3 days old, so we're not showing it.", and the label "Shared result, expired". An **unverified** link (unsigned, tampered, or shared before signing) is someone's claim, not ours: the band takes the neutral Checking surface, the heading reads "Check this shared link yourself" at Headline size in ink (never Verdict size, never a verdict word), one plain sentence "We can't confirm the result in this link came from Scrutinix. It may be old or edited, so we're not showing it.", and the primary "Scan this link" (the viewer saw no earlier scan, so nothing is "fresh"; the verified band keeps "Run a fresh scan"). Nothing from the payload is drawn (no verdict word, tint, score, summary, or strip); the link anatomy below it is Scrutinix's own computation and stays, so a look-alike's real owner is still stated. Its label is "Shared link, not verified"; neither state speaks through the live region on load. "How we reached this verdict" is a native disclosure below the evidence, never between the band and its evidence. Every verdict string comes from `lib/domain/verdict-guidance.ts` and `lib/domain/verdict.ts`.
 
 ### Link anatomy (signature, S2)
 
@@ -492,7 +492,11 @@ The link taken apart in mono at body size: scheme and path in Soft Slate, subdom
 
 ### Evidence rows
 
-An Evidence heading (meta, 600) with the Summary/Full switch on a hairline, then a `<ul>` divided by hairlines. Each row: the cell marker, the signal label (14px, 500, ink, a 176px column from 40rem), the finding as a plain sentence in Graphite (wraps, never truncates), and a chevron when evidence exists. Opening a row reveals a Cool Mist evidence plate (6px radius) holding a mono key/value list; timing lives only there. Summary shows only the checks that drove the verdict and folds the rest into one line ("7 other checks found nothing. Show all checks").
+An Evidence heading (meta, 600) with the Summary/Full switch on a hairline, then a `<ul>` divided by hairlines. Each row: the cell marker, the signal label (14px, 500, ink, a 176px column from 40rem), the finding as a plain sentence in Graphite (wraps, never truncates), and a chevron when evidence exists. Opening a row reveals a Cool Mist evidence plate (6px radius) holding a mono key/value list; timing lives only there. These rows are the Full view (and an Error result's Summary).
+
+### Summary questions
+
+Summary is a `<ul>` "Questions" on the same hairlines, five items in fixed order. Each: the question as an `h4` (14px, 500, ink, focusable for strip cells), the answer in ink at body size, the why clause in Graphite (14px), an optional disagreement sentence in Graphite, then "Sources: VirusTotal · Safe Browsing · Threat feeds" in caption Soft Slate (the strip's cell names; one `QuestionSources` component, so layer 6 can cite numbered cells; the dot is drawn by `.sx-source::before`, so the text, copied or spoken, is "VirusTotal, Safe Browsing, Threat feeds"). No severity colour or marker: the strip and Full rows carry each check's severity once. A question still waiting on a check shows "Checking…" in Soft Slate over invisible room shaped like a typical clean answer and why, so answers fill in place and the questions below hold still in the common case (a finding, disagreement, or long hostname can still add lines, and a short "couldn't check" answer takes fewer). Answers and why clauses cap at 62ch, and question text wraps anywhere, so a long hostname breaks rather than widening a phone screen. Layer 6 (identity) restyles this block.
 
 ### History and batch
 
@@ -505,9 +509,9 @@ Hairline-divided lists with one row grammar (`result-row.tsx`): glyph, verdict w
 ### Accessibility contract (tests depend on these)
 
 - Landmarks and targets: skip link to `#main-content`; `id="scan-console"`; band `section` named "Scan result: {verdict}" (or "Scanning URL"); focusable `h2#sx-verdict-heading`; region "Scan history" with heading "History (N scans)" and filter `#sx-history-filter`; region "Batch scan results".
-- Names: textboxes "URL to analyze" / "URLs to analyze, one per line"; buttons Analyze URL, Start batch, Clear all history, Confirm clear all history, Undo clear history, Show all checks, Run a fresh scan, Scan this link, "Open result for {link}"; `role="meter"` "Threat score" (scored verdicts only, `aria-valuetext` "73 out of 100"); `role="switch"` whose name starts with its visible labels ("Summary Full signal list", WCAG 2.5.3); toolbar "Checks"; list "Signals"; each row named "{Label}: {finding}", its visible text in order, on its `<summary>` (or its `<li>` when it has no evidence).
+- Names: textboxes "URL to analyze" / "URLs to analyze, one per line"; buttons Analyze URL, Start batch, Clear all history, Confirm clear all history, Undo clear history, Run a fresh scan, Scan this link, "Open result for {link}"; `role="meter"` "Threat score" (scored verdicts only, `aria-valuetext` "73 out of 100"); `role="switch"` whose name starts with its visible labels ("Summary Full signal list", WCAG 2.5.3); toolbar "Checks" (described as moving to a question in Summary, opening evidence in Full); list "Questions" with an `h4` per question; list "Signals"; each row named "{Label}: {finding}", its visible text in order, on its `<summary>` (or its `<li>` when it has no evidence).
 - Announcements: one polite live region, never remounted, reports progress ("3 of 8 checks finished.") and `getVerdictAnnouncement` on completion, waiting for the link parser so a look-alike is spoken with its hedge (or, if it failed, an "Unconfirmed" Safe with why). Opening a stored result moves focus to the verdict heading and blanks the region for 100ms so an identical announcement is spoken again.
-- Focus: Re-scan and either shared-scan button ("Run a fresh scan", "Scan this link") park focus on the band heading (the same node from Checking to verdict); Cancel returns it to the field; a landed scan off-screen scrolls into view (instantly under reduced motion); revealing quiet checks focuses the first newly revealed row, with the list as fallback.
+- Focus: Re-scan and either shared-scan button ("Run a fresh scan", "Scan this link") park focus on the band heading (the same node from Checking to verdict); Cancel returns it to the field; a landed scan off-screen scrolls into view (instantly under reduced motion); a strip cell focuses the question citing its check (Summary) or opens and focuses its row (Full).
 - Floors: 44px targets; colour never carries meaning alone; coloured text uses `-fg` tokens; axe at zero violations on the empty page and on results in both themes; Lighthouse Accessibility ≥ 0.95.
 
 ## Do's and Don'ts

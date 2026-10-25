@@ -1,7 +1,5 @@
 import type { Metadata, Viewport } from "next";
 import { headers } from "next/headers";
-import { GeistMono } from "geist/font/mono";
-import { GeistSans } from "geist/font/sans";
 
 import "@/app/globals.css";
 import "@/app/scrutinix.css";
@@ -67,9 +65,7 @@ export default async function RootLayout({
 
   return (
     <html lang="en" suppressHydrationWarning>
-      <body
-        className={`${GeistSans.variable} ${GeistMono.variable} font-sans antialiased`}
-      >
+      <body className="font-sans antialiased">
         <a href="#main-content" className="sx-skip-link">
           Skip to content
         </a>

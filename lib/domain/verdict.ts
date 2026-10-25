@@ -14,7 +14,12 @@ import {
   vtAnalysisAgeDays,
 } from "@/lib/domain/reputation";
 import {
+  FRESH_CERTIFICATE_DAYS,
   getSignalSeverity,
+  LONG_REDIRECT_CHAIN_HOPS,
+  MANY_FRAMES,
+  NEW_DOMAIN_DAYS,
+  OBFUSCATION_HINTS,
   YOUNG_DOMAIN_DAYS,
 } from "@/lib/domain/signal-severity";
 import type {
@@ -83,6 +88,23 @@ export function getScoredSignals(
       .filter((item) => item.score > 0)
       .map((item) => item.signal),
   );
+}
+
+/**
+ * Every finding that added score, by the group the one-line summary names
+ * it with. Each must be explained by the Summary question citing its check
+ * (`tests/unit/summary-questions.test.ts` walks them).
+ */
+export function getScoredFindings(
+  signals: SignalResults,
+): { signal: SignalName; group: string; reason: string }[] {
+  return collectContributions(signals)
+    .filter((item) => item.score > 0)
+    .map((item) => ({
+      signal: item.signal,
+      group: item.subject?.group ?? item.category,
+      reason: item.reason,
+    }));
 }
 
 /**
@@ -463,12 +485,16 @@ function scoreSsl(signals: SignalResults): ScoredItem[] {
   const whois = signals.whois;
   const domainAgeDays =
     whois.status === "success" && whois.data ? whois.data.ageDays : null;
-  if (validFrom && domainAgeDays !== null && domainAgeDays < 30) {
+  if (validFrom && domainAgeDays !== null && domainAgeDays < NEW_DOMAIN_DAYS) {
     const issuedAt = new Date(validFrom).getTime();
     const certAgeDays = Number.isNaN(issuedAt)
       ? null
       : Math.floor((Date.now() - issuedAt) / (1000 * 60 * 60 * 24));
-    if (certAgeDays !== null && certAgeDays >= 0 && certAgeDays < 7) {
+    if (
+      certAgeDays !== null &&
+      certAgeDays >= 0 &&
+      certAgeDays < FRESH_CERTIFICATE_DAYS
+    ) {
       contributions.push({
         score: 12,
         category: "TLS",
@@ -516,7 +542,7 @@ function scoreRedirects(signals: SignalResults): ScoredItem[] {
   const data = signal.data;
   const contributions: ScoredItem[] = [];
 
-  if (data.totalHops >= 3) {
+  if (data.totalHops >= LONG_REDIRECT_CHAIN_HOPS) {
     contributions.push({
       score: 8,
       category: "Redirects",
@@ -584,7 +610,7 @@ function scoreRedirects(signals: SignalResults): ScoredItem[] {
       });
     }
 
-    if (content.obfuscationHints.length >= 2) {
+    if (content.obfuscationHints.length >= OBFUSCATION_HINTS) {
       contributions.push({
         score: 10,
         category: "Page Content",
@@ -598,7 +624,7 @@ function scoreRedirects(signals: SignalResults): ScoredItem[] {
       });
     }
 
-    if (content.hiddenIframeCount >= 1 || content.iframeCount >= 3) {
+    if (content.hiddenIframeCount >= 1 || content.iframeCount >= MANY_FRAMES) {
       contributions.push({
         score: 8,
         category: "Page Content",
@@ -656,7 +682,7 @@ function scoreWhois(signals: SignalResults): ScoredItem[] {
 
   const contributions: ScoredItem[] = [];
 
-  if (signal.data.ageDays !== null && signal.data.ageDays < 30) {
+  if (signal.data.ageDays !== null && signal.data.ageDays < NEW_DOMAIN_DAYS) {
     contributions.push({
       score: 15,
       category: "Domain Age",

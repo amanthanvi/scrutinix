@@ -42,3 +42,22 @@ export function formatAge(days: number): string {
   }
   return `about ${countOf(Math.floor(whole / 365), "year")}`;
 }
+
+const HOUR_MS = 1000 * 60 * 60;
+
+/**
+ * Elapsed time worded to follow "listed" or "issued" and precede "ago":
+ * "less than an hour", "6 hours", "3 days", "about 2 months". Hours give
+ * way to `formatAge` from two days on; a negative span (clock skew) reads
+ * as "less than an hour".
+ */
+export function formatElapsed(milliseconds: number): string {
+  const hours = Math.floor(Math.max(0, milliseconds) / HOUR_MS);
+  if (hours < 1) {
+    return "less than an hour";
+  }
+  if (hours < 48) {
+    return countOf(hours, "hour");
+  }
+  return formatAge(hours / 24);
+}

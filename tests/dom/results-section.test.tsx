@@ -247,7 +247,7 @@ describe("ResultsSection", () => {
     );
   });
 
-  it("announces the verdict and shows only the signals that drove it", async () => {
+  it("announces the verdict and answers five questions in Summary", async () => {
     const result = buildResult("scan-1", 7);
     vi.stubGlobal(
       "fetch",
@@ -274,37 +274,56 @@ describe("ResultsSection", () => {
       );
     });
 
-    // Summary: VirusTotal drove the verdict; nothing else gets a row.
+    // Summary: five questions, each a heading under "Evidence", no rows.
+    const questions = screen.getByRole("list", { name: "Questions" });
     expect(
-      screen
-        .getByLabelText(/^VirusTotal: /, { selector: "summary, li" })
-        .getAttribute("aria-label"),
-    ).toBe("VirusTotal: 7 engines flagged this link as malicious.");
-    expect(screen.queryByLabelText(/^Google Safe Browsing:/)).toBeNull();
-    const quiet = screen.getByRole("button", {
-      name: /1 other check found nothing and 6 couldn't give a full answer\. Show all checks/,
-    });
+      within(questions)
+        .getAllByRole("heading", { level: 4 })
+        .map((heading) => heading.textContent),
+    ).toEqual([
+      "Has it been reported?",
+      "Where would it take me?",
+      "What else raises concern?",
+      "Does HTTPS make it safe?",
+      "What did the other checks find?",
+    ]);
+    const reported = questions.querySelector('[data-question="reported"]');
+    expect(reported?.textContent).toContain(
+      "7 of 67 VirusTotal engines flag it as malicious.",
+    );
+    // One textual separator; the dot is drawn, so it isn't copied or read.
+    expect(reported?.textContent).toContain(
+      "Sources: VirusTotal, Safe Browsing, Threat feeds",
+    );
+    expect(reported?.textContent).not.toContain("·");
+    expect(screen.queryByRole("list", { name: "Signals" })).toBeNull();
+    // No severity colour in the questions: the strip carries it once.
+    expect(questions.querySelector("[data-severity]")).toBeNull();
 
     // The switch's name contains its visible labels (WCAG 2.5.3).
     const viewSwitch = screen.getByRole("switch", { name: /^Summary Full/ });
     expect(viewSwitch.getAttribute("aria-checked")).toBe("false");
 
-    fireEvent.click(quiet);
+    // Full keeps the eight per-check rows exactly as before.
+    fireEvent.click(viewSwitch);
     expect(viewSwitch.getAttribute("aria-checked")).toBe("true");
-    expect(screen.getByLabelText(/^Google Safe Browsing:/)).toBeTruthy();
-    // The button that revealed the rows is gone. None of the newly
-    // revealed rows can expand here, so focus lands on the list - not
-    // <body>, and not the VirusTotal row Summary already showed.
-    const signalsList = screen.getByRole("list", { name: "Signals" });
-    await waitFor(() => {
-      expect(document.activeElement).toBe(signalsList);
-    });
+    expect(screen.queryByRole("list", { name: "Questions" })).toBeNull();
+    const list = screen.getByRole("list", { name: "Signals" });
+    expect(
+      Array.from(list.querySelectorAll("li[data-signal]")).map(
+        (row) => (row as HTMLElement).dataset.signal,
+      ),
+    ).toEqual([...signalNames]);
+    expect(
+      screen
+        .getByLabelText(/^VirusTotal: /, { selector: "summary, li" })
+        .getAttribute("aria-label"),
+    ).toBe("VirusTotal: 7 engines flagged this link as malicious.");
 
     // Result actions follow the evidence and say what they export.
     const download = screen.getByRole("button", {
       name: "Download result (JSON)",
     });
-    const list = screen.getByRole("list", { name: "Signals" });
     expect(
       list.compareDocumentPosition(download) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
@@ -318,38 +337,62 @@ describe("ResultsSection", () => {
     expect(analyze.getAttribute("data-variant")).toBe("primary");
   });
 
-  it("focuses the first newly revealed check after Show all checks", async () => {
-    const signals = buildSignals(7);
-    // Expandable rows: VirusTotal (a driver) and DNS (newly revealed).
-    if (signals.virusTotal.data) {
-      signals.virusTotal.data.lastAnalysisDate = new Date().toISOString();
-    }
-    signals.dns = cleanSignals().dns;
-    renderApp(
-      <OpenStored
-        result={resultFrom("revealed", signals, "https://evil.example/")}
-      />,
-    );
-    fireEvent.click(screen.getByRole("button", { name: "open stored" }));
-
-    // Summary already shows VirusTotal, the first expandable row in Full.
-    const virusTotal = await screen.findByLabelText(/^VirusTotal:/, {
-      selector: "summary, li",
+  it("holds each question's space with a placeholder until its checks land", async () => {
+    const stream = stubHeldStream();
+    renderApp();
+    fireEvent.change(screen.getByRole("textbox", { name: "URL to analyze" }), {
+      target: { value: "example.com" },
     });
-    expect(virusTotal.tagName).toBe("SUMMARY");
-    expect(screen.queryByLabelText(/^DNS Profile:/)).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: /Show all checks/ }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Analyze URL" }));
+    });
+    const clean = cleanSignals();
+    const send = (event: unknown) =>
+      stream.controller?.enqueue(
+        new TextEncoder().encode(`${JSON.stringify(event)}\n`),
+      );
+    await act(async () => {
+      send({
+        type: "scan_started",
+        scanId: "live",
+        url: "https://example.com/",
+        cached: false,
+        startedAt: "2026-10-06T00:00:00.000Z",
+      });
+      send({ type: "signal_result", name: "ssl", result: clean.ssl });
+    });
 
+    const questions = await screen.findByRole("list", { name: "Questions" });
     await waitFor(() => {
-      const row = (
-        document.activeElement as HTMLElement | null
-      )?.closest<HTMLElement>("li[data-signal]");
-      expect(row?.dataset.signal).toBe("dns");
-      expect(document.activeElement?.tagName).toBe("SUMMARY");
-      expect(document.activeElement?.getAttribute("aria-label")).toMatch(
-        /^DNS Profile:/,
+      const https = questions.querySelector('[data-question="https"]');
+      expect(https?.getAttribute("aria-busy")).toBeNull();
+      expect(https?.textContent).toContain(
+        "No. The site has a valid certificate.",
       );
     });
+    const reported = questions.querySelector('[data-question="reported"]');
+    expect(reported?.getAttribute("aria-busy")).toBe("true");
+    expect(reported?.textContent).toContain("Checking…");
+    // The sources are known before the answer.
+    expect(reported?.textContent).toContain("Sources:");
+
+    await act(async () => {
+      stream.controller?.close();
+    });
+  });
+
+  it("hides the band's because line while the questions state the evidence", async () => {
+    const result = buildResult("because", 7);
+    expect(result.threatInfo?.summary).toBeTruthy();
+    renderApp(<OpenStored result={result} />);
+    fireEvent.click(screen.getByRole("button", { name: "open stored" }));
+
+    await screen.findByRole("list", { name: "Questions" });
+    expect(screen.queryByText(result.threatInfo!.summary)).toBeNull();
+    // The imperative and the confidence line stay.
+    const band = screen.getByLabelText(/^scan result: malicious$/i);
+    expect(within(band).getByText("Don't open this link.")).toBeTruthy();
+    expect(within(band).getByText(/confidence$/)).toBeTruthy();
   });
 
   it("moves focus to the verdict when a stored result opens", async () => {
@@ -597,17 +640,77 @@ describe("ResultsSection", () => {
     fireEvent.click(screen.getByRole("button", { name: "open stored" }));
 
     expect(await screen.findByText("Looks safe to open.")).toBeTruthy();
-    expect(
-      screen.getByRole("button", {
-        name: /^All 8 checks found nothing\. Show all checks/,
-      }),
-    ).toBeTruthy();
+    expect(screen.getAllByText("Not on any list we checked.")).toHaveLength(1);
     expect(screen.queryByText("No check flagged this link.")).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: /Show all checks/ }),
+    ).toBeNull();
+  });
+
+  it("keeps a reopened result's ages on its own check time", async () => {
+    const checkedAt = Date.parse("2026-10-06T09:00:00.000Z");
+    const signals = cleanSignals();
+    signals.ssl.data!.validFrom = new Date(
+      checkedAt - 2 * 60 * 60 * 1000,
+    ).toISOString();
+    // The server counts domain age when it checks; it never moves after.
+    signals.whois.data!.ageDays = 3;
+    signals.threatFeeds.data!.matches = [
+      {
+        feed: "urlhaus",
+        matchedUrl: "https://example.com/",
+        detail: "lists this link as active malware distribution",
+        confidence: "high",
+        matchType: "url",
+        listedAt: new Date(checkedAt - 6 * 60 * 60 * 1000).toISOString(),
+      },
+    ];
+    const result = resultFrom("aged", signals, "https://example.com/");
+    result.metadata.completedAt = new Date(checkedAt).toISOString();
+    result.metadata.checkedAt = new Date(checkedAt).toISOString();
+
+    // Reopened from history 30 days later.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(checkedAt + 30 * 24 * 60 * 60 * 1000);
+    try {
+      renderApp(<OpenStored result={result} />);
+      fireEvent.click(screen.getByRole("button", { name: "open stored" }));
+      const questions = await screen.findByRole("list", { name: "Questions" });
+      const text = (id: string) =>
+        questions.querySelector(`[data-question="${id}"]`)?.textContent ?? "";
+
+      expect(text("https")).toContain(
+        "This certificate was issued 2 hours ago.",
+      );
+      expect(text("concern")).toContain(
+        "Its domain was registered 3 days ago.",
+      );
+      expect(text("reported")).toContain("(listed 6 hours ago)");
+      // The pairing the engine scored still reads as it did.
+      expect(text("https")).toContain(
+        "A brand-new certificate on a brand-new domain",
+      );
+
+      // Full counts its ages from the same moment; expiry still counts from now.
+      fireEvent.click(screen.getByRole("switch", { name: /^summary full/i }));
+      const rows = await screen.findByRole("list", { name: "Signals" });
+      const row = (name: string) =>
+        rows.querySelector(`li[data-signal="${name}"]`)?.textContent ?? "";
+      expect(row("threatFeeds")).toContain("Listed6 hours ago");
+      expect(row("ssl")).toContain("Certificate age0 days");
+      expect(row("ssl")).not.toMatch(/Certificate age30 days/);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("states each driving fact once on the default Summary view", async () => {
     for (const [host, fact, pattern] of [
-      ["malicious.scrutinix.test", "engines flagged", /engines flagged/g],
+      [
+        "malicious.scrutinix.test",
+        "VirusTotal engines flag",
+        /VirusTotal engines flag/g,
+      ],
       ["feed-hit.scrutinix.test", "lists this link", /lists this link/g],
     ] as const) {
       const result = resultFrom(
@@ -625,7 +728,7 @@ describe("ResultsSection", () => {
     }
   });
 
-  it("names each strip cell by its finding and reveals its row", async () => {
+  it("names each strip cell by its finding and leads to its question or row", async () => {
     const signals = buildSignals(7);
     signals.dns = cleanSignals().dns;
     renderApp(
@@ -649,23 +752,45 @@ describe("ResultsSection", () => {
     fireEvent.keyDown(cells[1]!, { key: "End" });
     expect(document.activeElement).toBe(cells[7]);
 
-    // DNS is hidden on Summary: its cell switches to Full, opens the row,
-    // and focuses it.
-    expect(screen.queryByLabelText(/^DNS Profile:/)).toBeNull();
+    // Summary: a cell moves focus to the question that cites its check.
+    expect(strip.getAttribute("aria-describedby")).toBe("sx-strip-hint");
+    expect(document.getElementById("sx-strip-hint")?.textContent).toBe(
+      "Each check moves to the question it answers below.",
+    );
     const dnsCell = cells.find(
       (cell) => cell.dataset.signal === "dns",
     ) as HTMLElement;
+    fireEvent.click(dnsCell);
+    await waitFor(() => {
+      expect(document.activeElement).toBe(
+        screen.getByRole("heading", {
+          name: "What did the other checks find?",
+        }),
+      );
+    });
+    fireEvent.click(cells[0]!);
+    await waitFor(() => {
+      expect(document.activeElement).toBe(
+        screen.getByRole("heading", { name: "Has it been reported?" }),
+      );
+    });
+    expect(
+      screen
+        .getByRole("switch", { name: /^Summary Full/ })
+        .getAttribute("aria-checked"),
+    ).toBe("false");
+
+    // Full: the same cell opens the check's row and focuses it.
+    fireEvent.click(screen.getByRole("switch", { name: /^Summary Full/ }));
+    expect(document.getElementById("sx-strip-hint")?.textContent).toBe(
+      "Each check opens its evidence below.",
+    );
     fireEvent.click(dnsCell);
     await waitFor(() => {
       const row = screen.getByLabelText(/^DNS Profile:/);
       expect(document.activeElement).toBe(row);
       expect(row.closest("details")?.open).toBe(true);
     });
-    expect(
-      screen
-        .getByRole("switch", { name: /^Summary Full/ })
-        .getAttribute("aria-checked"),
-    ).toBe("true");
   });
 
   it("keeps keyboard focus on the band through a Re-scan", async () => {
@@ -777,6 +902,9 @@ describe("shared links and their signature", () => {
     expect(
       within(band).getByRole("button", { name: "Run a fresh scan" }),
     ).toBeTruthy();
+    // A snapshot carries no check data: no questions, no rows.
+    expect(screen.queryByRole("list", { name: "Questions" })).toBeNull();
+    expect(screen.queryByRole("list", { name: "Signals" })).toBeNull();
   });
 
   it("shows nothing an unsigned payload claims", () => {
@@ -953,9 +1081,10 @@ describe("ResultsSection focus and states", () => {
     expect(
       await screen.findByText(/saved before per-check results were kept/),
     ).toBeTruthy();
-    // No strip claiming eight failed checks, and no rows.
+    // No strip claiming eight failed checks, no rows, and no questions.
     expect(screen.queryByRole("toolbar", { name: "Checks" })).toBeNull();
     expect(screen.queryByRole("list", { name: "Signals" })).toBeNull();
+    expect(screen.queryByRole("list", { name: "Questions" })).toBeNull();
   });
 
   it("draws eight failed cells for a real scan whose checks all failed", async () => {
@@ -975,6 +1104,11 @@ describe("ResultsSection focus and states", () => {
     const strip = await screen.findByRole("toolbar", { name: "Checks" });
     expect(strip.querySelectorAll('[data-severity="error"]').length).toBe(8);
     expect(screen.queryByText(/saved before per-check results/)).toBeNull();
+    // Nothing to answer with: Summary keeps the eight failed rows.
+    expect(screen.queryByRole("list", { name: "Questions" })).toBeNull();
+    expect(
+      screen.getByRole("list", { name: "Signals" }).querySelectorAll("li"),
+    ).toHaveLength(8);
   });
 });
 

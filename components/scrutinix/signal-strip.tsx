@@ -69,20 +69,27 @@ interface SignalStripProps {
   signals: SignalResults;
   scored: ReadonlySet<SignalName>;
   streaming: boolean;
-  /** Reveal and focus the row for this signal. */
+  /**
+   * What a cell leads to: the Summary question that cites the check, or
+   * the check's evidence row (Full).
+   */
+  leadsTo?: "question" | "row";
+  /** Move focus to the question or row for this signal. */
   onActivate: (name: SignalName) => void;
 }
 
 /**
  * The live strip. It is the streaming progress (cells fill in place, never
  * reflowing) and the evidence index: each cell is a named control that
- * reveals its row. Arrow keys, Home, and End move between cells; only one
- * cell is in the tab order (roving tabindex).
+ * moves to the Summary question citing its check, or opens its row in
+ * Full. Arrow keys, Home, and End move between cells; only one cell is in
+ * the tab order (roving tabindex).
  */
 export function SignalStrip({
   signals,
   scored,
   streaming,
+  leadsTo = "row",
   onActivate,
 }: SignalStripProps) {
   const signature = getSignalSignature(signals, scored);
@@ -127,7 +134,9 @@ export function SignalStrip({
       className={STRIP_GRID}
     >
       <span id="sx-strip-hint" className="sr-only">
-        Each check opens its evidence below.
+        {leadsTo === "question"
+          ? "Each check moves to the question it answers below."
+          : "Each check opens its evidence below."}
       </span>
       {signalNames.map((name, index) => {
         const severity = signature[index] ?? "pending";

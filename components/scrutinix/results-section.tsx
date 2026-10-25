@@ -12,15 +12,23 @@ import {
   SignatureStrip,
 } from "@/components/scrutinix/signal-strip";
 import {
+  SummaryQuestionList,
+  questionHeadingId,
+} from "@/components/scrutinix/summary-questions";
+import {
   VERDICT_HEADING_ID,
   VerdictBand,
   VerdictDetails,
 } from "@/components/scrutinix/verdict-panel";
 import { SIGNAL_COUNT } from "@/components/shared/scrutinix-types";
-import { describeQuietChecks } from "@/components/shared/signal-selection";
 import { Button } from "@/components/ui/button";
-import { useLinkAnatomy, warmLinkParser } from "@/hooks/use-link-anatomy";
+import {
+  getLoadedLinkParser,
+  useLinkAnatomy,
+  warmLinkParser,
+} from "@/hooks/use-link-anatomy";
 import { downloadTextFile } from "@/lib/client/export";
+import { registrableDomainOf } from "@/lib/domain/link-anatomy";
 import {
   signalNames,
   type AnalysisResult,
@@ -28,6 +36,11 @@ import {
   type SignalResults,
 } from "@/lib/domain/types";
 import { isLegacySignalRecord } from "@/lib/domain/signal-signature";
+import {
+  evidenceTimeOf,
+  getSummaryQuestions,
+  questionCiting,
+} from "@/lib/domain/summary-questions";
 import { getVerdictAnnouncement } from "@/lib/domain/verdict-guidance";
 import { cn } from "@/lib/utils";
 
@@ -46,11 +59,13 @@ const BatchTable = dynamic(
 );
 
 function RuntimeSignalRow<N extends SignalName>({
+  evidenceTime,
   index,
   name,
   scored,
   signals,
 }: {
+  evidenceTime: number | undefined;
   index: number;
   name: N;
   scored: boolean;
@@ -62,6 +77,7 @@ function RuntimeSignalRow<N extends SignalName>({
       result={signals[name]}
       index={index}
       scored={scored}
+      evidenceTime={evidenceTime}
     />
   );
 }
@@ -94,16 +110,15 @@ export function ResultsSection() {
     openStoredResult,
     rescanUrl,
     scan,
+    scored,
     setSingleUrl,
     setViewMode,
     shareResult,
     shared,
     sharedSnapshot,
     signals,
-    summarySelection,
     verdictFocusRequest,
     viewMode,
-    visibleSignals,
   } = useAnalyzerRuntime();
 
   const linkUrl =
@@ -204,28 +219,9 @@ export function ResultsSection() {
     if (lost) document.getElementById("sx-url-input")?.focus();
   }, [active, scan.state.isStreaming, scan.state.result]);
 
-  // Revealing the quiet checks removes the button that did it; move focus
-  // to the first newly revealed check that can expand, so keyboard users
-  // land on new evidence rather than a row Summary already showed. If none
-  // of the revealed rows expands, focus the list instead of <body>.
+  // A strip cell leads to its evidence: in Summary, the question citing
+  // its check; in Full, its row, opened. Focus moves there.
   const signalListRef = useRef<HTMLUListElement>(null);
-  const revealedFromRef = useRef<ReadonlySet<SignalName> | null>(null);
-  useEffect(() => {
-    const shownBefore = revealedFromRef.current;
-    if (!shownBefore || viewMode !== "full") return;
-    revealedFromRef.current = null;
-    const list = signalListRef.current;
-    const target = Array.from(
-      list?.querySelectorAll<HTMLElement>("li[data-signal]") ?? [],
-    )
-      .filter((row) => !shownBefore.has(row.dataset.signal as SignalName))
-      .map((row) => row.querySelector<HTMLElement>("summary"))
-      .find(Boolean);
-    (target ?? list)?.focus();
-  }, [viewMode]);
-
-  // A strip cell reveals its row: switch to Full if Summary hides it, open
-  // its evidence, and move focus there.
   const [revealRequest, setRevealRequest] = useState<{
     name: SignalName;
     at: number;
@@ -235,21 +231,25 @@ export function ResultsSection() {
     const row = signalListRef.current?.querySelector<HTMLElement>(
       `li[data-signal="${revealRequest.name}"]`,
     );
-    if (!row) return;
-    const details = row.querySelector("details");
+    const target =
+      row ??
+      document.getElementById(
+        questionHeadingId(questionCiting(revealRequest.name)),
+      );
+    if (!target) return;
+    const details = row?.querySelector("details");
     if (details) details.open = true;
-    (row.querySelector<HTMLElement>("summary") ?? row).focus({
+    (row?.querySelector<HTMLElement>("summary") ?? target).focus({
       preventScroll: true,
     });
-    row.scrollIntoView?.({
+    target.scrollIntoView?.({
       block: "nearest",
       behavior: prefersReducedMotion() ? "auto" : "smooth",
     });
     setRevealRequest(null);
-  }, [revealRequest, visibleSignals]);
+  }, [revealRequest]);
 
   const activateSignal = (name: SignalName) => {
-    if (!visibleSignals.includes(name)) setViewMode("full");
     setRevealRequest({ name, at: Date.now() });
   };
 
@@ -262,8 +262,32 @@ export function ResultsSection() {
     !legacyRecord &&
     (scan.state.isStreaming ||
       signalNames.some((name) => signals[name].status !== "pending"));
-  const quietChecks =
-    viewMode === "summary" ? describeQuietChecks(summarySelection) : null;
+  // Summary answers five questions. A failed scan has nothing to answer
+  // with, so it keeps its eight rows; Full always shows the rows.
+  const showQuestions =
+    hasSignalActivity &&
+    viewMode === "summary" &&
+    !(active?.verdict === "error");
+  // One clock for every relative age, in Summary and Full: a finished
+  // result's own check time, or the server's start time while a scan
+  // streams, so ages don't jump when the verdict lands.
+  const evidenceTime = active
+    ? evidenceTimeOf(active.metadata)
+    : scan.state.isStreaming && scan.state.startedAt
+      ? evidenceTimeOf({ checkedAt: scan.state.startedAt })
+      : undefined;
+  const parse = getLoadedLinkParser();
+  const questions =
+    showQuestions && linkUrl
+      ? getSummaryQuestions({
+          url: linkUrl,
+          signals,
+          now: evidenceTime,
+          registeredDomainOf: parse
+            ? (host) => registrableDomainOf(parse, host)
+            : null,
+        })
+      : null;
   // A shared link with nothing else on screen: its band (verified snapshot
   // or the neutral "check it yourself") and Scrutinix's own anatomy.
   const showShared = !active && !scan.state.isStreaming && shared !== null;
@@ -307,7 +331,7 @@ export function ResultsSection() {
             completedSignals={done}
             impersonates={impersonates}
             addressCheck={addressCheck}
-            driverRows={summarySelection.drivers.length}
+            evidenceShown={hasSignalActivity}
             onCancelScan={() => {
               // Cancel unmounts with its band: hand focus back to the input.
               focusOnLandRef.current = false;
@@ -330,7 +354,9 @@ export function ResultsSection() {
                 url={linkUrl}
                 anatomy={anatomy}
                 signals={showShared ? null : signals}
-                visibleSignals={visibleSignals}
+                // The questions and rows state every check's facts, so the
+                // anatomy keeps them only while a scan streams.
+                visibleSignals={hasSignalActivity ? signalNames : []}
                 streaming={scan.state.isStreaming && !active}
               />
             </div>
@@ -354,8 +380,9 @@ export function ResultsSection() {
               <div className="mt-8">
                 <SignalStrip
                   signals={signals}
-                  scored={summarySelection.scored}
+                  scored={scored}
                   streaming={scan.state.isStreaming && !active}
+                  leadsTo={questions ? "question" : "row"}
                   onActivate={activateSignal}
                 />
               </div>
@@ -400,42 +427,26 @@ export function ResultsSection() {
                   </button>
                 </div>
 
-                {visibleSignals.length > 0 ? (
+                {questions ? (
+                  <SummaryQuestionList questions={questions} />
+                ) : (
                   <ul
                     ref={signalListRef}
                     aria-label="Signals"
-                    tabIndex={-1}
-                    className="divide-y divide-[var(--sx-border)] border-b border-[var(--sx-border)] outline-none focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--sx-focus-ring)]"
+                    className="divide-y divide-[var(--sx-border)] border-b border-[var(--sx-border)]"
                   >
-                    {visibleSignals.map((signalName, index) => (
+                    {signalNames.map((signalName, index) => (
                       <RuntimeSignalRow
                         key={signalName}
                         name={signalName}
                         signals={signals}
-                        scored={summarySelection.scored.has(signalName)}
+                        scored={scored.has(signalName)}
                         index={index}
+                        evidenceTime={evidenceTime}
                       />
                     ))}
                   </ul>
-                ) : null}
-
-                {quietChecks ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      revealedFromRef.current = new Set(
-                        summarySelection.drivers,
-                      );
-                      setViewMode("full");
-                    }}
-                    className="min-h-11 self-start py-2 text-left text-sm text-[var(--sx-text-muted)] hover:text-[var(--sx-text)]"
-                  >
-                    {quietChecks}{" "}
-                    <span className="sx-link whitespace-nowrap">
-                      Show all checks
-                    </span>
-                  </button>
-                ) : null}
+                )}
               </div>
             </>
           ) : null}

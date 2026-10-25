@@ -106,10 +106,11 @@ export default function AboutPage() {
                 : `${cellNames[name]} (${signalLabels[name]})`,
             )
             .join(", ")}
-          . Each cell opens its check&apos;s evidence. Each kind of answer has
-          its own shape as well as its colour. A cell that found nothing is a
-          thin gray dash, never green: green is kept for a Safe verdict, so a
-          quiet check never reads as an endorsement.
+          . Each cell leads to its check&apos;s evidence: in Summary, the
+          question that cites it; in Full, its row. Each kind of answer has its
+          own shape as well as its colour. A cell that found nothing is a thin
+          gray dash, never green: green is kept for a Safe verdict, so a quiet
+          check never reads as an endorsement.
         </p>
         <ul
           className={`${PROSE_MEASURE} grid gap-x-6 gap-y-2.5 sm:grid-cols-2`}
@@ -160,9 +161,9 @@ export default function AboutPage() {
           className={`${PROSE_MEASURE} text-body flex list-disc flex-col gap-2.5 pl-5 text-[var(--sx-text-muted)] marker:text-[var(--sx-text-soft)]`}
         >
           <li>
-            Summary shows only the checks that drove the verdict; Full lists all
-            eight. Each row expands to its evidence: engines, certificate
-            fields, redirect hops.
+            Summary answers five plain questions, each naming the checks it
+            rests on; Full lists all eight checks. Each Full row expands to its
+            evidence: engines, certificate fields, redirect hops.
           </li>
           <li>
             Batch checks up to 10 links at once. Rows resolve independently;

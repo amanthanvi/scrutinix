@@ -66,7 +66,7 @@ async function seedLegacySuspiciousEntry() {
 }
 
 describe("history saved before scoredSignals", () => {
-  it("shows the checks that drove the verdict when reopened", async () => {
+  it("marks the checks that drove the verdict when reopened", async () => {
     await seedLegacySuspiciousEntry();
     render(
       <AnalyzerRuntimeProvider>
@@ -80,15 +80,22 @@ describe("history saved before scoredSignals", () => {
     });
     fireEvent.click(entry);
 
+    // The re-derived scored checks draw as warnings, never "found nothing",
+    // and the questions state what they found.
+    const strip = await screen.findByRole("toolbar", { name: "Checks" });
     await waitFor(() => {
-      expect(screen.getByLabelText(/^Redirect Chain:/)).toBeTruthy();
+      for (const name of ["redirectChain", "whois"]) {
+        expect(
+          strip
+            .querySelector(`[data-signal="${name}"] [data-severity]`)
+            ?.getAttribute("data-severity"),
+        ).toBe("suspicious");
+      }
     });
-    expect(screen.getByLabelText(/^Domain Registration:/)).toBeTruthy();
-    expect(screen.queryByText(/All 8 checks found nothing/)).toBeNull();
-    expect(
-      screen.getByRole("button", {
-        name: /^6 other checks found nothing\. Show all checks/,
-      }),
-    ).toBeTruthy();
+    const questions = screen.getByRole("list", { name: "Questions" });
+    expect(questions.textContent).toContain(
+      "Its domain was registered about 3 months ago.",
+    );
+    expect(questions.textContent).toContain("1 hidden frame");
   });
 });

@@ -73,6 +73,34 @@ describe("threat feed provider", () => {
     ]);
   });
 
+  it("keeps the URLhaus listing date for an exact match", async () => {
+    server.use(
+      http.post("https://urlhaus-api.abuse.ch/v1/url/", () =>
+        HttpResponse.json({
+          query_status: "ok",
+          threat: "malware_download",
+          url_status: "online",
+          date_added: "2026-10-23 07:12:45 UTC",
+        }),
+      ),
+      http.get(
+        "https://openphish.com/feed.txt",
+        () => new HttpResponse("", { status: 200 }),
+      ),
+    );
+    stubThreatFox();
+
+    const result = await runThreatFeedsProvider("https://evil.example/x.exe");
+
+    expect(result.matches).toContainEqual(
+      expect.objectContaining({
+        feed: "urlhaus",
+        detail: "lists this link as a malware download",
+        listedAt: "2026-10-23T07:12:45.000Z",
+      }),
+    );
+  });
+
   it("falls back to URLhaus host-level listings when the exact URL is unknown", async () => {
     server.use(
       http.post("https://urlhaus-api.abuse.ch/v1/url/", () =>

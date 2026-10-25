@@ -37,7 +37,7 @@ npm run icons                      # Regenerate favicons/app icons from lib/bran
 
 ```
 app/
-  layout.tsx              # Root layout (ThemeProvider + Sonner + Geist Sans/Mono)
+  layout.tsx              # Root layout (ThemeProvider + Sonner; system sans/mono, no page web fonts)
   page.tsx                # Single-column home: header, headline, ScanForm, ResultsSection, history; ?shared= metadata
   scrutinix.css           # CSS-only motion/utility layer (sx-* classes)
   globals.css             # Tailwind v4 + semantic --sx-* theme tokens
@@ -56,12 +56,13 @@ components/
     app-footer.tsx        # One-line footer
     scan-form.tsx         # Single/Batch tabs + inputs (id="scan-console")
     input-panels.tsx      # URL input + Paste + Analyze; batch textarea and exports
-    results-section.tsx   # Band → anatomy → strip → Summary/Full rows → details → actions; focus + live region
+    results-section.tsx   # Band → anatomy → strip → Summary questions / Full rows → details → actions; focus + live region
     verdict-panel.tsx     # VerdictBand (Checking/result/snapshot, one element tree) + VerdictDetails
     link-anatomy.tsx      # Registered domain emphasised, look-alike sentence, segment-keyed facts, full-link toggle
     signal-strip.tsx      # SignalStrip (roving toolbar), SignatureStrip, SignalGlyph
     signal-cell.tsx       # Server-safe atoms: SignalCell, cellNames, BrandMark
     signal-row.tsx        # Typed per-signal disclosure row (<li>, strip cell as marker)
+    summary-questions.tsx # Summary: the five questions (h4 each), placeholder while pending, QuestionSources
     batch-table.tsx       # Batch result list with mini strips
     result-row.tsx        # Shared history/batch row parts: verdict word (look-alike tone), compact anatomy
     history-section.tsx   # Dynamic-import wrapper; drains completed-result queue
@@ -71,7 +72,6 @@ components/
   shared/
     scrutinix-types.ts    # Verdict/severity presentation helpers ("clear" = found nothing)
     signal-utils.ts       # Signal findings, summaries + detail entries
-    signal-selection.ts   # Summary selection: verdict drivers + quiet-check line
 
 hooks/
   use-ndjson-request.ts   # Shared stream core
@@ -84,6 +84,7 @@ lib/
   brand-mark.ts           # Mark geometry: header, OG cards, scripts/generate-icons.mjs
   domain/                 # Zod schemas, URL validation, verdict logic
     verdict-guidance.ts   # Imperative line, showScore, announcement, coverage caveat
+    summary-questions.ts  # Summary's five questions: fixed mapping, answers, why clauses, disagreements
     feed-copy.ts          # Feed display names, feed-match + Google threat-type wording
     reputation.ts         # Client-safe reputation thresholds + hasConfirmedReputationHit
     signal-severity.ts    # Per-signal severity ("clear" = found nothing; scored => warning)
@@ -143,13 +144,68 @@ tests/
   score visibility, live announcement, caveat) and `lib/domain/verdict.ts`
   (summary naming the evidence, reasons) own every verdict string; counts go
   through `countOf`. `threatInfo.scoredSignals` (from `getScoredSignals`) is
-  the single source of truth for which rows Summary shows. Feed-match `detail` is a clause that follows the feed's
+  the single source of truth for which checks drove the verdict (the strip
+  and Full rows never draw them as "found nothing"). Feed-match `detail` is a clause that follows the feed's
   display name ("lists this link as phishing"); `describeFeedMatch` adds it.
 - **Verdict band**: tinted with `--sx-<verdict>-surface`; the word stays ink
-  (one colour encoding). The summary sentence shows only when no Summary
-  driver row already states it. It is the only tinted container; once it
+  (one colour encoding). The summary sentence ("because" line) yields
+  whenever the questions or rows state the evidence (`evidenceShown`), so in
+  practice only a legacy record shows it. It is the only tinted container; once it
   mounts, the home headline steps down to the headline size (CSS `:has`)
   so the verdict owns the one display moment.
+- **Summary questions**: Summary answers five plain questions
+  (`lib/domain/summary-questions.ts`, which holds every Summary string), in
+  fixed order with a fixed mapping so each check is cited by exactly one:
+  "Has it been reported?" (VirusTotal, Safe Browsing, threat feeds), "Where
+  would it take me?" (redirects and the final page), "What else raises
+  concern?" (link pattern model, registration), "Does HTTPS make it safe?"
+  (certificate), "What did the other checks find?" (DNS, hosting network).
+  Each has a short answer, one "why it matters" clause, its sources (strip
+  cell names, `QuestionSources`), and an optional disagreement sentence
+  when checks conflict in a way a reader would notice (lists clean on a
+  brand-new domain, a list hit VirusTotal hasn't caught, the pattern model
+  flagging what every list passed, naming whichever member flagged it, a
+  VirusTotal conviction no list shares).
+  The HTTPS answer always starts "No." (a valid certificate is encryption,
+  not trust) and dates the leaf certificate it read ("This certificate was
+  issued 2 hours ago"), never "first". Hosting is "network AS… , registered
+  in NL", never "located/hosted in". Listing dates, certificate age, and
+  hosting add no score contribution (the one existing certificate-age rule,
+  a days-old certificate on a brand-new domain, predates them, and the
+  HTTPS why names it unless a certificate error takes the why); nothing
+  here changes a verdict or score, and the
+  questions read signals only (not `scoredSignals`), so a weak scored hit
+  under Safe never reads as a "threat report". Every scored finding is
+  named by its question: `tests/unit/summary-questions.test.ts` walks
+  every scorer branch via `getScoredFindings`, and the thresholds it names
+  are shared from `signal-severity.ts`. The link pattern model and
+  structure checks are each described from their own label (agreement
+  only when the labels match; the combined reading is its own sentence).
+  A redirect chain that stopped partway keeps the hops it saw and leaves
+  the destination unconfirmed; "couldn't reach" means nothing answered.
+  Unscored page findings (one hard-to-read sign, under three frames) are
+  not raised. Ages of what was seen, in Summary and Full rows alike, count
+  from the result's check time (`evidenceTimeOf`: `checkedAt`, else
+  `completedAt`; the stream's start while scanning), never from when it is
+  reopened; certificate expiry counts from now. A plain
+  HTTP link that moves to HTTPS says so and still gives the certificate. A
+  name with no public address says so ("We found no address", or "only
+  private or reserved addresses"), never "points nowhere". A question is pending
+  until every check it cites lands; its placeholder holds room shaped like
+  a typical clean answer (`PLACEHOLDER_SHAPE`, invisible generated content,
+  never text), so later headings hold still in the common case (findings
+  and long hosts still grow a question; "couldn't check" answers shrink). Question
+  text wraps anywhere (long hosts break, never truncate), and the sources
+  dot is drawn (`.sx-source::before`), so a copy reads "VirusTotal, Safe
+  Browsing". The
+  owner and look-alike are stated by the anatomy, never by a question; the
+  anatomy's own facts (certificate, young domain, "Ends at") step aside
+  once the evidence below states them. Legacy records, Error results (all
+  eight rows in Summary), and shared snapshots get no questions. Full keeps
+  the eight rows. A strip cell focuses its question in Summary and opens
+  its row in Full. The PSL lookup is passed in (`registeredDomainOf`);
+  without it a different host is named but never called "a different
+  site".
 - **Eight-cell strip**: severities from `lib/domain/signal-signature.ts` in
   fixed `signalNames` order. Every state has its own shape, so no two differ
   by hue alone: flagged solid, caution hatched, found-nothing a thin dash,
@@ -215,6 +271,19 @@ tests/
   tests pass fixed times. The share toast tells the sender the 3-day
   window, and sharing an expired history entry says so with "Scan again".
   `share-signing.ts` and `env.ts` import `server-only` (vitest aliases it).
+- **Evidence is not a score**: `dns.hosting` (Team Cymru IP-to-ASN over
+  DNS, `lib/server/providers/team-cymru.ts`) and feed `listedAt` are
+  evidence only; no scoring path reads them. Hosting looks up the first
+  public address (IPv4 preferred; IPv6 only inside global unicast
+  2000::/3), never a private one, with a 2 s abort-aware resolver; only
+  the IP leaves the server. NXDOMAIN is recorded as `asn: null` ("no
+  network routes this address"); a timeout or malformed answer leaves
+  `hosting` unset and never fails the DNS signal, and a stored record with
+  a missing or invalid ASN is dropped, never read as `null`. The country
+  is the AS record's registration ("registered in NL", never "located
+  in"); the origin prefix's country is never a stand-in. Full-view rows come from `getSignalDetailEntries` (one
+  fact per row, explicit `now`); TXT values are counted and named by
+  kind, never dumped.
 - **UI danger is not a verdict**: form/stream errors and destructive
   confirms use `--sx-danger-fg` / `--sx-danger-border`, never
   `--sx-malicious-*`.
@@ -235,7 +304,7 @@ tests/
 ## Stack
 
 - Node 24 LTS, Next.js 16, React 19, TypeScript 5.9 (strict + noUncheckedIndexedAccess)
-- Tailwind CSS v4, Geist Sans/Mono, Radix, Lucide, Zod 4, idb, sonner,
+- Tailwind CSS v4, system sans/mono (bundled Geist only for server OG cards), Radix, Lucide, Zod 4, idb, sonner,
   next-themes, local `@huggingface/transformers`
 - ESLint 10 with direct Next.js, React, hooks, TypeScript, and JSX accessibility plugins
 - Vitest, MSW, fake-indexeddb, Playwright, axe-core, Lighthouse

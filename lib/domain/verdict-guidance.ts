@@ -376,11 +376,14 @@ function announcementHost(url: string): string | null {
  * Whether the verdict band should show the one-line summary as its
  * "because" line. It only appears when it adds information:
  *
- * - Not when Summary already shows driver rows: "7 VirusTotal engines
- *   flagged this link." above a VirusTotal row saying the same thing
- *   states one fact twice (`driverRows`).
- * - Not for a clean, fully covered Safe result: "Looks safe to open." and
- *   the quiet-checks line ("All 8 checks found nothing.") already say it.
+ * - Not when the evidence below states it (`evidenceShown`): the Summary
+ *   questions answer "Has it been reported?" and "What else raises
+ *   concern?" with the same facts, and the Full rows state each check, so
+ *   the line would say one fact twice. In practice it shows only for a
+ *   result with no evidence on screen (a record saved before checks were
+ *   kept).
+ * - Not for a clean, fully covered Safe result: "Looks safe to open."
+ *   already says it.
  *
  * The summary stays in the data for shares, exports, and history search.
  */
@@ -388,9 +391,9 @@ export function shouldShowVerdictSummary(
   result: Pick<AnalysisResult, "verdict" | "threatInfo"> & {
     metadata?: Pick<AnalysisResult["metadata"], "partialFailure"> | null;
   },
-  driverRows = 0,
+  evidenceShown = false,
 ): boolean {
-  if (!result.threatInfo?.summary || driverRows > 0) {
+  if (!result.threatInfo?.summary || evidenceShown) {
     return false;
   }
   if (result.verdict !== "safe") {

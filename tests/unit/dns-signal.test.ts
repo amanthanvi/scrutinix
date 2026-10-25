@@ -9,7 +9,12 @@ import {
 } from "node:dns/promises";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { lookupHostingNetwork } from "@/lib/server/providers/team-cymru";
 import { runDnsSignal } from "@/lib/server/signals/dns";
+
+vi.mock("@/lib/server/providers/team-cymru", () => ({
+  lookupHostingNetwork: vi.fn(async () => undefined),
+}));
 
 vi.mock("node:dns/promises", () => ({
   reverse: vi.fn(),
@@ -28,6 +33,7 @@ const resolveMxMock = vi.mocked(resolveMx);
 const resolveNsMock = vi.mocked(resolveNs);
 const resolveTxtMock = vi.mocked(resolveTxt);
 const reverseMock = vi.mocked(reverse);
+const lookupHostingMock = vi.mocked(lookupHostingNetwork);
 
 function mockEmptyLookups() {
   resolve4Mock.mockRejectedValue(
@@ -113,6 +119,66 @@ describe("runDnsSignal", () => {
       "Private or reserved addresses were omitted from the DNS result.",
     );
     expect(payload).not.toContain("192.168.1.20");
+  });
+
+  it("looks up the hosting network for the public addresses only", async () => {
+    mockEmptyLookups();
+    resolve4Mock.mockResolvedValue(["192.168.1.20", "93.184.216.34"]);
+    const hosting = {
+      ip: "93.184.216.34",
+      asn: 64500,
+      asName: "EXAMPLE-NET",
+      prefix: "93.184.216.0/24",
+      registeredCountry: "NL",
+    };
+    lookupHostingMock.mockResolvedValueOnce(hosting);
+    const controller = new AbortController();
+
+    const result = await runDnsSignal(
+      "https://example.test/",
+      controller.signal,
+    );
+
+    expect(lookupHostingMock).toHaveBeenCalledWith(
+      ["93.184.216.34"],
+      controller.signal,
+    );
+    expect(result.hosting).toEqual(hosting);
+  });
+
+  it("leaves hosting unset when the lookup has no answer", async () => {
+    mockEmptyLookups();
+    resolve4Mock.mockResolvedValue(["93.184.216.34"]);
+    lookupHostingMock.mockResolvedValueOnce(undefined);
+
+    const result = await runDnsSignal("https://example.test/");
+
+    expect(result).not.toHaveProperty("hosting");
+    expect(result.addresses).toEqual(["93.184.216.34"]);
+  });
+
+  it("looks up the hosting network of a literal public IP", async () => {
+    reverseMock.mockResolvedValueOnce([]);
+
+    await runDnsSignal("http://93.184.216.34/");
+
+    expect(lookupHostingMock).toHaveBeenCalledWith(
+      ["93.184.216.34"],
+      undefined,
+    );
+  });
+
+  it("treats a bracketed IPv6 literal as the address, not a hostname", async () => {
+    reverseMock.mockResolvedValueOnce([]);
+
+    const result = await runDnsSignal("https://[2606:4700:4700::1111]/");
+
+    expect(result.subjectType).toBe("ip");
+    expect(resolve6Mock).not.toHaveBeenCalled();
+    expect(lookupHostingMock).toHaveBeenCalledWith(
+      ["2606:4700:4700::1111"],
+      undefined,
+    );
   });
 
   it("redacts literal private IP subjects", async () => {

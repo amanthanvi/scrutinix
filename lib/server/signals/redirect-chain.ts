@@ -3,6 +3,7 @@ import https from "node:https";
 import type { IncomingMessage } from "node:http";
 
 import { analyzePageContent } from "@/lib/domain/content-analysis";
+import { REDIRECT_STATUSES } from "@/lib/domain/signal-severity";
 import type { RedirectData } from "@/lib/domain/types";
 import { checkFailureMessage } from "@/lib/server/client-error";
 import { SCRUTINIX_USER_AGENT } from "@/lib/server/http";
@@ -12,7 +13,6 @@ import {
   type PublicNetworkTargetResolution,
 } from "@/lib/server/public-network-target";
 
-const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
 const MAX_REDIRECTS = 5;
 const REQUEST_TIMEOUT_MS = 8_000;
 /** Aggregate budget across the whole chain (all hops, all addresses). */
