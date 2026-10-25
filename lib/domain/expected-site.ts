@@ -49,7 +49,9 @@ function expectedIp(parse: ParseHostname, expected: string): string | null {
     if (host.startsWith("[")) {
       link = `https://${expected}`;
     } else if (parse(host).isIp) {
-      const bracketed = host.includes(":") ? `[${host}]` : host;
+      // A bare IPv6 address (two or more colons) needs brackets to be a
+      // link; an IPv4 address with a port is a link as typed.
+      const bracketed = host.split(":").length > 2 ? `[${host}]` : host;
       link = `https://${bracketed}${expected.slice(host.length)}`;
     } else {
       return null;

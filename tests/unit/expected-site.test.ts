@@ -108,6 +108,13 @@ describe("compareExpectedSite", () => {
     expect(
       compareExpectedSite(parse, v4, "https://1.1.1.1/dns-query"),
     ).toMatchObject({ outcome: "match" });
+    // A port is part of the address as typed, not IPv6 syntax.
+    for (const typed of ["1.1.1.1:443", "1.1.1.1:8443/dns-query"]) {
+      expect(compareExpectedSite(parse, v4, typed), typed).toEqual({
+        outcome: "match",
+        sentence: "Matches 1.1.1.1.",
+      });
+    }
     expect(compareExpectedSite(parse, v4, "8.8.8.8")).toEqual({
       outcome: "mismatch",
       sentence: "This link belongs to 1.1.1.1, not 8.8.8.8.",
@@ -117,6 +124,7 @@ describe("compareExpectedSite", () => {
     expect(v6.registeredDomain).toBe("[2606:4700:4700::1111]");
     for (const typed of [
       "[2606:4700:4700::1111]",
+      "[2606:4700:4700::1111]:443/dns-query",
       "2606:4700:4700::1111",
       "2606:4700:4700:0:0:0:0:1111",
     ]) {
