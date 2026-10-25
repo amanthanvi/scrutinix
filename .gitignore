@@ -21,8 +21,12 @@
 # misc
 .DS_Store
 
-# Cursor IDE (local hooks/state; keep out of VCS)
-.cursor/
+# Cursor IDE (local hooks/state; keep out of VCS).
+# The verify skill symlink is the exception so agents can find it.
+.cursor/*
+!.cursor/skills/
+.cursor/skills/*
+!.cursor/skills/verify-scrutinix
 *.pem
 !tests/fixtures/localhost-self-signed.key.pem
 !tests/fixtures/localhost-self-signed.cert.pem
