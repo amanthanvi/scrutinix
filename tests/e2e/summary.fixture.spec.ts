@@ -1,6 +1,11 @@
 import { expect, test, type Page } from "@playwright/test";
 
-import { gotoApp, submitSingleScan } from "./helpers";
+import {
+  gotoApp,
+  holdScanStream,
+  releaseScanLines as release,
+  submitSingleScan,
+} from "./helpers";
 
 /**
  * Summary layout on real browsers: phone width, held streams, copying.
@@ -10,65 +15,6 @@ import { gotoApp, submitSingleScan } from "./helpers";
 
 const LONGEST_LABEL_HOST =
   "accountverificationandsecuritycheckpointforyoursigninportalnowx.com";
-
-/**
- * Hold the next scan's NDJSON stream: the real fixture response is read in
- * full, then handed to the app one line at a time. `scan_started` goes out
- * at once; `release(n)` sends the next n lines (eight signal results, then
- * `scan_complete`).
- */
-async function holdScanStream(page: Page) {
-  await page.addInitScript(() => {
-    const realFetch = window.fetch.bind(window);
-    window.fetch = async (input, init) => {
-      const url =
-        typeof input === "string"
-          ? input
-          : input instanceof URL
-            ? input.href
-            : input.url;
-      if (!new URL(url, location.href).pathname.endsWith("/api/analyze")) {
-        return realFetch(input, init);
-      }
-      const response = await realFetch(input, init);
-      const lines = (await response.text()).split("\n").filter(Boolean);
-      const encoder = new TextEncoder();
-      let sent = 0;
-      let stream!: ReadableStreamDefaultController<Uint8Array>;
-      const body = new ReadableStream<Uint8Array>({
-        start(controller) {
-          stream = controller;
-        },
-      });
-      const release = (count: number) => {
-        for (; count > 0 && sent < lines.length; count -= 1) {
-          stream.enqueue(encoder.encode(`${lines[sent]}\n`));
-          sent += 1;
-        }
-        if (sent === lines.length) stream.close();
-      };
-      (window as unknown as { __sxRelease: typeof release }).__sxRelease =
-        release;
-      release(1);
-      return new Response(body, {
-        status: response.status,
-        headers: response.headers,
-      });
-    };
-  });
-}
-
-async function release(page: Page, count: number) {
-  // The questions show as pending before the response arrives.
-  await page.waitForFunction(() => "__sxRelease" in window);
-  await page.evaluate(
-    (n) =>
-      (window as unknown as { __sxRelease: (n: number) => void }).__sxRelease(
-        n,
-      ),
-    count,
-  );
-}
 
 /** Each question heading's layout offset from the top of the list (transforms ignored). */
 async function headingOffsets(page: Page) {
