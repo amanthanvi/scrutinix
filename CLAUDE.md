@@ -29,7 +29,8 @@ npm run format:check               # Prettier
 npm run test:unit -- --run         # Vitest, node
 npm run test:integration -- --run  # Vitest, node + MSW
 npm run test:dom -- --run          # Vitest, jsdom + fake-indexeddb
-npm run test:e2e                   # Playwright with offline fixtures (E2E_PORT, default 3000)
+npm run test:e2e                   # Playwright with offline fixtures, Chromium (E2E_PORT, default 3000)
+npm run test:e2e:engines           # The same suite in Chromium, Firefox, and WebKit
 npm run lighthouse                 # Lighthouse audit (LIGHTHOUSE_PORT, default 3000)
 npm run check:contrast             # WCAG token-pair guard, both themes
 npm run icons                      # Regenerate favicons/app icons from lib/brand-mark.ts

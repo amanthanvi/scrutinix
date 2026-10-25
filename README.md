@@ -187,7 +187,9 @@ npm run lighthouse
 Pull requests and pushes to `main` run the full CI chain, including fixture-backed
 Playwright checks and Lighthouse with blocking Performance `>= 0.90` and
 Accessibility `>= 0.95` thresholds. CI installs Chromium explicitly and shares
-its executable path with both browser tools.
+its executable path with both browser tools. `npm run test:e2e` runs the
+Playwright suite in Chromium; `npm run test:e2e:engines` runs it in Chromium,
+Firefox, and WebKit, and CI runs the Firefox and WebKit legs as their own jobs.
 
 Additional repo maintenance checks:
 
