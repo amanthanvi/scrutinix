@@ -20,11 +20,11 @@ state plus the landed analysis-hardening and review-remediation work.
 
 ## Current Snapshot
 
-- Date: 2026-10-06
-- Execution status: `P21-P27 complete; P28 canonical redesign implemented, verified locally, and documented (DESIGN.md); P29 layer 0 (public errors) implemented and verified locally; P29.2a evidence data (layer 2, part A) implemented and verified locally; P29.2b Summary questions (layer 2, part B) implemented and verified locally; P29.5 sharing implemented and verified locally`
+- Date: 2026-10-24 (release 4.0.0)
+- Execution status: `P21-P28 complete; P29 distinctiveness stack (layers 0-7: public errors, honesty, evidence and Summary questions, anatomy on paste, speed, sharing, editorial identity, open methodology) merged and released as 4.0.0, with the verification skill (#64)`
 - Platform:
-  - Next.js `16.3.4`
-  - React `19.2.x`
+  - Next.js `16.4.2`
+  - React `19.3.x`
   - Node `24.20.0 LTS` (`.nvmrc`; deploy compatibility remains `24.x`)
   - ESLint `10.x` with direct Next.js, React, hooks, TypeScript, and JSX accessibility plugins
   - NDJSON streaming over `fetch`
