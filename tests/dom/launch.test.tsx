@@ -131,7 +131,7 @@ afterEach(() => {
 });
 
 describe("a link handed to the page (?url=, or the share target's redirect to it)", () => {
-  it("fills in the field, focuses it, takes the link apart, and scans only when Analyze is tapped", async () => {
+  it("fills in the field, takes the link apart, focuses Analyze, and scans only when Analyze is tapped", async () => {
     const fetchMock = stubScan(LINK);
     const raw = "HTTPS://Parcel-Help.Example:443/track#top";
     window.history.replaceState(

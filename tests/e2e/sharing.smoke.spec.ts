@@ -69,8 +69,8 @@ async function urlField(page: Page) {
 }
 
 /**
- * The page the link arrived on: the link filled in and focused, taken
- * apart below the field, and no scan, however long it waits.
+ * The page the link arrived on: the link filled in and taken apart below
+ * the field, Analyze focused, and no scan, however long it waits.
  */
 async function expectWaitingForAnalyze(
   page: Page,
