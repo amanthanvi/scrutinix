@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
-import { gotoApp, submitSingleScan } from "./helpers";
+import { gotoApp, setDefaultTextSize, submitSingleScan } from "./helpers";
 
 /**
  * These specs depend on SCRUTINIX_TEST_FIXTURES=1 (set by scripts/run-e2e.mjs),
@@ -158,6 +158,42 @@ test("a pasted link is taken apart before any scan, then hands over to the resul
   await expect(pasted).toHaveCount(0);
 });
 
+test("neighbouring captions keep a gap when a short part's caption wraps", async ({
+  page,
+}) => {
+  // "malicious." is narrower than "A label anyone can add", so that caption
+  // wraps inside its part; the next caption must not read on from it.
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await gotoApp(page);
+  await page
+    .getByRole("textbox", { name: "URL to analyze" })
+    .fill("https://malicious.scrutinix.test/login");
+  const pasted = page.getByRole("region", { name: "The link, taken apart" });
+  await expect(pasted).toContainText("Registered domain");
+  const gaps = await pasted.evaluate((region) => {
+    const textRects = [...region.querySelectorAll(".sx-anat-caption")].map(
+      (caption) => {
+        const range = document.createRange();
+        range.selectNodeContents(caption);
+        return [...range.getClientRects()];
+      },
+    );
+    const found: number[] = [];
+    for (let i = 0; i + 1 < textRects.length; i += 1) {
+      for (const left of textRects[i]!) {
+        for (const right of textRects[i + 1]!) {
+          if (Math.abs(left.top - right.top) < 2) {
+            found.push(right.left - left.right);
+          }
+        }
+      }
+    }
+    return found;
+  });
+  expect(gaps.length).toBeGreaterThan(0);
+  for (const gap of gaps) expect(gap).toBeGreaterThanOrEqual(12);
+});
+
 test("a long expected site wraps its answer instead of widening a phone", async ({
   page,
 }) => {
@@ -307,6 +343,20 @@ function headingWords(page: Page): Promise<string[]> {
   );
 }
 
+/** The verdict heading's size in px, and whether its word stays inside it. */
+function measureVerdict(page: Page) {
+  return page.locator("#sx-verdict-heading").evaluate((heading) => {
+    const word = heading.firstElementChild ?? heading;
+    return {
+      size: parseFloat(getComputedStyle(heading).fontSize),
+      inside:
+        heading.scrollWidth <= heading.clientWidth + 1 &&
+        word.getBoundingClientRect().right <=
+          heading.getBoundingClientRect().right + 1,
+    };
+  });
+}
+
 test("a slow link parser holds a Safe look-alike, never showing Safe", async ({
   page,
 }) => {
@@ -405,4 +455,41 @@ test("a link parser that fails to load leaves a Safe result Unconfirmed, never S
       () => document.documentElement.scrollWidth <= window.innerWidth,
     ),
   ).toBe(true);
+
+  // With twice the default text size it is larger, and wraps to stay inside.
+  const standard = await measureVerdict(page);
+  await setDefaultTextSize(page, 32);
+  const enlarged = await measureVerdict(page);
+  expect(enlarged.size).toBeGreaterThan(standard.size);
+  expect(enlarged.inside).toBe(true);
+});
+
+test("a larger default text size never shrinks a scored verdict, at any width, and keeps it inside its band", async ({
+  page,
+}) => {
+  await gotoApp(page);
+  await submitSingleScan(page, "https://critical.scrutinix.test/login");
+  const verdict = page.getByLabel(/^scan result: critical$/i);
+  await expect(verdict.getByRole("meter")).toBeVisible({ timeout: 15_000 });
+
+  // Through the rem breakpoints (40rem, 48rem) as they move with the text.
+  for (const width of [320, 414, 640, 768, 1024, 1280]) {
+    await page.setViewportSize({ width, height: 800 });
+    let previous = 0;
+    for (const standard of [16, 24, 32]) {
+      await setDefaultTextSize(page, standard);
+      const current = await measureVerdict(page);
+      const at = `${width}px wide, ${standard}px text`;
+      expect(current.size, at).toBeGreaterThanOrEqual(previous);
+      expect(current.inside, at).toBe(true);
+      previous = current.size;
+    }
+  }
+
+  // The narrowest phone: the 2rem floor makes it larger, not just equal.
+  await page.setViewportSize({ width: 320, height: 800 });
+  await setDefaultTextSize(page, 16);
+  const standard = await measureVerdict(page);
+  await setDefaultTextSize(page, 32);
+  expect((await measureVerdict(page)).size).toBeGreaterThan(standard.size);
 });

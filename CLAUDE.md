@@ -5,10 +5,12 @@
 **Scrutinix** — a FOSS multi-signal URL threat analyzer, live at
 https://www.scrutinix.net. It streams 8 separate security signals
 (VirusTotal, ML ensemble, Google Safe Browsing, threat feeds, SSL, WHOIS,
-DNS, redirect chain) over NDJSON into a minimal, single-column product UI:
-the canonical minimal product tool on a cool crisp white ground, with the
-verdict band, the site the link really belongs to, and an eight-cell signal strip as the
-one signature. Light and dark themes receive equal treatment.
+DNS, redirect chain) over NDJSON into a single-column product UI in the
+editorial fact-checker identity (P29.6): the link is the claim under
+review, answered with a squared verdict band, the site it really belongs
+to in the serif, the link taken apart, and an eight-cell strip whose
+numbered cells every Summary answer cites. Light and dark themes receive
+equal treatment.
 
 Operating conventions and learned gotchas live in [`AGENTS.md`](./AGENTS.md).
 `SPEC.md` is the product record; `DESIGN.md` is the design constraint of
@@ -37,13 +39,13 @@ npm run icons                      # Regenerate favicons/app icons from lib/bran
 
 ```
 app/
-  layout.tsx              # Root layout (ThemeProvider + lazy Sonner; system sans/mono, no page web fonts)
+  layout.tsx              # Root layout (ThemeProvider + lazy Sonner + Newsreader via next/font/local)
   page.tsx                # Single-column home: header, headline, ScanForm, ResultsSection, history; ?shared= metadata;
                           #   ?url= prefill (waits for Analyze); a shared link opens recipient-first
-  scrutinix.css           # CSS-only motion/utility layer (sx-* classes)
+  scrutinix.css           # CSS-only motion/effects + static sx-* component layout (band, anatomy, strip, questions, public tables)
   globals.css             # Tailwind v4 + semantic --sx-* theme tokens
   api/analyze/            # POST NDJSON stream (single + batch routes)
-  opengraph-image.tsx     # Default OG card (lib/og/cards.tsx, bundled Geist)
+  opengraph-image.tsx     # Default OG card (lib/og/cards.tsx, Newsreader + Geist from disk)
   og/result/route.tsx     # Per-result share image for ?shared= links (payload-capped)
   share/route.ts          # Web Share Target (POST /share): first link -> /?url= (prefill only; no cookie)
 proxy.ts                  # Rate limiting (scan tier for /api/analyze, image tier for /og/result) + CSP nonces
@@ -63,7 +65,7 @@ components/
     results-section.tsx   # Band → anatomy → strip → Summary questions / Full rows → details → actions; focus + live region
     verdict-panel.tsx     # VerdictBand (Checking/result/snapshot, one element tree) + VerdictDetails
     link-anatomy.tsx      # Registered domain emphasised, look-alike sentence, segment-keyed facts, full-link toggle
-    signal-strip.tsx      # SignalStrip (roving toolbar), SignatureStrip, SignalGlyph
+    signal-strip.tsx      # SignalStrip (numbered roving toolbar), SignatureStrip, SignalGlyph, cellNumber
     signal-cell.tsx       # Server-safe atoms: SignalCell, cellNames, BrandMark
     signal-row.tsx        # Typed per-signal disclosure row (<li>, strip cell as marker)
     summary-questions.tsx # Summary: the five questions (h4 each), placeholder while pending, QuestionSources
@@ -71,7 +73,7 @@ components/
     result-row.tsx        # Shared history/batch row parts: verdict word (look-alike tone), compact anatomy
     history-section.tsx   # Dynamic-import wrapper; drains completed-result queue
     history-panel.tsx     # Search, clear/undo, export, entry list (draws nothing when empty)
-    public-page-shell.tsx # Shared 46rem shell for /about and /privacy
+    public-page-shell.tsx # Shared 71rem shell for /about and /privacy (prose measures, TableFrame, .sx-public tables)
     error-boundary.tsx    # Class-based error boundary
     retryable-chunk.tsx   # next/dynamic loader: a failed optional chunk (Batch) says so in place, with Try again
   shared/
@@ -100,7 +102,7 @@ lib/
     registrable-domain.ts # Server wrapper over link-anatomy's registrableDomainOf
     copy.ts               # countOf / formatList / capitalize / formatAge for user-facing copy
     share-launch.ts       # Share-target link extraction (extractSharedLink) and ?url= prefill (resolvePrefill)
-  og/                     # Share-card renderers (cards.tsx) and bundled-Geist loader (fonts.ts)
+  og/                     # Share-card renderers (cards.tsx) and font loader (fonts.ts: Newsreader TTF + Geist)
   server/                 # Orchestrator, providers, signals, cache, local ONNX ML
     share-metadata.ts     # ?shared= verify + validate → SharedView, page metadata, image cap
     share-signing.ts      # HMAC sign/verify for share links; attaches result.share to streamed results
@@ -109,6 +111,7 @@ lib/
   config/                 # Environment validation
 
 scripts/
+  build-display-fonts.sh  # Rebuild fonts/newsreader/ from the pinned Fontsource tarball (needs fontTools)
   check-contrast.mjs      # WCAG token-pair guard for both themes (also run by the unit suite)
   generate-icons.mjs      # `npm run icons`: favicons/app icons from lib/brand-mark.ts (sharp; embeds provenance)
   run-e2e.mjs             # Build + start + Playwright on E2E_PORT
@@ -154,12 +157,20 @@ tests/
   the single source of truth for which checks drove the verdict (the strip
   and Full rows never draw them as "found nothing"). Feed-match `detail` is a clause that follows the feed's
   display name ("lists this link as phishing"); `describeFeedMatch` adds it.
-- **Verdict band**: tinted with `--sx-<verdict>-surface`; the word stays ink
-  (one colour encoding). The summary sentence ("because" line) yields
-  whenever the questions or rows state the evidence (`evidenceShown`), so in
-  practice only a legacy record shows it. It is the only tinted container; once it
-  mounts, the home headline steps down to the headline size (CSS `:has`)
-  so the verdict owns the one display moment.
+- **Verdict band**: squared, tinted with `--sx-<verdict>-surface` under a
+  heavy top rule in `--sx-<verdict>`; the word stays ink (one colour
+  encoding) and secondary text uses `--sx-<verdict>-ink`. When a verdict
+  lands a keyed `.sx-band-rule` draws over the neutral track (240ms,
+  `--sx-ease-expo`) and the word rises 4px; both are drawn in place under
+  reduced motion. The registered domain sits in the serif under the verdict
+  word (`registeredDomain`, with `holdDomain` keeping its height while the
+  parser loads); it only names the site, and the anatomy's
+  `ownershipSentence` stays the one place the owner sentence is said. The
+  summary sentence ("because" line) yields whenever the questions or rows
+  state the evidence (`evidenceShown`), so in practice only a legacy record
+  shows it. It is the only tinted container; once it mounts, the home
+  headline steps out of sight (still the h1) and the supporting line goes
+  (CSS `:has`), so the verdict owns the one display moment.
 - **Summary questions**: Summary answers five plain questions
   (`lib/domain/summary-questions.ts`, which holds every Summary string), in
   fixed order with a fixed mapping so each check is cited by exactly one:
@@ -202,9 +213,11 @@ tests/
   a typical clean answer (`PLACEHOLDER_SHAPE`, invisible generated content,
   never text), so later headings hold still in the common case (findings
   and long hosts still grow a question; "couldn't check" answers shrink). Question
-  text wraps anywhere (long hosts break, never truncate), and the sources
-  dot is drawn (`.sx-source::before`), so a copy reads "VirusTotal, Safe
-  Browsing". The
+  text wraps anywhere (long hosts break, never truncate). The sources line
+  has two parts: an `sr-only` plain list ("Sources: VirusTotal, Safe
+  Browsing"), which is what assistive technology hears and what a copy
+  gives, and the numbered "From 1 VirusTotal · 3 Safe Browsing" line,
+  which is `aria-hidden` and `select-none`. The
   owner and look-alike are stated by the anatomy, never by a question; the
   anatomy's own facts (certificate, young domain, "Ends at") step aside
   once the evidence below states them. Legacy records, Error results (all
@@ -215,7 +228,7 @@ tests/
   site".
 - **Eight-cell strip**: severities from `lib/domain/signal-signature.ts` in
   fixed `signalNames` order. Every state has its own shape, so no two differ
-  by hue alone: flagged solid, caution hatched, found-nothing a thin dash,
+  by hue alone: flagged solid, caution hatched, found-nothing a short centred dash,
   partial a centred short block, failed an outline, didn't-apply dashed,
   running the empty track. `tests/unit/contrast.test.ts` checks the shapes stay
   distinct and each mark stands 3:1 off the track. One grammar for
@@ -223,7 +236,13 @@ tests/
   (`lib/og/cards.tsx` mirrors the shapes). Entries saved before signals were
   kept (`isLegacySignalRecord`: every check carries the sanitizer's
   `MISSING_SIGNAL_DATA`) draw empty glyph slots and a plain note, never
-  eight "failed" cells; a real all-failed scan still draws them.
+  eight "failed" cells; a real all-failed scan still draws them. The live
+  strip heads Evidence as its index: cells numbered 1-8 (`cellNumber`, in
+  `signalNames` order, `aria-hidden` tags), and each question's "From" line
+  (`QuestionSources`) cites the same numbers while assistive technology
+  hears "Sources: <names>". Phones get two columns of four 44px rows, so
+  the roving keys follow the layout (`stripColumns`): Left/Right always step
+  in order; Up/Down step in order on phones and move a row from 40rem.
 - **Link anatomy**: `lib/domain/link-anatomy.ts` is isomorphic (tldts passed
   in). Every contiguous run of 2+ subdomain labels is tested; a two-letter
   country-code run counts only for a listed brand (`amazon.de`), so
@@ -320,24 +339,39 @@ tests/
 - **UI danger is not a verdict**: form/stream errors and destructive
   confirms use `--sx-danger-fg` / `--sx-danger-border`, never
   `--sx-malicious-*`.
+- **Display face**: Newsreader, exactly two static latin cuts (400/opsz 16,
+  600/opsz 60, 46,864 bytes) in `fonts/newsreader/` (OFL), loaded by
+  `next/font/local` on `<html>`; `--font-display` reads its variable and
+  Tailwind's `font-serif` points at it. It sets the headline, verdict word,
+  registered domain, score, imperative, owner sentence, Summary questions
+  and answers, section titles, wordmark, and public titles; the interface is
+  the system sans and the link/data the system mono. `bundleBudget.fontBytes`
+  is 48,000: a third cut or face trips it. Share cards read the same cuts as
+  TTF.
 - **Type scale**: custom `text-*` steps live in `@theme`; `lib/utils.ts`
   teaches them to tailwind-merge or `cn()` silently drops them.
 - **Contrast guard**: `scripts/check-contrast.mjs` (unit suite) asserts every
   token pair in both themes; extend its `PAIRS` when adding a token.
-- **Static accent**: blue `--sx-accent`; verdict colors appear only where a
-  verdict is stated.
+- **Ink buttons, static accent**: filled controls use `--sx-button*` (ink);
+  the blue `--sx-accent` marks only links, focus, the caret, and selection.
+  Verdict colors appear only where a verdict is stated.
 - **E2E fixtures**: `SCRUTINIX_TEST_FIXTURES=1` provides deterministic offline
   scenarios under `npm run test:e2e`. Fixtures score unknown hosts Safe, so
   fixture mode signs shares only with the published e2e key, and that key
   signs nothing outside fixture mode (`shareSecretProblem` in `env.ts`).
 - **CSS layering**: `app/globals.css` owns semantic tokens;
-  `app/scrutinix.css` owns prefixed motion/effect utilities. Motion is CSS-only,
+  `app/scrutinix.css` owns prefixed motion/effect utilities and the static
+  layout of the identity's components (`.sx-band-*`, `.sx-anat*`,
+  `.sx-strip*`, `.sx-question*`, `.sx-public` tables): as Tailwind strings
+  they pushed the shared first-load chunk past Turbopack's split point. Its
+  rules are unlayered, so they beat Tailwind utilities on the same element:
+  give a variant its own class rather than a utility. Motion is CSS-only,
   under 300ms, and respects `prefers-reduced-motion`.
 
 ## Stack
 
 - Node 24 LTS, Next.js 16, React 19, TypeScript 5.9 (strict + noUncheckedIndexedAccess)
-- Tailwind CSS v4, system sans/mono (bundled Geist only for server OG cards), Radix, Lucide, Zod 4, idb, sonner,
+- Tailwind CSS v4, Newsreader (self-hosted display serif) + system sans/mono (bundled Geist only for server OG cards), Radix, Lucide, Zod 4, idb, sonner,
   next-themes, local `@huggingface/transformers`
 - ESLint 10 with direct Next.js, React, hooks, TypeScript, and JSX accessibility plugins
 - Vitest, MSW, fake-indexeddb, Playwright, axe-core, Lighthouse
@@ -372,4 +406,4 @@ or pulled with `vercel env pull`.
 
 ### P29.4 speed
 
-The page requests no web fonts; `--font-display` defaults to `--font-sans`. Batch input and results load on demand; history storage hydrates eagerly, but its panel loads only for entries or Undo. Sonner mounts on the first notification and waits for its subscription before publishing. `npm run check:bundle` audits actual first-load browser requests after build; budgets live in `package.json`. CI runs it with provisioned Chromium.
+When P29.4 landed the page requested no web fonts and `--font-display` defaulted to `--font-sans`; P29.6 since fills that hook with Newsreader (two cuts, 46,864 B, budget 48,000), the only web font the page loads. Batch input and results load on demand; history storage hydrates eagerly, but its panel loads only for entries or Undo. Sonner mounts on the first notification and waits for its subscription before publishing. `npm run check:bundle` audits actual first-load browser requests after build; budgets live in `package.json`. CI runs it with provisioned Chromium.

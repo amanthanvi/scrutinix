@@ -71,8 +71,10 @@ export default async function HomePage({
     ? null
     : resolvePrefill(paramOf(params, PREFILL_PARAM));
 
-  const lead = (
-    <p className="text-lead mt-3 max-w-[34rem] text-pretty text-[var(--sx-text-muted)]">
+  const lead = (className: string) => (
+    <p
+      className={`${className} max-w-[37.5rem] font-serif text-[1.125rem] leading-[1.45] text-pretty text-[var(--sx-text-muted)] sm:text-[1.375rem]`}
+    >
       Paste a link from an email, text, or chat. Eight separate checks tell you
       whether it&apos;s safe to open, and which site it really belongs to.
     </p>
@@ -85,7 +87,7 @@ export default async function HomePage({
 
         <main
           id="main-content"
-          className="mx-auto w-full max-w-[46rem] flex-1 px-4 pt-12 sm:px-6 sm:pt-20"
+          className="sx-home sx-gutter mx-auto w-full max-w-[71rem] flex-1 pt-[3.25rem] sm:pt-[8.5rem]"
         >
           {shared ? (
             // Recipient-first: whoever opened a shared link sees it (the
@@ -95,17 +97,20 @@ export default async function HomePage({
             <>
               <h1 className="sr-only">A link shared with you</h1>
               <ScrutinixErrorBoundary>
-                <div className="flex flex-col gap-16">
+                <div className="flex flex-col gap-16 sm:gap-20">
                   <ResultsSection />
-                  <section aria-labelledby="sx-check-another">
+                  <section
+                    aria-labelledby="sx-check-another"
+                    className="max-w-[47.5rem]"
+                  >
                     <h2
                       id="sx-check-another"
-                      className="text-headline font-semibold text-balance text-[var(--sx-text)]"
+                      className="sm:text-headline font-serif text-[2rem] leading-[1.05] font-semibold tracking-[-0.02em] text-balance text-[var(--sx-text)]"
                     >
                       Check another link
                     </h2>
-                    {lead}
-                    <div className="mt-8">
+                    {lead("mt-4 sm:mt-5")}
+                    <div className="mt-9 sm:mt-12">
                       <ScanForm />
                     </div>
                   </section>
@@ -114,15 +119,17 @@ export default async function HomePage({
             </>
           ) : (
             <>
-              <h1 className="sx-hero-title text-headline sm:text-display font-semibold text-balance text-[var(--sx-text)]">
-                Check a link before you click.
+              <h1 className="sx-hero-title text-display max-w-[57.5rem] font-serif font-semibold text-balance text-[var(--sx-text)]">
+                Is this link what it says it is?
               </h1>
-              {lead}
+              {lead("sx-hero-lead mt-[1.125rem] sm:mt-7")}
 
-              <div className="sx-hero-form mt-8 sm:mt-10">
+              <div className="sx-hero-form mt-9 sm:mt-14">
                 <ScrutinixErrorBoundary>
-                  <div className="flex flex-col gap-10">
-                    <ScanForm />
+                  <div className="flex flex-col gap-5 sm:gap-7">
+                    <div className="max-w-[47.5rem]">
+                      <ScanForm />
+                    </div>
                     <ResultsSection />
                   </div>
                 </ScrutinixErrorBoundary>
@@ -131,7 +138,7 @@ export default async function HomePage({
           )}
 
           {/* No gap when history is empty: its region draws nothing. */}
-          <div className="mt-20 has-[>div[aria-busy]]:mt-0 has-[>section:empty]:mt-0">
+          <div className="mt-20 max-w-[47.5rem] has-[>div[aria-busy]]:mt-0 has-[>section:empty]:mt-0 sm:mt-24">
             <ScrutinixErrorBoundary>
               <HistorySection />
             </ScrutinixErrorBoundary>

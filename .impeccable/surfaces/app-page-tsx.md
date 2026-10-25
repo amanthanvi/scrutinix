@@ -14,20 +14,22 @@ related_targets: ["app/about/page.tsx","app/privacy/page.tsx","app/opengraph-ima
 
 ## Direction contract
 
-THESIS: The verdict is the product, said plainly and big, on a precise minimal tool that feels like it belongs next to Linear and Vercel. It refuses both the category's cyber dashboard and the old version's underpowered grey form, where the biggest text at rest was "History".
+THESIS: The link is the claim under review; the page reports on it like a careful fact-check: a plain question, a rated answer, every source named. It refuses newspaper costume as firmly as the category's cyber dashboard: the editorial character is a sentence set well, not props.
 
-OWN-WORLD: The canonical minimal product tool, played straight at full fidelity. A cool, crisp white ground (light) and a deep neutral-cool ground (dark), each designed on its own. Geist Sans for UI and Geist Mono for URLs and data, on a real type scale with confident display steps. Hairline structure, one static blue accent for actions and focus, and verdict hues only where a verdict is stated. Precise 1px borders on controls, tabular numerals, and themed browser surfaces. No costume, no quirk.
+OWN-WORLD: The editorial fact-checker (P29.6, owner-chosen from a 16-draft blind bake-off: P09 with P11's domain line). Serif tells the story (Newsreader, exactly two static cuts: 400 at opsz 16, 600 at opsz 60), the system sans runs the interface, the system mono carries the link and data. A cool, crisp near-white sheet by day; a deep cool ground with warm paper ink by night, each designed on its own. Ink buttons; one editor's blue for links, focus, the caret, and selection only. Verdict hues only where a verdict is stated. Squared, ruled, hairline structure; themed browser surfaces; tabular figures.
 
-STORY: The visitor understands at once what this does ("Check a link before you click"), pastes, and watches eight checks land as eight cells. They then read one sentence they can act on ("Don't open this link."), see who really owns the link, and expand the evidence only if they want it. They leave trusting the answer because it admits what it couldn't check.
+STORY: The visitor reads the question they already have ("Is this link what it says it is?"), pastes, and sees the link taken apart before anything is sent. They watch eight checks land, then read the verdict, the site the link really belongs to in the serif beneath it, and one instruction ("Don't open this link."). Every answer below cites the numbered cells it comes from, so the evidence is checkable without jargon. They leave trusting it because it says what it couldn't check.
 
-FIRST VIEWPORT: Header (the eight-square mark plus the Scrutinix wordmark, then About, Privacy and theme). A visible headline at display size with one supporting line. The Single/Batch tabs, then the URL input with Paste and a ready primary Analyze button, all inside the first viewport on desktop and mobile. After a scan: the verdict band (a column-wide, low-chroma verdict surface with the verdict word at 40–56px, the imperative directly beneath, and the score plus its band only when scored), then the link anatomy line (registered domain emphasised, everything else quiet, a plain look-alike sentence), then the eight-cell strip, then the Summary/Full evidence rows, then actions. On mobile the verdict lands in view when a scan completes.
+FIRST VIEWPORT: Header (the folded-strip mark and serif wordmark, About, Privacy, theme). The headline at display size (two lines on desktop) with the serif supporting line, then the Single/Batch tabs, the 56px mono field with Paste, and the ink Analyze button, all in the first viewport on desktop and phone. After a scan the headline steps out of sight and the column opens on the squared band under its heavy rule: the verdict word (60/84px), the registered domain (30/44px serif), the instruction (22/26px serif), the score and its band at the right only when scored, the confidence line on the band's hairline. On phones the field and Analyze share one row so the verdict lands in view.
 
-FORM: The standing exit, the category canon. It was chosen by the user over three dealt directions (Label, Signage, Line) after live drafts. Seed key ccccb7f7. The craft bar is Linear and Vercel.
+FORM: Editorial, without costume: a rated answer with named sources. The craft bar is a well-set fact-check page: measure, rhythm, and citation, not decoration.
 
-Signature move: the eight-cell strip. It is the streaming progress, the evidence index, the history and batch glyph, the brand mark, and the share-image motif: one grammar at every scale.
+Signature moves: the link taken apart (hairline brackets naming each part, a heavy bracket on the registered domain, stacking on phones) and citation (the strip's cells numbered 1-8 and cited by every Summary answer). The strip stays one grammar at every scale: progress, evidence index, row marker, history and batch glyph, mark, icons, share images.
 
-FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance
+AUTHORED MOMENT: The rule draws. When a verdict lands, the band's top rule draws left to right (scaleX, 240ms, exponential ease-out) and the verdict word rises 4px as it fades in; drawn in place under reduced motion.
+
+FINISH: unreviewed and undocumented is unfinished; this build ends with an independent critique, DESIGN.md, the sidecar, and every shipping raster carrying its provenance.
 
 ## Unresolved
 
-None pending from the user. The look-alike finding influences verdict wording only; scoring changes are out of scope for this PR.
+None pending from the user. Not adopted by the owner (do not build): an "already clicked / typed a password" line, plain-words score bands. Copy beyond the headline is unchanged.

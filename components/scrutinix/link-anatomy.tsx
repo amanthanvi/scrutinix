@@ -17,13 +17,59 @@ const PATH_LIMIT = 48;
 /** A registered domain longer than this may wrap or truncate. */
 const LONG_DOMAIN = 26;
 
+/**
+ * A domain kept whole where it fits: it moves to the next line as a unit,
+ * never breaking at its hyphen, and breaks only on a line too narrow for
+ * it (a larger text size) rather than run off the page. `trail` is the
+ * punctuation that must stay with it. A longer domain breaks anywhere.
+ */
+function WholeDomain({
+  domain,
+  className,
+  trail = "",
+}: {
+  domain: string;
+  className?: string;
+  trail?: string;
+}) {
+  if (domain.length > LONG_DOMAIN) {
+    return (
+      <>
+        <span className={cn(className, "break-all")}>{domain}</span>
+        {trail}
+      </>
+    );
+  }
+  return (
+    <span className="inline-block max-w-full wrap-anywhere">
+      <span className={className}>{domain}</span>
+      {trail}
+    </span>
+  );
+}
+
+/** Punctuation that opens `text`, kept with the domain before it. */
+function leadingPunctuation(text: string): string {
+  return /^[.,;:!?]*/.exec(text)?.[0] ?? "";
+}
+
 function shorten(value: string, limit = PATH_LIMIT): string {
   return value.length > limit ? `${value.slice(0, limit - 1)}…` : value;
 }
 
 /**
+ * The link line's size (app/scrutinix.css): reading size on a result, a
+ * step down in the form.
+ */
+const LINK_SIZE = {
+  result: "sx-link-result",
+  form: "sx-link-form",
+} as const;
+
+/**
  * "This link belongs to secure-login.xyz, not paypal.com." built from the
- * shared `ownershipSentence`, with the two domains set in mono.
+ * shared `ownershipSentence`, set in the serif with the two domains in
+ * mono and the owner emphasised.
  */
 function OwnershipSentence({
   registeredDomain,
@@ -35,13 +81,25 @@ function OwnershipSentence({
   const sentence = ownershipSentence(registeredDomain, impersonates);
   const ownerAt = sentence.indexOf(registeredDomain);
   const brandAt = sentence.lastIndexOf(impersonates);
+  const between = sentence.slice(ownerAt + registeredDomain.length, brandAt);
+  const end = sentence.slice(brandAt + impersonates.length);
+  const ownerTrail = leadingPunctuation(between);
+  const brandTrail = leadingPunctuation(end);
   return (
     <>
       {sentence.slice(0, ownerAt)}
-      <span className="font-mono">{registeredDomain}</span>
-      {sentence.slice(ownerAt + registeredDomain.length, brandAt)}
-      <span className="font-mono">{impersonates}</span>
-      {sentence.slice(brandAt + impersonates.length)}
+      <WholeDomain
+        domain={registeredDomain}
+        className="font-mono text-[0.86em] font-bold"
+        trail={ownerTrail}
+      />
+      {between.slice(ownerTrail.length)}
+      <WholeDomain
+        domain={impersonates}
+        className="font-mono text-[0.86em]"
+        trail={brandTrail}
+      />
+      {end.slice(brandTrail.length)}
     </>
   );
 }
@@ -74,6 +132,7 @@ export function LinkAnatomyView({
   streaming = false,
   id = "sx-link-anatomy",
   captions = false,
+  size = "result",
 }: {
   url: string;
   anatomy: LinkAnatomy | null;
@@ -89,6 +148,8 @@ export function LinkAnatomyView({
    * "Registered domain", "A page on that domain"): the link taken apart.
    */
   captions?: boolean;
+  /** The result's link at reading size, or the form's a step down. */
+  size?: keyof typeof LINK_SIZE;
 }) {
   const [expandedFor, setExpandedFor] = useState<string | null>(null);
   const expanded = expandedFor === url;
@@ -99,18 +160,22 @@ export function LinkAnatomyView({
   const truncates = Boolean(anatomy && anatomy.path.length > PATH_LIMIT);
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-4">
       {anatomy && captions ? (
         <CaptionedLink
           id={id}
           anatomy={anatomy}
           path={expanded ? anatomy.path : shorten(anatomy.path)}
+          className={LINK_SIZE[size]}
         />
       ) : (
         <p
           id={id}
           title={anatomy?.href ?? url}
-          className="text-body font-mono break-words text-[var(--sx-text-soft)]"
+          className={cn(
+            LINK_SIZE[size],
+            "font-mono break-words text-[var(--sx-text-soft)]",
+          )}
         >
           {anatomy ? (
             <>
@@ -129,16 +194,10 @@ export function LinkAnatomyView({
                 </span>
               ) : null}
               {/* The owner never splits mid-name unless it cannot fit. */}
-              <span
-                className={cn(
-                  "text-lead font-semibold text-[var(--sx-text)]",
-                  anatomy.registeredDomain.length <= LONG_DOMAIN
-                    ? "whitespace-nowrap"
-                    : "break-all",
-                )}
-              >
-                {anatomy.registeredDomain}
-              </span>
+              <WholeDomain
+                domain={anatomy.registeredDomain}
+                className="font-bold text-[var(--sx-text)]"
+              />
               {anatomy.port ? <span>{anatomy.port}</span> : null}
               {anatomy.path ? (
                 <span className="break-all">
@@ -158,14 +217,14 @@ export function LinkAnatomyView({
           aria-expanded={expanded}
           aria-controls={id}
           onClick={() => setExpandedFor(expanded ? null : url)}
-          className="text-meta sx-link -my-2 inline-flex min-h-11 items-center self-start"
+          className="text-meta sx-link -my-2.5 inline-flex min-h-11 items-center self-start"
         >
           {expanded ? "Shorten link" : "Show full link"}
         </button>
       ) : null}
 
       {anatomy?.impersonates ? (
-        <p className="text-body font-medium text-[var(--sx-text)]">
+        <p className="sx-owner">
           <OwnershipSentence
             registeredDomain={anatomy.registeredDomain}
             impersonates={anatomy.impersonates}
@@ -174,7 +233,7 @@ export function LinkAnatomyView({
       ) : null}
 
       {facts.length > 0 ? (
-        <dl className="text-meta grid grid-cols-[auto_minmax(0,1fr)] items-baseline gap-x-4 gap-y-1">
+        <dl className="text-meta sm:text-body grid grid-cols-[auto_minmax(0,1fr)] items-baseline gap-x-5 gap-y-1.5">
           {facts.map((fact) => (
             <div key={fact.key} className="contents">
               <dt
@@ -216,18 +275,26 @@ function CaptionedLink({
   id,
   anatomy,
   path,
+  className,
 }: {
   id: string;
   anatomy: LinkAnatomy;
   path: string;
+  className?: string;
 }) {
   return (
     <p
       id={id}
       title={anatomy.href}
-      className="text-body flex flex-wrap items-baseline font-mono text-[var(--sx-text-soft)]"
+      className={cn(
+        "sx-anat",
+        hasShortMiddlePart(anatomy, path) && "sx-anat-stacked",
+        className,
+      )}
     >
-      <span>{anatomy.scheme}://</span>
+      {/* Phones stack the named parts; the bare scheme steps out of sight
+          there (the certificate fact below still speaks for it). */}
+      <span className="max-sm:sr-only">{anatomy.scheme}://</span>
       {anatomy.userinfo ? (
         <LinkPart caption="Ignored by browsers">
           <span className="break-all line-through">{anatomy.userinfo}@</span>
@@ -240,17 +307,11 @@ function CaptionedLink({
           </span>
         </LinkPart>
       ) : null}
-      <LinkPart caption="Registered domain">
-        <span
-          className={cn(
-            "text-lead font-semibold text-[var(--sx-text)]",
-            anatomy.registeredDomain.length <= LONG_DOMAIN
-              ? "whitespace-nowrap"
-              : "break-all",
-          )}
-        >
-          {anatomy.registeredDomain}
-        </span>
+      <LinkPart caption="Registered domain" owner>
+        <WholeDomain
+          domain={anatomy.registeredDomain}
+          className="font-bold text-[var(--sx-text)]"
+        />
       </LinkPart>
       {anatomy.port ? <span>{anatomy.port}</span> : null}
       {path ? (
@@ -262,21 +323,41 @@ function CaptionedLink({
   );
 }
 
+/**
+ * Whether a captioned part with another after it is too short to carry its
+ * caption inline. The caption never widens its part, so its longest word
+ * must fit over the part's text at the form's smaller size: "anyone" over
+ * four mono characters, "browsers" over five, "Registered" over seven.
+ * Otherwise the link is shown stacked, as on phones.
+ */
+function hasShortMiddlePart(anatomy: LinkAnatomy, path: string): boolean {
+  const middle: [string | null, number][] = [
+    [anatomy.userinfo ? `${anatomy.userinfo}@` : null, 5],
+    [anatomy.subdomain ? `${anatomy.subdomain}.` : null, 4],
+    [path ? anatomy.registeredDomain : null, 7],
+  ];
+  return middle.some(([part, min]) => part !== null && part.length < min);
+}
+
+/**
+ * One named part: its text over a hairline bracket carrying the caption
+ * (heavy for the registered domain). The caption never widens its part,
+ * so the link stays one continuous line of text.
+ */
 function LinkPart({
   caption,
+  owner = false,
   children,
 }: {
   caption: string;
+  owner?: boolean;
   children: ReactNode;
 }) {
   return (
-    <span className="inline-flex max-w-full min-w-0 flex-col">
+    <span className={cn("sx-anat-part", owner && "sx-anat-owner")}>
       <span className="sr-only">{caption}: </span>
-      {children}
-      <span
-        aria-hidden="true"
-        className="text-caption mt-0.5 pr-3 font-sans text-[var(--sx-text-soft)]"
-      >
+      <span className="sx-anat-text">{children}</span>
+      <span aria-hidden="true" className="sx-anat-caption">
         {caption}
       </span>
     </span>

@@ -1,242 +1,269 @@
 ---
 name: Scrutinix
-description: "Check a link before you click. Eight separate checks, one plain verdict."
+description: "Is this link what it says it is? Eight separate checks, one plain answer, every source named."
 colors:
   # Light theme (:root). OKLCH is the normative source (app/globals.css).
-  ground: "oklch(1 0 0)"
+  ground: "oklch(0.99 0.003 250)"
   surface: "oklch(1 0 0)"
-  subtle: "oklch(0.972 0.003 255)"
-  hairline: "oklch(0.925 0.004 255)"
-  control-edge: "oklch(0.66 0.01 255)"
+  subtle: "oklch(0.965 0.004 255)"
+  hairline: "oklch(0.9 0.005 255)"
+  control-edge: "oklch(0.64 0.01 255)"
   control-edge-hover: "oklch(0.5 0.012 255)"
   ink: "oklch(0.2 0.012 262)"
-  ink-muted: "oklch(0.45 0.014 262)"
-  ink-soft: "oklch(0.54 0.012 262)"
-  accent: "oklch(0.52 0.19 260)"
-  accent-solid: "oklch(0.52 0.19 260)"
-  accent-solid-hover: "oklch(0.46 0.18 260)"
-  accent-on: "oklch(1 0 0)"
-  focus-ring: "oklch(0.56 0.19 260)"
-  selection: "oklch(0.88 0.06 260)"
+  ink-muted: "oklch(0.44 0.013 262)"
+  ink-soft: "oklch(0.52 0.012 262)"
+  accent: "oklch(0.46 0.16 262)"
+  focus-ring: "oklch(0.46 0.16 262)"
+  selection: "oklch(0.9 0.05 262)"
+  button: "oklch(0.2 0.012 262)"
+  button-hover: "oklch(0.34 0.014 262)"
+  button-on: "oklch(1 0 0)"
   safe: "oklch(0.6 0.14 158)"
   safe-fg: "oklch(0.45 0.11 158)"
   safe-surface: "oklch(0.972 0.022 158)"
   safe-edge: "oklch(0.89 0.05 158)"
+  safe-ink: "oklch(0.42 0.04 158)"
   suspicious: "oklch(0.64 0.15 58)"
   suspicious-fg: "oklch(0.49 0.12 55)"
   suspicious-surface: "oklch(0.975 0.026 80)"
   suspicious-edge: "oklch(0.9 0.06 75)"
-  malicious: "oklch(0.58 0.2 27)"
+  suspicious-ink: "oklch(0.42 0.04 62)"
+  malicious: "oklch(0.56 0.2 27)"
   malicious-fg: "oklch(0.5 0.19 27)"
-  malicious-surface: "oklch(0.968 0.02 22)"
-  malicious-edge: "oklch(0.89 0.05 22)"
+  malicious-surface: "oklch(0.962 0.024 22)"
+  malicious-edge: "oklch(0.88 0.05 22)"
+  malicious-ink: "oklch(0.42 0.04 22)"
   critical: "oklch(0.5 0.2 355)"
   critical-fg: "oklch(0.46 0.19 355)"
   critical-surface: "oklch(0.965 0.022 350)"
   critical-edge: "oklch(0.88 0.055 350)"
+  critical-ink: "oklch(0.42 0.04 352)"
   unknown: "oklch(0.58 0.035 250)"
   unknown-fg: "oklch(0.45 0.035 250)"
   unknown-surface: "oklch(0.968 0.008 250)"
   unknown-edge: "oklch(0.9 0.014 250)"
+  unknown-ink: "oklch(0.42 0.03 250)"
   error: "oklch(0.57 0.08 30)"
   error-fg: "oklch(0.47 0.08 30)"
   error-surface: "oklch(0.968 0.01 30)"
   error-edge: "oklch(0.9 0.02 30)"
-  pending-surface: "oklch(0.975 0.003 255)"
+  error-ink: "oklch(0.42 0.03 30)"
+  pending-surface: "oklch(0.972 0.004 255)"
   danger: "oklch(0.52 0.16 20)"
   danger-edge: "oklch(0.52 0.16 20)"
-  cell-flagged: "oklch(0.58 0.2 27)"
-  cell-caution: "oklch(0.615 0.15 58)"
+  cell-flagged: "oklch(0.56 0.2 27)"
+  cell-caution: "oklch(0.62 0.15 58)"
   cell-failed: "oklch(0.55 0.012 262)"
   cell-limited: "oklch(0.58 0.035 250)"
-  cell-clear: "oklch(0.61 0.008 262)"
-  cell-na: "oklch(0.64 0.008 262)"
-  cell-track: "oklch(0.94 0.004 255)"
-  # Dark theme (.dark), designed on its own, not inverted.
-  dark-ground: "oklch(0.165 0.009 264)"
-  dark-surface: "oklch(0.195 0.01 264)"
-  dark-subtle: "oklch(0.225 0.011 264)"
-  dark-hairline: "oklch(0.27 0.012 264)"
-  dark-control-edge: "oklch(0.5 0.014 264)"
-  dark-control-edge-hover: "oklch(0.64 0.014 264)"
-  dark-ink: "oklch(0.955 0.004 264)"
-  dark-ink-muted: "oklch(0.76 0.01 264)"
-  dark-ink-soft: "oklch(0.67 0.01 264)"
-  dark-accent: "oklch(0.74 0.13 258)"
-  dark-accent-solid: "oklch(0.56 0.18 260)"
-  dark-accent-solid-hover: "oklch(0.51 0.18 260)"
-  dark-accent-on: "oklch(1 0 0)"
-  dark-focus-ring: "oklch(0.72 0.14 258)"
-  dark-selection: "oklch(0.38 0.09 260)"
+  cell-clear: "oklch(0.6 0.008 262)"
+  cell-na: "oklch(0.62 0.008 262)"
+  cell-track: "oklch(0.945 0.004 255)"
+  # Dark theme (.dark), designed on its own: warm paper ink on a cool ground.
+  dark-ground: "oklch(0.17 0.007 258)"
+  dark-surface: "oklch(0.205 0.008 258)"
+  dark-subtle: "oklch(0.225 0.009 258)"
+  dark-hairline: "oklch(0.3 0.009 258)"
+  dark-control-edge: "oklch(0.52 0.012 258)"
+  dark-control-edge-hover: "oklch(0.66 0.012 258)"
+  dark-ink: "oklch(0.95 0.006 90)"
+  dark-ink-muted: "oklch(0.77 0.008 90)"
+  dark-ink-soft: "oklch(0.67 0.008 260)"
+  dark-accent: "oklch(0.76 0.12 258)"
+  dark-focus-ring: "oklch(0.76 0.12 258)"
+  dark-selection: "oklch(0.36 0.08 260)"
+  dark-button: "oklch(0.95 0.006 90)"
+  dark-button-hover: "oklch(0.84 0.008 90)"
+  dark-button-on: "oklch(0.17 0.007 258)"
   dark-safe: "oklch(0.72 0.14 158)"
   dark-safe-fg: "oklch(0.8 0.12 158)"
   dark-safe-surface: "oklch(0.215 0.03 160)"
   dark-safe-edge: "oklch(0.32 0.055 160)"
+  dark-safe-ink: "oklch(0.82 0.03 158)"
   dark-suspicious: "oklch(0.78 0.14 72)"
   dark-suspicious-fg: "oklch(0.84 0.12 78)"
   dark-suspicious-surface: "oklch(0.22 0.032 70)"
   dark-suspicious-edge: "oklch(0.34 0.06 70)"
+  dark-suspicious-ink: "oklch(0.82 0.03 72)"
   dark-malicious: "oklch(0.68 0.18 25)"
   dark-malicious-fg: "oklch(0.77 0.14 25)"
-  dark-malicious-surface: "oklch(0.215 0.04 22)"
-  dark-malicious-edge: "oklch(0.34 0.08 22)"
+  dark-malicious-surface: "oklch(0.22 0.038 22)"
+  dark-malicious-edge: "oklch(0.34 0.07 22)"
+  dark-malicious-ink: "oklch(0.82 0.03 22)"
   dark-critical: "oklch(0.68 0.19 355)"
   dark-critical-fg: "oklch(0.78 0.14 355)"
   dark-critical-surface: "oklch(0.215 0.042 350)"
   dark-critical-edge: "oklch(0.34 0.085 350)"
+  dark-critical-ink: "oklch(0.82 0.03 352)"
   dark-unknown: "oklch(0.66 0.035 250)"
   dark-unknown-fg: "oklch(0.78 0.03 250)"
   dark-unknown-surface: "oklch(0.21 0.014 250)"
   dark-unknown-edge: "oklch(0.31 0.02 250)"
+  dark-unknown-ink: "oklch(0.82 0.02 250)"
   dark-error: "oklch(0.66 0.08 30)"
   dark-error-fg: "oklch(0.76 0.07 30)"
   dark-error-surface: "oklch(0.21 0.018 30)"
   dark-error-edge: "oklch(0.32 0.03 30)"
-  dark-pending-surface: "oklch(0.19 0.01 264)"
+  dark-error-ink: "oklch(0.82 0.025 30)"
+  dark-pending-surface: "oklch(0.2 0.008 258)"
   dark-danger: "oklch(0.74 0.12 20)"
   dark-danger-edge: "oklch(0.66 0.14 22)"
   dark-cell-flagged: "oklch(0.68 0.18 25)"
   dark-cell-caution: "oklch(0.78 0.14 72)"
-  dark-cell-failed: "oklch(0.62 0.012 264)"
-  dark-cell-limited: "oklch(0.6 0.035 250)"
-  dark-cell-clear: "oklch(0.56 0.01 264)"
-  dark-cell-na: "oklch(0.53 0.012 264)"
-  dark-cell-track: "oklch(0.25 0.011 264)"
+  dark-cell-failed: "oklch(0.62 0.012 260)"
+  dark-cell-limited: "oklch(0.62 0.035 250)"
+  dark-cell-clear: "oklch(0.6 0.01 260)"
+  dark-cell-na: "oklch(0.56 0.012 260)"
+  dark-cell-track: "oklch(0.27 0.01 258)"
 typography:
   display:
-    fontFamily: "system-ui, sans-serif"
-    fontSize: "2.75rem"
+    fontFamily: "Newsreader, Georgia, serif"
+    fontSize: "clamp(2.875rem, 1.5rem + 5.63vw, 5.5rem)"
     fontWeight: 600
-    lineHeight: 1.06
-    letterSpacing: "-0.032em"
-  headline:
-    fontFamily: "system-ui, sans-serif"
-    fontSize: "2.125rem"
-    fontWeight: 600
-    lineHeight: 1.1
-    letterSpacing: "-0.028em"
+    lineHeight: 0.98
+    letterSpacing: "-0.026em"
   verdict:
-    fontFamily: "system-ui, sans-serif"
-    fontSize: "3.25rem"
+    fontFamily: "Newsreader, Georgia, serif"
+    fontSize: "5.25rem"
     fontWeight: 600
-    lineHeight: 1
-    letterSpacing: "-0.036em"
+    lineHeight: 0.95
+    letterSpacing: "-0.03em"
   verdict-sm:
-    fontFamily: "system-ui, sans-serif"
-    fontSize: "2.5rem"
+    fontFamily: "Newsreader, Georgia, serif"
+    fontSize: "3.75rem"
     fontWeight: 600
-    lineHeight: 1
-    letterSpacing: "-0.032em"
+    lineHeight: 0.95
+    letterSpacing: "-0.03em"
   score:
-    fontFamily: "system-ui, sans-serif"
-    fontSize: "2rem"
-    fontWeight: 500
+    fontFamily: "Newsreader, Georgia, serif"
+    fontSize: "3.75rem"
+    fontWeight: 600
     lineHeight: 1
     letterSpacing: "-0.02em"
     fontFeature: '"tnum"'
-  imperative:
-    fontFamily: "system-ui, sans-serif"
-    fontSize: "1.3125rem"
-    fontWeight: 500
-    lineHeight: "1.75rem"
-    letterSpacing: "-0.012em"
-  title:
-    fontFamily: "system-ui, sans-serif"
-    fontSize: "1.25rem"
+  domain:
+    fontFamily: "Newsreader, Georgia, serif"
+    fontSize: "2.75rem"
     fontWeight: 600
-    lineHeight: "1.75rem"
-    letterSpacing: "-0.012em"
-  lead:
-    fontFamily: "system-ui, sans-serif"
-    fontSize: "1.0625rem"
+    lineHeight: 1.05
+    letterSpacing: "-0.02em"
+  headline:
+    fontFamily: "Newsreader, Georgia, serif"
+    fontSize: "2.5rem"
+    fontWeight: 600
+    lineHeight: 1.05
+    letterSpacing: "-0.02em"
+  title:
+    fontFamily: "Newsreader, Georgia, serif"
+    fontSize: "1.75rem"
+    fontWeight: 600
+    lineHeight: 1.15
+    letterSpacing: "-0.015em"
+  imperative:
+    fontFamily: "Newsreader, Georgia, serif"
+    fontSize: "1.625rem"
     fontWeight: 400
-    lineHeight: "1.625rem"
+    lineHeight: 1.32
+  owner:
+    fontFamily: "Newsreader, Georgia, serif"
+    fontSize: "1.4375rem"
+    fontWeight: 400
+    lineHeight: 1.4
+  question:
+    fontFamily: "Newsreader, Georgia, serif"
+    fontSize: "1.375rem"
+    fontWeight: 600
+    lineHeight: 1.3
+    letterSpacing: "-0.008em"
+  answer:
+    fontFamily: "Newsreader, Georgia, serif"
+    fontSize: "1.3125rem"
+    fontWeight: 400
+    lineHeight: 1.5
+  lead:
+    fontFamily: "Newsreader, Georgia, serif"
+    fontSize: "1.375rem"
+    fontWeight: 400
+    lineHeight: 1.45
+  link:
+    fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
+    fontSize: "1.6875rem"
+    fontWeight: 400
+    lineHeight: 1.25
+    letterSpacing: "-0.01em"
   body:
     fontFamily: "system-ui, sans-serif"
-    fontSize: "0.9375rem"
+    fontSize: "1rem"
     fontWeight: 400
     lineHeight: "1.5rem"
   meta:
     fontFamily: "system-ui, sans-serif"
-    fontSize: "0.8125rem"
+    fontSize: "0.9375rem"
     fontWeight: 500
-    lineHeight: "1.25rem"
+    lineHeight: "1.375rem"
   caption:
     fontFamily: "system-ui, sans-serif"
-    fontSize: "0.75rem"
+    fontSize: "0.8125rem"
     fontWeight: 400
-    lineHeight: "1rem"
-  link-data:
-    fontFamily: "ui-monospace, monospace"
-    fontSize: "0.9375rem"
-    fontWeight: 400
-    lineHeight: "1.5rem"
-    fontFeature: '"tnum"'
-  owner-domain:
-    fontFamily: "ui-monospace, monospace"
-    fontSize: "1.0625rem"
-    fontWeight: 600
-    lineHeight: "1.625rem"
+    lineHeight: "1.25rem"
   evidence-data:
-    fontFamily: "ui-monospace, monospace"
-    fontSize: "0.75rem"
+    fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
+    fontSize: "0.8125rem"
     fontWeight: 400
     lineHeight: "1.25rem"
     fontFeature: '"tnum"'
 rounded:
-  glyph: "1.5px"
+  band: "0"
   cell: "2px"
-  sm: "4px"
-  md: "6px"
-  lg: "8px"
-  xl: "12px"
+  tag: "3px"
+  sm: "2px"
+  md: "4px"
 spacing:
+  column: "71rem"
   column-gutter: "16px"
   column-gutter-wide: "24px"
-  hero-top: "48px"
-  hero-top-wide: "80px"
-  tight: "12px"
-  block: "24px"
-  group: "32px"
-  section: "40px"
-  page-section: "56px"
-  history-gap: "80px"
-  row: "14px"
+  form-measure: "47.5rem"
+  hero-top: "52px"
+  hero-top-wide: "136px"
+  rail: "19rem"
+  rail-gap: "48px"
+  band-padding: "36px 44px 24px"
+  band-padding-phone: "26px 20px 16px"
+  band-rule: "5px"
+  band-rule-phone: "4px"
+  section: "44px"
+  evidence: "56px"
 components:
   button-primary:
-    backgroundColor: "{colors.accent-solid}"
-    textColor: "{colors.accent-on}"
+    backgroundColor: "{colors.button}"
+    textColor: "{colors.button-on}"
     rounded: "{rounded.md}"
-    padding: "0 20px"
-    height: "48px"
+    padding: "0 28px"
+    height: "56px"
   button-primary-hover:
-    backgroundColor: "{colors.accent-solid-hover}"
-    textColor: "{colors.accent-on}"
+    backgroundColor: "{colors.button-hover}"
+    textColor: "{colors.button-on}"
   button-outline:
     backgroundColor: "{colors.surface}"
     textColor: "{colors.ink}"
     rounded: "{rounded.md}"
-    padding: "0 14px"
-    height: "44px"
+    padding: "0 20px"
+    height: "48px"
   button-outline-hover:
     backgroundColor: "{colors.subtle}"
     textColor: "{colors.ink}"
   button-ghost:
     textColor: "{colors.ink-muted}"
-    typography: "{typography.meta}"
+    typography: "{typography.body}"
     rounded: "{rounded.md}"
-    padding: "0 10px"
+    padding: "0 14px"
     height: "44px"
-  button-ghost-hover:
-    backgroundColor: "{colors.subtle}"
-    textColor: "{colors.ink}"
   input-url:
     backgroundColor: "{colors.surface}"
     textColor: "{colors.ink}"
-    typography: "{typography.link-data}"
+    typography: "{typography.body}"
     rounded: "{rounded.md}"
-    padding: "0 14px"
-    height: "48px"
+    padding: "0 16px"
+    height: "56px"
   tab-trigger:
     textColor: "{colors.ink-soft}"
     height: "44px"
@@ -247,65 +274,70 @@ components:
     backgroundColor: "{colors.pending-surface}"
     textColor: "{colors.ink-soft}"
     typography: "{typography.verdict}"
-    rounded: "{rounded.xl}"
-    padding: "28px"
+    rounded: "{rounded.band}"
+    padding: "{spacing.band-padding}"
   verdict-band-safe:
     backgroundColor: "{colors.safe-surface}"
     textColor: "{colors.ink}"
     typography: "{typography.verdict}"
-    rounded: "{rounded.xl}"
-    padding: "28px"
+    rounded: "{rounded.band}"
+    padding: "{spacing.band-padding}"
   verdict-band-suspicious:
     backgroundColor: "{colors.suspicious-surface}"
     textColor: "{colors.ink}"
     typography: "{typography.verdict}"
-    rounded: "{rounded.xl}"
-    padding: "28px"
+    rounded: "{rounded.band}"
+    padding: "{spacing.band-padding}"
   verdict-band-malicious:
     backgroundColor: "{colors.malicious-surface}"
     textColor: "{colors.ink}"
     typography: "{typography.verdict}"
-    rounded: "{rounded.xl}"
-    padding: "28px"
+    rounded: "{rounded.band}"
+    padding: "{spacing.band-padding}"
   verdict-band-critical:
     backgroundColor: "{colors.critical-surface}"
     textColor: "{colors.ink}"
     typography: "{typography.verdict}"
-    rounded: "{rounded.xl}"
-    padding: "28px"
+    rounded: "{rounded.band}"
+    padding: "{spacing.band-padding}"
   verdict-band-unknown:
     backgroundColor: "{colors.unknown-surface}"
     textColor: "{colors.ink}"
     typography: "{typography.verdict}"
-    rounded: "{rounded.xl}"
-    padding: "28px"
+    rounded: "{rounded.band}"
+    padding: "{spacing.band-padding}"
   verdict-band-error:
     backgroundColor: "{colors.error-surface}"
     textColor: "{colors.ink}"
     typography: "{typography.verdict}"
-    rounded: "{rounded.xl}"
-    padding: "28px"
+    rounded: "{rounded.band}"
+    padding: "{spacing.band-padding}"
   strip-cell:
     backgroundColor: "{colors.cell-track}"
     rounded: "{rounded.cell}"
-    height: "12px"
+    height: "28px"
+  strip-cell-phone:
+    backgroundColor: "{colors.cell-track}"
+    rounded: "{rounded.cell}"
+    size: "40px x 20px"
+  number-tag:
+    textColor: "{colors.ink-muted}"
+    rounded: "{rounded.tag}"
+    size: "20px"
   glyph-cell:
     backgroundColor: "{colors.cell-track}"
-    rounded: "{rounded.glyph}"
+    rounded: "1.5px"
     size: "7px"
-  evidence-row:
-    textColor: "{colors.ink-muted}"
-    padding: "14px 0"
   evidence-plate:
     backgroundColor: "{colors.subtle}"
     textColor: "{colors.ink-muted}"
     typography: "{typography.evidence-data}"
-    rounded: "{rounded.md}"
-    padding: "12px 14px"
+    rounded: "{rounded.tag}"
+    padding: "14px 16px"
   history-row:
     textColor: "{colors.ink}"
-    rounded: "{rounded.md}"
-    padding: "10px 8px"
+    rounded: "{rounded.tag}"
+    padding: "12px"
     height: "48px"
 ---
 
@@ -313,69 +345,73 @@ components:
 
 ## Overview
 
-**Creative North Star: "The Plain Answer"**
+**Creative North Star: "The Fact-Check"**
 
-Scrutinix is the canonical minimal product tool, played straight at Linear and Vercel craft level and made sharper. A person holding a suspicious link gets one answer, said plainly and big, on a precise instrument: a cool, crisp white ground (light) or a deep neutral-cool ground (dark), near-black ink, hairline structure, one static blue accent, and verdict colour only where a verdict is stated. Each theme is designed on its own; dark is not an inversion.
+The link is the claim under review, and the page reports on it the way a careful fact-check does: a plain question, a rated answer, every source named. No newspaper props (no mastheads, columns, datelines, small caps, or newsprint): the editorial character lives in a sentence set well. Serif tells the story, the system sans runs the interface, and the system mono carries the link.
 
-The page is one centred column that reads top to bottom as the task does: a display headline and one supporting line, the Single/Batch scan form, then the verdict band, the link anatomy (which site the link really belongs to), the eight-cell strip, the evidence (Summary's five questions or Full's eight rows), the actions, and local history. Density is calm at rest and exact under load: UI type sits on tight 12–17px steps, while the headline and the verdict word jump to display sizes so the answer outranks the chrome. Nothing is costume. Monospace appears only where the content is data.
+Light is a cool, crisp near-white ground with pure-white fields and blue-black ink. Dark is a deep cool ground with warm paper ink, designed on its own rather than inverted. Buttons are ink; one "editor's blue" accent marks only links, focus, the caret, and selection. Verdict hues appear only where a verdict is stated.
 
-The signature is the eight-cell strip. One cell per check, in a fixed order, with a fixed shape for every state. It is the streaming progress, the evidence index, the row marker, the history and batch glyph, the brand mark, the app icon, and the share-image motif: one grammar at every scale.
+The page is one 71rem column read top to bottom as the task runs: the question "Is this link what it says it is?", one supporting line, and the scan form; then the verdict band, the link taken apart, the Evidence (the numbered strip as its index, then Summary's five questions or Full's eight rows), the actions, and local history.
 
-**Provenance.** Chosen on 2026-10-06 after a critique called the previous minimal build bland and underwhelming. Three committed alternate worlds were dealt and drafted live (Label, Signage, Line; seed `ccccb7f7`); the user chose the standing exit, the category canon, with a cool white light ground instead of warm paper and no grafts of the drafts' world-specific presentations. Direction contract: `.impeccable/surfaces/app-page-tsx.md`.
+Two signatures carry the identity. **The link taken apart**: the pasted link in mono at reading size, a hairline bracket naming each part, a heavy bracket on the registered domain, and one sentence stating which site it belongs to. **Citation**: the eight-cell strip heads the evidence as its index, its cells numbered 1–8, and every Summary answer cites the same numbers. The strip remains one grammar at every scale: streaming progress, evidence index, row marker, history and batch glyph, brand mark, app icon, share-image motif.
+
+**Provenance.** Chosen on 2026-10-24 by the owner after a 16-draft bake-off judged by blind panels: base "P09 editorial (Recommended)" (`.impeccable/bakeoff/2026-10-identity-r2/editorial--opus.html`), with P11's registered-domain serif line under the verdict (`editorial--grok.html`), P09's "link taken apart" captions and numbered citations, and layer 2B's HTTPS question set. The headline is the one copy change. Built as P29.6 (layer 6 of the distinctiveness stack). Direction contract: `.impeccable/surfaces/app-page-tsx.md`.
 
 **Key Characteristics:**
 
-- One 46rem column; the verdict band is the only tinted container.
-- Cool white / deep neutral-cool grounds, blue-black ink, one blue accent for actions, links, and focus.
-- The system sans on a real scale with confident display steps; the system mono for links, domains, evidence, and counts. The page loads no web fonts.
-- Verdict hue appears as a low-chroma band surface; the verdict word itself stays ink.
-- The eight-cell strip carries every state by shape as well as hue.
-- CSS-only motion under 300ms with one authored moment: the cells fill, then the band takes its colour and the verdict word arrives.
+- One 71rem column; the form, history, and batch keep a 47.5rem measure; answers cap at 44rem.
+- Newsreader (two static cuts) for the story; system sans for the interface; system mono for the link and data.
+- A squared verdict band, the only tinted container, under a heavy top rule in the verdict's hue.
+- The registered domain set in the serif directly under the verdict word.
+- Ink buttons; the accent never fills a control.
+- The strip carries every state by shape as well as hue; its cells are numbered and cited.
+- CSS-only motion under 300ms with one authored moment: the rule draws.
 - Browser surfaces are themed: selection, caret, scrollbars, focus rings, underline offset, tabular numerals.
 
 ### Motion
 
-All motion lives in `app/scrutinix.css`, is CSS-only, eases out on `cubic-bezier(0.23, 1, 0.32, 1)` from an already-visible default, and stays under 300ms.
+All motion lives in `app/scrutinix.css`, is CSS-only, and stays under 300ms. Controls ease on `cubic-bezier(0.23, 1, 0.32, 1)`; the authored moment uses an exponential ease-out, `cubic-bezier(0.16, 1, 0.3, 1)`.
 
-- **The authored moment.** Cells fill in place as checks land (a 260ms `scaleX` from the left on the cell's fill layer). When the verdict lands, the band's background and edge cross-fade from the Checking surface to the verdict surface (280ms) and the verdict word arrives with a 240ms fade and 6px rise (`@starting-style`).
-- **Entrances.** Rows and the batch list use a 200ms fade and 4px rise. Only the initial pending rows stagger (40ms each); resolving rows enter instantly.
+- **The authored moment: the rule draws.** When a verdict lands, the band's heavy top rule (a keyed `.sx-band-rule`) draws left to right over the neutral track (`scaleX` 0 → 1, 240ms), and the verdict word rises 4px as it fades in (240ms, `@starting-style`). The band's surface cross-fades from the Checking surface (280ms).
+- **Progress.** Cells fill in place as checks land (260ms `scaleX` from the left on the cell's fill layer). This is status, not a second moment.
+- **Entrances.** Rows and the batch list use a 200ms fade and 4px rise; only the initial pending rows stagger (40ms each).
 - **The one loop.** A still-running cell (and a batch row still checking) breathes in opacity on a 1.2s loop. Nothing else repeats.
-- **Controls.** Buttons press to `scale: 0.97` over 160ms; disclosure chevrons rotate 90° over 200ms; strip cells and rows take a 160ms hover plate. Tab switches and input focus do not animate.
-- **Reduced motion.** `prefers-reduced-motion: reduce` removes translation, the loop, the cell fill, the band cross-fade, chevron rotation, and button scale; entrances keep a 150ms opacity fade; smooth scrolling turns off.
+- **Controls.** Buttons press to `scale: 0.97` over 160ms; disclosure chevrons rotate 90° over 200ms; strip cells, rows, and the question a cell leads to take a 160ms hover/target plate.
+- **Reduced motion.** `prefers-reduced-motion: reduce` draws the rule and the verdict in place (no animation), and removes translation, the loop, the cell fill, the band cross-fade, chevron rotation, and button scale; entrances keep a 150ms opacity fade; smooth scrolling turns off.
 
 ## Colors
 
-A cool, nearly achromatic system with one blue voice and six verdict families that speak only when a verdict is stated. OKLCH in `app/globals.css` is the normative source; every pair below is asserted by `scripts/check-contrast.mjs` in both themes.
+A cool, nearly achromatic system with warm paper ink by night, one blue voice for links and focus, and six verdict families that speak only when a verdict is stated. OKLCH in `app/globals.css` is the normative source; every pair below is asserted by `scripts/check-contrast.mjs` in both themes (172 pairs).
 
 ### Primary
 
-- **Signal Blue** (`accent`): links, the active tab and Summary/Full underline, the caret. In dark it lifts to a lighter blue so link text keeps 4.5:1 on the deep ground.
-- **Signal Blue Solid** (`accent-solid`, pressed `accent-solid-hover`): the filled primary button (Analyze at rest, Start batch, Run a fresh scan, Scan this link, Reload page) with white label (`accent-on`). Dark keeps a mid blue so the white label stays AA.
-- **Focus Blue** (`focus-ring`): every focus ring, and the edge a focused field takes.
+- **Editor's Blue** (`accent`): links, the caret, and text selection's hue. Its chroma is four times Unknown slate's, so the two never read as one.
+- **Focus Blue** (`focus-ring`): the same blue; every focus ring, and the edge a focused field takes.
 - **Selection Wash** (`selection`): text selection behind ink.
+- **Ink Button** (`button`, hover `button-hover`, label `button-on`): every filled control (Analyze at rest, Start batch, Run a fresh scan, Scan this link, Reload page, a toast's action). Light: blue-black ink with a white label; dark: warm paper with a deep label.
 
 ### Neutral
 
-- **Crisp White Ground** / **Deep Cool Ground** (`ground`, `dark-ground`): the page. Light is pure white; dark is a deep blue-leaning neutral, also the dark `theme-color`.
-- **Field White** / **Raised Field** (`surface`): inputs, outline buttons, the skip link. Identical to the ground in light; one step up in dark.
-- **Cool Mist** (`subtle`): hover plates behind rows, strip cells, and ghost buttons; the evidence plate inside an opened row.
-- **Hairline Gray** (`hairline`): every divider and rule (header, footer, tab list, row lists).
-- **Control Edge** (`control-edge`, hover `control-edge-hover`): the 1px border on fields and outline buttons, held at 3:1 on the ground.
-- **Blue-Black Ink** (`ink`), **Graphite** (`ink-muted`), **Soft Slate** (`ink-soft`): primary text, secondary text, and quiet text (placeholders, cell names, timestamps). All three keep 4.5:1 on the ground, the field, and the hover plate.
+- **Cool Sheet** / **Night Ground** (`ground`): the page; also the browser `theme-color` (`#fafcfe` / `#0e1012`).
+- **Field White** / **Raised Field** (`surface`): inputs, outline buttons, toasts, the skip link.
+- **Plate** (`subtle`): hover plates behind rows, strip cells, and ghost buttons; the evidence plate inside an opened row; the plate behind the question a strip cell leads to.
+- **Hairline** (`hairline`): every divider (header, footer, tab list, row lists, the strip's index rule, number tags). Section heads take an ink rule instead.
+- **Control Edge** (`control-edge`, hover `control-edge-hover`): the 1px border on fields and outline buttons, held at 3:1 on the ground and the field.
+- **Ink** (`ink`), **Muted Ink** (`ink-muted`), **Soft Ink** (`ink-soft`): primary, secondary, and quiet text (placeholders, inactive tabs, unremarkable cell names, timestamps). All keep 4.5:1 on the ground, the field, and the plate. Dark ink and muted ink are warm (hue 90): paper under a lamp, not a flipped blue-black.
 
 ### Verdict (semantic)
 
-Each verdict owns four tokens: a graphic hue (`<v>`, 3:1 on the ground), a text hue (`<v>-fg`, 4.5:1 on the ground), a low-chroma band surface (`<v>-surface`), and its 1px band edge (`<v>-edge`). Ink, secondary ink, links, and focus all stay AA on every surface.
+Each verdict owns five tokens: a graphic hue (`<v>`, 3:1 on the ground; the band's top rule and strip marks), a text hue (`<v>-fg`, 4.5:1 on the ground; history and batch verdict words, /about), a low-chroma band surface (`<v>-surface`), the hairline inside the band (`<v>-edge`, above its confidence line), and a tinted ink for secondary text on the band (`<v>-ink`: the "/100", the score band, the coverage caveat, a verified share's note). Ink, tinted ink, links, and focus all stay AA on every surface.
 
 - **Safe Green**: a stated Safe verdict only.
-- **Suspicious Amber**, **Malicious Red**, **Critical Magenta**: the three warning verdicts, stepping in hue rather than shouting in chroma.
-- **Unknown Slate**: its own slate pair, never the accent blue. Also the tone a look-alike Safe takes (band, row word, share card).
-- **Error Clay**: a failed scan, desaturated so it never reads as a threat; the error boundary borrows its surface.
-- **Checking Band** (`pending-surface`): the band while checks run, a hair off the ground.
+- **Suspicious Amber**, **Malicious Red**, **Critical Magenta**: the three warning verdicts, stepping in hue. Malicious's rule, surface, edge, and band ink are P09's; the other hues are unchanged from the previous system.
+- **Unknown Slate**: its own slate family, never the accent. Also the tone a look-alike Safe takes (band, row word, share card).
+- **Error Clay**: a failed scan, desaturated so it never reads as a threat; the error boundary borrows its surface and rule.
+- **Checking** (`pending-surface`; its rule is the hairline): the band while checks run, and a shared link we can't vouch for.
 
 ### Strip ramp (semantic)
 
-`cell-flagged` (the Malicious graphic), `cell-caution` (amber), `cell-limited` (slate, a partial answer), `cell-failed` and `cell-clear` and `cell-na` (three grays), on `cell-track`. Every mark keeps 3:1 against the ground, the track, and the hover plate.
+`cell-flagged` (the Malicious graphic), `cell-caution` (amber), `cell-limited` (slate, a partial answer), `cell-failed`, `cell-clear`, and `cell-na` (three grays), on `cell-track`. Every mark keeps 3:1 against the ground, the track, and the hover plate.
 
 ### UI danger (semantic)
 
@@ -383,160 +419,165 @@ Each verdict owns four tokens: a graphic hue (`<v>`, 3:1 on the ground), a text 
 
 ### Named Rules
 
-**The Verdict-Only Hue Rule.** Verdict hues appear only where a verdict is stated: the band surface, a history or batch row's verdict word, the share card. Chrome never re-tints; the accent is static.
+**The Verdict-Only Hue Rule.** Verdict hues appear only where a verdict is stated: the band's surface and rule, a history or batch row's verdict word, the share card, /about's band table. Chrome never re-tints.
 
-**The Gray-Means-Nothing Rule.** A check that found nothing is gray (`cell-clear`), never green. Green belongs to a stated Safe verdict, so a quiet source never reads as an endorsement beside a Malicious answer.
+**The Ink Button Rule.** Filled controls are ink. The accent marks links, focus, the caret, and selection, and nothing else.
+
+**The Gray-Means-Nothing Rule.** A check that found nothing is a gray dash (`cell-clear`), never green.
 
 **The Danger Is Not a Verdict Rule.** UI failures use `danger`/`danger-edge`. Never borrow `malicious-*` for a form error or a destructive confirm.
+
+**The Tinted Secondary Rule.** Secondary text on a band uses that band's `-ink`, never a neutral gray.
 
 **The Guarded Pair Rule.** A new token ships with its pairs added to `PAIRS` in `scripts/check-contrast.mjs`: 4.5:1 for text, 3:1 for graphics and control edges, in both themes. The unit suite fails otherwise.
 
 ## Typography
 
-**Display Font:** `--font-display`, defaulting to the system `--font-sans` stack (P29.4; identity layer may replace this hook).
-**Body Font:** system `--font-sans` stack (`system-ui`, -apple-system, BlinkMacSystemFont, "Segoe UI")
-**Label/Mono Font:** system `--font-mono` stack (`ui-monospace`, SFMono-Regular, Menlo, Consolas).
+**Display Font:** Newsreader (SIL OFL 1.1), self-hosted through `next/font/local` as `--font-display` (Tailwind `font-serif`). Exactly two static latin cuts, built by `scripts/build-display-fonts.sh` from `@fontsource-variable/newsreader` 5.3.0: 400 at opsz 16 (22,708 bytes) and 600 at opsz 60 (24,156 bytes), 46,864 bytes in all, preloaded with a metric-matched Times New Roman fallback. Licence: `fonts/newsreader/OFL.txt`.
+**Body Font:** the system UI sans (`system-ui`, -apple-system, Segoe UI).
+**Label/Mono Font:** the system mono (`ui-monospace`, SF Mono, Cascadia Mono, Menlo, Consolas).
 
-**Character:** One neo-grotesque family does everything a word does; its mono sibling does everything a measurement does. The pairing reads as a precise instrument, not a terminal.
+**Character:** the serif is the reporter: it states the question, the verdict, the site, the instruction, and each answer. The sans is the instrument panel: tabs, buttons, captions, sources, rows. The mono is the evidence: the link and data, always tabular.
 
 ### Hierarchy
 
-- **Verdict** (600, 52px from 40rem, 40px below; line-height 1; −0.036em / −0.032em): the verdict word in the band, the largest type on any result.
-- **Display** (600, 44px, 1.06, −0.032em): the home headline and public page titles from 40rem.
-- **Headline** (600, 34px, 1.1, −0.028em): the same headlines on phones, and the home headline once a verdict band is on the page.
-- **Score** (500, 32px, 1, −0.02em, tabular): the threat score numeral. Set in the sans because a monospace slashed zero can read as "Ø" at this size; the "/100" beside it is mono meta.
-- **Imperative** (500, 21px, 28px, −0.012em): the one instruction under the verdict word ("Don't open this link.").
-- **Title** (600, 20px, 28px, −0.012em): History, batch, and public-page section headings.
-- **Lead** (400, 17px, 26px): the supporting line under a headline; also the registered domain in the anatomy line (mono, 600).
-- **Body** (400, 15px, 24px): sentences, summaries, caveats, public prose (at 30rem: 63–73 characters per rendered line).
-- **Meta** (13px, 20px; 500 on controls): buttons, nav, tabs' hint, confidence line, the Evidence heading (600).
-- **Caption** (12px, 16px): strip cell names, timestamps, evidence entries (mono).
+- **Display** (600, 46–88px fluid, 0.98, −0.026em): the home headline. Public-page titles use a smaller fluid step (40–68px).
+- **Verdict** (600, 84px from 48rem, 60px below; 0.95; −0.03em): the verdict word, the largest type on any result. It never outgrows its band: the size is `clamp(2rem, 16.4cqi, size)` against the band frame (an inline-size container), so the longest word ("Unconfirmed") fits a 320px phone at about 38px while wider bands keep the full size. A larger default text size never makes it smaller, at any width: the band's width can't shrink as text grows (the column's gutters and the band's side padding are px), the floor and both caps are rem, and the full size switches on at 768px, a px width (48rem at the default size), so a larger text size can't switch it back to the phone cap. Where the larger word can't fit, it wraps, at a hyphenation point when there is one.
+- **Score** (600, 60px / 40px, tabular): the threat score numeral; "/100" beside it in the serif at 22px in the band's ink.
+- **Domain** (600, 44px / 30px, −0.02em): the registered domain under the verdict word.
+- **Headline** (600, 40px / 32px): "Check another link"; an unverified share's band heading.
+- **Title** (600, 28px / 22px): Evidence, History, Batch results, public-page sections.
+- **Imperative** (400, 26px / 22px, 1.32): the one instruction in the band.
+- **Owner** (400, 23px / 20px): "This link belongs to secure-login.xyz, not paypal.com.", domains in mono at 0.86em, the owner bold.
+- **Question** (600, 22px / 20px) and **Answer** (400, 21px / 18px, 1.5): Summary.
+- **Lead** (400, 22px / 18px, 1.45): the supporting line under a headline, in Muted Ink.
+- **Link** (mono 400, 27px / 19px on a result; 22px / 17px under the form): the link taken apart.
+- **Body** (16px, 24px): interface sentences, buttons, tabs, Full findings, public prose (at 32rem: 65–75 characters per line).
+- **Meta** (15px): nav, captions under the link, sources lines, cell names (14px on phones), the legend.
+- **Caption** (13px): timestamps and mono evidence entries.
 
 ### Named Rules
 
-**The One Display Moment Rule.** Once the verdict band mounts, the home headline steps down from display to headline size (CSS `:has(#sx-verdict-heading)` from 40rem), so one display size owns the moment. The step happens when the scan starts, never after the verdict lands.
+**The One Display Moment Rule.** Once the verdict band mounts, the home headline steps out of sight (it stays the page's h1) and the supporting line goes, so the verdict is the only display size on screen. It happens when the scan starts, never after the verdict lands.
 
-**The Mono Is Data Rule.** The system mono sets links, registered domains, evidence entries, counts, scores' "/100", and timestamps, always with tabular numerals. Never use it to make prose look technical.
+**The Mono Is Data Rule.** Mono sets the link, domains inside sentences, evidence entries, counts, and timestamps, always tabular. The registered domain under the verdict is the sentence's subject, so it is the serif, not mono.
 
-**The Taught Scale Rule.** Every custom `text-*` step lives in `@theme` and is registered with tailwind-merge in `lib/utils.ts`; otherwise `cn()` silently drops it when a colour class follows.
+**The Two Cuts Rule.** The page loads exactly the two Newsreader cuts. A third weight, an italic, or another face needs the owner and a raised `bundleBudget.fontBytes` (48,000 today).
+
+**The Taught Scale Rule.** Every custom `text-*` step lives in `@theme` and is registered with tailwind-merge in `lib/utils.ts`.
 
 ## Layout
 
-One centred column, `max-width: 46rem`, with 16px gutters (24px from 40rem). The header (56px) and footer share the column; each is separated from the page by a single hairline. The home page opens 48px below the header (80px from 40rem); headline, supporting line (12px below, capped at 34rem), and the form (32px, then 40px from 40rem) sit together so the tabs, the URL field, Paste, and a ready Analyze button are in the first viewport on desktop and phone.
+One centred column, `max-width: 71rem`, with 16px gutters (24px from 40rem), in px (`.sx-gutter`) so a larger default text size gives the words the room, not the margins. Anything that bleeds into the gutter (row hover plates, a ghost button's hit area, the header's links, the phone strip's cells) bleeds in px too, so it never outgrows it. The header (72px; 60px on phones) and the footer share it, each set off by one hairline. The home opens 136px below the header (52px on phones): the headline (max 57.5rem, two lines at desktop), the supporting line 28px below (max 37.5rem), and the form 56px below at a 47.5rem measure, so the tabs, the 56px field, Paste, and the ink Analyze button sit in the first viewport on desktop and phone.
 
-**Shared-view order (recipient-first).** When the page opens on a shared link (verified, unverified, or expired), the person reading it did not come to scan; they came to see what was sent. The column then opens on the results stack (shared band, link anatomy 24px below, the strip 32px below when verified), and the form follows 64px later under a "Check another link" heading at Headline size with the supporting line beneath it; the hero headline is not drawn (an `sr-only` h1 "A link shared with you" keeps the outline). The order holds for the visit: a fresh scan from the band or from the form replaces the band in place above the form, and scrolls into view if it lands off-screen. Nothing takes focus on arrival, and neither shared state speaks through the live region on load. A `/?url=` link, including Share → Scrutinix, opens the ordinary order with the link already in the field (taken apart below it) and Analyze focused, not the field, so a phone keyboard never covers it, waiting for Analyze.
+With a result on the page the column starts 28px under the header (8px on phones) and the results take the full column: the band 28px under the form, "The link, taken apart" 44px below, Evidence 56px below, then "How we reached this verdict" and the actions. On phones the field and Analyze share one row once a result shows (Paste steps aside) so the verdict lands in the first view; the actions become Download on its own row with Share and Re-scan halves. History follows at the form's measure, 96px below, and draws nothing when empty.
 
-The results stack follows a fixed rhythm: verdict band, link anatomy 24px below, strip 32px below, the Evidence block 40px below, verdict details 24px below, actions 16px below. History begins 80px below the results and collapses that gap entirely when it has nothing to draw. Public pages (`/about`, `/privacy`) use the same column and header: display title, lead at the prose measure, then one hairline and sections 56px apart.
+**Shared-view order (recipient-first).** A shared link opens on the results stack (band, the link taken apart, and the strip when verified), then "Check another link" at Headline size with the supporting line and the form, 80px later. The hero headline is not drawn (an `sr-only` h1 "A link shared with you" keeps the outline). A fresh scan replaces the band in place. Nothing takes focus on arrival, and neither shared state speaks through the live region on load. A `/?url=` link opens the ordinary order with the link in the field, taken apart below it, and Analyze focused (not the field, so a phone keyboard never covers it).
 
-Responsive behaviour: the band's score moves from beside the verdict word (from 40rem) to a baseline row under it; signal-row labels stack above their finding below 40rem; history and batch rows wrap the link onto its own full-width second line on phones; the strip is a 4 × 2 grid below 48rem and a single row of eight from 48rem. The page scrolls as one document: no sticky rails, no inner scroll areas. `scrollbar-gutter: stable` keeps the column still as results grow.
+**Public pages** (`/about`, `/privacy`) use the same column and header: a serif title, the serif lead, one hairline, then sections 64px apart at the prose measure (32rem) or the list measure (48rem). Plain `<table>`, `<details>`, and `<code>` inside the shell are styled by `.sx-public` (zero-specificity `:where()`): an ink header rule over hairline rows, tabular figures, `data-numeric` cells right-aligned, disclosure summaries with a drawn chevron. `TableFrame` wraps a wide table so it scrolls on its own (focusable region) instead of widening a phone.
+
+Responsive behaviour: the band's score moves from its right column (from 48rem) to a baseline row under the instruction; the strip is two columns of four rows below 40rem (one column of eight below 20rem, so only at a larger text size), a 4 × 2 grid to 64rem, a single row of eight from 64rem; the question rail starts at 64rem; the link's parts stack below 40rem. The page scrolls as one document; `scrollbar-gutter: stable` keeps the column still as results grow. A larger default text size reflows instead of scrolling sideways: the header's nav, the footer's links, the Evidence switch, and Batch's "up to 10 links" hint wrap onto their own line when they don't fit; a button's label wraps inside it rather than outgrowing the column; check names wrap on phones (breaking inside a word only when one alone is wider than the line); a check's details stack (label over value) and the strip goes to one column below 20rem, a rem media query that follows the reader's text size (under 480px at 150%, 640px at 200%) and never applies at the default size from 320px; and any word wider than its line breaks (`overflow-wrap: break-word` on the body), which changes nothing that fits. The row verdict column is at least 7rem and grows only when a wide system font needs it for "Unconfirmed". The e2e suite holds all of this at 150% and 200% from 320px, on desktop and phone emulation; CI runs it on Linux, whose default sans (DejaVu) is wider than the macOS and Android fonts, so the layout is checked with a wide font as well as a narrow one.
 
 ### Named Rules
 
-**The No-Reflow Rule.** Streaming never moves what is above the strip. Cells fill in place; the anatomy's fact slots are held open ("Checking…") until the scan ends; Cancel lives inside the Checking band; the band keeps a slot for its confidence line so the verdict changes the band's tone, not its height.
+**The No-Reflow Rule.** Streaming never moves what is above the strip. Cells fill in place; the band holds the domain line while the parser loads and the confidence line's slot while checks run; the anatomy's fact slots read "Checking…" until the scan ends; Cancel lives inside the Checking band.
 
 ## Elevation & Depth
 
-Flat by default. Depth comes from type scale, spacing, hairline dividers, and one tonal device: the verdict band's low-chroma surface with its 1px edge. Hover is a Cool Mist plate, not a lift. Focus is a 2px Focus Blue outline offset 2px (fields take it flush on their own edge). There are no shadows, gradients, glass, or glows in the system.
+Flat by default. Depth comes from type scale, spacing, rules, and one tonal device: the band's low-chroma surface under its heavy rule. Section heads (Evidence, History, Batch) sit on a 1px ink rule; lists divide on hairlines. Hover is a Plate, not a lift. Focus is a 2px Focus Blue outline offset 2px (fields take it flush on their own edge). Toasts are the one floating surface: a control-edge border and a short offset shadow. No gradients, glass, or glows.
 
 ### Named Rules
 
-**The One Tinted Surface Rule.** The verdict band is the only tinted, bordered container on a result. The error boundary reuses its shape on the Error surface. Everything else is type on the ground, divided by hairlines.
+**The One Tinted Surface Rule.** The verdict band is the only tinted container on a result. The error boundary reuses its shape on the Error surface. Everything else is type on the ground, divided by rules.
 
 ## Shapes
 
-Gently rounded and exact. Controls use a 6px radius (`rounded.md`); the verdict band and the error boundary use 12px (`rounded.xl`). Strip cells are 2px-rounded slots; history and batch glyph cells are 7px squares at 1.5px. Borders are always 1px: hairlines for structure, Control Edge for fields and outline buttons, the verdict edge for the band. Tabs and the Summary/Full switch mark selection with a 2px underline, never a pill.
+Squared and exact. The band and the error boundary have no radius. Controls use 4px; plates, number tags, and hover plates 3px; strip cells 2px; glyph cells 1.5px. Borders are 1px (hairlines for structure, Control Edge for fields and outline buttons, ink under section heads); the band's rule is 5px (4px on phones). Tabs and the Summary/Full switch mark selection with a 2px ink underline, never a pill. The link's brackets are 1px soft ink with 6px end ticks; the registered domain's is 2px ink with 7px ticks.
 
-The brand mark is the strip folded 4 × 2 (six-unit cells, two-unit gaps, one-unit radius) from `lib/brand-mark.ts`, drawn in ink in the header and on share cards, and on a 22%-rounded ink tile for app icons.
+The brand mark is the strip folded 4 × 2 (six-unit cells, two-unit gaps, one-unit radius) from `lib/brand-mark.ts`, drawn in ink beside the serif wordmark and on share cards, and on a 22%-rounded ink tile for app icons. The mark's colours did not change in this layer, so the icons were not regenerated.
 
 ### Named Rules
 
-**The Shape Before Hue Rule.** No two strip states differ by colour alone: flagged is a solid block, caution is a −45° hatch, found-nothing is a thin centred dash, a partial answer is a centred short block (never a length that reads as progress), failed is a 1.5px inset outline, didn't-apply is a dashed outline, and still-running is the bare track. Under forced colours the cells redraw the same shapes in system colours. The hatch is the only repeating-gradient pattern in the system and lives only inside cells.
+**The Shape Before Hue Rule.** No two strip states differ by colour alone: flagged is a solid block, caution a −45° hatch, found-nothing a short centred dash (half the cell's width), a partial answer a centred short block (never a length that reads as progress), failed a 1.5px inset outline, didn't-apply a dashed outline, and still-running the bare track. Under forced colours the cells redraw the same shapes in system colours, and the band keeps its rule as a border. The hatch is the only repeating-gradient pattern and lives only inside cells.
 
 ## Components
 
 ### Buttons
 
-- **Shape:** 6px radius, 1px border (transparent unless outlined), 44px minimum target; meta type at 500.
-- **Primary:** Signal Blue Solid with a white label. Analyze is 48px tall beside the field and is never disabled at rest (an empty submit explains itself inline); while a scan runs it is `aria-disabled`, not disabled, so focus stays. While a result is on screen it drops to the outline style so the verdict owns the colour; editing the field restores it.
-- **Outline:** Field White with a Control Edge border, ink label; hover darkens the edge and lays a Cool Mist plate. Used for result actions (Download result (JSON), Share, Re-scan).
-- **Ghost:** no fill, Graphite label; hover lays Cool Mist and inks the label. Used for Paste, exports, Clear/Undo, Cancel, batch Open.
-- **Press:** `scale: 0.97` over 160ms. Every export names its scope (result, batch, history).
+- **Shape:** 4px radius, 1px border, 44px minimum target; body type at 500 (600 on ink).
+- **Primary (ink):** Analyze is 56px tall beside the field (52px stacked on phones), never disabled at rest; while a scan runs it is `aria-disabled`, not disabled, so focus stays. While a result is on screen it drops to the outline style; editing the field restores it.
+- **Outline:** Field White, Control Edge border, ink label, 48px; hover darkens the edge and lays a Plate. Result actions: Download result (JSON), Share, Re-scan.
+- **Ghost:** no fill, Muted Ink; hover lays a Plate and inks the label. Paste, exports, Clear/Undo, Cancel scan, batch Open.
+- **Press:** `scale: 0.97` over 160ms.
 
 ### Inputs / Fields
 
-- **Style:** Field White, 1px Control Edge, 6px radius, 14px horizontal padding. The URL field is 48px tall and set in mono at body size; placeholder "Paste a link" in Soft Slate. Paste sits inside its right edge only where the browser can read the clipboard.
-- **Focus:** the border turns Focus Blue with the 2px outline flush on it (offset 0).
-- **Error:** the border turns UI Danger and a plain danger-coloured line appears beneath (`role="alert"`); never a callout box.
+Field White, 1px Control Edge, 4px radius, 16px padding. The URL field is 56px (52px on phones; 48px in the result row) in mono at body size, placeholder "Paste a link" in Soft Ink. Focus turns the border Focus Blue with the outline flush on it; errors turn it UI Danger with a plain danger line beneath (`role="alert"`).
 
 ### Tabs (Single / Batch) and the Summary/Full switch
 
-Text triggers on a hairline baseline, 44px tall. Inactive is Soft Slate; active is ink with a 2px Signal Blue underline. Batch carries an "up to 10 links" hint outside its accessible name. The Summary/Full switch uses the same text-option look as one `role="switch"`.
+Text triggers on a baseline rule, 44px tall, at least 44px wide, 30px apart. Inactive is Soft Ink; active is ink with a 2px ink underline. Batch carries an "up to 10 links" hint outside its accessible name. Summary/Full is one `role="switch"` with the same look, set on the Evidence head's ink rule.
 
 ### Navigation
 
-The header is the column at 56px: the eight-square mark and the "Scrutinix" wordmark (15px, 600, −0.015em; a home link off the home page), then About, Privacy (meta, Graphite to ink on hover, ink when current), and the theme toggle. The footer is one meta line on a hairline: name, About, Privacy, Source, and "Free and open source. No account needed."
+Header: the mark and the serif wordmark (600, 23px / 21px), then About, Privacy (meta, Muted Ink to ink, ink when current), and the theme toggle, all 44px. Footer: one line on a hairline: the serif wordmark, About, Privacy, Source, and "Free and open source. No account needed."
 
-### Verdict band (signature, S1)
+### Verdict band (signature)
 
-A column-wide section on `<verdict>-surface` with its 1px `<verdict>-edge`, 12px radius, 28px padding (20px × 24px on phones). Inside: the verdict word in ink at Verdict size (`h2#sx-verdict-heading`, focusable), the imperative directly beneath, and on the right the score numeral with its band text ("Malicious band 55–79") only when `getVerdictGuidance().showScore` (never for Unknown or Error). Below: a "because" sentence only when no evidence is shown beneath (a legacy record), a coverage caveat in Graphite only when coverage was limited, then the confidence line with "How scoring works". While checks run, the same element tree reads "Checking" in Soft Slate on the Checking surface, with "3 of 8 checks finished" and Cancel scan, so focus survives the switch. A look-alike Safe reads "Look-alike" (never "Safe"), takes the Unknown surface, shows no score, and replaces the confidence line with "No check flagged it, but the name is misleading."; its own verdict and score are stated first in the details ("No check flagged it: on their own, the checks scored it Safe, 4 out of 100."). A Safe result waits for the link parser: until it loads the band keeps the Checking tree ("Checking", "Checking the link's address", the confidence slot held), so neither "Safe" nor green shows before a look-alike is ruled out; if the parser fails it reads "Unconfirmed" on the Unknown surface, no score, "Check the link's address before you open it.", and "We couldn't check whether this address imitates another site." in place of the confidence line. Shared links come in two states, decided on the server. A **verified** snapshot (its `sig` is Scrutinix's own) shows the verdict word on its surface, the hedged imperative, the snapshot's summary, no score, a primary "Run a fresh scan", and a quiet Graphite note "Verified Scrutinix result · checked <UTC date and time, with the year>. It may be out of date.", with the snapshot strip below. A verified snapshot is shown for 3 days after its check (`SHARE_MAX_AGE`); after that it gets the unverified band below with its own sentence, "This shared result is more than 3 days old, so we're not showing it.", and the label "Shared result, expired". An **unverified** link (unsigned, tampered, or shared before signing) is someone's claim, not ours: the band takes the neutral Checking surface, the heading reads "Check this shared link yourself" at Headline size in ink (never Verdict size, never a verdict word), one plain sentence "We can't confirm the result in this link came from Scrutinix. It may be old or edited, so we're not showing it.", and the primary "Scan this link" (the viewer saw no earlier scan, so nothing is "fresh"; the verified band keeps "Run a fresh scan"). Nothing from the payload is drawn (no verdict word, tint, score, summary, or strip); the link anatomy below it is Scrutinix's own computation and stays, so a look-alike's real owner is still stated. Its label is "Shared link, not verified"; neither state speaks through the live region on load. "How we reached this verdict" is a native disclosure below the evidence, never between the band and its evidence. Every verdict string comes from `lib/domain/verdict-guidance.ts` and `lib/domain/verdict.ts`.
+A column-wide `section` on `<verdict>-surface`, squared, under its rule (`--sx-<verdict>`) drawn over the neutral track; padding 36px 44px 24px (26px 20px 16px on phones; the side padding is px, like the gutters). Inside: the verdict word at Verdict size in ink (`h2#sx-verdict-heading`, focusable), the registered domain under it at Domain size in the serif (it names the site only; the anatomy carries the sentence), the imperative beneath in the serif, and on the right the score with "/100" and its band ("Malicious band 55–79") in the band's ink, only when `getVerdictGuidance().showScore`. Below, set off by the band's hairline: the confidence label in ink 600 with "How scoring works" (a look-alike's note "No check flagged it, but the name is misleading." is regular weight); a "because" sentence only when no evidence shows beneath (a legacy record); a coverage caveat in band ink when coverage was limited. While checks run the same tree reads "Checking" in Soft Ink on the Checking surface with the domain, "3 of 8 checks finished", and Cancel scan, so focus survives. A look-alike Safe reads "Look-alike", takes the Unknown family, and shows no score. A **verified** shared snapshot shows its verdict, the hedged imperative, its summary, the ink "Run a fresh scan", and "Verified Scrutinix result · checked <UTC date and time>. It may be out of date." on the band's hairline; past 3 days it becomes the unverified band with "This shared result is more than 3 days old, so we're not showing it." An **unverified** link takes the Checking surface and track, the heading "Check this shared link yourself" at Headline size (never Verdict size, never a verdict word), the domain line (Scrutinix's own computation), one plain sentence, and "Scan this link"; nothing from the payload is drawn. Every verdict string comes from `lib/domain/verdict-guidance.ts` and `lib/domain/verdict.ts`. A Safe result waits for the link parser: until it loads the band keeps the Checking tree ("Checking", "Checking the link's address", the confidence slot held, the domain line held), so neither "Safe" nor green shows before a look-alike is ruled out; if the parser fails it reads "Unconfirmed" on the Unknown surface, no score, "Check the link's address before you open it.", and "We couldn't check whether this address imitates another site." in place of the confidence line.
 
-### Link anatomy (signature, S2)
+### The link, taken apart (signature)
 
-The link taken apart in mono at body size: scheme and path in Soft Slate, subdomain in Graphite, and the registered domain (the real owner) in ink at lead size, 600, never split mid-name unless it cannot fit. An ignored login name is struck through. A long path truncates with a "Show full link" toggle. A look-alike gets one plain sentence ("This link belongs to secure-login.xyz, not paypal.com.") with both domains in mono, said once on the page. Beneath, a small two-column list keys facts to the segment they describe (`https://` for a certificate problem, the domain for a young registration, "Ends at" for a redirect to another host), only when the fact matters and its evidence row isn't already on screen. Before a scan, the form shows the typed link the same way with each part captioned beneath it in Caption text ("A label anyone can add", "Registered domain", "A page on that domain"), parts wrapping as units on their baselines (assistive technology hears each part after its caption; the visual captions are hidden from it), then a quiet "Expecting a particular site?" link that opens one field answered live in the browser; it steps aside once that link's scan or result is on screen. In history and batch rows the compact form drops the scheme, truncates the subdomain from its left and the path first, and never truncates the owner.
+On a result, under a quiet rail heading ("The link, taken apart", body 600, Muted Ink, a plain block so the pasted link's region keeps that name alone), and under the form before a scan (a region with that name): the link in mono, scheme and path in Soft Ink, subdomain in Muted Ink, the registered domain bold in ink. Each named part stands over a hairline bracket carrying its caption in meta type ("A label anyone can add", "Registered domain", "A page on that domain", "Ignored by browsers" for a login name, struck through); the registered domain's bracket is heavy and its caption ink 600. A caption never widens its part (`contain: inline-size`, min 5.5rem), so the link stays one line of text. Nothing follows the last part, so its caption may run past its text to the end of the line, and wraps there rather than past the column (the part fills the rest of its line; its bracket is drawn under the text). Below 40rem the parts stack, each on a 1px left rule (3px ink for the domain), captions beneath, and the bare scheme steps out of sight (still spoken). Assistive technology hears each part after its caption; the visual captions are `aria-hidden`. A long path truncates with "Show full link". A look-alike gets one Owner sentence. Beneath, a small two-column list keys facts to the part they describe, only while the scan streams or when no evidence row states them. History and batch rows use the compact single line: the subdomain truncates from its left, the owner never.
 
-### Eight-cell strip (signature, S3)
+### Evidence: the strip as the index (signature)
 
-- **Live strip:** a `role="toolbar"` of eight cell controls (12px-tall cells with their short names in caption type beneath), four columns below 48rem and eight from 48rem. Names of flagged, caution, and failed checks go to ink at 500; the rest stay Soft Slate. Each cell is a named control ("Redirects: …") that reveals, opens, and focuses its evidence row; arrows, Home, and End move a roving tabindex.
-- **Snapshot strip:** the same grid drawn settled from a stored signature, as a list with real text for each state.
-- **Row marker:** a 14 × 8px cell leads each evidence row, so row and strip cell read as one thing.
-- **Glyph:** eight 7px cells with 2px gaps in history and batch rows; entries saved before signals were kept draw empty slots and a plain note, never eight failed cells.
-- **Mark, icon, share card:** the idealized strip (every cell filled in ink), folded 4 × 2 for the mark and icons, and one row of eight on the default share card.
+Evidence is a serif Title over an ink rule with the Summary/Full switch at its right. Under it, the live strip as the index (`role="toolbar"` "Checks", roving tabindex): each cell a named control ("Redirects: …") with its bar, its number in a hairline tag (`.sx-tag`, 1–8 in `signalNames` order), and its short name (ink 500 when flagged, caution, or failed; Soft Ink otherwise, underlined on hover). It moves focus to the question citing its check (Summary; that question takes a Plate) or opens and focuses its row (Full). Left/Right step through the cells and wrap; Up/Down move a row (clamped) from 40rem and step in order down the phone's two columns. Once a result settles, a legend names only the states drawn ("Flagged the link", "Found nothing", …), hidden from assistive technology. A hairline closes the index. Shared snapshots draw the same grid settled, as a list with real text per state.
 
-### Evidence rows
+### Summary questions (on a rail)
 
-An Evidence heading (meta, 600) with the Summary/Full switch on a hairline, then a `<ul>` divided by hairlines. Each row: the cell marker, the signal label (14px, 500, ink, a 176px column from 40rem), the finding as a plain sentence in Graphite (wraps, never truncates), and a chevron when evidence exists. Opening a row reveals a Cool Mist evidence plate (6px radius) holding a mono key/value list; timing lives only there. These rows are the Full view (and an Error result's Summary).
+Five questions in fixed order (layer 2B's set: Has it been reported? · Where would it take me? · What else raises concern? · Does HTTPS make it safe? · What did the other checks find?) on hairlines. From 64rem each question (Question type, `h4`, focusable) and its "From" line hang in a 19rem rail with the answer and why clause beside it at Answer size (44rem cap), the why in Muted Ink, any disagreement sentence after it. Narrower they stack: question, answer, then "From". The "From" line cites the strip: "From [1] VirusTotal · [3] Safe Browsing · [4] Threat feeds" with the same number tags; assistive technology hears "Sources: VirusTotal, Safe Browsing, Threat feeds" instead (one `QuestionSources` component), and the numbered line can't be selected, so a copy gives that plain list. No severity colour or marker here: the strip and Full rows carry each check's severity once. A pending question shows "Checking…" in Soft Ink over the room a typical answer takes (a representative answer and why drawn as invisible generated content, never text), so the headings below hold their place for clean answers; a longer answer (a flagged report with a disagreement, a long host) can still grow. Answer text wraps anywhere, so a long hostname breaks instead of widening a phone.
 
-### Summary questions
+### Full rows
 
-Summary is a `<ul>` "Questions" on the same hairlines, five items in fixed order. Each: the question as an `h4` (14px, 500, ink, focusable for strip cells), the answer in ink at body size, the why clause in Graphite (14px), an optional disagreement sentence in Graphite, then "Sources: VirusTotal · Safe Browsing · Threat feeds" in caption Soft Slate (the strip's cell names; one `QuestionSources` component, so layer 6 can cite numbered cells; the dot is drawn by `.sx-source::before`, so the text, copied or spoken, is "VirusTotal, Safe Browsing, Threat feeds"). No severity colour or marker: the strip and Full rows carry each check's severity once. A question still waiting on a check shows "Checking…" in Soft Slate over invisible room shaped like a typical clean answer and why, so answers fill in place and the questions below hold still in the common case (a finding, disagreement, or long hostname can still add lines, and a short "couldn't check" answer takes fewer). Answers and why clauses cap at 62ch, and question text wraps anywhere, so a long hostname breaks rather than widening a phone screen. Layer 6 (identity) restyles this block.
+The eight rows on the same rail and hairlines: the row marker (a 24 × 14 cell), the number tag and the signal label (body 500, ink) in the rail column, the finding in Muted Ink beside it (wraps, never truncates), and a chevron when evidence exists. Opening a row reveals the evidence plate (mono key/value, timing only there) aligned under the finding. Rows are also an Error result's Summary.
 
 ### History and batch
 
-Hairline-divided lists with one row grammar (`result-row.tsx`): glyph, verdict word in its `-fg` colour (a look-alike Safe reads "Look-alike" in Unknown slate; a Safe row holds "—" until the link parser loads, and reads "Unconfirmed" in Unknown slate if it failed), the compact anatomy, and a trailing timestamp (history) or Open (batch). Rows are 48px minimum; history rows are whole-row buttons with a Cool Mist hover plate. History draws nothing when empty (the landmark stays); a filter field appears past three entries; clearing confirms in UI Danger and offers Undo. Batch has a title and a mono "3/10" count on a hairline and a hidden-on-phone index column.
+At the form's measure, under a serif Title on an ink rule. One row grammar (`result-row.tsx`): the glyph, the verdict word in its `-fg` colour at body 600 (a look-alike Safe reads "Look-alike" in Unknown slate; a Safe row holds "—" until the link parser loads, and reads "Unconfirmed" in Unknown slate if it failed), the compact anatomy, and a timestamp (history) or Open (batch). Rows are 48px minimum; history rows are whole-row buttons with a Plate on hover. A filter appears past three entries; clearing confirms in UI Danger and offers Undo. Batch shows a mono "3/10" count and an index column from 40rem.
 
 ### Share images
 
-1200 × 630 cards rendered by `lib/og/cards.tsx` in the light theme with bundled Geist and Geist Mono (hex equivalents of the light tokens; Satori reads neither OKLCH nor variables). The default card: mark and wordmark, the headline in explicit lines at 84px, the supporting line, the ink strip, "scrutinix.net". A shared result card: the verdict band (word at 104px, imperative at 36px; a Safe look-alike's word is "Look-alike", never "Safe", since many chat clients show only the title and image, and its title reads "Look-alike of <brand>: <domain> — Scrutinix") on its surface and edge, the registered domain in mono (or the ownership sentence for a look-alike), and the result's strip with cell names, shapes mirrored from the live strip. The result card is drawn only for a signed payload within 3 days of its check; an expired or unverified shared link previews with the default card and the site's default title and description, never a verdict or any text from the payload (not even its domain).
+1200 × 630 cards from `lib/og/cards.tsx` in the light theme: Newsreader (the same two cuts, as TTF) for the wordmark, headline, supporting line, verdict, instruction, and the registered domain; Geist for interface text and Geist Mono for domains inside a look-alike's sentence (a server can't embed the system faces). Colours are the light tokens' hex equivalents. The default card: mark and serif wordmark, "Check a link before you click." in explicit lines, the supporting line, the ink strip, "scrutinix.net". A result card: the squared band under its 8px rule (word at 104px, instruction at 38px; a Safe look-alike's word is "Look-alike", never "Safe"), the registered domain in the serif (or the ownership sentence for a look-alike), and the result's strip with names, shapes mirrored. Only a signed payload within 3 days gets a result card.
 
 ### Accessibility contract (tests depend on these)
 
-- Landmarks and targets: skip link to `#main-content`; `id="scan-console"`; band `section` named "Scan result: {verdict}" (or "Scanning URL"); focusable `h2#sx-verdict-heading`; region "Scan history" with heading "History (N scans)" and filter `#sx-history-filter`; region "Batch scan results".
-- Names: textboxes "URL to analyze" / "URLs to analyze, one per line"; buttons Analyze URL, Start batch, Clear all history, Confirm clear all history, Undo clear history, Run a fresh scan, Scan this link, "Open result for {link}"; `role="meter"` "Threat score" (scored verdicts only, `aria-valuetext` "73 out of 100"); `role="switch"` whose name starts with its visible labels ("Summary Full signal list", WCAG 2.5.3); toolbar "Checks" (described as moving to a question in Summary, opening evidence in Full); list "Questions" with an `h4` per question; list "Signals"; each row named "{Label}: {finding}", its visible text in order, on its `<summary>` (or its `<li>` when it has no evidence).
-- Announcements: one polite live region, never remounted, reports progress ("3 of 8 checks finished.") and `getVerdictAnnouncement` on completion, waiting for the link parser so a look-alike is spoken with its hedge (or, if it failed, an "Unconfirmed" Safe with why). Opening a stored result moves focus to the verdict heading and blanks the region for 100ms so an identical announcement is spoken again.
-- Focus: a `/?url=` prefill (a share-target launch redirects to one) focuses Analyze, not the field, so a phone keyboard never covers the link taken apart below it. Re-scan and either shared-scan button ("Run a fresh scan", "Scan this link") park focus on the band heading (the same node from Checking to verdict); Cancel returns it to the field; a landed scan off-screen scrolls into view (instantly under reduced motion); a strip cell focuses the question citing its check (Summary) or opens and focuses its row (Full).
-- Floors: 44px targets; colour never carries meaning alone; coloured text uses `-fg` tokens; axe at zero violations on the empty page and on results in both themes; Lighthouse Accessibility ≥ 0.95.
+- Landmarks and targets: skip link to `#main-content`; `id="scan-console"`; band `section` named "Scan result: {verdict}" (or "Scanning URL", "Shared link, not verified", "Shared result, expired"); focusable `h2#sx-verdict-heading`; region "The link, taken apart" for the pasted link only; region "Scan history" with heading "History (N scans)" and filter `#sx-history-filter`; region "Batch scan results".
+- Names: textboxes "URL to analyze" / "URLs to analyze, one per line"; buttons Analyze URL, Start batch, Clear all history, Confirm clear all history, Undo clear history, Run a fresh scan, Scan this link, "Open result for {link}"; `role="meter"` "Threat score" (`aria-valuetext` "73 out of 100"); `role="switch"` whose name starts with its visible labels ("Summary Full signal list"); toolbar "Checks"; list "Questions" with an `h4` per question; list "Signals"; each row named "{Label}: {finding}", its visible text in order. Cell numbers and the "From" line's tags are `aria-hidden`; names stay the source of truth.
+- Announcements: one polite live region, never remounted, reports progress and `getVerdictAnnouncement` on completion, waiting for the link parser so a look-alike is spoken with its hedge (or, if it failed, an "Unconfirmed" Safe with why).
+- Focus: a `/?url=` prefill (a share-target launch redirects to one) focuses Analyze, not the field, so a phone keyboard never covers the link taken apart below it; Re-scan and the shared-scan buttons park focus on the band heading; Cancel returns it to the field; a strip cell focuses its question or opens and focuses its row.
+- Floors: 44px targets; colour never carries meaning alone; coloured text uses `-fg` or `-ink` tokens; axe at zero on the empty page, a pasted link, results, shared links, and /about in both themes; Lighthouse Performance ≥ 0.90, Accessibility ≥ 0.95.
 
 ## Do's and Don'ts
 
 ### Do:
 
-- **Do** keep one 46rem column in the order headline → form → verdict band → link anatomy → strip → evidence → actions → history.
-- **Do** state each fact once: one score, one severity per signal, the owner sentence once.
-- **Do** put verdict hue on the band surface and keep the verdict word in ink.
+- **Do** keep the order headline → form → band → the link taken apart → Evidence (strip index, then questions or rows) → actions → history.
+- **Do** state each fact once: one score, one severity per signal, the owner sentence once (the band only names the domain).
+- **Do** set the story in Newsreader and the interface in the system sans; keep mono for the link and data.
+- **Do** cite checks by the strip's numbers, with names alongside and names alone for assistive technology.
 - **Do** draw every new strip state with its own shape and add its pair to the contrast guard.
-- **Do** use the strip's grammar wherever a result is summarized: history, batch, share cards, icons.
-- **Do** theme every browser surface from the palette: selection, caret, scrollbar, focus, tabular numerals.
 - **Do** design light and dark separately and check both at every change.
+- **Do** keep static component layout in `app/scrutinix.css` (`.sx-*`) when it would otherwise grow the first-load script.
 
 ### Don't:
 
-- **Don't** use casefile, dossier, or stamp costume; terminal, CRT, radar, or glow theater; or cream-and-purple SaaS.
-- **Don't** warm the light ground into paper; it is cool, crisp white.
-- **Don't** graft the dealt drafts' presentations: no disclosure-label panel, no road signs, no transit line.
-- **Don't** add score rings, gauges, threat-level bars, or stacked per-signal badges repeating one fact.
-- **Don't** wrap content in cards or callout boxes; the verdict band is the only tinted container, and errors are plain lines of text.
-- **Don't** use pill tab bars or segmented pills; selection is a 2px underline.
-- **Don't** add taglines, kickers, stat bands, or feature grids around the one plain headline.
+- **Don't** use newspaper costume: mastheads, columns, datelines, small caps, drop caps, rules as ornament, newsprint textures.
+- **Don't** use casefile/dossier/stamp costume, terminal/CRT/radar/glow theater, or cream-and-purple SaaS.
+- **Don't** fill a button with the accent, or use the accent for anything but links, focus, the caret, and selection.
+- **Don't** round the band or add a second tinted container; errors are plain lines of text.
+- **Don't** add score rings, gauges, threat-level bars, or stacked per-signal badges.
 - **Don't** colour a found-nothing check green, or a UI error with a verdict red.
-- **Don't** add shadows, gradients, glass, or glows; hover is a Cool Mist plate.
-- **Don't** set prose in mono or put a second infinite animation on the page.
+- **Don't** load a third font cut or face, or synthesize bold/italic from the two (`font-synthesis: none`).
+- **Don't** add taglines, kickers, stat bands, or feature grids around the one headline.
+- **Don't** say "independent" for the checks (they are separate) or "who owns it" for a site (it is which site the link belongs to).

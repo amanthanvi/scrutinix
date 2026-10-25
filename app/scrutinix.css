@@ -3,8 +3,10 @@
  * globals.css. Motion is CSS-only, under 300ms, ease-out from an
  * already-visible default, and collapses under prefers-reduced-motion.
  *
- * The one authored moment: the eight cells fill as checks land, then the
- * verdict band takes its colour and the verdict word arrives.
+ * The one authored moment, "the rule draws": when a verdict lands, the
+ * band's heavy top rule draws left to right (scaleX, 240ms, exponential
+ * ease-out) and the verdict word rises 4px as it fades in. Cells filling
+ * as checks land is progress, not a moment.
  */
 
 .scrutinix-theme {
@@ -68,15 +70,22 @@
 .sx-cell[data-severity="suspicious"]::before {
   background: repeating-linear-gradient(
     -45deg,
-    var(--sx-cell-caution) 0 2px,
-    transparent 2px 3.5px
+    var(--sx-cell-caution) 0 var(--sx-hatch, 2px),
+    transparent var(--sx-hatch, 2px) var(--sx-hatch-period, 3.5px)
   );
   transform: scaleX(1);
 }
 
-/* Found nothing: a thin centred dash, never a block. */
+/* Tall cells (the live strip, /about's key) take P09's wider hatch. */
+.sx-cell-tall {
+  --sx-hatch: 2.4px;
+  --sx-hatch-period: 6.5px;
+}
+
+/* Found nothing: a short centred dash, never a block. */
 .sx-cell[data-severity="clear"]::before {
-  inset: 36% 0;
+  inset: calc(50% - max(1px, 6%)) 24%;
+  border-radius: 1px;
   background: var(--sx-cell-clear);
   transform: scaleX(1);
 }
@@ -167,6 +176,16 @@
     outline-offset: -1px;
   }
 
+  /* The band keeps its rule as a border; backgrounds are wiped. */
+  .sx-band {
+    border-top: 4px solid CanvasText;
+  }
+
+  .sx-band::before,
+  .sx-band-rule {
+    display: none;
+  }
+
   /* Selected tab and Summary/Full segment: one underline, in Highlight. */
   [data-slot="tabs-trigger"] {
     border-bottom-color: Canvas;
@@ -183,25 +202,184 @@
 }
 
 /*
- * Once a verdict band is on the page, the hero headline steps down to the
- * headline size so one display size (the verdict) owns the moment. Keyed
- * on the band's heading, which mounts when a scan starts, so the reflow
- * happens once, before the verdict lands, never after. (A shared link
- * opens recipient-first, with no hero headline, so nothing steps down.)
+ * Once a verdict band is on the page, the verdict owns the one display
+ * moment: the hero headline steps out of sight (it stays the page's h1 for
+ * assistive technology) and the supporting line goes. Keyed on the band's
+ * heading, which mounts when a scan starts, so the reflow happens once,
+ * before the verdict lands, never after. (A shared link opens
+ * recipient-first, with no hero headline, so nothing steps out.)
  */
-@media (min-width: 40rem) {
-  main:has(#sx-verdict-heading) > .sx-hero-title {
-    font-size: var(--text-headline);
-    line-height: var(--text-headline--line-height);
-    letter-spacing: var(--text-headline--letter-spacing);
+main:has(#sx-verdict-heading) > .sx-hero-title {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+main:has(#sx-verdict-heading) > .sx-hero-lead {
+  display: none;
+}
+
+main:has(#sx-verdict-heading) > .sx-hero-form {
+  margin-top: 0;
+}
+
+/*
+ * Phones with a result on the page: the field and Analyze share one row
+ * and Paste steps aside, so the verdict lands higher in the first view.
+ */
+@media (max-width: 39.99rem) {
+  .sx-home:has(#sx-verdict-heading) .sx-input-row {
+    flex-direction: row;
   }
 
-  main:has(#sx-verdict-heading) > .sx-hero-form {
-    margin-top: 1.5rem;
+  .sx-home:has(#sx-verdict-heading) .sx-input-row input {
+    height: 3rem;
+    padding-right: 0.75rem;
+    font-size: 0.9375rem;
+  }
+
+  .sx-home:has(#sx-verdict-heading) .sx-input-row .sx-paste {
+    display: none;
+  }
+
+  .sx-home:has(#sx-verdict-heading) .sx-input-row > button {
+    height: 3rem;
+    padding-inline: 1.125rem;
   }
 }
 
-/* Strip controls: a quiet hover plate behind the cell and its label. */
+/* With a result on the page the column starts close under the header. */
+.sx-home:has(#sx-verdict-heading) {
+  padding-top: 0.5rem;
+}
+
+@media (min-width: 40rem) {
+  .sx-home:has(#sx-verdict-heading) {
+    padding-top: 1.75rem;
+  }
+}
+
+/* ---------------------------------------------------------------------
+ * The live strip as the evidence's numbered index. Phones: two columns of
+ * four 44px rows, numbered down each column, each a slug beside its full
+ * name. From 40rem a 4 x 2 grid of 28px bars over their names; a single
+ * row of eight from 64rem.
+ * ------------------------------------------------------------------- */
+
+.sx-strip {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: repeat(4, auto);
+  grid-auto-flow: column;
+  gap: 0.25rem 0.875rem;
+}
+
+.sx-strip-cell,
+.sx-strip-item {
+  display: flex;
+  min-width: 0;
+  min-height: 2.75rem;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: 3px;
+  padding-right: 0.25rem;
+  text-align: left;
+}
+
+.sx-cell-bar {
+  --sx-hatch: 2.4px;
+  --sx-hatch-period: 6.5px;
+  width: 2.25rem;
+  height: 1.25rem;
+  flex-shrink: 0;
+}
+
+.sx-cell-label {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: 0.3125rem;
+  font-size: 0.875rem;
+  line-height: 1.25;
+}
+
+.sx-cell-label .sx-tag {
+  flex-shrink: 0;
+  align-self: center;
+}
+
+/* The name wraps rather than truncating, so a zoomed or narrow strip
+   stays identifiable; the text is static, so it never moves a cell. */
+.sx-cell-name {
+  min-width: 0;
+  overflow-wrap: break-word;
+  text-wrap: balance;
+  color: var(--sx-text-soft);
+}
+
+.sx-cell-name[data-notable="true"] {
+  font-weight: 500;
+  color: var(--sx-text);
+}
+
+/* Two columns stop fitting a slug, a number, and a name once the screen is
+   narrower than 20rem of the person's text size (150% text on a 320px
+   phone): one column of eight, so no name is squeezed to nothing. Never at
+   the default size, where 20rem is 320px. */
+@media (max-width: 19.98rem) {
+  .sx-strip {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
+    grid-auto-flow: row;
+  }
+}
+
+@media (min-width: 40rem) {
+  .sx-strip {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-rows: none;
+    grid-auto-flow: row;
+    gap: 1rem 0.625rem;
+  }
+
+  .sx-strip-cell,
+  .sx-strip-item {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.625rem;
+    padding: 0.375rem 6px 0.5rem;
+  }
+
+  .sx-strip-cell {
+    margin-inline: -6px;
+  }
+
+  .sx-cell-bar {
+    width: 100%;
+    height: 1.75rem;
+  }
+
+  .sx-cell-label {
+    margin-top: 0.125rem;
+    gap: 0.4375rem;
+    font-size: var(--text-meta);
+  }
+
+  .sx-cell-name {
+    hyphens: auto;
+  }
+}
+
+@media (min-width: 64rem) {
+  .sx-strip {
+    grid-template-columns: repeat(8, minmax(0, 1fr));
+  }
+}
+
+/* Strip controls: a quiet hover plate and an underlined name. */
 .sx-strip-cell {
   transition: background-color 160ms var(--sx-ease);
 }
@@ -210,42 +388,828 @@
   background: var(--sx-subtle);
 }
 
-/*
- * A question's sources: the dot between cell names is drawn, not text, so
- * a copy gives one separator (the visually hidden comma and the space
- * after it) and a screen reader hears only the comma. The empty alt text
- * keeps the dot unspoken; the first declaration is the fallback where alt
- * text isn't supported.
- */
-.sx-source + .sx-source::before {
-  content: "·";
-  content: "·" / "";
-  margin-inline-start: 0.3em;
+.sx-strip-cell:hover .sx-cell-name {
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+/* Section titles on a result (Evidence, History, Batch) in the serif, and
+   the quiet rail heading over the link. */
+.sx-section-title {
+  font-family: var(--font-display);
+  font-size: 1.375rem;
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: -0.015em;
+  font-synthesis: none;
+  color: var(--sx-text);
+}
+
+.sx-rail-heading {
+  margin-bottom: 1rem;
+  font-size: var(--text-body);
+  font-weight: 600;
+  color: var(--sx-text-muted);
+}
+
+/* The strip as the evidence's index, between the title and the answers. */
+.sx-strip-index {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  border-bottom: 1px solid var(--sx-border);
+  padding-block: 1.25rem;
+}
+
+@media (min-width: 40rem) {
+  .sx-section-title {
+    font-size: var(--text-title);
+  }
+
+  .sx-rail-heading {
+    margin-bottom: 1.25rem;
+  }
+
+  .sx-strip-index {
+    padding-block: 1.5rem;
+  }
+}
+
+/* The key to the shapes on screen. */
+.sx-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem 1.5rem;
+  font-size: var(--text-meta);
+  line-height: var(--text-meta--line-height);
+  color: var(--sx-text-muted);
+}
+
+.sx-legend > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.sx-legend .sx-cell {
+  width: 1.375rem;
+  height: 0.75rem;
+  flex-shrink: 0;
+}
+
+.sx-question {
+  transition: background-color 160ms var(--sx-ease);
 }
 
 /* ---------------------------------------------------------------------
- * The verdict band: neutral while checks run, then the verdict surface.
+ * The verdict band: squared, the one tinted container, under a heavy top
+ * rule. The neutral track is always there; a verdict's rule (a keyed
+ * .sx-band-rule) draws over it from the left when the verdict lands.
  * ------------------------------------------------------------------- */
 
 .sx-band {
-  transition:
-    background-color 280ms var(--sx-ease),
-    border-color 280ms var(--sx-ease);
+  --sx-rule: 4px;
+  position: relative;
+  transition: background-color 280ms var(--sx-ease);
+}
+
+.sx-band::before,
+.sx-band-rule {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: var(--sx-rule);
+  background: var(--sx-pending);
+}
+
+.sx-band-rule {
+  background: var(--sx-band-rule);
+  transform-origin: left center;
+}
+
+@media (min-width: 40rem) {
+  .sx-band {
+    --sx-rule: 5px;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .sx-band-rule {
+    animation: sx-draw 240ms var(--sx-ease-expo) both;
+  }
+}
+
+@keyframes sx-draw {
+  from {
+    transform: scaleX(0);
+  }
+}
+
+/*
+ * The column's side gutters (page, header, footer, public pages) and the
+ * band's side padding are px, not rem: a larger default text size gives
+ * the words the room, not the margins, and the band never narrows as text
+ * grows, so the verdict (sized against it) never shrinks.
+ */
+.sx-gutter {
+  padding-inline: 16px;
+}
+
+@media (min-width: 40rem) {
+  .sx-gutter {
+    padding-inline: 24px;
+  }
+}
+
+/* The band's frame and type (static, so kept out of the script). */
+.sx-band-frame {
+  padding: 1.625rem 20px 1rem;
+  /* The verdict word sizes against the band's own width (cqi below). */
+  container-type: inline-size;
+}
+
+.sx-band-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem 2.5rem;
+}
+
+.sx-band-body > div:first-child {
+  min-width: 0;
+}
+
+/*
+ * The verdict word at display size, never wider than the band: the longest
+ * word ("Unconfirmed", about 6.1em in the serif at 600) fits at 16.4cqi, so
+ * narrow phones scale it down instead of overflowing; wider bands keep the
+ * full size. A larger default text size never makes it smaller: the band's
+ * width doesn't shrink as text grows (px gutters and padding), the floor
+ * and caps are rem, and the full size switches on at a px width. Where the
+ * larger word can't fit, it wraps, at a hyphenation point if there is one.
+ */
+.sx-band-heading {
+  outline-offset: 4px;
+  font-size: clamp(2rem, 16.4cqi, var(--text-verdict-sm));
+  line-height: var(--text-verdict-sm--line-height);
+  letter-spacing: var(--text-verdict-sm--letter-spacing);
+  overflow-wrap: anywhere;
+  hyphens: auto;
+}
+
+/* A shared link we can't vouch for: a plain heading, never verdict size. */
+.sx-band-heading-claim {
+  font-size: 2rem;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+}
+
+/* The registered domain, in the serif, directly under the verdict word. */
+.sx-band-domain {
+  margin-top: 0.75rem;
+  font-family: var(--font-display);
+  font-size: 1.875rem;
+  font-weight: 600;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  font-synthesis: none;
+  overflow-wrap: anywhere;
+  color: var(--sx-text);
+}
+
+.sx-band-imperative {
+  max-width: 40rem;
+  margin-top: 1rem;
+  font-family: var(--font-display);
+  font-size: 1.375rem;
+  line-height: 1.32;
+  text-wrap: pretty;
+  color: var(--sx-text);
+}
+
+/* The band's last line, set off by its own hairline. */
+.sx-band-line {
+  margin-top: 1.5rem;
+  border-top: 1px solid var(--sx-band-edge);
+  padding-top: 0.875rem;
+  font-size: var(--text-meta);
+  line-height: var(--text-meta--line-height);
+}
+
+.sx-score {
+  display: flex;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 0.75rem;
+  padding-top: 0.5rem;
+  font-size: var(--text-meta);
+  color: var(--sx-band-ink);
+}
+
+.sx-score [role="meter"] {
+  font-size: 2.5rem;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+  color: var(--sx-text);
+}
+
+.sx-score [role="meter"] > span {
+  margin-left: 0.25rem;
+  font-size: 1.375rem;
+  font-weight: 400;
+  letter-spacing: normal;
+  color: var(--sx-band-ink);
+}
+
+@media (min-width: 40rem) {
+  .sx-band-frame {
+    padding: 2.25rem 44px 1.5rem;
+  }
+
+  .sx-band-heading-claim {
+    font-size: var(--text-headline);
+    line-height: var(--text-headline--line-height);
+    letter-spacing: var(--text-headline--letter-spacing);
+  }
+
+  .sx-band-domain {
+    font-size: var(--text-domain);
+    line-height: var(--text-domain--line-height);
+  }
+
+  .sx-band-imperative {
+    font-size: var(--text-imperative);
+    line-height: var(--text-imperative--line-height);
+  }
+
+  .sx-band-line,
+  .sx-score {
+    font-size: var(--text-body);
+    line-height: var(--text-body--line-height);
+  }
+
+  .sx-score [role="meter"] {
+    font-size: var(--text-score);
+  }
+}
+
+/* The verdict's full size from 768px, a px width (48rem at the default
+   text size), so a larger text size can't switch it back to the smaller
+   cap. The score's column below still waits for 48rem of text. */
+@media (min-width: 768px) {
+  .sx-band-heading {
+    font-size: clamp(2rem, 16.4cqi, var(--text-verdict));
+    line-height: var(--text-verdict--line-height);
+    letter-spacing: var(--text-verdict--letter-spacing);
+  }
+}
+
+/* The score takes its own column only once the longest word
+   ("Suspicious") and a three-digit score both fit. */
+@media (min-width: 48rem) {
+  .sx-band-body {
+    flex-direction: row;
+    align-items: flex-start;
+    justify-content: space-between;
+  }
+
+  .sx-score {
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.625rem;
+    padding-top: 0.375rem;
+  }
 }
 
 .sx-band-arrive {
+  display: inline-block;
+  max-width: 100%;
   opacity: 1;
   translate: 0 0;
   transition:
-    opacity 240ms var(--sx-ease),
-    translate 240ms var(--sx-ease);
+    opacity 240ms var(--sx-ease-expo),
+    translate 240ms var(--sx-ease-expo);
 }
 
 @starting-style {
   .sx-band-arrive {
     opacity: 0;
-    translate: 0 6px;
+    translate: 0 4px;
   }
+}
+
+/* ---------------------------------------------------------------------
+ * The link, taken apart: each part over a hairline bracket that names it,
+ * a heavy bracket on the registered domain. On phones the parts stack,
+ * each on its own rule, the domain's heavy.
+ * ------------------------------------------------------------------- */
+
+.sx-anat {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  row-gap: 1rem;
+}
+
+.sx-anat-part {
+  display: inline-flex;
+  min-width: 0;
+  max-width: 100%;
+  flex-direction: column;
+}
+
+.sx-anat-caption {
+  position: relative;
+  margin: 0.875rem 0.125rem 0;
+  border-top: 1px solid var(--sx-text-soft);
+  padding-top: 0.625rem;
+  /* The caption wraps inside its part's width, never widening it. */
+  contain: inline-size;
+}
+
+.sx-anat-caption::before,
+.sx-anat-caption::after {
+  content: "";
+  position: absolute;
+  top: -7px;
+  width: 1px;
+  height: 6px;
+  background: var(--sx-text-soft);
+}
+
+.sx-anat-caption::before {
+  left: -1px;
+}
+
+.sx-anat-caption::after {
+  right: -1px;
+}
+
+.sx-anat-owner .sx-anat-caption {
+  border-top: 2px solid var(--sx-text);
+}
+
+.sx-anat-owner .sx-anat-caption::before,
+.sx-anat-owner .sx-anat-caption::after {
+  top: -8px;
+  width: 2px;
+  height: 7px;
+  background: var(--sx-text);
+}
+
+.sx-anat-owner .sx-anat-caption::before {
+  left: -2px;
+}
+
+.sx-anat-owner .sx-anat-caption::after {
+  right: -2px;
+}
+
+/*
+ * Inline, a caption that wraps fills its part's width, so the next part's
+ * caption would start right beside it and read as one sentence ("A label
+ * anyone can Registered domain"). Each caption but the last keeps a gap at
+ * its end; the brackets above still span the whole part.
+ */
+@media (min-width: 40rem) {
+  .sx-anat:not(.sx-anat-stacked)
+    .sx-anat-part:not(:last-child)
+    .sx-anat-caption {
+    padding-inline-end: 0.75rem;
+  }
+}
+
+/*
+ * Inline: nothing follows the last part, so its caption may run past its
+ * text, to the end of its line, and wraps there rather than past the
+ * column. The part fills the rest of its line, so its bracket is drawn
+ * under the text (the caption's own geometry) instead of along the
+ * caption.
+ */
+@media (min-width: 40rem) {
+  .sx-anat:not(.sx-anat-stacked) .sx-anat-part:last-child {
+    flex-grow: 1;
+    align-items: flex-start;
+  }
+
+  .sx-anat:not(.sx-anat-stacked) .sx-anat-part:last-child .sx-anat-caption {
+    align-self: stretch;
+    border-top-color: transparent;
+  }
+
+  .sx-anat:not(.sx-anat-stacked)
+    .sx-anat-part:last-child
+    .sx-anat-caption::before,
+  .sx-anat:not(.sx-anat-stacked)
+    .sx-anat-part:last-child
+    .sx-anat-caption::after {
+    display: none;
+  }
+
+  .sx-anat:not(.sx-anat-stacked) .sx-anat-part:last-child .sx-anat-text {
+    position: relative;
+  }
+
+  .sx-anat:not(.sx-anat-stacked) .sx-anat-part:last-child .sx-anat-text::before,
+  .sx-anat:not(.sx-anat-stacked) .sx-anat-part:last-child .sx-anat-text::after {
+    content: "";
+    position: absolute;
+    left: 0.125rem;
+    right: 0.125rem;
+    top: calc(100% + 0.875rem);
+    height: 1px;
+    background: var(--sx-text-soft);
+  }
+
+  /* The end ticks, rising from the line. */
+  .sx-anat:not(.sx-anat-stacked) .sx-anat-part:last-child .sx-anat-text::after {
+    left: calc(0.125rem - 1px);
+    right: calc(0.125rem - 1px);
+    top: calc(100% + 0.875rem - 6px);
+    height: 6px;
+    border-inline: 1px solid var(--sx-text-soft);
+    background: none;
+  }
+
+  .sx-anat:not(.sx-anat-stacked)
+    .sx-anat-owner:last-child
+    .sx-anat-text::before {
+    height: 2px;
+    background: var(--sx-text);
+  }
+
+  .sx-anat:not(.sx-anat-stacked)
+    .sx-anat-owner:last-child
+    .sx-anat-text::after {
+    left: calc(0.125rem - 2px);
+    right: calc(0.125rem - 2px);
+    height: 7px;
+    border-inline: 2px solid var(--sx-text);
+  }
+}
+
+/*
+ * Stacked: every phone, and any link with a middle part too short to
+ * carry its caption inline (`a.example.com`), where a caption would either
+ * widen its part and break the link apart or wrap a word per line.
+ */
+@media (max-width: 39.99rem) {
+  .sx-anat {
+    flex-direction: column;
+    align-items: stretch;
+    row-gap: 0.75rem;
+  }
+
+  .sx-anat-part {
+    border-left: 1px solid var(--sx-text-soft);
+    padding-left: 0.75rem;
+  }
+
+  .sx-anat-owner {
+    border-left: 3px solid var(--sx-text);
+    padding-left: 0.625rem;
+  }
+
+  .sx-anat-caption,
+  .sx-anat-owner .sx-anat-caption {
+    margin: 0.1875rem 0 0;
+    border: 0;
+    padding: 0;
+    contain: none;
+  }
+
+  .sx-anat-caption::before,
+  .sx-anat-caption::after {
+    display: none;
+  }
+}
+
+.sx-anat-stacked {
+  flex-direction: column;
+  align-items: stretch;
+  row-gap: 0.75rem;
+}
+
+.sx-anat-stacked .sx-anat-part {
+  border-left: 1px solid var(--sx-text-soft);
+  padding-left: 0.75rem;
+}
+
+.sx-anat-stacked .sx-anat-owner {
+  border-left: 3px solid var(--sx-text);
+  padding-left: 0.625rem;
+}
+
+.sx-anat-stacked .sx-anat-caption,
+.sx-anat-stacked .sx-anat-owner .sx-anat-caption {
+  margin: 0.1875rem 0 0;
+  border: 0;
+  padding: 0;
+  white-space: normal;
+  contain: none;
+}
+
+.sx-anat-stacked .sx-anat-caption::before,
+.sx-anat-stacked .sx-anat-caption::after {
+  display: none;
+}
+
+/* ---------------------------------------------------------------------
+ * Citation: the strip's cell numbers and the Summary's "From" line share
+ * one hairline number tag, so a cited number never reads as a count.
+ * ------------------------------------------------------------------- */
+
+.sx-tag {
+  display: inline-grid;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  place-items: center;
+  border: 1px solid var(--sx-border);
+  border-radius: 3px;
+  padding: 0 0.25rem;
+  font-size: 0.78125rem;
+  font-weight: 500;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--sx-text-muted);
+}
+
+/* Inside a control whose name is set (a strip cell, a check row), the
+   number is drawn, not text: the control's visible text stays its name, so
+   "click VirusTotal" finds it (WCAG 2.5.3) and the name needs no digit. */
+.sx-tag[data-n]::before {
+  content: attr(data-n);
+}
+
+/* ---------------------------------------------------------------------
+ * The link line, the owner sentence, and the Summary's questions on a
+ * rail: static layout kept out of the first-load script.
+ * ------------------------------------------------------------------- */
+
+.sx-anat {
+  font-family: var(--font-mono);
+  color: var(--sx-text-soft);
+}
+
+.sx-anat-caption {
+  font-family: var(--font-sans);
+  font-size: var(--text-meta);
+  line-height: var(--text-meta--line-height);
+  letter-spacing: normal;
+  color: var(--sx-text-muted);
+}
+
+.sx-anat-owner .sx-anat-caption {
+  font-weight: 600;
+  color: var(--sx-text);
+}
+
+.sx-link-result {
+  font-size: 1.1875rem;
+  line-height: 1.3;
+}
+
+.sx-link-form {
+  font-size: 1.0625rem;
+  line-height: 1.35;
+}
+
+/* "This link belongs to …": the serif, both domains in mono. */
+.sx-owner {
+  max-width: 44rem;
+  margin-top: 0.25rem;
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  line-height: 1.4;
+  text-wrap: pretty;
+  color: var(--sx-text);
+}
+
+@media (min-width: 40rem) {
+  .sx-link-result {
+    font-size: var(--text-link);
+    line-height: var(--text-link--line-height);
+    letter-spacing: var(--text-link--letter-spacing);
+  }
+
+  .sx-link-form {
+    font-size: 1.375rem;
+    line-height: 1.3;
+  }
+
+  .sx-owner {
+    font-size: var(--text-owner);
+  }
+}
+
+/* Phones stack question, answer, then sources; from 64rem the question
+   and its sources hang in a 19rem rail beside the answer. */
+.sx-question {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding-block: 1rem;
+}
+
+.sx-question-rail {
+  display: contents;
+}
+
+.sx-question-rail > h4 {
+  scroll-margin-top: 1.5rem;
+  outline-offset: 4px;
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  font-weight: 600;
+  line-height: 1.3;
+  font-synthesis: none;
+  text-wrap: balance;
+  color: var(--sx-text);
+}
+
+.sx-question-rail > .sx-sources {
+  order: 1;
+}
+
+.sx-answer {
+  max-width: 44rem;
+  font-family: var(--font-display);
+  font-size: 1.125rem;
+  line-height: 1.45;
+  text-wrap: pretty;
+}
+
+.sx-sources {
+  font-size: var(--text-meta);
+  line-height: 1.5;
+  color: var(--sx-text-muted);
+}
+
+.sx-sources .sx-tag {
+  margin-right: 0.4375rem;
+  vertical-align: 1px;
+}
+
+.sx-sources-sep {
+  margin-inline: 0.4375rem;
+  color: var(--sx-text-soft);
+}
+
+@media (min-width: 40rem) {
+  .sx-question {
+    padding-block: 1.25rem;
+  }
+
+  .sx-question-rail > h4 {
+    font-size: var(--text-question);
+    letter-spacing: var(--text-question--letter-spacing);
+  }
+
+  .sx-answer {
+    font-size: var(--text-answer);
+    line-height: var(--text-answer--line-height);
+  }
+}
+
+@media (min-width: 64rem) {
+  .sx-question {
+    display: grid;
+    grid-template-columns: 19rem minmax(0, 1fr);
+    column-gap: 3rem;
+  }
+
+  .sx-question-rail {
+    display: flex;
+    flex-direction: column;
+    gap: 0.625rem;
+  }
+
+  .sx-question-rail > .sx-sources {
+    order: 0;
+  }
+}
+
+/* A strip cell moves focus to the question citing it: the plate shows
+   which answer that is. */
+.sx-question:has(h4:focus) {
+  background: var(--sx-subtle);
+  /* The plate bleeds past the column; the row's hairlines don't. */
+  box-shadow:
+    -1rem 0 0 var(--sx-subtle),
+    1rem 0 0 var(--sx-subtle);
+}
+
+/* ---------------------------------------------------------------------
+ * Public pages (/about, /privacy): plain tables and disclosures inherit
+ * the identity. Zero-specificity :where() so a utility class always wins.
+ * ------------------------------------------------------------------- */
+
+.sx-public :where(table) {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-meta);
+  line-height: var(--text-meta--line-height);
+  font-variant-numeric: tabular-nums lining-nums;
+  color: var(--sx-text-muted);
+}
+
+.sx-public :where(caption) {
+  caption-side: top;
+  padding-bottom: 0.75rem;
+  text-align: left;
+  color: var(--sx-text-muted);
+}
+
+.sx-public :where(thead th) {
+  border-bottom: 1px solid var(--sx-text);
+  padding: 0 1rem 0.625rem 0;
+  text-align: left;
+  vertical-align: bottom;
+  font-weight: 600;
+  color: var(--sx-text);
+}
+
+.sx-public :where(tbody th, tbody td, tfoot th, tfoot td) {
+  border-bottom: 1px solid var(--sx-border);
+  padding: 0.6875rem 1rem 0.6875rem 0;
+  text-align: left;
+  vertical-align: top;
+}
+
+.sx-public :where(tbody th) {
+  font-weight: 500;
+  color: var(--sx-text);
+}
+
+.sx-public :where(tfoot th, tfoot td) {
+  border-top: 1px solid var(--sx-text);
+  border-bottom: 0;
+  font-weight: 600;
+  color: var(--sx-text);
+}
+
+.sx-public :where(th, td):last-child {
+  padding-right: 0;
+}
+
+/* Figures right-aligned in their column: mark the cell `data-numeric`. */
+.sx-public :where([data-numeric]) {
+  text-align: right;
+}
+
+.sx-public :where(code) {
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+}
+
+.sx-public :where(details) {
+  border-top: 1px solid var(--sx-border);
+  border-bottom: 1px solid var(--sx-border);
+}
+
+.sx-public :where(details) + :where(details) {
+  border-top: 0;
+}
+
+.sx-public :where(details > summary) {
+  display: flex;
+  min-height: 2.75rem;
+  align-items: center;
+  gap: 0.625rem;
+  cursor: pointer;
+  list-style: none;
+  font-weight: 500;
+  color: var(--sx-text);
+}
+
+.sx-public :where(details > summary)::-webkit-details-marker {
+  display: none;
+}
+
+.sx-public :where(details > summary)::before {
+  content: "";
+  width: 0.5rem;
+  height: 0.5rem;
+  flex: none;
+  background: var(--sx-text-soft);
+  clip-path: polygon(25% 0, 75% 50%, 25% 100%);
+  transition: rotate 200ms var(--sx-ease);
+}
+
+.sx-public :where(details[open] > summary)::before {
+  rotate: 90deg;
+}
+
+.sx-public :where(details[open]) {
+  padding-bottom: 1rem;
+}
+
+.sx-table-frame:focus-visible {
+  outline: 2px solid var(--sx-focus-ring);
+  outline-offset: 4px;
 }
 
 /* ---------------------------------------------------------------------
@@ -336,11 +1300,15 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .sx-enter,
-  .sx-band-arrive {
+  .sx-enter {
     translate: none;
     transition-duration: 150ms;
     transition-property: opacity;
+  }
+
+  /* The verdict is drawn in place, like its rule. */
+  .sx-band-arrive {
+    transition: none;
   }
 
   .sx-live,
@@ -350,6 +1318,8 @@
 
   .sx-cell::before,
   .sx-band,
+  .sx-question,
+  .sx-public details > summary::before,
   .sx-chevron,
   .sx-btn-press,
   .sx-strip-cell,

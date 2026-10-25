@@ -622,6 +622,25 @@ test("a signed snapshot without a strip still opens @smoke", async ({
   ).toBeVisible();
 });
 
+test("a scan that lands below a short window brings the whole instruction into view @smoke", async ({
+  page,
+}) => {
+  // 1440 x 900 at 200% zoom: the band's domain line sits between the
+  // verdict word and the instruction, so measuring only the line under
+  // the heading would stop the scroll with the instruction cut off.
+  await page.setViewportSize({ width: 720, height: 450 });
+  await gotoApp(page);
+  await submitSingleScan(page, "https://malicious.scrutinix.test/login");
+  await expect(page.getByLabel(/^scan result: malicious$/i)).toBeVisible();
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await submitSingleScan(page, "https://malicious.scrutinix.test/again");
+  await expect(
+    page
+      .getByLabel(/^scan result: malicious$/i)
+      .getByText("Don't open this link."),
+  ).toBeInViewport({ ratio: 1 });
+});
+
 for (const reducedMotion of ["no-preference", "reduce"] as const) {
   test(`on a phone a re-scan's verdict comes into view (${reducedMotion} motion) @smoke`, async ({
     page,

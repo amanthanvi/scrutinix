@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import localFont from "next/font/local";
 import { headers } from "next/headers";
 
 import "@/app/globals.css";
@@ -8,6 +9,32 @@ import { LazyToaster } from "@/components/ui/lazy-toaster";
 import { getSiteUrl } from "@/lib/site-url";
 
 const siteUrl = getSiteUrl();
+
+/**
+ * The one display face: Newsreader (SIL OFL 1.1), two static latin cuts
+ * built by `scripts/build-display-fonts.sh` (400 at opsz 16 for reading
+ * size, 600 at opsz 60 for display). Self-hosted and preloaded as CSS, no
+ * runtime script; `--font-display` in app/globals.css reads the variable.
+ * Interface text stays the system sans, links and data the system mono.
+ */
+const newsreader = localFont({
+  src: [
+    {
+      path: "../fonts/newsreader/newsreader-400-opsz16.woff2",
+      weight: "400",
+      style: "normal",
+    },
+    {
+      path: "../fonts/newsreader/newsreader-600-opsz60.woff2",
+      weight: "600",
+      style: "normal",
+    },
+  ],
+  variable: "--font-newsreader",
+  display: "swap",
+  fallback: ["Georgia", "Times New Roman", "serif"],
+  adjustFontFallback: "Times New Roman",
+});
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
@@ -50,8 +77,8 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: [
-    { media: "(prefers-color-scheme: dark)", color: "#0c0e12" },
-    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+    { media: "(prefers-color-scheme: dark)", color: "#0e1012" },
+    { media: "(prefers-color-scheme: light)", color: "#fafcfe" },
   ],
 };
 
@@ -64,7 +91,7 @@ export default async function RootLayout({
   const nonce = (await headers()).get("x-nonce") ?? undefined;
 
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" className={newsreader.variable} suppressHydrationWarning>
       <body className="font-sans antialiased">
         <a href="#main-content" className="sx-skip-link">
           Skip to content

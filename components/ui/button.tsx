@@ -7,21 +7,22 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
-  "sx-btn-press inline-flex min-h-11 shrink-0 items-center justify-center gap-1.5 rounded-md border border-transparent text-meta font-medium whitespace-nowrap outline-none select-none disabled:pointer-events-none aria-disabled:cursor-not-allowed [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-3.5",
+  "sx-btn-press inline-flex min-h-11 max-w-full shrink-0 items-center justify-center gap-2 rounded-md border border-transparent text-center text-body font-medium outline-none select-none disabled:pointer-events-none aria-disabled:cursor-not-allowed [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   {
     variants: {
       variant: {
+        // Buttons are ink: the accent marks only links, focus, and the caret.
         primary:
-          "bg-[var(--sx-accent-solid)] text-[var(--sx-accent-fg)] hover:bg-[var(--sx-accent-solid-hover)] disabled:border-[var(--sx-border)] disabled:bg-[var(--sx-subtle)] disabled:text-[var(--sx-text-soft)] aria-disabled:border-[var(--sx-border)] aria-disabled:bg-[var(--sx-subtle)] aria-disabled:text-[var(--sx-text-soft)] aria-disabled:hover:bg-[var(--sx-subtle)]",
+          "border-[var(--sx-button)] bg-[var(--sx-button)] font-semibold text-[var(--sx-button-fg)] hover:border-[var(--sx-button-hover)] hover:bg-[var(--sx-button-hover)] disabled:border-[var(--sx-border)] disabled:bg-[var(--sx-subtle)] disabled:text-[var(--sx-text-soft)] aria-disabled:border-[var(--sx-border)] aria-disabled:bg-[var(--sx-subtle)] aria-disabled:text-[var(--sx-text-soft)] aria-disabled:hover:bg-[var(--sx-subtle)]",
         ghost:
           "text-[var(--sx-text-muted)] hover:bg-[var(--sx-subtle)] hover:text-[var(--sx-text)] disabled:opacity-60 aria-disabled:opacity-60",
         outline:
           "border-[var(--sx-control)] bg-[var(--sx-surface)] text-[var(--sx-text)] hover:border-[var(--sx-control-hover)] hover:bg-[var(--sx-subtle)] disabled:opacity-60 aria-disabled:opacity-60",
       },
       size: {
-        default: "h-9 px-3.5",
-        sm: "h-8 px-2.5",
-        icon: "size-9 min-w-11 px-0 py-0",
+        default: "min-h-12 px-5 py-2",
+        sm: "min-h-11 px-3.5 py-1.5",
+        icon: "size-11 px-0 py-0",
       },
     },
     defaultVariants: {

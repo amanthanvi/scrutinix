@@ -67,7 +67,12 @@ function buildResult(
 
 function renderPanel(
   result: AnalysisResult,
-  props: { evidenceShown?: boolean; impersonates?: string | null } = {},
+  props: {
+    evidenceShown?: boolean;
+    impersonates?: string | null;
+    registeredDomain?: string | null;
+    holdDomain?: boolean;
+  } = {},
 ) {
   return render(
     <>
@@ -87,6 +92,37 @@ function renderPanel(
 }
 
 describe("VerdictBand", () => {
+  it("names the registered domain in the serif under the verdict, and only names it", () => {
+    renderPanel(buildResult("malicious", { score: 73 }), {
+      registeredDomain: "secure-login.xyz",
+      impersonates: "paypal.com",
+    });
+    const band = screen.getByRole("region", { name: "Scan result: Malicious" });
+    const heading = screen.getByRole("heading", { level: 2 });
+    const domain = heading.nextElementSibling as HTMLElement;
+    expect(domain.textContent).toBe("secure-login.xyz");
+    expect(domain.className).toContain("sx-band-domain");
+    // The owner sentence belongs to the link anatomy, said once there.
+    expect(band.textContent).not.toMatch(/belongs to/);
+  });
+
+  it("holds the domain line's height while the link parser loads", () => {
+    renderPanel(buildResult("safe", { score: 4 }), { holdDomain: true });
+    const placeholder = screen.getByRole("heading", { level: 2 })
+      .nextElementSibling as HTMLElement;
+    expect(placeholder.getAttribute("aria-hidden")).toBe("true");
+    expect(placeholder.className).toContain("invisible");
+  });
+
+  it("draws a verdict rule keyed to the result, over the band's track", () => {
+    renderPanel(buildResult("malicious", { score: 73 }));
+    const band = screen.getByRole("region", { name: "Scan result: Malicious" });
+    expect(band.querySelector(".sx-band-rule")).not.toBeNull();
+    expect(band.style.getPropertyValue("--sx-band-rule")).toBe(
+      "var(--sx-malicious)",
+    );
+  });
+
   it("puts the instruction under the verdict and explains the score in place", () => {
     renderPanel(
       buildResult("malicious", {
@@ -261,7 +297,7 @@ describe("VerdictBand", () => {
 
     for (const name of ["What to do", "Caveats", "Why high confidence"]) {
       const heading = screen.getByRole("heading", { level: 3, name });
-      expect(heading.className).toContain("text-meta");
+      expect(heading.className).toContain("text-body");
       expect(heading.className).toContain("font-semibold");
     }
   });
@@ -430,10 +466,10 @@ describe("VerdictBand", () => {
     ).toBeNull();
   });
 
-  it("sets the score numeral in sans so a zero never reads as a slashed zero", () => {
+  it("sets the score numeral in the display serif, never mono, so a zero never reads as a slashed zero", () => {
     renderPanel(buildResult("safe", { score: 0 }));
     const meter = screen.getByRole("meter", { name: "Threat score" });
-    expect(meter.className).toContain("font-sans");
+    expect(meter.className).toContain("font-serif");
     expect(meter.className).toContain("tabular-nums");
     expect(meter.className).not.toMatch(/(^|\s)font-mono(\s|$)/);
   });
@@ -522,5 +558,47 @@ describe("VerdictDetails reference", () => {
     );
 
     expect(screen.queryByText(/Reference/)).toBeNull();
+  });
+});
+
+describe("VerdictDetails wording", () => {
+  it("says how many checks failed, so 8/8 never reads as eight answers", () => {
+    const signals = Object.fromEntries(
+      Object.entries(settledSignals()).map(([name, signal]) => [
+        name,
+        { ...signal, status: "error", data: null, error: "Check failed." },
+      ]),
+    ) as SignalResults;
+    renderPanel(buildResult("error", {}, { signals }));
+    expect(screen.getByText(/^8\/8 checks · 8 failed/)).toBeTruthy();
+  });
+
+  it("names no failures when every check answered", () => {
+    renderPanel(
+      buildResult("safe", {
+        score: 4,
+        confidenceReasons: ["Every check answered."],
+      }),
+    );
+    expect(screen.getByText(/^8\/8 checks/).textContent).not.toMatch(/failed/);
+  });
+
+  it("calls a look-alike's confidence the checks' own, as its band claims none", () => {
+    renderPanel(
+      buildResult("safe", {
+        score: 4,
+        confidenceReasons: ["Every check answered."],
+      }),
+      { impersonates: "paypal.com" },
+    );
+    expect(
+      screen.getByRole("heading", {
+        level: 3,
+        name: "Why the checks have high confidence",
+      }),
+    ).toBeTruthy();
+    expect(
+      screen.queryByRole("heading", { level: 3, name: "Why high confidence" }),
+    ).toBeNull();
   });
 });

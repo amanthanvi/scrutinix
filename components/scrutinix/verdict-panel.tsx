@@ -27,17 +27,32 @@ import {
 import { cn } from "@/lib/utils";
 
 /** Details section headings: secondary, but clearly headings. */
-const DETAIL_HEADING = "text-meta font-semibold text-[var(--sx-text)]";
+const DETAIL_HEADING = "text-body font-semibold text-[var(--sx-text)]";
 
 /** Focus target when a stored result replaces the view or a scan lands. */
 export const VERDICT_HEADING_ID = "sx-verdict-heading";
 
+/**
+ * The band's tone: its surface, the colour of its top rule, its inner
+ * hairline, and the tinted ink for secondary text on it.
+ */
 function bandStyle(verdict: Verdict | "pending"): CSSProperties {
   return {
     backgroundColor: `var(--sx-${verdict}-surface)`,
-    borderColor: `var(--sx-${verdict}-edge)`,
-  };
+    "--sx-band-rule": `var(--sx-${verdict})`,
+    "--sx-band-edge": `var(--sx-${verdict}-edge)`,
+    "--sx-band-ink": `var(--sx-${verdict}-ink)`,
+  } as CSSProperties;
 }
+
+/**
+ * The band's last line (confidence, or a verified share's note), set off
+ * by the band's own hairline. Checking holds its slot.
+ */
+const CONFIDENCE_LINE = "sx-band-line";
+
+/** Secondary text on the band: tinted from its hue, never plain gray. */
+const BAND_INK = "text-[var(--sx-band-ink)]";
 
 /** The neutral band's line for a link Scrutinix did not sign. */
 const UNVERIFIED_SHARE_LINE =
@@ -78,23 +93,41 @@ function formatTimestamp(value: string): string {
 }
 
 /**
- * The band frame. Every state renders the same element tree, so the
- * heading node survives the switch from "Checking" to the verdict and a
- * focused heading keeps focus when the result lands.
+ * The band frame: squared, on the tone's low-chroma surface, under a heavy
+ * top rule. Every state renders the same element tree, so the heading node
+ * survives the switch from "Checking" to the verdict and a focused heading
+ * keeps focus when the result lands.
+ *
+ * `arrival` keys the rule: when a verdict lands, a new rule draws left to
+ * right over the neutral track (the one authored moment). Without it the
+ * band shows only the track (Checking, or a shared link we can't vouch
+ * for).
+ *
+ * `domain` is the registered domain in the display serif directly under
+ * the heading: the subject of what the band says. It only names the site;
+ * the link anatomy below carries the sentence ("This link belongs to …").
+ * While the link parser loads, `holdDomain` keeps its line's height so
+ * nothing below the band moves when it arrives.
  */
 function Band({
   label,
   tone,
+  arrival,
   heading,
   headingClassName,
+  domain,
+  holdDomain = false,
   aside,
   imperative,
   children,
 }: {
   label: string;
   tone: Verdict | "pending";
+  arrival?: string;
   heading: ReactNode;
   headingClassName?: string;
+  domain?: string | null;
+  holdDomain?: boolean;
   aside?: ReactNode;
   imperative: ReactNode;
   children?: ReactNode;
@@ -102,24 +135,32 @@ function Band({
   return (
     <section
       aria-label={label}
-      className="sx-band scroll-mt-4 rounded-xl border px-5 py-6 sm:px-7 sm:py-7"
+      className="sx-band sx-band-frame scroll-mt-4"
       style={bandStyle(tone)}
     >
-      <div className="flex flex-col gap-x-8 gap-y-4 sm:flex-row sm:items-start sm:justify-between">
+      {arrival ? (
+        <span key={arrival} aria-hidden="true" className="sx-band-rule" />
+      ) : null}
+      <div className="sx-band-body">
         <div className="min-w-0">
           <h2
             id={VERDICT_HEADING_ID}
             tabIndex={-1}
             className={cn(
-              "text-verdict-sm sm:text-verdict font-semibold wrap-anywhere outline-offset-4",
+              "sx-band-heading font-serif font-semibold",
               headingClassName,
             )}
           >
             {heading}
           </h2>
-          <p className="text-imperative mt-3 font-medium text-balance text-[var(--sx-text)]">
-            {imperative}
-          </p>
+          {domain ? (
+            <p className="sx-band-domain">{domain}</p>
+          ) : holdDomain ? (
+            <p aria-hidden="true" className="sx-band-domain invisible">
+              &nbsp;
+            </p>
+          ) : null}
+          <p className="sx-band-imperative">{imperative}</p>
         </div>
         {aside}
       </div>
@@ -139,10 +180,14 @@ function heldBand({
   label,
   line,
   aside,
+  domain,
+  holdDomain,
 }: {
   label: string;
   line: ReactNode;
   aside?: ReactNode;
+  domain: string | null;
+  holdDomain: boolean;
 }) {
   return (
     <Band
@@ -150,19 +195,21 @@ function heldBand({
       tone="pending"
       heading={<span>Checking</span>}
       headingClassName="text-[var(--sx-text-soft)]"
+      domain={domain}
+      holdDomain={holdDomain}
       aside={aside}
       imperative={
         <span className="text-[var(--sx-text-muted)] tabular-nums">{line}</span>
       }
     >
-      <p aria-hidden="true" className="text-meta invisible mt-5">
+      <p aria-hidden="true" className={cn(CONFIDENCE_LINE, "invisible")}>
         &nbsp;
       </p>
     </Band>
   );
 }
 
-/** A shared band's one primary action. */
+/** A shared band's one primary action: an ink button. */
 function RunSharedScanButton({
   onClick,
   label,
@@ -174,7 +221,7 @@ function RunSharedScanButton({
     <button
       type="button"
       onClick={onClick}
-      className="sx-btn-press text-meta inline-flex min-h-11 items-center rounded-md bg-[var(--sx-accent-solid)] px-4 font-medium text-[var(--sx-accent-fg)] hover:bg-[var(--sx-accent-solid-hover)]"
+      className="sx-btn-press text-body inline-flex min-h-12 items-center rounded-md bg-[var(--sx-button)] px-5 font-semibold text-[var(--sx-button-fg)] hover:bg-[var(--sx-button-hover)]"
     >
       {label}
     </button>
@@ -206,6 +253,13 @@ interface VerdictBandProps {
    */
   addressCheck?: LinkParserStatus;
   /**
+   * The link's registered domain from the anatomy (null until the parser
+   * loads): named in the serif under the heading.
+   */
+  registeredDomain?: string | null;
+  /** A link is on screen, so hold the domain line's height until it loads. */
+  holdDomain?: boolean;
+  /**
    * The questions or rows below state the evidence, so the "because" line
    * yields to them.
    */
@@ -230,18 +284,23 @@ export function VerdictBand({
   completedSignals = 0,
   impersonates = null,
   addressCheck = "ready",
+  registeredDomain = null,
+  holdDomain = false,
   evidenceShown = false,
   onRunSharedScan,
   onCancelScan,
 }: VerdictBandProps) {
+  const domainProps = { domain: registeredDomain, holdDomain };
+
   if (isStreaming && !result) {
     return heldBand({
       label: "Scanning URL",
+      ...domainProps,
       aside: onCancelScan ? (
         <button
           type="button"
           onClick={onCancelScan}
-          className="sx-btn-press text-meta -mr-2 inline-flex min-h-11 items-center self-start rounded-md px-3 font-medium text-[var(--sx-text-muted)] hover:bg-[var(--sx-subtle)] hover:text-[var(--sx-text)]"
+          className="sx-btn-press text-body -mr-[12px] inline-flex min-h-11 items-center self-start rounded-md px-[12px] font-medium text-[var(--sx-text-muted)] hover:bg-[var(--sx-subtle)] hover:text-[var(--sx-text)]"
         >
           Cancel scan
         </button>
@@ -263,6 +322,7 @@ export function VerdictBand({
       <Band
         label={`Scan result: ${word}`}
         tone={guidance.tone}
+        arrival={`shared-${sharedSnapshot.verdict}`}
         heading={
           <span
             key={`shared-${sharedSnapshot.verdict}`}
@@ -271,21 +331,27 @@ export function VerdictBand({
             {word}
           </span>
         }
+        {...domainProps}
         imperative={guidance.imperative}
       >
         {sharedSnapshot.summary ? (
-          <p className="text-body mt-4 max-w-[60ch] text-[var(--sx-text)]">
+          <p className="text-body mt-4 max-w-[65ch] text-[var(--sx-text)]">
             {sharedSnapshot.summary}
           </p>
         ) : null}
-        <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-2">
+        <div
+          className={cn(
+            CONFIDENCE_LINE,
+            "flex flex-wrap items-center gap-x-5 gap-y-3",
+          )}
+        >
           {onRunSharedScan ? (
             <RunSharedScanButton
               onClick={onRunSharedScan}
               label="Run a fresh scan"
             />
           ) : null}
-          <p className="text-meta text-[var(--sx-text-muted)]">
+          <p className={cn("text-meta", BAND_INK)}>
             Verified Scrutinix result · checked{" "}
             <time dateTime={sharedSnapshot.capturedAt}>
               {formatSnapshotTime(sharedSnapshot.capturedAt)}
@@ -308,11 +374,12 @@ export function VerdictBand({
         }
         tone="pending"
         heading={<span>Check this shared link yourself</span>}
-        headingClassName="text-headline sm:text-headline text-[var(--sx-text)]"
+        headingClassName="sx-band-heading-claim text-[var(--sx-text)]"
+        {...domainProps}
         imperative={expiredShare ? EXPIRED_SHARE_LINE : UNVERIFIED_SHARE_LINE}
       >
         {onRunSharedScan ? (
-          <div className="mt-5">
+          <div className="mt-6">
             <RunSharedScanButton
               onClick={onRunSharedScan}
               label="Scan this link"
@@ -332,6 +399,7 @@ export function VerdictBand({
     return heldBand({
       label: ADDRESS_CHECK_PENDING,
       line: ADDRESS_CHECK_PENDING,
+      ...domainProps,
     });
   }
 
@@ -364,6 +432,7 @@ export function VerdictBand({
     <Band
       label={`Scan result: ${word}`}
       tone={guidance.tone}
+      arrival={result.id}
       heading={
         // Keyed so the word remounts and arrives when a result lands.
         <span key={result.id} className="sx-band-arrive">
@@ -371,10 +440,11 @@ export function VerdictBand({
         </span>
       }
       headingClassName="text-[var(--sx-text)]"
+      {...domainProps}
       imperative={guidance.imperative}
       aside={
         guidance.showScore ? (
-          <div className="flex shrink-0 flex-row items-baseline gap-3 sm:flex-col sm:items-end sm:gap-1 sm:pt-1.5">
+          <div className="sx-score">
             <span
               role="meter"
               aria-label="Threat score"
@@ -382,38 +452,45 @@ export function VerdictBand({
               aria-valuemax={100}
               aria-valuenow={score}
               aria-valuetext={`${score} out of 100`}
-              className="font-sans text-[2rem] leading-none font-medium tracking-[-0.02em] text-[var(--sx-text)] tabular-nums"
+              className="font-serif tabular-nums"
             >
-              {/* Sans keeps the score zero distinct from a slashed letterform. */}
               {score}
-              <span className="text-meta font-mono font-normal tracking-normal text-[var(--sx-text-muted)]">
-                /100
-              </span>
+              <span>/100</span>
             </span>
-            <span className="text-meta text-[var(--sx-text-muted)]">
-              {getScoreBandText(score)}
-            </span>
+            <span>{getScoreBandText(score)}</span>
           </div>
         ) : null
       }
     >
       {because ? (
-        <p className="text-body mt-4 max-w-[60ch] text-[var(--sx-text)]">
+        <p className="text-body mt-5 max-w-[65ch] text-[var(--sx-text)]">
           {because}
         </p>
       ) : null}
       {caveat ? (
-        <p className="text-body mt-4 max-w-[60ch] text-[var(--sx-text-muted)]">
-          {caveat}
-        </p>
+        <p className={cn("text-body mt-4 max-w-[65ch]", BAND_INK)}>{caveat}</p>
       ) : null}
       {confidence ? (
         // When the line wraps, the link starts the next line with its
         // separator in the 1.25rem gutter left of the text edge, which the
         // clip hides; the clip keeps 0.25rem so the focus ring still shows.
-        <p className="text-meta mt-5 text-[var(--sx-text-muted)] [clip-path:inset(-0.5rem_-0.5rem_-0.5rem_-0.25rem)]">
+        <p
+          className={cn(
+            CONFIDENCE_LINE,
+            BAND_INK,
+            "[clip-path:inset(-0.5rem_-0.5rem_-0.75rem_-0.25rem)]",
+          )}
+        >
           <span className="-ml-5 flex flex-wrap items-baseline gap-y-1">
-            <span className="ml-5">{confidence}</span>
+            <span
+              className={cn(
+                "ml-5",
+                !guidance.confidenceNote &&
+                  "font-semibold text-[var(--sx-text)]",
+              )}
+            >
+              {confidence}
+            </span>
             <span className="whitespace-nowrap">
               <span aria-hidden="true" className="inline-block w-5 text-center">
                 ·
@@ -471,6 +548,10 @@ export function VerdictDetails({
   const completed = Object.values(result.signals).filter(
     (signal) => signal.status !== "pending",
   ).length;
+  // "8/8 checks" alone reads as eight answers when all eight failed.
+  const failed = Object.values(result.signals).filter(
+    (signal) => signal.status === "error",
+  ).length;
   // Failed checks keep a plain sentence; the scan id is the one reference
   // for every server log line behind them, so it is stated once, here.
   const reference =
@@ -490,8 +571,8 @@ export function VerdictDetails({
   }
 
   return (
-    <details className="sx-disclosure border-t border-[var(--sx-border)] pt-4">
-      <summary className="text-meta inline-flex min-h-11 items-center gap-2 font-medium text-[var(--sx-text-muted)] hover:text-[var(--sx-text)]">
+    <details className="sx-disclosure border-t border-[var(--sx-border)] pt-3">
+      <summary className="text-body inline-flex min-h-11 items-center gap-2.5 font-medium text-[var(--sx-text-muted)] hover:text-[var(--sx-text)]">
         <svg
           aria-hidden="true"
           viewBox="0 0 8 8"
@@ -501,7 +582,7 @@ export function VerdictDetails({
         </svg>
         How we reached this verdict
       </summary>
-      <div className="mt-2 max-w-[62ch] space-y-5 pb-1 text-sm leading-6">
+      <div className="text-body mt-2 max-w-[65ch] space-y-5 pb-1">
         {underlying ? (
           <p className="text-[var(--sx-text)]">{underlying}</p>
         ) : null}
@@ -541,7 +622,13 @@ export function VerdictDetails({
 
         {confidenceReasons.length > 0 ? (
           <div>
-            <h3 className={DETAIL_HEADING}>Why {confidenceLabel} confidence</h3>
+            <h3 className={DETAIL_HEADING}>
+              {/* A look-alike's (or unconfirmed) band claims no confidence;
+                  this is the checks' own. */}
+              {underlying
+                ? `Why the checks have ${confidenceLabel} confidence`
+                : `Why ${confidenceLabel} confidence`}
+            </h3>
             <ul className="mt-1.5 space-y-1 text-[var(--sx-text-muted)]">
               {confidenceReasons.slice(0, 4).map((item, index) => (
                 <li key={`${index}-${item}`}>{item}</li>
@@ -552,6 +639,7 @@ export function VerdictDetails({
 
         <p className="text-caption font-mono text-[var(--sx-text-soft)]">
           {completed}/{SIGNAL_COUNT} checks
+          {failed > 0 ? ` · ${failed} failed` : ""}
           {metadata?.durationMs ? ` · ${metadata.durationMs} ms` : ""}
           {metadata?.completedAt
             ? ` · finished ${formatTimestamp(metadata.completedAt)}`

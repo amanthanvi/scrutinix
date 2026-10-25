@@ -38,8 +38,9 @@ export const PAIRS = [
   ),
   ["--sx-accent", "--sx-bg", TEXT, "link text"],
   ["--sx-accent", "--sx-subtle", TEXT, "link text on hover"],
-  ["--sx-accent-fg", "--sx-accent-solid", TEXT, "primary button label"],
-  ["--sx-accent-fg", "--sx-accent-solid-hover", TEXT, "primary button hover"],
+  // Buttons are ink; the accent never fills one.
+  ["--sx-button-fg", "--sx-button", TEXT, "primary button label"],
+  ["--sx-button-fg", "--sx-button-hover", TEXT, "primary button hover"],
   // UI danger (form and stream errors, destructive confirm): not a verdict.
   ...["--sx-bg", "--sx-surface", "--sx-subtle"].map((bg) => [
     "--sx-danger-fg",
@@ -55,6 +56,7 @@ export const PAIRS = [
   ...[...VERDICTS, "pending"].flatMap((v) => [
     ["--sx-text", `--sx-${v}-surface`, TEXT, "band ink"],
     ["--sx-text-muted", `--sx-${v}-surface`, TEXT, "band secondary"],
+    [`--sx-${v}-ink`, `--sx-${v}-surface`, TEXT, "band tinted secondary"],
     ["--sx-accent", `--sx-${v}-surface`, TEXT, "band link"],
     ["--sx-focus-ring", `--sx-${v}-surface`, GRAPHIC, "focus in band"],
   ]),
@@ -62,7 +64,8 @@ export const PAIRS = [
   ["--sx-focus-ring", "--sx-bg", GRAPHIC, "focus ring"],
   ["--sx-control", "--sx-bg", GRAPHIC, "control border"],
   ["--sx-control", "--sx-surface", GRAPHIC, "control border on field"],
-  ["--sx-accent-solid", "--sx-bg", GRAPHIC, "primary button edge"],
+  ["--sx-button", "--sx-bg", GRAPHIC, "primary button edge"],
+  ["--sx-button", "--sx-surface", GRAPHIC, "primary button edge on field"],
   ...VERDICTS.map((v) => [`--sx-${v}`, "--sx-bg", GRAPHIC, "verdict graphic"]),
   // Strip cells that state a finding, on the ground.
   ...[

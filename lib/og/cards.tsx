@@ -11,22 +11,26 @@ import {
 } from "@/lib/domain/verdict-guidance";
 
 /**
- * Share cards (1200 x 630) in the light theme: the cool white ground, ink,
- * and the eight-cell strip. Colours are the hex equivalents of the
- * `app/globals.css` light tokens (Satori does not read OKLCH or CSS
- * variables). Geist is read from the installed package
+ * Share cards (1200 x 630) in the light theme: the cool near-white ground,
+ * ink, the squared verdict band under its heavy rule, and the eight-cell
+ * strip. Colours are the hex equivalents of the `app/globals.css` light
+ * tokens (Satori does not read OKLCH or CSS variables). Display text is
+ * Newsreader, interface text Geist, both read from disk
  * (`lib/og/fonts.ts`), so no font is fetched at render time.
  */
 export const CARD_SIZE = { width: 1200, height: 630 } as const;
 
 const C = {
-  bg: "#ffffff",
+  bg: "#fafcfe",
   ink: "#13161c",
-  muted: "#51555d",
-  soft: "#6b6f76",
-  border: "#e4e6e9",
-  track: "#e9ebee",
+  muted: "#4f535a",
+  soft: "#656970",
+  border: "#dcdee1",
+  track: "#ebedef",
 } as const;
+
+/** The display face: the page's `--font-display`. */
+const SERIF = "Newsreader";
 
 /**
  * The ramp with its shapes, as in `app/scrutinix.css`: flagged solid,
@@ -38,22 +42,23 @@ type CellShape =
   "solid" | "hatch" | "dash" | "partial" | "outline" | "dashed" | "empty";
 
 const CELL: Record<Severity, { color: string; shape: CellShape }> = {
-  malicious: { color: "#d73431", shape: "solid" },
-  suspicious: { color: "#c56900", shape: "hatch" },
-  clear: { color: "#808388", shape: "dash" },
+  malicious: { color: "#d02c2a", shape: "solid" },
+  suspicious: { color: "#c76b00", shape: "hatch" },
+  clear: { color: "#7e8085", shape: "dash" },
   neutral: { color: "#6b7c8f", shape: "partial" },
   error: { color: "#6e7279", shape: "outline" },
-  skipped: { color: "#8f9297", shape: "dashed" },
+  skipped: { color: "#83868b", shape: "dashed" },
   pending: { color: C.track, shape: "empty" },
 };
 
-const BAND: Record<Verdict, { surface: string; edge: string }> = {
-  safe: { surface: "#eafbf0", edge: "#c0e5ce" },
-  suspicious: { surface: "#fff5e4", edge: "#f6d9b2" },
-  malicious: { surface: "#fff0ee", edge: "#facecc" },
-  critical: { surface: "#ffeef5", edge: "#f5c9dd" },
-  unknown: { surface: "#f0f5fa", edge: "#d7dfe7" },
-  error: { surface: "#fbf2f0", edge: "#ebd9d6" },
+/** Each tone's band: its surface and heavy top rule. */
+const BAND: Record<Verdict, { surface: string; rule: string }> = {
+  safe: { surface: "#eafbf0", rule: "#02985f" },
+  suspicious: { surface: "#fff5e4", rule: "#ce710c" },
+  malicious: { surface: "#ffedeb", rule: "#d02c2a" },
+  critical: { surface: "#ffeef5", rule: "#b10b69" },
+  unknown: { surface: "#f0f5fa", rule: "#6b7c8f" },
+  error: { surface: "#fbf2f0", rule: "#a1655b" },
 };
 
 const CELL_NAMES = [
@@ -102,13 +107,14 @@ function Brand() {
         display: "flex",
         alignItems: "center",
         gap: 16,
-        fontSize: 30,
+        fontFamily: SERIF,
+        fontSize: 36,
         fontWeight: 600,
-        letterSpacing: "-0.02em",
+        letterSpacing: "-0.012em",
         color: C.ink,
       }}
     >
-      <Mark scale={1.5} />
+      <Mark scale={1.25} />
       Scrutinix
     </div>
   );
@@ -146,7 +152,7 @@ function Strip({
                 display: "flex",
                 alignItems: "center",
                 height: 22,
-                borderRadius: 4,
+                borderRadius: 3,
                 overflow: "hidden",
                 background: outlined ? "transparent" : C.track,
                 border: outlined
@@ -186,7 +192,22 @@ function Strip({
                   }}
                 />
               ) : shape === "dash" ? (
-                <div style={{ width: "100%", height: 6, background: color }} />
+                <div
+                  style={{
+                    display: "flex",
+                    width: "100%",
+                    justifyContent: "center",
+                  }}
+                >
+                  <div
+                    style={{
+                      width: "52%",
+                      height: 5,
+                      borderRadius: 2,
+                      background: color,
+                    }}
+                  />
+                </div>
               ) : null}
             </div>
             {labels ? (
@@ -248,8 +269,9 @@ function OwnershipLine({
         display: "flex",
         flexWrap: "wrap",
         alignItems: "baseline",
-        fontSize: 32,
-        color: C.muted,
+        fontFamily: SERIF,
+        fontSize: 34,
+        color: C.ink,
         lineHeight: 1.3,
       }}
     >
@@ -265,7 +287,7 @@ function OwnershipLine({
                   fontWeight: 500,
                   letterSpacing: "-0.02em",
                   color: C.ink,
-                  fontSize: part.owner ? 40 : 32,
+                  fontSize: part.owner ? 36 : 30,
                 }
               : {}),
           }}
@@ -301,10 +323,11 @@ export function DefaultCard() {
           style={{
             display: "flex",
             flexDirection: "column",
-            fontSize: 84,
+            fontFamily: SERIF,
+            fontSize: 92,
             fontWeight: 600,
-            lineHeight: 1.04,
-            letterSpacing: "-0.035em",
+            lineHeight: 1,
+            letterSpacing: "-0.026em",
           }}
         >
           <div style={{ display: "flex" }}>Check a link before</div>
@@ -313,9 +336,11 @@ export function DefaultCard() {
         <div
           style={{
             display: "flex",
-            fontSize: 32,
+            fontFamily: SERIF,
+            fontSize: 34,
+            lineHeight: 1.35,
             color: C.muted,
-            maxWidth: 880,
+            maxWidth: 900,
           }}
         >
           Eight separate checks tell you whether it&apos;s safe to open, and
@@ -388,29 +413,30 @@ export function ResultCard({
         </div>
       </div>
 
+      {/* The band: squared, the one tinted block, under its heavy rule. */}
       <div
         style={{
           display: "flex",
           flexDirection: "column",
           gap: 16,
           padding: "36px 44px",
-          borderRadius: 20,
           background: band.surface,
-          border: `2px solid ${band.edge}`,
+          borderTop: `8px solid ${band.rule}`,
         }}
       >
         <div
           style={{
             display: "flex",
+            fontFamily: SERIF,
             fontSize: 104,
             fontWeight: 600,
-            lineHeight: 1,
-            letterSpacing: "-0.04em",
+            lineHeight: 0.95,
+            letterSpacing: "-0.03em",
           }}
         >
           {shareHeadline({ verdict, impersonates }, { short: true })}
         </div>
-        <div style={{ display: "flex", fontSize: 36, fontWeight: 500 }}>
+        <div style={{ display: "flex", fontFamily: SERIF, fontSize: 38 }}>
           {imperative}
         </div>
       </div>
@@ -419,12 +445,14 @@ export function ResultCard({
         <OwnershipLine domain={domain} impersonates={impersonates} />
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {/* The registered domain in the display serif, as on the page. */}
           <div
             style={{
               display: "flex",
-              fontSize: 40,
-              fontWeight: 500,
-              fontFamily: "Geist Mono",
+              fontFamily: SERIF,
+              fontSize: 48,
+              fontWeight: 600,
+              lineHeight: 1.05,
               letterSpacing: "-0.02em",
             }}
           >

@@ -161,16 +161,14 @@ test("a long destination host wraps instead of widening a phone screen", async (
   expect(box && box.x + box.width).toBeLessThanOrEqual(summary.viewport);
 });
 
-test("copying a question's sources gives one separator between names", async ({
+test("copying a question's sources gives the plain list once", async ({
   page,
 }) => {
   await gotoApp(page);
   await submitSingleScan(page, "example.com");
   await expect(page.getByLabel(/^scan result: safe$/i)).toBeVisible();
 
-  const sources = page
-    .locator('[data-question="reported"]')
-    .getByText(/^Sources:/);
+  const sources = page.locator('[data-question="reported"] .sx-sources');
   const copied = await sources.evaluate((node) => {
     const range = document.createRange();
     range.selectNodeContents(node);
@@ -182,11 +180,8 @@ test("copying a question's sources gives one separator between names", async ({
   expect(copied.replace(/\s+/g, " ").trim()).toBe(
     "Sources: VirusTotal, Safe Browsing, Threat feeds",
   );
-  // The dot between names is still drawn, just not as text.
-  const dots = await sources.evaluate((node) =>
-    [...node.children]
-      .map((child) => getComputedStyle(child, "::before").content)
-      .filter((content) => content.includes("·")),
-  );
-  expect(dots).toHaveLength(2);
+  // The numbered line, dots and all, is drawn for the eye only.
+  const numbered = sources.locator('[aria-hidden="true"]');
+  await expect(numbered).toContainText("·");
+  await expect(numbered).toHaveCSS("user-select", "none");
 });

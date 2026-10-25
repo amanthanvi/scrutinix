@@ -1,6 +1,9 @@
 "use client";
 
+import { Fragment } from "react";
+
 import { cellNames } from "@/components/scrutinix/signal-cell";
+import { cellNumber } from "@/components/scrutinix/signal-strip";
 import {
   PENDING_ANSWER,
   PLACEHOLDER_SHAPE,
@@ -16,36 +19,44 @@ export function questionHeadingId(id: SummaryQuestionId): string {
 }
 
 /**
- * The checks a question cites, by their strip cell names. One component,
- * so a later layer can cite numbered cells in one place. The comma is the
- * one textual separator (read aloud, and what a copy gives); the dot is
- * drawn by `.sx-source` and is neither selectable nor spoken.
+ * The checks a question cites, by the strip's own cell numbers and names:
+ * "From 1 VirusTotal · 3 Safe Browsing". The numbers sit in the strip's
+ * hairline tag, so a cited number never reads as a count. Assistive
+ * technology hears the plain list ("Sources: VirusTotal, Safe Browsing"),
+ * which is also the one text a copy gives: the numbered line is for the eye
+ * and can't be selected.
  */
 export function QuestionSources({ names }: { names: readonly SignalName[] }) {
   return (
-    <p className="text-caption text-[var(--sx-text-soft)]">
-      {sourcesLabel(names.length)}:{" "}
-      {names.map((name, index) => (
-        <span key={name} className="sx-source">
-          {index > 0 ? (
-            <>
-              <span className="sr-only">,</span>{" "}
-            </>
-          ) : null}
-          {cellNames[name]}
-        </span>
-      ))}
+    <p className="sx-sources">
+      <span className="sr-only">
+        {sourcesLabel(names.length)}:{" "}
+        {names.map((name) => cellNames[name]).join(", ")}
+      </span>
+      <span aria-hidden="true" className="select-none">
+        From{" "}
+        {names.map((name, index) => (
+          <Fragment key={name}>
+            {index > 0 ? <span className="sx-sources-sep">·</span> : null}
+            <span className="whitespace-nowrap">
+              <span className="sx-tag">{cellNumber(name)}</span>
+              {cellNames[name]}
+            </span>
+          </Fragment>
+        ))}
+      </span>
     </p>
   );
 }
 
 /**
- * Summary: five plain questions, each a heading with its answer, why it
- * matters, any disagreement, and its sources. A question whose checks are
- * still running holds the room a typical answer takes, so answers fill in
- * place as checks land. No severity colour: the strip and the Full rows
- * carry each check's severity once. Dynamic text wraps anywhere, so a long
- * hostname breaks instead of widening a phone screen.
+ * Summary: five plain questions on a rail. From 64rem each question and
+ * the checks it cites hang in a left column, with the answer and why it
+ * matters set beside it at reading size; narrower, they stack. A question
+ * whose checks are still running holds the room a typical answer takes,
+ * so answers fill in place as checks land. No severity colour: the strip
+ * and the Full rows carry each check's severity once. Dynamic text wraps
+ * anywhere, so a long hostname breaks instead of widening a phone screen.
  */
 export function SummaryQuestionList({
   questions,
@@ -62,55 +73,49 @@ export function SummaryQuestionList({
           key={question.id}
           data-question={question.id}
           aria-busy={question.state === "pending" || undefined}
-          className="sx-enter flex flex-col gap-1 py-4 wrap-anywhere"
+          className="sx-enter sx-question wrap-anywhere"
         >
-          <h4
-            id={questionHeadingId(question.id)}
-            tabIndex={-1}
-            className="scroll-mt-4 text-sm font-medium text-[var(--sx-text)] outline-offset-4"
-          >
-            {question.question}
-          </h4>
-          {question.state === "pending" ? (
-            <div className="grid">
-              {/*
-               * Holds a typical answer's room, drawn as generated content so
-               * it is never text; "Checking…" sits on its first line.
-               */}
-              <div
-                aria-hidden="true"
-                className="invisible col-start-1 row-start-1 flex flex-col gap-1"
-              >
-                <p
-                  data-stand-in={PLACEHOLDER_SHAPE[question.id].answer}
-                  className="text-body max-w-[62ch] before:content-[attr(data-stand-in)]"
-                />
-                <p
-                  data-stand-in={PLACEHOLDER_SHAPE[question.id].why}
-                  className="max-w-[62ch] text-sm before:content-[attr(data-stand-in)]"
-                />
-              </div>
-              <p className="text-body col-start-1 row-start-1 text-[var(--sx-text-soft)]">
-                {PENDING_ANSWER}
-              </p>
-            </div>
-          ) : (
-            <>
-              <p className="text-body max-w-[62ch] text-[var(--sx-text)]">
-                {question.answer}
-              </p>
-              <p className="max-w-[62ch] text-sm text-[var(--sx-text-muted)]">
-                {question.why}
-              </p>
-              {question.disagreement ? (
-                <p className="max-w-[62ch] text-sm text-[var(--sx-text-muted)]">
-                  {question.disagreement}
-                </p>
-              ) : null}
-            </>
-          )}
-          <div className="mt-1">
+          <div className="sx-question-rail">
+            <h4 id={questionHeadingId(question.id)} tabIndex={-1}>
+              {question.question}
+            </h4>
             <QuestionSources names={question.sources} />
+          </div>
+          <div className="sx-answer">
+            {question.state === "pending" ? (
+              <div className="grid">
+                {/*
+                 * Holds a typical answer's room, drawn as generated content
+                 * so it is never text; "Checking…" sits on its first line.
+                 */}
+                <div
+                  aria-hidden="true"
+                  className="invisible col-start-1 row-start-1"
+                >
+                  <p
+                    data-stand-in={PLACEHOLDER_SHAPE[question.id].answer}
+                    className="before:content-[attr(data-stand-in)]"
+                  />
+                  <p
+                    data-stand-in={PLACEHOLDER_SHAPE[question.id].why}
+                    className="before:content-[attr(data-stand-in)]"
+                  />
+                </div>
+                <p className="col-start-1 row-start-1 text-[var(--sx-text-soft)]">
+                  {PENDING_ANSWER}
+                </p>
+              </div>
+            ) : (
+              <>
+                <p className="text-[var(--sx-text)]">{question.answer}</p>
+                <p className="text-[var(--sx-text-muted)]">{question.why}</p>
+                {question.disagreement ? (
+                  <p className="mt-2 text-[var(--sx-text-muted)]">
+                    {question.disagreement}
+                  </p>
+                ) : null}
+              </>
+            )}
           </div>
         </li>
       ))}

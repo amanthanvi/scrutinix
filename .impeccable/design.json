@@ -1,24 +1,41 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-06T14:15:25.831Z",
+  "generatedAt": "2026-10-24T18:03:20.000Z",
   "title": "Design System: Scrutinix",
   "extensions": {
     "colorMeta": {
       "ground": {
         "role": "neutral",
-        "displayName": "Crisp White Ground",
-        "canonical": "oklch(1 0 0)",
-        "hex": "#ffffff",
+        "displayName": "Cool Sheet",
+        "canonical": "oklch(0.99 0.003 250)",
+        "hex": "#fafcfe",
         "cssVar": "--sx-bg",
         "tonalRamp": [
-          "oklch(0.150 0 0)",
-          "oklch(0.264 0 0)",
-          "oklch(0.379 0 0)",
-          "oklch(0.493 0 0)",
-          "oklch(0.607 0 0)",
-          "oklch(0.721 0 0)",
-          "oklch(0.836 0 0)",
-          "oklch(0.950 0 0)"
+          "oklch(0.150 0.003 250)",
+          "oklch(0.264 0.003 250)",
+          "oklch(0.379 0.003 250)",
+          "oklch(0.493 0.003 250)",
+          "oklch(0.607 0.003 250)",
+          "oklch(0.721 0.003 250)",
+          "oklch(0.836 0.003 250)",
+          "oklch(0.950 0.003 250)"
+        ]
+      },
+      "dark-ground": {
+        "role": "neutral",
+        "displayName": "Night Ground",
+        "canonical": "oklch(0.17 0.007 258)",
+        "hex": "#0e1012",
+        "cssVar": "--sx-bg",
+        "tonalRamp": [
+          "oklch(0.150 0.007 258)",
+          "oklch(0.264 0.007 258)",
+          "oklch(0.379 0.007 258)",
+          "oklch(0.493 0.007 258)",
+          "oklch(0.607 0.007 258)",
+          "oklch(0.721 0.007 258)",
+          "oklch(0.836 0.007 258)",
+          "oklch(0.950 0.007 258)"
         ]
       },
       "surface": {
@@ -38,29 +55,29 @@
           "oklch(0.950 0 0)"
         ]
       },
-      "subtle": {
+      "dark-surface": {
         "role": "neutral",
-        "displayName": "Cool Mist",
-        "canonical": "oklch(0.972 0.003 255)",
-        "hex": "#f4f6f8",
-        "cssVar": "--sx-subtle",
+        "displayName": "Raised Field",
+        "canonical": "oklch(0.205 0.008 258)",
+        "hex": "#15171b",
+        "cssVar": "--sx-surface",
         "tonalRamp": [
-          "oklch(0.150 0.003 255)",
-          "oklch(0.264 0.003 255)",
-          "oklch(0.379 0.003 255)",
-          "oklch(0.493 0.003 255)",
-          "oklch(0.607 0.003 255)",
-          "oklch(0.721 0.003 255)",
-          "oklch(0.836 0.003 255)",
-          "oklch(0.950 0.003 255)"
+          "oklch(0.150 0.008 258)",
+          "oklch(0.264 0.008 258)",
+          "oklch(0.379 0.008 258)",
+          "oklch(0.493 0.008 258)",
+          "oklch(0.607 0.008 258)",
+          "oklch(0.721 0.008 258)",
+          "oklch(0.836 0.008 258)",
+          "oklch(0.950 0.008 258)"
         ]
       },
-      "hairline": {
+      "subtle": {
         "role": "neutral",
-        "displayName": "Hairline Gray",
-        "canonical": "oklch(0.925 0.004 255)",
-        "hex": "#e4e6e9",
-        "cssVar": "--sx-border",
+        "displayName": "Plate",
+        "canonical": "oklch(0.965 0.004 255)",
+        "hex": "#f2f4f6",
+        "cssVar": "--sx-subtle",
         "tonalRamp": [
           "oklch(0.150 0.004 255)",
           "oklch(0.264 0.004 255)",
@@ -72,11 +89,62 @@
           "oklch(0.950 0.004 255)"
         ]
       },
+      "dark-subtle": {
+        "role": "neutral",
+        "displayName": "Plate",
+        "canonical": "oklch(0.225 0.009 258)",
+        "hex": "#191c20",
+        "cssVar": "--sx-subtle",
+        "tonalRamp": [
+          "oklch(0.150 0.009 258)",
+          "oklch(0.264 0.009 258)",
+          "oklch(0.379 0.009 258)",
+          "oklch(0.493 0.009 258)",
+          "oklch(0.607 0.009 258)",
+          "oklch(0.721 0.009 258)",
+          "oklch(0.836 0.009 258)",
+          "oklch(0.950 0.009 258)"
+        ]
+      },
+      "hairline": {
+        "role": "neutral",
+        "displayName": "Hairline",
+        "canonical": "oklch(0.9 0.005 255)",
+        "hex": "#dcdee1",
+        "cssVar": "--sx-border",
+        "tonalRamp": [
+          "oklch(0.150 0.005 255)",
+          "oklch(0.264 0.005 255)",
+          "oklch(0.379 0.005 255)",
+          "oklch(0.493 0.005 255)",
+          "oklch(0.607 0.005 255)",
+          "oklch(0.721 0.005 255)",
+          "oklch(0.836 0.005 255)",
+          "oklch(0.950 0.005 255)"
+        ]
+      },
+      "dark-hairline": {
+        "role": "neutral",
+        "displayName": "Hairline",
+        "canonical": "oklch(0.3 0.009 258)",
+        "hex": "#2b2e32",
+        "cssVar": "--sx-border",
+        "tonalRamp": [
+          "oklch(0.150 0.009 258)",
+          "oklch(0.264 0.009 258)",
+          "oklch(0.379 0.009 258)",
+          "oklch(0.493 0.009 258)",
+          "oklch(0.607 0.009 258)",
+          "oklch(0.721 0.009 258)",
+          "oklch(0.836 0.009 258)",
+          "oklch(0.950 0.009 258)"
+        ]
+      },
       "control-edge": {
         "role": "neutral",
         "displayName": "Control Edge",
-        "canonical": "oklch(0.66 0.01 255)",
-        "hex": "#8e9398",
+        "canonical": "oklch(0.64 0.01 255)",
+        "hex": "#888d92",
         "cssVar": "--sx-control",
         "tonalRamp": [
           "oklch(0.150 0.01 255)",
@@ -89,9 +157,26 @@
           "oklch(0.950 0.01 255)"
         ]
       },
+      "dark-control-edge": {
+        "role": "neutral",
+        "displayName": "Control Edge",
+        "canonical": "oklch(0.52 0.012 258)",
+        "hex": "#656970",
+        "cssVar": "--sx-control",
+        "tonalRamp": [
+          "oklch(0.150 0.012 258)",
+          "oklch(0.264 0.012 258)",
+          "oklch(0.379 0.012 258)",
+          "oklch(0.493 0.012 258)",
+          "oklch(0.607 0.012 258)",
+          "oklch(0.721 0.012 258)",
+          "oklch(0.836 0.012 258)",
+          "oklch(0.950 0.012 258)"
+        ]
+      },
       "control-edge-hover": {
         "role": "neutral",
-        "displayName": "Control Edge, Hovered",
+        "displayName": "Control Edge, Hover",
         "canonical": "oklch(0.5 0.012 255)",
         "hex": "#5f646a",
         "cssVar": "--sx-control-hover",
@@ -106,9 +191,26 @@
           "oklch(0.950 0.012 255)"
         ]
       },
+      "dark-control-edge-hover": {
+        "role": "neutral",
+        "displayName": "Control Edge, Hover",
+        "canonical": "oklch(0.66 0.012 258)",
+        "hex": "#8e939a",
+        "cssVar": "--sx-control-hover",
+        "tonalRamp": [
+          "oklch(0.150 0.012 258)",
+          "oklch(0.264 0.012 258)",
+          "oklch(0.379 0.012 258)",
+          "oklch(0.493 0.012 258)",
+          "oklch(0.607 0.012 258)",
+          "oklch(0.721 0.012 258)",
+          "oklch(0.836 0.012 258)",
+          "oklch(0.950 0.012 258)"
+        ]
+      },
       "ink": {
         "role": "neutral",
-        "displayName": "Blue-Black Ink",
+        "displayName": "Ink",
         "canonical": "oklch(0.2 0.012 262)",
         "hex": "#13161c",
         "cssVar": "--sx-text",
@@ -123,28 +225,62 @@
           "oklch(0.950 0.012 262)"
         ]
       },
+      "dark-ink": {
+        "role": "neutral",
+        "displayName": "Warm Paper Ink",
+        "canonical": "oklch(0.95 0.006 90)",
+        "hex": "#f0eeea",
+        "cssVar": "--sx-text",
+        "tonalRamp": [
+          "oklch(0.150 0.006 90)",
+          "oklch(0.264 0.006 90)",
+          "oklch(0.379 0.006 90)",
+          "oklch(0.493 0.006 90)",
+          "oklch(0.607 0.006 90)",
+          "oklch(0.721 0.006 90)",
+          "oklch(0.836 0.006 90)",
+          "oklch(0.950 0.006 90)"
+        ]
+      },
       "ink-muted": {
         "role": "neutral",
-        "displayName": "Graphite",
-        "canonical": "oklch(0.45 0.014 262)",
-        "hex": "#51555d",
+        "displayName": "Muted Ink",
+        "canonical": "oklch(0.44 0.013 262)",
+        "hex": "#4f535a",
         "cssVar": "--sx-text-muted",
         "tonalRamp": [
-          "oklch(0.150 0.014 262)",
-          "oklch(0.264 0.014 262)",
-          "oklch(0.379 0.014 262)",
-          "oklch(0.493 0.014 262)",
-          "oklch(0.607 0.014 262)",
-          "oklch(0.721 0.014 262)",
-          "oklch(0.836 0.014 262)",
-          "oklch(0.950 0.014 262)"
+          "oklch(0.150 0.013 262)",
+          "oklch(0.264 0.013 262)",
+          "oklch(0.379 0.013 262)",
+          "oklch(0.493 0.013 262)",
+          "oklch(0.607 0.013 262)",
+          "oklch(0.721 0.013 262)",
+          "oklch(0.836 0.013 262)",
+          "oklch(0.950 0.013 262)"
+        ]
+      },
+      "dark-ink-muted": {
+        "role": "neutral",
+        "displayName": "Muted Paper Ink",
+        "canonical": "oklch(0.77 0.008 90)",
+        "hex": "#b6b4af",
+        "cssVar": "--sx-text-muted",
+        "tonalRamp": [
+          "oklch(0.150 0.008 90)",
+          "oklch(0.264 0.008 90)",
+          "oklch(0.379 0.008 90)",
+          "oklch(0.493 0.008 90)",
+          "oklch(0.607 0.008 90)",
+          "oklch(0.721 0.008 90)",
+          "oklch(0.836 0.008 90)",
+          "oklch(0.950 0.008 90)"
         ]
       },
       "ink-soft": {
         "role": "neutral",
-        "displayName": "Soft Slate",
-        "canonical": "oklch(0.54 0.012 262)",
-        "hex": "#6b6f76",
+        "displayName": "Soft Ink",
+        "canonical": "oklch(0.52 0.012 262)",
+        "hex": "#656970",
         "cssVar": "--sx-text-soft",
         "tonalRamp": [
           "oklch(0.150 0.012 262)",
@@ -157,63 +293,199 @@
           "oklch(0.950 0.012 262)"
         ]
       },
+      "dark-ink-soft": {
+        "role": "neutral",
+        "displayName": "Soft Ink",
+        "canonical": "oklch(0.67 0.008 260)",
+        "hex": "#92959a",
+        "cssVar": "--sx-text-soft",
+        "tonalRamp": [
+          "oklch(0.150 0.008 260)",
+          "oklch(0.264 0.008 260)",
+          "oklch(0.379 0.008 260)",
+          "oklch(0.493 0.008 260)",
+          "oklch(0.607 0.008 260)",
+          "oklch(0.721 0.008 260)",
+          "oklch(0.836 0.008 260)",
+          "oklch(0.950 0.008 260)"
+        ]
+      },
       "accent": {
         "role": "primary",
-        "displayName": "Signal Blue",
-        "canonical": "oklch(0.52 0.19 260)",
-        "hex": "#1961d4",
+        "displayName": "Editor's Blue",
+        "canonical": "oklch(0.46 0.16 262)",
+        "hex": "#2151af",
         "cssVar": "--sx-accent",
         "tonalRamp": [
-          "oklch(0.150 0.19 260)",
-          "oklch(0.264 0.19 260)",
-          "oklch(0.379 0.19 260)",
-          "oklch(0.493 0.19 260)",
-          "oklch(0.607 0.19 260)",
-          "oklch(0.721 0.19 260)",
-          "oklch(0.836 0.19 260)",
-          "oklch(0.950 0.19 260)"
+          "oklch(0.150 0.16 262)",
+          "oklch(0.264 0.16 262)",
+          "oklch(0.379 0.16 262)",
+          "oklch(0.493 0.16 262)",
+          "oklch(0.607 0.16 262)",
+          "oklch(0.721 0.16 262)",
+          "oklch(0.836 0.16 262)",
+          "oklch(0.950 0.16 262)"
         ]
       },
-      "accent-solid": {
+      "dark-accent": {
         "role": "primary",
-        "displayName": "Signal Blue Solid",
-        "canonical": "oklch(0.52 0.19 260)",
-        "hex": "#1961d4",
-        "cssVar": "--sx-accent-solid",
+        "displayName": "Editor's Blue",
+        "canonical": "oklch(0.76 0.12 258)",
+        "hex": "#80b3fd",
+        "cssVar": "--sx-accent",
         "tonalRamp": [
-          "oklch(0.150 0.19 260)",
-          "oklch(0.264 0.19 260)",
-          "oklch(0.379 0.19 260)",
-          "oklch(0.493 0.19 260)",
-          "oklch(0.607 0.19 260)",
-          "oklch(0.721 0.19 260)",
-          "oklch(0.836 0.19 260)",
-          "oklch(0.950 0.19 260)"
+          "oklch(0.150 0.12 258)",
+          "oklch(0.264 0.12 258)",
+          "oklch(0.379 0.12 258)",
+          "oklch(0.493 0.12 258)",
+          "oklch(0.607 0.12 258)",
+          "oklch(0.721 0.12 258)",
+          "oklch(0.836 0.12 258)",
+          "oklch(0.950 0.12 258)"
         ]
       },
-      "accent-solid-hover": {
+      "focus-ring": {
         "role": "primary",
-        "displayName": "Signal Blue Solid, Pressed",
-        "canonical": "oklch(0.46 0.18 260)",
-        "hex": "#084fba",
-        "cssVar": "--sx-accent-solid-hover",
+        "displayName": "Focus Blue",
+        "canonical": "oklch(0.46 0.16 262)",
+        "hex": "#2151af",
+        "cssVar": "--sx-focus-ring",
         "tonalRamp": [
-          "oklch(0.150 0.18 260)",
-          "oklch(0.264 0.18 260)",
-          "oklch(0.379 0.18 260)",
-          "oklch(0.493 0.18 260)",
-          "oklch(0.607 0.18 260)",
-          "oklch(0.721 0.18 260)",
-          "oklch(0.836 0.18 260)",
-          "oklch(0.950 0.18 260)"
+          "oklch(0.150 0.16 262)",
+          "oklch(0.264 0.16 262)",
+          "oklch(0.379 0.16 262)",
+          "oklch(0.493 0.16 262)",
+          "oklch(0.607 0.16 262)",
+          "oklch(0.721 0.16 262)",
+          "oklch(0.836 0.16 262)",
+          "oklch(0.950 0.16 262)"
         ]
       },
-      "accent-on": {
+      "dark-focus-ring": {
         "role": "primary",
-        "displayName": "On Signal Blue",
+        "displayName": "Focus Blue",
+        "canonical": "oklch(0.76 0.12 258)",
+        "hex": "#80b3fd",
+        "cssVar": "--sx-focus-ring",
+        "tonalRamp": [
+          "oklch(0.150 0.12 258)",
+          "oklch(0.264 0.12 258)",
+          "oklch(0.379 0.12 258)",
+          "oklch(0.493 0.12 258)",
+          "oklch(0.607 0.12 258)",
+          "oklch(0.721 0.12 258)",
+          "oklch(0.836 0.12 258)",
+          "oklch(0.950 0.12 258)"
+        ]
+      },
+      "selection": {
+        "role": "primary",
+        "displayName": "Selection Wash",
+        "canonical": "oklch(0.9 0.05 262)",
+        "hex": "#ccdfff",
+        "cssVar": "--sx-selection",
+        "tonalRamp": [
+          "oklch(0.150 0.05 262)",
+          "oklch(0.264 0.05 262)",
+          "oklch(0.379 0.05 262)",
+          "oklch(0.493 0.05 262)",
+          "oklch(0.607 0.05 262)",
+          "oklch(0.721 0.05 262)",
+          "oklch(0.836 0.05 262)",
+          "oklch(0.950 0.05 262)"
+        ]
+      },
+      "dark-selection": {
+        "role": "primary",
+        "displayName": "Selection Wash",
+        "canonical": "oklch(0.36 0.08 260)",
+        "hex": "#233c67",
+        "cssVar": "--sx-selection",
+        "tonalRamp": [
+          "oklch(0.150 0.08 260)",
+          "oklch(0.264 0.08 260)",
+          "oklch(0.379 0.08 260)",
+          "oklch(0.493 0.08 260)",
+          "oklch(0.607 0.08 260)",
+          "oklch(0.721 0.08 260)",
+          "oklch(0.836 0.08 260)",
+          "oklch(0.950 0.08 260)"
+        ]
+      },
+      "button": {
+        "role": "primary",
+        "displayName": "Ink Button",
+        "canonical": "oklch(0.2 0.012 262)",
+        "hex": "#13161c",
+        "cssVar": "--sx-button",
+        "tonalRamp": [
+          "oklch(0.150 0.012 262)",
+          "oklch(0.264 0.012 262)",
+          "oklch(0.379 0.012 262)",
+          "oklch(0.493 0.012 262)",
+          "oklch(0.607 0.012 262)",
+          "oklch(0.721 0.012 262)",
+          "oklch(0.836 0.012 262)",
+          "oklch(0.950 0.012 262)"
+        ]
+      },
+      "dark-button": {
+        "role": "primary",
+        "displayName": "Paper Button",
+        "canonical": "oklch(0.95 0.006 90)",
+        "hex": "#f0eeea",
+        "cssVar": "--sx-button",
+        "tonalRamp": [
+          "oklch(0.150 0.006 90)",
+          "oklch(0.264 0.006 90)",
+          "oklch(0.379 0.006 90)",
+          "oklch(0.493 0.006 90)",
+          "oklch(0.607 0.006 90)",
+          "oklch(0.721 0.006 90)",
+          "oklch(0.836 0.006 90)",
+          "oklch(0.950 0.006 90)"
+        ]
+      },
+      "button-hover": {
+        "role": "primary",
+        "displayName": "Ink Button, Hover",
+        "canonical": "oklch(0.34 0.014 262)",
+        "hex": "#34383f",
+        "cssVar": "--sx-button-hover",
+        "tonalRamp": [
+          "oklch(0.150 0.014 262)",
+          "oklch(0.264 0.014 262)",
+          "oklch(0.379 0.014 262)",
+          "oklch(0.493 0.014 262)",
+          "oklch(0.607 0.014 262)",
+          "oklch(0.721 0.014 262)",
+          "oklch(0.836 0.014 262)",
+          "oklch(0.950 0.014 262)"
+        ]
+      },
+      "dark-button-hover": {
+        "role": "primary",
+        "displayName": "Paper Button, Hover",
+        "canonical": "oklch(0.84 0.008 90)",
+        "hex": "#cccac5",
+        "cssVar": "--sx-button-hover",
+        "tonalRamp": [
+          "oklch(0.150 0.008 90)",
+          "oklch(0.264 0.008 90)",
+          "oklch(0.379 0.008 90)",
+          "oklch(0.493 0.008 90)",
+          "oklch(0.607 0.008 90)",
+          "oklch(0.721 0.008 90)",
+          "oklch(0.836 0.008 90)",
+          "oklch(0.950 0.008 90)"
+        ]
+      },
+      "button-on": {
+        "role": "primary",
+        "displayName": "Button Label",
         "canonical": "oklch(1 0 0)",
         "hex": "#ffffff",
-        "cssVar": "--sx-accent-fg",
+        "cssVar": "--sx-button-fg",
         "tonalRamp": [
           "oklch(0.150 0 0)",
           "oklch(0.264 0 0)",
@@ -225,43 +497,26 @@
           "oklch(0.950 0 0)"
         ]
       },
-      "focus-ring": {
+      "dark-button-on": {
         "role": "primary",
-        "displayName": "Focus Blue",
-        "canonical": "oklch(0.56 0.19 260)",
-        "hex": "#276ee1",
-        "cssVar": "--sx-focus-ring",
+        "displayName": "Button Label",
+        "canonical": "oklch(0.17 0.007 258)",
+        "hex": "#0e1012",
+        "cssVar": "--sx-button-fg",
         "tonalRamp": [
-          "oklch(0.150 0.19 260)",
-          "oklch(0.264 0.19 260)",
-          "oklch(0.379 0.19 260)",
-          "oklch(0.493 0.19 260)",
-          "oklch(0.607 0.19 260)",
-          "oklch(0.721 0.19 260)",
-          "oklch(0.836 0.19 260)",
-          "oklch(0.950 0.19 260)"
-        ]
-      },
-      "selection": {
-        "role": "primary",
-        "displayName": "Selection Wash",
-        "canonical": "oklch(0.88 0.06 260)",
-        "hex": "#c1d9ff",
-        "cssVar": "--sx-selection",
-        "tonalRamp": [
-          "oklch(0.150 0.06 260)",
-          "oklch(0.264 0.06 260)",
-          "oklch(0.379 0.06 260)",
-          "oklch(0.493 0.06 260)",
-          "oklch(0.607 0.06 260)",
-          "oklch(0.721 0.06 260)",
-          "oklch(0.836 0.06 260)",
-          "oklch(0.950 0.06 260)"
+          "oklch(0.150 0.007 258)",
+          "oklch(0.264 0.007 258)",
+          "oklch(0.379 0.007 258)",
+          "oklch(0.493 0.007 258)",
+          "oklch(0.607 0.007 258)",
+          "oklch(0.721 0.007 258)",
+          "oklch(0.836 0.007 258)",
+          "oklch(0.950 0.007 258)"
         ]
       },
       "safe": {
-        "role": "verdict",
-        "displayName": "Safe Green (graphic)",
+        "role": "semantic",
+        "displayName": "Safe Green (rule, cell)",
         "canonical": "oklch(0.6 0.14 158)",
         "hex": "#02985f",
         "cssVar": "--sx-safe",
@@ -276,9 +531,26 @@
           "oklch(0.950 0.14 158)"
         ]
       },
+      "dark-safe": {
+        "role": "semantic",
+        "displayName": "Safe Green (rule, cell)",
+        "canonical": "oklch(0.72 0.14 158)",
+        "hex": "#45bf82",
+        "cssVar": "--sx-safe",
+        "tonalRamp": [
+          "oklch(0.150 0.14 158)",
+          "oklch(0.264 0.14 158)",
+          "oklch(0.379 0.14 158)",
+          "oklch(0.493 0.14 158)",
+          "oklch(0.607 0.14 158)",
+          "oklch(0.721 0.14 158)",
+          "oklch(0.836 0.14 158)",
+          "oklch(0.950 0.14 158)"
+        ]
+      },
       "safe-fg": {
-        "role": "verdict",
-        "displayName": "Safe Green (text)",
+        "role": "semantic",
+        "displayName": "Safe Green Text",
         "canonical": "oklch(0.45 0.11 158)",
         "hex": "#00673d",
         "cssVar": "--sx-safe-fg",
@@ -293,8 +565,25 @@
           "oklch(0.950 0.11 158)"
         ]
       },
+      "dark-safe-fg": {
+        "role": "semantic",
+        "displayName": "Safe Green Text",
+        "canonical": "oklch(0.8 0.12 158)",
+        "hex": "#75d5a0",
+        "cssVar": "--sx-safe-fg",
+        "tonalRamp": [
+          "oklch(0.150 0.12 158)",
+          "oklch(0.264 0.12 158)",
+          "oklch(0.379 0.12 158)",
+          "oklch(0.493 0.12 158)",
+          "oklch(0.607 0.12 158)",
+          "oklch(0.721 0.12 158)",
+          "oklch(0.836 0.12 158)",
+          "oklch(0.950 0.12 158)"
+        ]
+      },
       "safe-surface": {
-        "role": "verdict",
+        "role": "semantic",
         "displayName": "Safe Green Band",
         "canonical": "oklch(0.972 0.022 158)",
         "hex": "#eafbf0",
@@ -310,9 +599,26 @@
           "oklch(0.950 0.022 158)"
         ]
       },
+      "dark-safe-surface": {
+        "role": "semantic",
+        "displayName": "Safe Green Band",
+        "canonical": "oklch(0.215 0.03 160)",
+        "hex": "#0c1e15",
+        "cssVar": "--sx-safe-surface",
+        "tonalRamp": [
+          "oklch(0.150 0.03 160)",
+          "oklch(0.264 0.03 160)",
+          "oklch(0.379 0.03 160)",
+          "oklch(0.493 0.03 160)",
+          "oklch(0.607 0.03 160)",
+          "oklch(0.721 0.03 160)",
+          "oklch(0.836 0.03 160)",
+          "oklch(0.950 0.03 160)"
+        ]
+      },
       "safe-edge": {
-        "role": "verdict",
-        "displayName": "Safe Green Band Edge",
+        "role": "semantic",
+        "displayName": "Safe Green Band Hairline",
         "canonical": "oklch(0.89 0.05 158)",
         "hex": "#c0e5ce",
         "cssVar": "--sx-safe-edge",
@@ -327,9 +633,60 @@
           "oklch(0.950 0.05 158)"
         ]
       },
+      "dark-safe-edge": {
+        "role": "semantic",
+        "displayName": "Safe Green Band Hairline",
+        "canonical": "oklch(0.32 0.055 160)",
+        "hex": "#153b29",
+        "cssVar": "--sx-safe-edge",
+        "tonalRamp": [
+          "oklch(0.150 0.055 160)",
+          "oklch(0.264 0.055 160)",
+          "oklch(0.379 0.055 160)",
+          "oklch(0.493 0.055 160)",
+          "oklch(0.607 0.055 160)",
+          "oklch(0.721 0.055 160)",
+          "oklch(0.836 0.055 160)",
+          "oklch(0.950 0.055 160)"
+        ]
+      },
+      "safe-ink": {
+        "role": "semantic",
+        "displayName": "Safe Green Band Ink",
+        "canonical": "oklch(0.42 0.04 158)",
+        "hex": "#3a5445",
+        "cssVar": "--sx-safe-ink",
+        "tonalRamp": [
+          "oklch(0.150 0.04 158)",
+          "oklch(0.264 0.04 158)",
+          "oklch(0.379 0.04 158)",
+          "oklch(0.493 0.04 158)",
+          "oklch(0.607 0.04 158)",
+          "oklch(0.721 0.04 158)",
+          "oklch(0.836 0.04 158)",
+          "oklch(0.950 0.04 158)"
+        ]
+      },
+      "dark-safe-ink": {
+        "role": "semantic",
+        "displayName": "Safe Green Band Ink",
+        "canonical": "oklch(0.82 0.03 158)",
+        "hex": "#b5cabd",
+        "cssVar": "--sx-safe-ink",
+        "tonalRamp": [
+          "oklch(0.150 0.03 158)",
+          "oklch(0.264 0.03 158)",
+          "oklch(0.379 0.03 158)",
+          "oklch(0.493 0.03 158)",
+          "oklch(0.607 0.03 158)",
+          "oklch(0.721 0.03 158)",
+          "oklch(0.836 0.03 158)",
+          "oklch(0.950 0.03 158)"
+        ]
+      },
       "suspicious": {
-        "role": "verdict",
-        "displayName": "Suspicious Amber (graphic)",
+        "role": "semantic",
+        "displayName": "Suspicious Amber (rule, cell)",
         "canonical": "oklch(0.64 0.15 58)",
         "hex": "#ce710c",
         "cssVar": "--sx-suspicious",
@@ -344,9 +701,26 @@
           "oklch(0.950 0.15 58)"
         ]
       },
+      "dark-suspicious": {
+        "role": "semantic",
+        "displayName": "Suspicious Amber (rule, cell)",
+        "canonical": "oklch(0.78 0.14 72)",
+        "hex": "#eea743",
+        "cssVar": "--sx-suspicious",
+        "tonalRamp": [
+          "oklch(0.150 0.14 72)",
+          "oklch(0.264 0.14 72)",
+          "oklch(0.379 0.14 72)",
+          "oklch(0.493 0.14 72)",
+          "oklch(0.607 0.14 72)",
+          "oklch(0.721 0.14 72)",
+          "oklch(0.836 0.14 72)",
+          "oklch(0.950 0.14 72)"
+        ]
+      },
       "suspicious-fg": {
-        "role": "verdict",
-        "displayName": "Suspicious Amber (text)",
+        "role": "semantic",
+        "displayName": "Suspicious Amber Text",
         "canonical": "oklch(0.49 0.12 55)",
         "hex": "#924a03",
         "cssVar": "--sx-suspicious-fg",
@@ -361,8 +735,25 @@
           "oklch(0.950 0.12 55)"
         ]
       },
+      "dark-suspicious-fg": {
+        "role": "semantic",
+        "displayName": "Suspicious Amber Text",
+        "canonical": "oklch(0.84 0.12 78)",
+        "hex": "#f6c16b",
+        "cssVar": "--sx-suspicious-fg",
+        "tonalRamp": [
+          "oklch(0.150 0.12 78)",
+          "oklch(0.264 0.12 78)",
+          "oklch(0.379 0.12 78)",
+          "oklch(0.493 0.12 78)",
+          "oklch(0.607 0.12 78)",
+          "oklch(0.721 0.12 78)",
+          "oklch(0.836 0.12 78)",
+          "oklch(0.950 0.12 78)"
+        ]
+      },
       "suspicious-surface": {
-        "role": "verdict",
+        "role": "semantic",
         "displayName": "Suspicious Amber Band",
         "canonical": "oklch(0.975 0.026 80)",
         "hex": "#fff5e4",
@@ -378,9 +769,26 @@
           "oklch(0.950 0.026 80)"
         ]
       },
+      "dark-suspicious-surface": {
+        "role": "semantic",
+        "displayName": "Suspicious Amber Band",
+        "canonical": "oklch(0.22 0.032 70)",
+        "hex": "#241809",
+        "cssVar": "--sx-suspicious-surface",
+        "tonalRamp": [
+          "oklch(0.150 0.032 70)",
+          "oklch(0.264 0.032 70)",
+          "oklch(0.379 0.032 70)",
+          "oklch(0.493 0.032 70)",
+          "oklch(0.607 0.032 70)",
+          "oklch(0.721 0.032 70)",
+          "oklch(0.836 0.032 70)",
+          "oklch(0.950 0.032 70)"
+        ]
+      },
       "suspicious-edge": {
-        "role": "verdict",
-        "displayName": "Suspicious Amber Band Edge",
+        "role": "semantic",
+        "displayName": "Suspicious Amber Band Hairline",
         "canonical": "oklch(0.9 0.06 75)",
         "hex": "#f6d9b2",
         "cssVar": "--sx-suspicious-edge",
@@ -395,11 +803,62 @@
           "oklch(0.950 0.06 75)"
         ]
       },
+      "dark-suspicious-edge": {
+        "role": "semantic",
+        "displayName": "Suspicious Amber Band Hairline",
+        "canonical": "oklch(0.34 0.06 70)",
+        "hex": "#4c3211",
+        "cssVar": "--sx-suspicious-edge",
+        "tonalRamp": [
+          "oklch(0.150 0.06 70)",
+          "oklch(0.264 0.06 70)",
+          "oklch(0.379 0.06 70)",
+          "oklch(0.493 0.06 70)",
+          "oklch(0.607 0.06 70)",
+          "oklch(0.721 0.06 70)",
+          "oklch(0.836 0.06 70)",
+          "oklch(0.950 0.06 70)"
+        ]
+      },
+      "suspicious-ink": {
+        "role": "semantic",
+        "displayName": "Suspicious Amber Band Ink",
+        "canonical": "oklch(0.42 0.04 62)",
+        "hex": "#5d4836",
+        "cssVar": "--sx-suspicious-ink",
+        "tonalRamp": [
+          "oklch(0.150 0.04 62)",
+          "oklch(0.264 0.04 62)",
+          "oklch(0.379 0.04 62)",
+          "oklch(0.493 0.04 62)",
+          "oklch(0.607 0.04 62)",
+          "oklch(0.721 0.04 62)",
+          "oklch(0.836 0.04 62)",
+          "oklch(0.950 0.04 62)"
+        ]
+      },
+      "dark-suspicious-ink": {
+        "role": "semantic",
+        "displayName": "Suspicious Amber Band Ink",
+        "canonical": "oklch(0.82 0.03 72)",
+        "hex": "#d1c1af",
+        "cssVar": "--sx-suspicious-ink",
+        "tonalRamp": [
+          "oklch(0.150 0.03 72)",
+          "oklch(0.264 0.03 72)",
+          "oklch(0.379 0.03 72)",
+          "oklch(0.493 0.03 72)",
+          "oklch(0.607 0.03 72)",
+          "oklch(0.721 0.03 72)",
+          "oklch(0.836 0.03 72)",
+          "oklch(0.950 0.03 72)"
+        ]
+      },
       "malicious": {
-        "role": "verdict",
-        "displayName": "Malicious Red (graphic)",
-        "canonical": "oklch(0.58 0.2 27)",
-        "hex": "#d73431",
+        "role": "semantic",
+        "displayName": "Malicious Red (rule, cell)",
+        "canonical": "oklch(0.56 0.2 27)",
+        "hex": "#d02c2a",
         "cssVar": "--sx-malicious",
         "tonalRamp": [
           "oklch(0.150 0.2 27)",
@@ -412,9 +871,26 @@
           "oklch(0.950 0.2 27)"
         ]
       },
+      "dark-malicious": {
+        "role": "semantic",
+        "displayName": "Malicious Red (rule, cell)",
+        "canonical": "oklch(0.68 0.18 25)",
+        "hex": "#f3625d",
+        "cssVar": "--sx-malicious",
+        "tonalRamp": [
+          "oklch(0.150 0.18 25)",
+          "oklch(0.264 0.18 25)",
+          "oklch(0.379 0.18 25)",
+          "oklch(0.493 0.18 25)",
+          "oklch(0.607 0.18 25)",
+          "oklch(0.721 0.18 25)",
+          "oklch(0.836 0.18 25)",
+          "oklch(0.950 0.18 25)"
+        ]
+      },
       "malicious-fg": {
-        "role": "verdict",
-        "displayName": "Malicious Red (text)",
+        "role": "semantic",
+        "displayName": "Malicious Red Text",
         "canonical": "oklch(0.5 0.19 27)",
         "hex": "#b7191c",
         "cssVar": "--sx-malicious-fg",
@@ -429,28 +905,62 @@
           "oklch(0.950 0.19 27)"
         ]
       },
+      "dark-malicious-fg": {
+        "role": "semantic",
+        "displayName": "Malicious Red Text",
+        "canonical": "oklch(0.77 0.14 25)",
+        "hex": "#ff8e86",
+        "cssVar": "--sx-malicious-fg",
+        "tonalRamp": [
+          "oklch(0.150 0.14 25)",
+          "oklch(0.264 0.14 25)",
+          "oklch(0.379 0.14 25)",
+          "oklch(0.493 0.14 25)",
+          "oklch(0.607 0.14 25)",
+          "oklch(0.721 0.14 25)",
+          "oklch(0.836 0.14 25)",
+          "oklch(0.950 0.14 25)"
+        ]
+      },
       "malicious-surface": {
-        "role": "verdict",
+        "role": "semantic",
         "displayName": "Malicious Red Band",
-        "canonical": "oklch(0.968 0.02 22)",
-        "hex": "#fff0ee",
+        "canonical": "oklch(0.962 0.024 22)",
+        "hex": "#ffedeb",
         "cssVar": "--sx-malicious-surface",
         "tonalRamp": [
-          "oklch(0.150 0.02 22)",
-          "oklch(0.264 0.02 22)",
-          "oklch(0.379 0.02 22)",
-          "oklch(0.493 0.02 22)",
-          "oklch(0.607 0.02 22)",
-          "oklch(0.721 0.02 22)",
-          "oklch(0.836 0.02 22)",
-          "oklch(0.950 0.02 22)"
+          "oklch(0.150 0.024 22)",
+          "oklch(0.264 0.024 22)",
+          "oklch(0.379 0.024 22)",
+          "oklch(0.493 0.024 22)",
+          "oklch(0.607 0.024 22)",
+          "oklch(0.721 0.024 22)",
+          "oklch(0.836 0.024 22)",
+          "oklch(0.950 0.024 22)"
+        ]
+      },
+      "dark-malicious-surface": {
+        "role": "semantic",
+        "displayName": "Malicious Red Band",
+        "canonical": "oklch(0.22 0.038 22)",
+        "hex": "#2a1312",
+        "cssVar": "--sx-malicious-surface",
+        "tonalRamp": [
+          "oklch(0.150 0.038 22)",
+          "oklch(0.264 0.038 22)",
+          "oklch(0.379 0.038 22)",
+          "oklch(0.493 0.038 22)",
+          "oklch(0.607 0.038 22)",
+          "oklch(0.721 0.038 22)",
+          "oklch(0.836 0.038 22)",
+          "oklch(0.950 0.038 22)"
         ]
       },
       "malicious-edge": {
-        "role": "verdict",
-        "displayName": "Malicious Red Band Edge",
-        "canonical": "oklch(0.89 0.05 22)",
-        "hex": "#facecc",
+        "role": "semantic",
+        "displayName": "Malicious Red Band Hairline",
+        "canonical": "oklch(0.88 0.05 22)",
+        "hex": "#f7cbc9",
         "cssVar": "--sx-malicious-edge",
         "tonalRamp": [
           "oklch(0.150 0.05 22)",
@@ -463,9 +973,60 @@
           "oklch(0.950 0.05 22)"
         ]
       },
+      "dark-malicious-edge": {
+        "role": "semantic",
+        "displayName": "Malicious Red Band Hairline",
+        "canonical": "oklch(0.34 0.07 22)",
+        "hex": "#572827",
+        "cssVar": "--sx-malicious-edge",
+        "tonalRamp": [
+          "oklch(0.150 0.07 22)",
+          "oklch(0.264 0.07 22)",
+          "oklch(0.379 0.07 22)",
+          "oklch(0.493 0.07 22)",
+          "oklch(0.607 0.07 22)",
+          "oklch(0.721 0.07 22)",
+          "oklch(0.836 0.07 22)",
+          "oklch(0.950 0.07 22)"
+        ]
+      },
+      "malicious-ink": {
+        "role": "semantic",
+        "displayName": "Malicious Red Band Ink",
+        "canonical": "oklch(0.42 0.04 22)",
+        "hex": "#614543",
+        "cssVar": "--sx-malicious-ink",
+        "tonalRamp": [
+          "oklch(0.150 0.04 22)",
+          "oklch(0.264 0.04 22)",
+          "oklch(0.379 0.04 22)",
+          "oklch(0.493 0.04 22)",
+          "oklch(0.607 0.04 22)",
+          "oklch(0.721 0.04 22)",
+          "oklch(0.836 0.04 22)",
+          "oklch(0.950 0.04 22)"
+        ]
+      },
+      "dark-malicious-ink": {
+        "role": "semantic",
+        "displayName": "Malicious Red Band Ink",
+        "canonical": "oklch(0.82 0.03 22)",
+        "hex": "#d7bdbb",
+        "cssVar": "--sx-malicious-ink",
+        "tonalRamp": [
+          "oklch(0.150 0.03 22)",
+          "oklch(0.264 0.03 22)",
+          "oklch(0.379 0.03 22)",
+          "oklch(0.493 0.03 22)",
+          "oklch(0.607 0.03 22)",
+          "oklch(0.721 0.03 22)",
+          "oklch(0.836 0.03 22)",
+          "oklch(0.950 0.03 22)"
+        ]
+      },
       "critical": {
-        "role": "verdict",
-        "displayName": "Critical Magenta (graphic)",
+        "role": "semantic",
+        "displayName": "Critical Magenta (rule, cell)",
         "canonical": "oklch(0.5 0.2 355)",
         "hex": "#b10b69",
         "cssVar": "--sx-critical",
@@ -480,9 +1041,26 @@
           "oklch(0.950 0.2 355)"
         ]
       },
+      "dark-critical": {
+        "role": "semantic",
+        "displayName": "Critical Magenta (rule, cell)",
+        "canonical": "oklch(0.68 0.19 355)",
+        "hex": "#ed5c9e",
+        "cssVar": "--sx-critical",
+        "tonalRamp": [
+          "oklch(0.150 0.19 355)",
+          "oklch(0.264 0.19 355)",
+          "oklch(0.379 0.19 355)",
+          "oklch(0.493 0.19 355)",
+          "oklch(0.607 0.19 355)",
+          "oklch(0.721 0.19 355)",
+          "oklch(0.836 0.19 355)",
+          "oklch(0.950 0.19 355)"
+        ]
+      },
       "critical-fg": {
-        "role": "verdict",
-        "displayName": "Critical Magenta (text)",
+        "role": "semantic",
+        "displayName": "Critical Magenta Text",
         "canonical": "oklch(0.46 0.19 355)",
         "hex": "#a0005d",
         "cssVar": "--sx-critical-fg",
@@ -497,8 +1075,25 @@
           "oklch(0.950 0.19 355)"
         ]
       },
+      "dark-critical-fg": {
+        "role": "semantic",
+        "displayName": "Critical Magenta Text",
+        "canonical": "oklch(0.78 0.14 355)",
+        "hex": "#fc90bc",
+        "cssVar": "--sx-critical-fg",
+        "tonalRamp": [
+          "oklch(0.150 0.14 355)",
+          "oklch(0.264 0.14 355)",
+          "oklch(0.379 0.14 355)",
+          "oklch(0.493 0.14 355)",
+          "oklch(0.607 0.14 355)",
+          "oklch(0.721 0.14 355)",
+          "oklch(0.836 0.14 355)",
+          "oklch(0.950 0.14 355)"
+        ]
+      },
       "critical-surface": {
-        "role": "verdict",
+        "role": "semantic",
         "displayName": "Critical Magenta Band",
         "canonical": "oklch(0.965 0.022 350)",
         "hex": "#ffeef5",
@@ -514,9 +1109,26 @@
           "oklch(0.950 0.022 350)"
         ]
       },
+      "dark-critical-surface": {
+        "role": "semantic",
+        "displayName": "Critical Magenta Band",
+        "canonical": "oklch(0.215 0.042 350)",
+        "hex": "#28111c",
+        "cssVar": "--sx-critical-surface",
+        "tonalRamp": [
+          "oklch(0.150 0.042 350)",
+          "oklch(0.264 0.042 350)",
+          "oklch(0.379 0.042 350)",
+          "oklch(0.493 0.042 350)",
+          "oklch(0.607 0.042 350)",
+          "oklch(0.721 0.042 350)",
+          "oklch(0.836 0.042 350)",
+          "oklch(0.950 0.042 350)"
+        ]
+      },
       "critical-edge": {
-        "role": "verdict",
-        "displayName": "Critical Magenta Band Edge",
+        "role": "semantic",
+        "displayName": "Critical Magenta Band Hairline",
         "canonical": "oklch(0.88 0.055 350)",
         "hex": "#f5c9dd",
         "cssVar": "--sx-critical-edge",
@@ -531,9 +1143,60 @@
           "oklch(0.950 0.055 350)"
         ]
       },
+      "dark-critical-edge": {
+        "role": "semantic",
+        "displayName": "Critical Magenta Band Hairline",
+        "canonical": "oklch(0.34 0.085 350)",
+        "hex": "#57233e",
+        "cssVar": "--sx-critical-edge",
+        "tonalRamp": [
+          "oklch(0.150 0.085 350)",
+          "oklch(0.264 0.085 350)",
+          "oklch(0.379 0.085 350)",
+          "oklch(0.493 0.085 350)",
+          "oklch(0.607 0.085 350)",
+          "oklch(0.721 0.085 350)",
+          "oklch(0.836 0.085 350)",
+          "oklch(0.950 0.085 350)"
+        ]
+      },
+      "critical-ink": {
+        "role": "semantic",
+        "displayName": "Critical Magenta Band Ink",
+        "canonical": "oklch(0.42 0.04 352)",
+        "hex": "#5f444f",
+        "cssVar": "--sx-critical-ink",
+        "tonalRamp": [
+          "oklch(0.150 0.04 352)",
+          "oklch(0.264 0.04 352)",
+          "oklch(0.379 0.04 352)",
+          "oklch(0.493 0.04 352)",
+          "oklch(0.607 0.04 352)",
+          "oklch(0.721 0.04 352)",
+          "oklch(0.836 0.04 352)",
+          "oklch(0.950 0.04 352)"
+        ]
+      },
+      "dark-critical-ink": {
+        "role": "semantic",
+        "displayName": "Critical Magenta Band Ink",
+        "canonical": "oklch(0.82 0.03 352)",
+        "hex": "#d5bdc6",
+        "cssVar": "--sx-critical-ink",
+        "tonalRamp": [
+          "oklch(0.150 0.03 352)",
+          "oklch(0.264 0.03 352)",
+          "oklch(0.379 0.03 352)",
+          "oklch(0.493 0.03 352)",
+          "oklch(0.607 0.03 352)",
+          "oklch(0.721 0.03 352)",
+          "oklch(0.836 0.03 352)",
+          "oklch(0.950 0.03 352)"
+        ]
+      },
       "unknown": {
-        "role": "verdict",
-        "displayName": "Unknown Slate (graphic)",
+        "role": "semantic",
+        "displayName": "Unknown Slate (rule, cell)",
         "canonical": "oklch(0.58 0.035 250)",
         "hex": "#6b7c8f",
         "cssVar": "--sx-unknown",
@@ -548,9 +1211,26 @@
           "oklch(0.950 0.035 250)"
         ]
       },
+      "dark-unknown": {
+        "role": "semantic",
+        "displayName": "Unknown Slate (rule, cell)",
+        "canonical": "oklch(0.66 0.035 250)",
+        "hex": "#8294a7",
+        "cssVar": "--sx-unknown",
+        "tonalRamp": [
+          "oklch(0.150 0.035 250)",
+          "oklch(0.264 0.035 250)",
+          "oklch(0.379 0.035 250)",
+          "oklch(0.493 0.035 250)",
+          "oklch(0.607 0.035 250)",
+          "oklch(0.721 0.035 250)",
+          "oklch(0.836 0.035 250)",
+          "oklch(0.950 0.035 250)"
+        ]
+      },
       "unknown-fg": {
-        "role": "verdict",
-        "displayName": "Unknown Slate (text)",
+        "role": "semantic",
+        "displayName": "Unknown Slate Text",
         "canonical": "oklch(0.45 0.035 250)",
         "hex": "#475768",
         "cssVar": "--sx-unknown-fg",
@@ -565,8 +1245,25 @@
           "oklch(0.950 0.035 250)"
         ]
       },
+      "dark-unknown-fg": {
+        "role": "semantic",
+        "displayName": "Unknown Slate Text",
+        "canonical": "oklch(0.78 0.03 250)",
+        "hex": "#a9b9ca",
+        "cssVar": "--sx-unknown-fg",
+        "tonalRamp": [
+          "oklch(0.150 0.03 250)",
+          "oklch(0.264 0.03 250)",
+          "oklch(0.379 0.03 250)",
+          "oklch(0.493 0.03 250)",
+          "oklch(0.607 0.03 250)",
+          "oklch(0.721 0.03 250)",
+          "oklch(0.836 0.03 250)",
+          "oklch(0.950 0.03 250)"
+        ]
+      },
       "unknown-surface": {
-        "role": "verdict",
+        "role": "semantic",
         "displayName": "Unknown Slate Band",
         "canonical": "oklch(0.968 0.008 250)",
         "hex": "#f0f5fa",
@@ -582,9 +1279,26 @@
           "oklch(0.950 0.008 250)"
         ]
       },
+      "dark-unknown-surface": {
+        "role": "semantic",
+        "displayName": "Unknown Slate Band",
+        "canonical": "oklch(0.21 0.014 250)",
+        "hex": "#13191f",
+        "cssVar": "--sx-unknown-surface",
+        "tonalRamp": [
+          "oklch(0.150 0.014 250)",
+          "oklch(0.264 0.014 250)",
+          "oklch(0.379 0.014 250)",
+          "oklch(0.493 0.014 250)",
+          "oklch(0.607 0.014 250)",
+          "oklch(0.721 0.014 250)",
+          "oklch(0.836 0.014 250)",
+          "oklch(0.950 0.014 250)"
+        ]
+      },
       "unknown-edge": {
-        "role": "verdict",
-        "displayName": "Unknown Slate Band Edge",
+        "role": "semantic",
+        "displayName": "Unknown Slate Band Hairline",
         "canonical": "oklch(0.9 0.014 250)",
         "hex": "#d7dfe7",
         "cssVar": "--sx-unknown-edge",
@@ -599,9 +1313,60 @@
           "oklch(0.950 0.014 250)"
         ]
       },
+      "dark-unknown-edge": {
+        "role": "semantic",
+        "displayName": "Unknown Slate Band Hairline",
+        "canonical": "oklch(0.31 0.02 250)",
+        "hex": "#29313a",
+        "cssVar": "--sx-unknown-edge",
+        "tonalRamp": [
+          "oklch(0.150 0.02 250)",
+          "oklch(0.264 0.02 250)",
+          "oklch(0.379 0.02 250)",
+          "oklch(0.493 0.02 250)",
+          "oklch(0.607 0.02 250)",
+          "oklch(0.721 0.02 250)",
+          "oklch(0.836 0.02 250)",
+          "oklch(0.950 0.02 250)"
+        ]
+      },
+      "unknown-ink": {
+        "role": "semantic",
+        "displayName": "Unknown Slate Band Ink",
+        "canonical": "oklch(0.42 0.03 250)",
+        "hex": "#414f5d",
+        "cssVar": "--sx-unknown-ink",
+        "tonalRamp": [
+          "oklch(0.150 0.03 250)",
+          "oklch(0.264 0.03 250)",
+          "oklch(0.379 0.03 250)",
+          "oklch(0.493 0.03 250)",
+          "oklch(0.607 0.03 250)",
+          "oklch(0.721 0.03 250)",
+          "oklch(0.836 0.03 250)",
+          "oklch(0.950 0.03 250)"
+        ]
+      },
+      "dark-unknown-ink": {
+        "role": "semantic",
+        "displayName": "Unknown Slate Band Ink",
+        "canonical": "oklch(0.82 0.02 250)",
+        "hex": "#bbc5d1",
+        "cssVar": "--sx-unknown-ink",
+        "tonalRamp": [
+          "oklch(0.150 0.02 250)",
+          "oklch(0.264 0.02 250)",
+          "oklch(0.379 0.02 250)",
+          "oklch(0.493 0.02 250)",
+          "oklch(0.607 0.02 250)",
+          "oklch(0.721 0.02 250)",
+          "oklch(0.836 0.02 250)",
+          "oklch(0.950 0.02 250)"
+        ]
+      },
       "error": {
-        "role": "verdict",
-        "displayName": "Error Clay (graphic)",
+        "role": "semantic",
+        "displayName": "Error Clay (rule, cell)",
         "canonical": "oklch(0.57 0.08 30)",
         "hex": "#a1655b",
         "cssVar": "--sx-error",
@@ -616,9 +1381,26 @@
           "oklch(0.950 0.08 30)"
         ]
       },
+      "dark-error": {
+        "role": "semantic",
+        "displayName": "Error Clay (rule, cell)",
+        "canonical": "oklch(0.66 0.08 30)",
+        "hex": "#be8075",
+        "cssVar": "--sx-error",
+        "tonalRamp": [
+          "oklch(0.150 0.08 30)",
+          "oklch(0.264 0.08 30)",
+          "oklch(0.379 0.08 30)",
+          "oklch(0.493 0.08 30)",
+          "oklch(0.607 0.08 30)",
+          "oklch(0.721 0.08 30)",
+          "oklch(0.836 0.08 30)",
+          "oklch(0.950 0.08 30)"
+        ]
+      },
       "error-fg": {
-        "role": "verdict",
-        "displayName": "Error Clay (text)",
+        "role": "semantic",
+        "displayName": "Error Clay Text",
         "canonical": "oklch(0.47 0.08 30)",
         "hex": "#82493f",
         "cssVar": "--sx-error-fg",
@@ -633,8 +1415,25 @@
           "oklch(0.950 0.08 30)"
         ]
       },
+      "dark-error-fg": {
+        "role": "semantic",
+        "displayName": "Error Clay Text",
+        "canonical": "oklch(0.76 0.07 30)",
+        "hex": "#daa197",
+        "cssVar": "--sx-error-fg",
+        "tonalRamp": [
+          "oklch(0.150 0.07 30)",
+          "oklch(0.264 0.07 30)",
+          "oklch(0.379 0.07 30)",
+          "oklch(0.493 0.07 30)",
+          "oklch(0.607 0.07 30)",
+          "oklch(0.721 0.07 30)",
+          "oklch(0.836 0.07 30)",
+          "oklch(0.950 0.07 30)"
+        ]
+      },
       "error-surface": {
-        "role": "verdict",
+        "role": "semantic",
         "displayName": "Error Clay Band",
         "canonical": "oklch(0.968 0.01 30)",
         "hex": "#fbf2f0",
@@ -650,9 +1449,26 @@
           "oklch(0.950 0.01 30)"
         ]
       },
+      "dark-error-surface": {
+        "role": "semantic",
+        "displayName": "Error Clay Band",
+        "canonical": "oklch(0.21 0.018 30)",
+        "hex": "#201513",
+        "cssVar": "--sx-error-surface",
+        "tonalRamp": [
+          "oklch(0.150 0.018 30)",
+          "oklch(0.264 0.018 30)",
+          "oklch(0.379 0.018 30)",
+          "oklch(0.493 0.018 30)",
+          "oklch(0.607 0.018 30)",
+          "oklch(0.721 0.018 30)",
+          "oklch(0.836 0.018 30)",
+          "oklch(0.950 0.018 30)"
+        ]
+      },
       "error-edge": {
-        "role": "verdict",
-        "displayName": "Error Clay Band Edge",
+        "role": "semantic",
+        "displayName": "Error Clay Band Hairline",
         "canonical": "oklch(0.9 0.02 30)",
         "hex": "#ebd9d6",
         "cssVar": "--sx-error-edge",
@@ -667,26 +1483,94 @@
           "oklch(0.950 0.02 30)"
         ]
       },
+      "dark-error-edge": {
+        "role": "semantic",
+        "displayName": "Error Clay Band Hairline",
+        "canonical": "oklch(0.32 0.03 30)",
+        "hex": "#412d2a",
+        "cssVar": "--sx-error-edge",
+        "tonalRamp": [
+          "oklch(0.150 0.03 30)",
+          "oklch(0.264 0.03 30)",
+          "oklch(0.379 0.03 30)",
+          "oklch(0.493 0.03 30)",
+          "oklch(0.607 0.03 30)",
+          "oklch(0.721 0.03 30)",
+          "oklch(0.836 0.03 30)",
+          "oklch(0.950 0.03 30)"
+        ]
+      },
+      "error-ink": {
+        "role": "semantic",
+        "displayName": "Error Clay Band Ink",
+        "canonical": "oklch(0.42 0.03 30)",
+        "hex": "#5c4743",
+        "cssVar": "--sx-error-ink",
+        "tonalRamp": [
+          "oklch(0.150 0.03 30)",
+          "oklch(0.264 0.03 30)",
+          "oklch(0.379 0.03 30)",
+          "oklch(0.493 0.03 30)",
+          "oklch(0.607 0.03 30)",
+          "oklch(0.721 0.03 30)",
+          "oklch(0.836 0.03 30)",
+          "oklch(0.950 0.03 30)"
+        ]
+      },
+      "dark-error-ink": {
+        "role": "semantic",
+        "displayName": "Error Clay Band Ink",
+        "canonical": "oklch(0.82 0.025 30)",
+        "hex": "#d4bfbb",
+        "cssVar": "--sx-error-ink",
+        "tonalRamp": [
+          "oklch(0.150 0.025 30)",
+          "oklch(0.264 0.025 30)",
+          "oklch(0.379 0.025 30)",
+          "oklch(0.493 0.025 30)",
+          "oklch(0.607 0.025 30)",
+          "oklch(0.721 0.025 30)",
+          "oklch(0.836 0.025 30)",
+          "oklch(0.950 0.025 30)"
+        ]
+      },
       "pending-surface": {
-        "role": "verdict",
+        "role": "semantic",
         "displayName": "Checking Band",
-        "canonical": "oklch(0.975 0.003 255)",
-        "hex": "#f5f7f9",
+        "canonical": "oklch(0.972 0.004 255)",
+        "hex": "#f4f6f8",
         "cssVar": "--sx-pending-surface",
         "tonalRamp": [
-          "oklch(0.150 0.003 255)",
-          "oklch(0.264 0.003 255)",
-          "oklch(0.379 0.003 255)",
-          "oklch(0.493 0.003 255)",
-          "oklch(0.607 0.003 255)",
-          "oklch(0.721 0.003 255)",
-          "oklch(0.836 0.003 255)",
-          "oklch(0.950 0.003 255)"
+          "oklch(0.150 0.004 255)",
+          "oklch(0.264 0.004 255)",
+          "oklch(0.379 0.004 255)",
+          "oklch(0.493 0.004 255)",
+          "oklch(0.607 0.004 255)",
+          "oklch(0.721 0.004 255)",
+          "oklch(0.836 0.004 255)",
+          "oklch(0.950 0.004 255)"
+        ]
+      },
+      "dark-pending-surface": {
+        "role": "semantic",
+        "displayName": "Checking Band",
+        "canonical": "oklch(0.2 0.008 258)",
+        "hex": "#14161a",
+        "cssVar": "--sx-pending-surface",
+        "tonalRamp": [
+          "oklch(0.150 0.008 258)",
+          "oklch(0.264 0.008 258)",
+          "oklch(0.379 0.008 258)",
+          "oklch(0.493 0.008 258)",
+          "oklch(0.607 0.008 258)",
+          "oklch(0.721 0.008 258)",
+          "oklch(0.836 0.008 258)",
+          "oklch(0.950 0.008 258)"
         ]
       },
       "danger": {
         "role": "semantic",
-        "displayName": "UI Danger (text)",
+        "displayName": "UI Danger",
         "canonical": "oklch(0.52 0.16 20)",
         "hex": "#b23641",
         "cssVar": "--sx-danger-fg",
@@ -699,6 +1583,23 @@
           "oklch(0.721 0.16 20)",
           "oklch(0.836 0.16 20)",
           "oklch(0.950 0.16 20)"
+        ]
+      },
+      "dark-danger": {
+        "role": "semantic",
+        "displayName": "UI Danger",
+        "canonical": "oklch(0.74 0.12 20)",
+        "hex": "#ed8b8b",
+        "cssVar": "--sx-danger-fg",
+        "tonalRamp": [
+          "oklch(0.150 0.12 20)",
+          "oklch(0.264 0.12 20)",
+          "oklch(0.379 0.12 20)",
+          "oklch(0.493 0.12 20)",
+          "oklch(0.607 0.12 20)",
+          "oklch(0.721 0.12 20)",
+          "oklch(0.836 0.12 20)",
+          "oklch(0.950 0.12 20)"
         ]
       },
       "danger-edge": {
@@ -718,825 +1619,9 @@
           "oklch(0.950 0.16 20)"
         ]
       },
-      "cell-flagged": {
-        "role": "strip",
-        "displayName": "Flagged Cell",
-        "canonical": "oklch(0.58 0.2 27)",
-        "hex": "#d73431",
-        "cssVar": "--sx-cell-flagged",
-        "tonalRamp": [
-          "oklch(0.150 0.2 27)",
-          "oklch(0.264 0.2 27)",
-          "oklch(0.379 0.2 27)",
-          "oklch(0.493 0.2 27)",
-          "oklch(0.607 0.2 27)",
-          "oklch(0.721 0.2 27)",
-          "oklch(0.836 0.2 27)",
-          "oklch(0.950 0.2 27)"
-        ]
-      },
-      "cell-caution": {
-        "role": "strip",
-        "displayName": "Caution Cell",
-        "canonical": "oklch(0.615 0.15 58)",
-        "hex": "#c56900",
-        "cssVar": "--sx-cell-caution",
-        "tonalRamp": [
-          "oklch(0.150 0.15 58)",
-          "oklch(0.264 0.15 58)",
-          "oklch(0.379 0.15 58)",
-          "oklch(0.493 0.15 58)",
-          "oklch(0.607 0.15 58)",
-          "oklch(0.721 0.15 58)",
-          "oklch(0.836 0.15 58)",
-          "oklch(0.950 0.15 58)"
-        ]
-      },
-      "cell-failed": {
-        "role": "strip",
-        "displayName": "Failed Cell",
-        "canonical": "oklch(0.55 0.012 262)",
-        "hex": "#6e7279",
-        "cssVar": "--sx-cell-failed",
-        "tonalRamp": [
-          "oklch(0.150 0.012 262)",
-          "oklch(0.264 0.012 262)",
-          "oklch(0.379 0.012 262)",
-          "oklch(0.493 0.012 262)",
-          "oklch(0.607 0.012 262)",
-          "oklch(0.721 0.012 262)",
-          "oklch(0.836 0.012 262)",
-          "oklch(0.950 0.012 262)"
-        ]
-      },
-      "cell-limited": {
-        "role": "strip",
-        "displayName": "Partial Cell",
-        "canonical": "oklch(0.58 0.035 250)",
-        "hex": "#6b7c8f",
-        "cssVar": "--sx-cell-limited",
-        "tonalRamp": [
-          "oklch(0.150 0.035 250)",
-          "oklch(0.264 0.035 250)",
-          "oklch(0.379 0.035 250)",
-          "oklch(0.493 0.035 250)",
-          "oklch(0.607 0.035 250)",
-          "oklch(0.721 0.035 250)",
-          "oklch(0.836 0.035 250)",
-          "oklch(0.950 0.035 250)"
-        ]
-      },
-      "cell-clear": {
-        "role": "strip",
-        "displayName": "Found-Nothing Cell",
-        "canonical": "oklch(0.61 0.008 262)",
-        "hex": "#808388",
-        "cssVar": "--sx-cell-clear",
-        "tonalRamp": [
-          "oklch(0.150 0.008 262)",
-          "oklch(0.264 0.008 262)",
-          "oklch(0.379 0.008 262)",
-          "oklch(0.493 0.008 262)",
-          "oklch(0.607 0.008 262)",
-          "oklch(0.721 0.008 262)",
-          "oklch(0.836 0.008 262)",
-          "oklch(0.950 0.008 262)"
-        ]
-      },
-      "cell-na": {
-        "role": "strip",
-        "displayName": "Didn't-Apply Cell",
-        "canonical": "oklch(0.64 0.008 262)",
-        "hex": "#898c91",
-        "cssVar": "--sx-cell-na",
-        "tonalRamp": [
-          "oklch(0.150 0.008 262)",
-          "oklch(0.264 0.008 262)",
-          "oklch(0.379 0.008 262)",
-          "oklch(0.493 0.008 262)",
-          "oklch(0.607 0.008 262)",
-          "oklch(0.721 0.008 262)",
-          "oklch(0.836 0.008 262)",
-          "oklch(0.950 0.008 262)"
-        ]
-      },
-      "cell-track": {
-        "role": "strip",
-        "displayName": "Cell Track",
-        "canonical": "oklch(0.94 0.004 255)",
-        "hex": "#e9ebee",
-        "cssVar": "--sx-cell-track",
-        "tonalRamp": [
-          "oklch(0.150 0.004 255)",
-          "oklch(0.264 0.004 255)",
-          "oklch(0.379 0.004 255)",
-          "oklch(0.493 0.004 255)",
-          "oklch(0.607 0.004 255)",
-          "oklch(0.721 0.004 255)",
-          "oklch(0.836 0.004 255)",
-          "oklch(0.950 0.004 255)"
-        ]
-      },
-      "dark-ground": {
-        "role": "neutral",
-        "displayName": "Deep Cool Ground (dark)",
-        "canonical": "oklch(0.165 0.009 264)",
-        "hex": "#0c0e12",
-        "cssVar": "--sx-bg",
-        "tonalRamp": [
-          "oklch(0.150 0.009 264)",
-          "oklch(0.264 0.009 264)",
-          "oklch(0.379 0.009 264)",
-          "oklch(0.493 0.009 264)",
-          "oklch(0.607 0.009 264)",
-          "oklch(0.721 0.009 264)",
-          "oklch(0.836 0.009 264)",
-          "oklch(0.950 0.009 264)"
-        ]
-      },
-      "dark-surface": {
-        "role": "neutral",
-        "displayName": "Raised Field (dark)",
-        "canonical": "oklch(0.195 0.01 264)",
-        "hex": "#13151a",
-        "cssVar": "--sx-surface",
-        "tonalRamp": [
-          "oklch(0.150 0.01 264)",
-          "oklch(0.264 0.01 264)",
-          "oklch(0.379 0.01 264)",
-          "oklch(0.493 0.01 264)",
-          "oklch(0.607 0.01 264)",
-          "oklch(0.721 0.01 264)",
-          "oklch(0.836 0.01 264)",
-          "oklch(0.950 0.01 264)"
-        ]
-      },
-      "dark-subtle": {
-        "role": "neutral",
-        "displayName": "Night Mist (dark)",
-        "canonical": "oklch(0.225 0.011 264)",
-        "hex": "#191c21",
-        "cssVar": "--sx-subtle",
-        "tonalRamp": [
-          "oklch(0.150 0.011 264)",
-          "oklch(0.264 0.011 264)",
-          "oklch(0.379 0.011 264)",
-          "oklch(0.493 0.011 264)",
-          "oklch(0.607 0.011 264)",
-          "oklch(0.721 0.011 264)",
-          "oklch(0.836 0.011 264)",
-          "oklch(0.950 0.011 264)"
-        ]
-      },
-      "dark-hairline": {
-        "role": "neutral",
-        "displayName": "Night Hairline (dark)",
-        "canonical": "oklch(0.27 0.012 264)",
-        "hex": "#23262c",
-        "cssVar": "--sx-border",
-        "tonalRamp": [
-          "oklch(0.150 0.012 264)",
-          "oklch(0.264 0.012 264)",
-          "oklch(0.379 0.012 264)",
-          "oklch(0.493 0.012 264)",
-          "oklch(0.607 0.012 264)",
-          "oklch(0.721 0.012 264)",
-          "oklch(0.836 0.012 264)",
-          "oklch(0.950 0.012 264)"
-        ]
-      },
-      "dark-control-edge": {
-        "role": "neutral",
-        "displayName": "Control Edge (dark)",
-        "canonical": "oklch(0.5 0.014 264)",
-        "hex": "#5f636c",
-        "cssVar": "--sx-control",
-        "tonalRamp": [
-          "oklch(0.150 0.014 264)",
-          "oklch(0.264 0.014 264)",
-          "oklch(0.379 0.014 264)",
-          "oklch(0.493 0.014 264)",
-          "oklch(0.607 0.014 264)",
-          "oklch(0.721 0.014 264)",
-          "oklch(0.836 0.014 264)",
-          "oklch(0.950 0.014 264)"
-        ]
-      },
-      "dark-control-edge-hover": {
-        "role": "neutral",
-        "displayName": "Control Edge, Hovered (dark)",
-        "canonical": "oklch(0.64 0.014 264)",
-        "hex": "#888c95",
-        "cssVar": "--sx-control-hover",
-        "tonalRamp": [
-          "oklch(0.150 0.014 264)",
-          "oklch(0.264 0.014 264)",
-          "oklch(0.379 0.014 264)",
-          "oklch(0.493 0.014 264)",
-          "oklch(0.607 0.014 264)",
-          "oklch(0.721 0.014 264)",
-          "oklch(0.836 0.014 264)",
-          "oklch(0.950 0.014 264)"
-        ]
-      },
-      "dark-ink": {
-        "role": "neutral",
-        "displayName": "Cool White Ink (dark)",
-        "canonical": "oklch(0.955 0.004 264)",
-        "hex": "#eff0f3",
-        "cssVar": "--sx-text",
-        "tonalRamp": [
-          "oklch(0.150 0.004 264)",
-          "oklch(0.264 0.004 264)",
-          "oklch(0.379 0.004 264)",
-          "oklch(0.493 0.004 264)",
-          "oklch(0.607 0.004 264)",
-          "oklch(0.721 0.004 264)",
-          "oklch(0.836 0.004 264)",
-          "oklch(0.950 0.004 264)"
-        ]
-      },
-      "dark-ink-muted": {
-        "role": "neutral",
-        "displayName": "Pale Graphite (dark)",
-        "canonical": "oklch(0.76 0.01 264)",
-        "hex": "#aeb1b8",
-        "cssVar": "--sx-text-muted",
-        "tonalRamp": [
-          "oklch(0.150 0.01 264)",
-          "oklch(0.264 0.01 264)",
-          "oklch(0.379 0.01 264)",
-          "oklch(0.493 0.01 264)",
-          "oklch(0.607 0.01 264)",
-          "oklch(0.721 0.01 264)",
-          "oklch(0.836 0.01 264)",
-          "oklch(0.950 0.01 264)"
-        ]
-      },
-      "dark-ink-soft": {
-        "role": "neutral",
-        "displayName": "Soft Slate (dark)",
-        "canonical": "oklch(0.67 0.01 264)",
-        "hex": "#92959c",
-        "cssVar": "--sx-text-soft",
-        "tonalRamp": [
-          "oklch(0.150 0.01 264)",
-          "oklch(0.264 0.01 264)",
-          "oklch(0.379 0.01 264)",
-          "oklch(0.493 0.01 264)",
-          "oklch(0.607 0.01 264)",
-          "oklch(0.721 0.01 264)",
-          "oklch(0.836 0.01 264)",
-          "oklch(0.950 0.01 264)"
-        ]
-      },
-      "dark-accent": {
-        "role": "primary",
-        "displayName": "Signal Blue, Lifted (dark)",
-        "canonical": "oklch(0.74 0.13 258)",
-        "hex": "#76acfc",
-        "cssVar": "--sx-accent",
-        "tonalRamp": [
-          "oklch(0.150 0.13 258)",
-          "oklch(0.264 0.13 258)",
-          "oklch(0.379 0.13 258)",
-          "oklch(0.493 0.13 258)",
-          "oklch(0.607 0.13 258)",
-          "oklch(0.721 0.13 258)",
-          "oklch(0.836 0.13 258)",
-          "oklch(0.950 0.13 258)"
-        ]
-      },
-      "dark-accent-solid": {
-        "role": "primary",
-        "displayName": "Signal Blue Solid (dark)",
-        "canonical": "oklch(0.56 0.18 260)",
-        "hex": "#2d6fdc",
-        "cssVar": "--sx-accent-solid",
-        "tonalRamp": [
-          "oklch(0.150 0.18 260)",
-          "oklch(0.264 0.18 260)",
-          "oklch(0.379 0.18 260)",
-          "oklch(0.493 0.18 260)",
-          "oklch(0.607 0.18 260)",
-          "oklch(0.721 0.18 260)",
-          "oklch(0.836 0.18 260)",
-          "oklch(0.950 0.18 260)"
-        ]
-      },
-      "dark-accent-solid-hover": {
-        "role": "primary",
-        "displayName": "Signal Blue Solid, Pressed (dark)",
-        "canonical": "oklch(0.51 0.18 260)",
-        "hex": "#1c5fcb",
-        "cssVar": "--sx-accent-solid-hover",
-        "tonalRamp": [
-          "oklch(0.150 0.18 260)",
-          "oklch(0.264 0.18 260)",
-          "oklch(0.379 0.18 260)",
-          "oklch(0.493 0.18 260)",
-          "oklch(0.607 0.18 260)",
-          "oklch(0.721 0.18 260)",
-          "oklch(0.836 0.18 260)",
-          "oklch(0.950 0.18 260)"
-        ]
-      },
-      "dark-accent-on": {
-        "role": "primary",
-        "displayName": "On Signal Blue (dark)",
-        "canonical": "oklch(1 0 0)",
-        "hex": "#ffffff",
-        "cssVar": "--sx-accent-fg",
-        "tonalRamp": [
-          "oklch(0.150 0 0)",
-          "oklch(0.264 0 0)",
-          "oklch(0.379 0 0)",
-          "oklch(0.493 0 0)",
-          "oklch(0.607 0 0)",
-          "oklch(0.721 0 0)",
-          "oklch(0.836 0 0)",
-          "oklch(0.950 0 0)"
-        ]
-      },
-      "dark-focus-ring": {
-        "role": "primary",
-        "displayName": "Focus Blue (dark)",
-        "canonical": "oklch(0.72 0.14 258)",
-        "hex": "#6ba5fb",
-        "cssVar": "--sx-focus-ring",
-        "tonalRamp": [
-          "oklch(0.150 0.14 258)",
-          "oklch(0.264 0.14 258)",
-          "oklch(0.379 0.14 258)",
-          "oklch(0.493 0.14 258)",
-          "oklch(0.607 0.14 258)",
-          "oklch(0.721 0.14 258)",
-          "oklch(0.836 0.14 258)",
-          "oklch(0.950 0.14 258)"
-        ]
-      },
-      "dark-selection": {
-        "role": "primary",
-        "displayName": "Selection Wash (dark)",
-        "canonical": "oklch(0.38 0.09 260)",
-        "hex": "#244172",
-        "cssVar": "--sx-selection",
-        "tonalRamp": [
-          "oklch(0.150 0.09 260)",
-          "oklch(0.264 0.09 260)",
-          "oklch(0.379 0.09 260)",
-          "oklch(0.493 0.09 260)",
-          "oklch(0.607 0.09 260)",
-          "oklch(0.721 0.09 260)",
-          "oklch(0.836 0.09 260)",
-          "oklch(0.950 0.09 260)"
-        ]
-      },
-      "dark-safe": {
-        "role": "verdict",
-        "displayName": "Safe Green (graphic) (dark)",
-        "canonical": "oklch(0.72 0.14 158)",
-        "hex": "#45bf82",
-        "cssVar": "--sx-safe",
-        "tonalRamp": [
-          "oklch(0.150 0.14 158)",
-          "oklch(0.264 0.14 158)",
-          "oklch(0.379 0.14 158)",
-          "oklch(0.493 0.14 158)",
-          "oklch(0.607 0.14 158)",
-          "oklch(0.721 0.14 158)",
-          "oklch(0.836 0.14 158)",
-          "oklch(0.950 0.14 158)"
-        ]
-      },
-      "dark-safe-fg": {
-        "role": "verdict",
-        "displayName": "Safe Green (text) (dark)",
-        "canonical": "oklch(0.8 0.12 158)",
-        "hex": "#75d5a0",
-        "cssVar": "--sx-safe-fg",
-        "tonalRamp": [
-          "oklch(0.150 0.12 158)",
-          "oklch(0.264 0.12 158)",
-          "oklch(0.379 0.12 158)",
-          "oklch(0.493 0.12 158)",
-          "oklch(0.607 0.12 158)",
-          "oklch(0.721 0.12 158)",
-          "oklch(0.836 0.12 158)",
-          "oklch(0.950 0.12 158)"
-        ]
-      },
-      "dark-safe-surface": {
-        "role": "verdict",
-        "displayName": "Safe Green Band (dark)",
-        "canonical": "oklch(0.215 0.03 160)",
-        "hex": "#0c1e15",
-        "cssVar": "--sx-safe-surface",
-        "tonalRamp": [
-          "oklch(0.150 0.03 160)",
-          "oklch(0.264 0.03 160)",
-          "oklch(0.379 0.03 160)",
-          "oklch(0.493 0.03 160)",
-          "oklch(0.607 0.03 160)",
-          "oklch(0.721 0.03 160)",
-          "oklch(0.836 0.03 160)",
-          "oklch(0.950 0.03 160)"
-        ]
-      },
-      "dark-safe-edge": {
-        "role": "verdict",
-        "displayName": "Safe Green Band Edge (dark)",
-        "canonical": "oklch(0.32 0.055 160)",
-        "hex": "#153b29",
-        "cssVar": "--sx-safe-edge",
-        "tonalRamp": [
-          "oklch(0.150 0.055 160)",
-          "oklch(0.264 0.055 160)",
-          "oklch(0.379 0.055 160)",
-          "oklch(0.493 0.055 160)",
-          "oklch(0.607 0.055 160)",
-          "oklch(0.721 0.055 160)",
-          "oklch(0.836 0.055 160)",
-          "oklch(0.950 0.055 160)"
-        ]
-      },
-      "dark-suspicious": {
-        "role": "verdict",
-        "displayName": "Suspicious Amber (graphic) (dark)",
-        "canonical": "oklch(0.78 0.14 72)",
-        "hex": "#eea743",
-        "cssVar": "--sx-suspicious",
-        "tonalRamp": [
-          "oklch(0.150 0.14 72)",
-          "oklch(0.264 0.14 72)",
-          "oklch(0.379 0.14 72)",
-          "oklch(0.493 0.14 72)",
-          "oklch(0.607 0.14 72)",
-          "oklch(0.721 0.14 72)",
-          "oklch(0.836 0.14 72)",
-          "oklch(0.950 0.14 72)"
-        ]
-      },
-      "dark-suspicious-fg": {
-        "role": "verdict",
-        "displayName": "Suspicious Amber (text) (dark)",
-        "canonical": "oklch(0.84 0.12 78)",
-        "hex": "#f6c16b",
-        "cssVar": "--sx-suspicious-fg",
-        "tonalRamp": [
-          "oklch(0.150 0.12 78)",
-          "oklch(0.264 0.12 78)",
-          "oklch(0.379 0.12 78)",
-          "oklch(0.493 0.12 78)",
-          "oklch(0.607 0.12 78)",
-          "oklch(0.721 0.12 78)",
-          "oklch(0.836 0.12 78)",
-          "oklch(0.950 0.12 78)"
-        ]
-      },
-      "dark-suspicious-surface": {
-        "role": "verdict",
-        "displayName": "Suspicious Amber Band (dark)",
-        "canonical": "oklch(0.22 0.032 70)",
-        "hex": "#241809",
-        "cssVar": "--sx-suspicious-surface",
-        "tonalRamp": [
-          "oklch(0.150 0.032 70)",
-          "oklch(0.264 0.032 70)",
-          "oklch(0.379 0.032 70)",
-          "oklch(0.493 0.032 70)",
-          "oklch(0.607 0.032 70)",
-          "oklch(0.721 0.032 70)",
-          "oklch(0.836 0.032 70)",
-          "oklch(0.950 0.032 70)"
-        ]
-      },
-      "dark-suspicious-edge": {
-        "role": "verdict",
-        "displayName": "Suspicious Amber Band Edge (dark)",
-        "canonical": "oklch(0.34 0.06 70)",
-        "hex": "#4c3211",
-        "cssVar": "--sx-suspicious-edge",
-        "tonalRamp": [
-          "oklch(0.150 0.06 70)",
-          "oklch(0.264 0.06 70)",
-          "oklch(0.379 0.06 70)",
-          "oklch(0.493 0.06 70)",
-          "oklch(0.607 0.06 70)",
-          "oklch(0.721 0.06 70)",
-          "oklch(0.836 0.06 70)",
-          "oklch(0.950 0.06 70)"
-        ]
-      },
-      "dark-malicious": {
-        "role": "verdict",
-        "displayName": "Malicious Red (graphic) (dark)",
-        "canonical": "oklch(0.68 0.18 25)",
-        "hex": "#f3625d",
-        "cssVar": "--sx-malicious",
-        "tonalRamp": [
-          "oklch(0.150 0.18 25)",
-          "oklch(0.264 0.18 25)",
-          "oklch(0.379 0.18 25)",
-          "oklch(0.493 0.18 25)",
-          "oklch(0.607 0.18 25)",
-          "oklch(0.721 0.18 25)",
-          "oklch(0.836 0.18 25)",
-          "oklch(0.950 0.18 25)"
-        ]
-      },
-      "dark-malicious-fg": {
-        "role": "verdict",
-        "displayName": "Malicious Red (text) (dark)",
-        "canonical": "oklch(0.77 0.14 25)",
-        "hex": "#ff8e86",
-        "cssVar": "--sx-malicious-fg",
-        "tonalRamp": [
-          "oklch(0.150 0.14 25)",
-          "oklch(0.264 0.14 25)",
-          "oklch(0.379 0.14 25)",
-          "oklch(0.493 0.14 25)",
-          "oklch(0.607 0.14 25)",
-          "oklch(0.721 0.14 25)",
-          "oklch(0.836 0.14 25)",
-          "oklch(0.950 0.14 25)"
-        ]
-      },
-      "dark-malicious-surface": {
-        "role": "verdict",
-        "displayName": "Malicious Red Band (dark)",
-        "canonical": "oklch(0.215 0.04 22)",
-        "hex": "#291111",
-        "cssVar": "--sx-malicious-surface",
-        "tonalRamp": [
-          "oklch(0.150 0.04 22)",
-          "oklch(0.264 0.04 22)",
-          "oklch(0.379 0.04 22)",
-          "oklch(0.493 0.04 22)",
-          "oklch(0.607 0.04 22)",
-          "oklch(0.721 0.04 22)",
-          "oklch(0.836 0.04 22)",
-          "oklch(0.950 0.04 22)"
-        ]
-      },
-      "dark-malicious-edge": {
-        "role": "verdict",
-        "displayName": "Malicious Red Band Edge (dark)",
-        "canonical": "oklch(0.34 0.08 22)",
-        "hex": "#5a2425",
-        "cssVar": "--sx-malicious-edge",
-        "tonalRamp": [
-          "oklch(0.150 0.08 22)",
-          "oklch(0.264 0.08 22)",
-          "oklch(0.379 0.08 22)",
-          "oklch(0.493 0.08 22)",
-          "oklch(0.607 0.08 22)",
-          "oklch(0.721 0.08 22)",
-          "oklch(0.836 0.08 22)",
-          "oklch(0.950 0.08 22)"
-        ]
-      },
-      "dark-critical": {
-        "role": "verdict",
-        "displayName": "Critical Magenta (graphic) (dark)",
-        "canonical": "oklch(0.68 0.19 355)",
-        "hex": "#ed5c9e",
-        "cssVar": "--sx-critical",
-        "tonalRamp": [
-          "oklch(0.150 0.19 355)",
-          "oklch(0.264 0.19 355)",
-          "oklch(0.379 0.19 355)",
-          "oklch(0.493 0.19 355)",
-          "oklch(0.607 0.19 355)",
-          "oklch(0.721 0.19 355)",
-          "oklch(0.836 0.19 355)",
-          "oklch(0.950 0.19 355)"
-        ]
-      },
-      "dark-critical-fg": {
-        "role": "verdict",
-        "displayName": "Critical Magenta (text) (dark)",
-        "canonical": "oklch(0.78 0.14 355)",
-        "hex": "#fc90bc",
-        "cssVar": "--sx-critical-fg",
-        "tonalRamp": [
-          "oklch(0.150 0.14 355)",
-          "oklch(0.264 0.14 355)",
-          "oklch(0.379 0.14 355)",
-          "oklch(0.493 0.14 355)",
-          "oklch(0.607 0.14 355)",
-          "oklch(0.721 0.14 355)",
-          "oklch(0.836 0.14 355)",
-          "oklch(0.950 0.14 355)"
-        ]
-      },
-      "dark-critical-surface": {
-        "role": "verdict",
-        "displayName": "Critical Magenta Band (dark)",
-        "canonical": "oklch(0.215 0.042 350)",
-        "hex": "#28111c",
-        "cssVar": "--sx-critical-surface",
-        "tonalRamp": [
-          "oklch(0.150 0.042 350)",
-          "oklch(0.264 0.042 350)",
-          "oklch(0.379 0.042 350)",
-          "oklch(0.493 0.042 350)",
-          "oklch(0.607 0.042 350)",
-          "oklch(0.721 0.042 350)",
-          "oklch(0.836 0.042 350)",
-          "oklch(0.950 0.042 350)"
-        ]
-      },
-      "dark-critical-edge": {
-        "role": "verdict",
-        "displayName": "Critical Magenta Band Edge (dark)",
-        "canonical": "oklch(0.34 0.085 350)",
-        "hex": "#57233e",
-        "cssVar": "--sx-critical-edge",
-        "tonalRamp": [
-          "oklch(0.150 0.085 350)",
-          "oklch(0.264 0.085 350)",
-          "oklch(0.379 0.085 350)",
-          "oklch(0.493 0.085 350)",
-          "oklch(0.607 0.085 350)",
-          "oklch(0.721 0.085 350)",
-          "oklch(0.836 0.085 350)",
-          "oklch(0.950 0.085 350)"
-        ]
-      },
-      "dark-unknown": {
-        "role": "verdict",
-        "displayName": "Unknown Slate (graphic) (dark)",
-        "canonical": "oklch(0.66 0.035 250)",
-        "hex": "#8294a7",
-        "cssVar": "--sx-unknown",
-        "tonalRamp": [
-          "oklch(0.150 0.035 250)",
-          "oklch(0.264 0.035 250)",
-          "oklch(0.379 0.035 250)",
-          "oklch(0.493 0.035 250)",
-          "oklch(0.607 0.035 250)",
-          "oklch(0.721 0.035 250)",
-          "oklch(0.836 0.035 250)",
-          "oklch(0.950 0.035 250)"
-        ]
-      },
-      "dark-unknown-fg": {
-        "role": "verdict",
-        "displayName": "Unknown Slate (text) (dark)",
-        "canonical": "oklch(0.78 0.03 250)",
-        "hex": "#a9b9ca",
-        "cssVar": "--sx-unknown-fg",
-        "tonalRamp": [
-          "oklch(0.150 0.03 250)",
-          "oklch(0.264 0.03 250)",
-          "oklch(0.379 0.03 250)",
-          "oklch(0.493 0.03 250)",
-          "oklch(0.607 0.03 250)",
-          "oklch(0.721 0.03 250)",
-          "oklch(0.836 0.03 250)",
-          "oklch(0.950 0.03 250)"
-        ]
-      },
-      "dark-unknown-surface": {
-        "role": "verdict",
-        "displayName": "Unknown Slate Band (dark)",
-        "canonical": "oklch(0.21 0.014 250)",
-        "hex": "#13191f",
-        "cssVar": "--sx-unknown-surface",
-        "tonalRamp": [
-          "oklch(0.150 0.014 250)",
-          "oklch(0.264 0.014 250)",
-          "oklch(0.379 0.014 250)",
-          "oklch(0.493 0.014 250)",
-          "oklch(0.607 0.014 250)",
-          "oklch(0.721 0.014 250)",
-          "oklch(0.836 0.014 250)",
-          "oklch(0.950 0.014 250)"
-        ]
-      },
-      "dark-unknown-edge": {
-        "role": "verdict",
-        "displayName": "Unknown Slate Band Edge (dark)",
-        "canonical": "oklch(0.31 0.02 250)",
-        "hex": "#29313a",
-        "cssVar": "--sx-unknown-edge",
-        "tonalRamp": [
-          "oklch(0.150 0.02 250)",
-          "oklch(0.264 0.02 250)",
-          "oklch(0.379 0.02 250)",
-          "oklch(0.493 0.02 250)",
-          "oklch(0.607 0.02 250)",
-          "oklch(0.721 0.02 250)",
-          "oklch(0.836 0.02 250)",
-          "oklch(0.950 0.02 250)"
-        ]
-      },
-      "dark-error": {
-        "role": "verdict",
-        "displayName": "Error Clay (graphic) (dark)",
-        "canonical": "oklch(0.66 0.08 30)",
-        "hex": "#be8075",
-        "cssVar": "--sx-error",
-        "tonalRamp": [
-          "oklch(0.150 0.08 30)",
-          "oklch(0.264 0.08 30)",
-          "oklch(0.379 0.08 30)",
-          "oklch(0.493 0.08 30)",
-          "oklch(0.607 0.08 30)",
-          "oklch(0.721 0.08 30)",
-          "oklch(0.836 0.08 30)",
-          "oklch(0.950 0.08 30)"
-        ]
-      },
-      "dark-error-fg": {
-        "role": "verdict",
-        "displayName": "Error Clay (text) (dark)",
-        "canonical": "oklch(0.76 0.07 30)",
-        "hex": "#daa197",
-        "cssVar": "--sx-error-fg",
-        "tonalRamp": [
-          "oklch(0.150 0.07 30)",
-          "oklch(0.264 0.07 30)",
-          "oklch(0.379 0.07 30)",
-          "oklch(0.493 0.07 30)",
-          "oklch(0.607 0.07 30)",
-          "oklch(0.721 0.07 30)",
-          "oklch(0.836 0.07 30)",
-          "oklch(0.950 0.07 30)"
-        ]
-      },
-      "dark-error-surface": {
-        "role": "verdict",
-        "displayName": "Error Clay Band (dark)",
-        "canonical": "oklch(0.21 0.018 30)",
-        "hex": "#201513",
-        "cssVar": "--sx-error-surface",
-        "tonalRamp": [
-          "oklch(0.150 0.018 30)",
-          "oklch(0.264 0.018 30)",
-          "oklch(0.379 0.018 30)",
-          "oklch(0.493 0.018 30)",
-          "oklch(0.607 0.018 30)",
-          "oklch(0.721 0.018 30)",
-          "oklch(0.836 0.018 30)",
-          "oklch(0.950 0.018 30)"
-        ]
-      },
-      "dark-error-edge": {
-        "role": "verdict",
-        "displayName": "Error Clay Band Edge (dark)",
-        "canonical": "oklch(0.32 0.03 30)",
-        "hex": "#412d2a",
-        "cssVar": "--sx-error-edge",
-        "tonalRamp": [
-          "oklch(0.150 0.03 30)",
-          "oklch(0.264 0.03 30)",
-          "oklch(0.379 0.03 30)",
-          "oklch(0.493 0.03 30)",
-          "oklch(0.607 0.03 30)",
-          "oklch(0.721 0.03 30)",
-          "oklch(0.836 0.03 30)",
-          "oklch(0.950 0.03 30)"
-        ]
-      },
-      "dark-pending-surface": {
-        "role": "verdict",
-        "displayName": "Checking Band (dark)",
-        "canonical": "oklch(0.19 0.01 264)",
-        "hex": "#111418",
-        "cssVar": "--sx-pending-surface",
-        "tonalRamp": [
-          "oklch(0.150 0.01 264)",
-          "oklch(0.264 0.01 264)",
-          "oklch(0.379 0.01 264)",
-          "oklch(0.493 0.01 264)",
-          "oklch(0.607 0.01 264)",
-          "oklch(0.721 0.01 264)",
-          "oklch(0.836 0.01 264)",
-          "oklch(0.950 0.01 264)"
-        ]
-      },
-      "dark-danger": {
-        "role": "semantic",
-        "displayName": "UI Danger (text) (dark)",
-        "canonical": "oklch(0.74 0.12 20)",
-        "hex": "#ed8b8b",
-        "cssVar": "--sx-danger-fg",
-        "tonalRamp": [
-          "oklch(0.150 0.12 20)",
-          "oklch(0.264 0.12 20)",
-          "oklch(0.379 0.12 20)",
-          "oklch(0.493 0.12 20)",
-          "oklch(0.607 0.12 20)",
-          "oklch(0.721 0.12 20)",
-          "oklch(0.836 0.12 20)",
-          "oklch(0.950 0.12 20)"
-        ]
-      },
       "dark-danger-edge": {
         "role": "semantic",
-        "displayName": "UI Danger Edge (dark)",
+        "displayName": "UI Danger Edge",
         "canonical": "oklch(0.66 0.14 22)",
         "hex": "#db6b6b",
         "cssVar": "--sx-danger-border",
@@ -1551,9 +1636,26 @@
           "oklch(0.950 0.14 22)"
         ]
       },
+      "cell-flagged": {
+        "role": "semantic",
+        "displayName": "Cell: Flagged",
+        "canonical": "oklch(0.56 0.2 27)",
+        "hex": "#d02c2a",
+        "cssVar": "--sx-cell-flagged",
+        "tonalRamp": [
+          "oklch(0.150 0.2 27)",
+          "oklch(0.264 0.2 27)",
+          "oklch(0.379 0.2 27)",
+          "oklch(0.493 0.2 27)",
+          "oklch(0.607 0.2 27)",
+          "oklch(0.721 0.2 27)",
+          "oklch(0.836 0.2 27)",
+          "oklch(0.950 0.2 27)"
+        ]
+      },
       "dark-cell-flagged": {
-        "role": "strip",
-        "displayName": "Flagged Cell (dark)",
+        "role": "semantic",
+        "displayName": "Cell: Flagged",
         "canonical": "oklch(0.68 0.18 25)",
         "hex": "#f3625d",
         "cssVar": "--sx-cell-flagged",
@@ -1568,9 +1670,26 @@
           "oklch(0.950 0.18 25)"
         ]
       },
+      "cell-caution": {
+        "role": "semantic",
+        "displayName": "Cell: Caution",
+        "canonical": "oklch(0.62 0.15 58)",
+        "hex": "#c76b00",
+        "cssVar": "--sx-cell-caution",
+        "tonalRamp": [
+          "oklch(0.150 0.15 58)",
+          "oklch(0.264 0.15 58)",
+          "oklch(0.379 0.15 58)",
+          "oklch(0.493 0.15 58)",
+          "oklch(0.607 0.15 58)",
+          "oklch(0.721 0.15 58)",
+          "oklch(0.836 0.15 58)",
+          "oklch(0.950 0.15 58)"
+        ]
+      },
       "dark-cell-caution": {
-        "role": "strip",
-        "displayName": "Caution Cell (dark)",
+        "role": "semantic",
+        "displayName": "Cell: Caution",
         "canonical": "oklch(0.78 0.14 72)",
         "hex": "#eea743",
         "cssVar": "--sx-cell-caution",
@@ -1585,28 +1704,45 @@
           "oklch(0.950 0.14 72)"
         ]
       },
+      "cell-failed": {
+        "role": "semantic",
+        "displayName": "Cell: Failed",
+        "canonical": "oklch(0.55 0.012 262)",
+        "hex": "#6e7279",
+        "cssVar": "--sx-cell-failed",
+        "tonalRamp": [
+          "oklch(0.150 0.012 262)",
+          "oklch(0.264 0.012 262)",
+          "oklch(0.379 0.012 262)",
+          "oklch(0.493 0.012 262)",
+          "oklch(0.607 0.012 262)",
+          "oklch(0.721 0.012 262)",
+          "oklch(0.836 0.012 262)",
+          "oklch(0.950 0.012 262)"
+        ]
+      },
       "dark-cell-failed": {
-        "role": "strip",
-        "displayName": "Failed Cell (dark)",
-        "canonical": "oklch(0.62 0.012 264)",
+        "role": "semantic",
+        "displayName": "Cell: Failed",
+        "canonical": "oklch(0.62 0.012 260)",
         "hex": "#82868e",
         "cssVar": "--sx-cell-failed",
         "tonalRamp": [
-          "oklch(0.150 0.012 264)",
-          "oklch(0.264 0.012 264)",
-          "oklch(0.379 0.012 264)",
-          "oklch(0.493 0.012 264)",
-          "oklch(0.607 0.012 264)",
-          "oklch(0.721 0.012 264)",
-          "oklch(0.836 0.012 264)",
-          "oklch(0.950 0.012 264)"
+          "oklch(0.150 0.012 260)",
+          "oklch(0.264 0.012 260)",
+          "oklch(0.379 0.012 260)",
+          "oklch(0.493 0.012 260)",
+          "oklch(0.607 0.012 260)",
+          "oklch(0.721 0.012 260)",
+          "oklch(0.836 0.012 260)",
+          "oklch(0.950 0.012 260)"
         ]
       },
-      "dark-cell-limited": {
-        "role": "strip",
-        "displayName": "Partial Cell (dark)",
-        "canonical": "oklch(0.6 0.035 250)",
-        "hex": "#718295",
+      "cell-limited": {
+        "role": "semantic",
+        "displayName": "Cell: Partial",
+        "canonical": "oklch(0.58 0.035 250)",
+        "hex": "#6b7c8f",
         "cssVar": "--sx-cell-limited",
         "tonalRamp": [
           "oklch(0.150 0.035 250)",
@@ -1619,114 +1755,194 @@
           "oklch(0.950 0.035 250)"
         ]
       },
-      "dark-cell-clear": {
-        "role": "strip",
-        "displayName": "Found-Nothing Cell (dark)",
-        "canonical": "oklch(0.56 0.01 264)",
-        "hex": "#71747b",
+      "dark-cell-limited": {
+        "role": "semantic",
+        "displayName": "Cell: Partial",
+        "canonical": "oklch(0.62 0.035 250)",
+        "hex": "#77889b",
+        "cssVar": "--sx-cell-limited",
+        "tonalRamp": [
+          "oklch(0.150 0.035 250)",
+          "oklch(0.264 0.035 250)",
+          "oklch(0.379 0.035 250)",
+          "oklch(0.493 0.035 250)",
+          "oklch(0.607 0.035 250)",
+          "oklch(0.721 0.035 250)",
+          "oklch(0.836 0.035 250)",
+          "oklch(0.950 0.035 250)"
+        ]
+      },
+      "cell-clear": {
+        "role": "semantic",
+        "displayName": "Cell: Found Nothing",
+        "canonical": "oklch(0.6 0.008 262)",
+        "hex": "#7e8085",
         "cssVar": "--sx-cell-clear",
         "tonalRamp": [
-          "oklch(0.150 0.01 264)",
-          "oklch(0.264 0.01 264)",
-          "oklch(0.379 0.01 264)",
-          "oklch(0.493 0.01 264)",
-          "oklch(0.607 0.01 264)",
-          "oklch(0.721 0.01 264)",
-          "oklch(0.836 0.01 264)",
-          "oklch(0.950 0.01 264)"
+          "oklch(0.150 0.008 262)",
+          "oklch(0.264 0.008 262)",
+          "oklch(0.379 0.008 262)",
+          "oklch(0.493 0.008 262)",
+          "oklch(0.607 0.008 262)",
+          "oklch(0.721 0.008 262)",
+          "oklch(0.836 0.008 262)",
+          "oklch(0.950 0.008 262)"
+        ]
+      },
+      "dark-cell-clear": {
+        "role": "semantic",
+        "displayName": "Cell: Found Nothing",
+        "canonical": "oklch(0.6 0.01 260)",
+        "hex": "#7d8086",
+        "cssVar": "--sx-cell-clear",
+        "tonalRamp": [
+          "oklch(0.150 0.01 260)",
+          "oklch(0.264 0.01 260)",
+          "oklch(0.379 0.01 260)",
+          "oklch(0.493 0.01 260)",
+          "oklch(0.607 0.01 260)",
+          "oklch(0.721 0.01 260)",
+          "oklch(0.836 0.01 260)",
+          "oklch(0.950 0.01 260)"
+        ]
+      },
+      "cell-na": {
+        "role": "semantic",
+        "displayName": "Cell: Didn't Apply",
+        "canonical": "oklch(0.62 0.008 262)",
+        "hex": "#83868b",
+        "cssVar": "--sx-cell-na",
+        "tonalRamp": [
+          "oklch(0.150 0.008 262)",
+          "oklch(0.264 0.008 262)",
+          "oklch(0.379 0.008 262)",
+          "oklch(0.493 0.008 262)",
+          "oklch(0.607 0.008 262)",
+          "oklch(0.721 0.008 262)",
+          "oklch(0.836 0.008 262)",
+          "oklch(0.950 0.008 262)"
         ]
       },
       "dark-cell-na": {
-        "role": "strip",
-        "displayName": "Didn't-Apply Cell (dark)",
-        "canonical": "oklch(0.53 0.012 264)",
-        "hex": "#686c73",
+        "role": "semantic",
+        "displayName": "Cell: Didn't Apply",
+        "canonical": "oklch(0.56 0.012 260)",
+        "hex": "#70757c",
         "cssVar": "--sx-cell-na",
         "tonalRamp": [
-          "oklch(0.150 0.012 264)",
-          "oklch(0.264 0.012 264)",
-          "oklch(0.379 0.012 264)",
-          "oklch(0.493 0.012 264)",
-          "oklch(0.607 0.012 264)",
-          "oklch(0.721 0.012 264)",
-          "oklch(0.836 0.012 264)",
-          "oklch(0.950 0.012 264)"
+          "oklch(0.150 0.012 260)",
+          "oklch(0.264 0.012 260)",
+          "oklch(0.379 0.012 260)",
+          "oklch(0.493 0.012 260)",
+          "oklch(0.607 0.012 260)",
+          "oklch(0.721 0.012 260)",
+          "oklch(0.836 0.012 260)",
+          "oklch(0.950 0.012 260)"
+        ]
+      },
+      "cell-track": {
+        "role": "semantic",
+        "displayName": "Cell Track",
+        "canonical": "oklch(0.945 0.004 255)",
+        "hex": "#ebedef",
+        "cssVar": "--sx-cell-track",
+        "tonalRamp": [
+          "oklch(0.150 0.004 255)",
+          "oklch(0.264 0.004 255)",
+          "oklch(0.379 0.004 255)",
+          "oklch(0.493 0.004 255)",
+          "oklch(0.607 0.004 255)",
+          "oklch(0.721 0.004 255)",
+          "oklch(0.836 0.004 255)",
+          "oklch(0.950 0.004 255)"
         ]
       },
       "dark-cell-track": {
-        "role": "strip",
-        "displayName": "Cell Track (dark)",
-        "canonical": "oklch(0.25 0.011 264)",
-        "hex": "#1f2227",
+        "role": "semantic",
+        "displayName": "Cell Track",
+        "canonical": "oklch(0.27 0.01 258)",
+        "hex": "#23272b",
         "cssVar": "--sx-cell-track",
         "tonalRamp": [
-          "oklch(0.150 0.011 264)",
-          "oklch(0.264 0.011 264)",
-          "oklch(0.379 0.011 264)",
-          "oklch(0.493 0.011 264)",
-          "oklch(0.607 0.011 264)",
-          "oklch(0.721 0.011 264)",
-          "oklch(0.836 0.011 264)",
-          "oklch(0.950 0.011 264)"
+          "oklch(0.150 0.01 258)",
+          "oklch(0.264 0.01 258)",
+          "oklch(0.379 0.01 258)",
+          "oklch(0.493 0.01 258)",
+          "oklch(0.607 0.01 258)",
+          "oklch(0.721 0.01 258)",
+          "oklch(0.836 0.01 258)",
+          "oklch(0.950 0.01 258)"
         ]
       }
     },
     "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "The home headline, Newsreader 600; 46-88px fluid."
+      },
       "verdict": {
         "displayName": "Verdict",
-        "purpose": "The verdict word in the band from 40rem; the largest type on any result."
+        "purpose": "The verdict word in the band from 48rem; the largest type on any result."
       },
       "verdict-sm": {
         "displayName": "Verdict (phone)",
-        "purpose": "The verdict word below 40rem."
-      },
-      "display": {
-        "displayName": "Display",
-        "purpose": "Home headline and public page titles from 40rem."
-      },
-      "headline": {
-        "displayName": "Headline",
-        "purpose": "Headlines on phones, and the home headline once a verdict band is on the page."
+        "purpose": "The verdict word below 48rem."
       },
       "score": {
         "displayName": "Score",
-        "purpose": "Threat score numeral, Geist Sans for an unslashed zero, tabular."
+        "purpose": "The threat score numeral in the serif, tabular; '/100' beside it in band ink."
       },
-      "imperative": {
-        "displayName": "Imperative",
-        "purpose": "The one instruction under the verdict word."
+      "domain": {
+        "displayName": "Registered Domain",
+        "purpose": "P11's line: the registered domain in the serif directly under the verdict word."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "'Check another link' and an unverified share's band heading."
       },
       "title": {
         "displayName": "Title",
-        "purpose": "History, batch, and public-page section headings."
+        "purpose": "Evidence, History, Batch results, and public-page sections."
+      },
+      "imperative": {
+        "displayName": "Imperative",
+        "purpose": "The one instruction in the band, Newsreader 400."
+      },
+      "owner": {
+        "displayName": "Owner Sentence",
+        "purpose": "'This link belongs to …', serif with domains in mono."
+      },
+      "question": {
+        "displayName": "Question",
+        "purpose": "A Summary question heading."
+      },
+      "answer": {
+        "displayName": "Answer",
+        "purpose": "A Summary answer and its why clause at reading size."
       },
       "lead": {
         "displayName": "Lead",
-        "purpose": "Supporting line under a headline."
+        "purpose": "The supporting line under a headline, in Muted Ink."
+      },
+      "link": {
+        "displayName": "Link",
+        "purpose": "The link taken apart, in mono at reading size."
       },
       "body": {
         "displayName": "Body",
-        "purpose": "Sentences, summaries, caveats, public prose at a 30rem measure."
+        "purpose": "Interface sentences, buttons, tabs, Full findings, public prose."
       },
       "meta": {
         "displayName": "Meta",
-        "purpose": "Buttons, nav, tab hints, confidence line, the Evidence heading."
+        "purpose": "Nav, captions under the link, sources lines, cell names, the legend."
       },
       "caption": {
         "displayName": "Caption",
-        "purpose": "Strip cell names and small reference text."
-      },
-      "link-data": {
-        "displayName": "Link (mono)",
-        "purpose": "The URL field and the anatomy line."
-      },
-      "owner-domain": {
-        "displayName": "Registered domain",
-        "purpose": "The link's real owner, emphasised inside the anatomy line."
+        "purpose": "Timestamps."
       },
       "evidence-data": {
-        "displayName": "Evidence (mono)",
-        "purpose": "Key/value evidence inside an opened row; timestamps."
+        "displayName": "Evidence Data",
+        "purpose": "Mono key/value entries in an opened row's plate."
       }
     },
     "shadows": [],
@@ -1734,59 +1950,69 @@
       {
         "name": "ease-out",
         "value": "cubic-bezier(0.23, 1, 0.32, 1)",
-        "purpose": "The one easing curve (--sx-ease) for every transition."
+        "purpose": "Controls and entrances (--sx-ease)."
+      },
+      {
+        "name": "ease-out-expo",
+        "value": "cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "The authored moment (--sx-ease-expo)."
+      },
+      {
+        "name": "rule-draw",
+        "value": "scaleX 0 -> 1, 240ms var(--sx-ease-expo)",
+        "purpose": "The band's top rule draws left to right when a verdict lands; drawn in place under reduced motion."
+      },
+      {
+        "name": "verdict-rise",
+        "value": "opacity 0 -> 1, translate 4px -> 0, 240ms var(--sx-ease-expo)",
+        "purpose": "The verdict word rises as it fades in (@starting-style)."
+      },
+      {
+        "name": "band-surface",
+        "value": "background-color 280ms var(--sx-ease)",
+        "purpose": "The band's surface crosses from Checking to the verdict."
       },
       {
         "name": "cell-fill",
         "value": "transform 260ms var(--sx-ease)",
-        "purpose": "A strip cell's fill grows from the left as its check lands."
-      },
-      {
-        "name": "band-tone",
-        "value": "background-color 280ms, border-color 280ms",
-        "purpose": "The band cross-fades from the Checking surface to the verdict surface."
-      },
-      {
-        "name": "verdict-arrive",
-        "value": "opacity + translate 6px, 240ms, @starting-style",
-        "purpose": "The verdict word arrives."
-      },
-      {
-        "name": "enter",
-        "value": "opacity + translate 4px, 200ms, @starting-style",
-        "purpose": "Rows and the batch list enter; initial pending rows stagger 40ms."
+        "purpose": "A strip cell's fill grows from the left as its check lands (progress)."
       },
       {
         "name": "live",
-        "value": "opacity 1 → 0.45, 1.2s ease-in-out infinite",
-        "purpose": "The only loop: a still-running cell or batch row."
+        "value": "opacity 1 -> 0.45, 1.2s ease-in-out infinite",
+        "purpose": "The one loop: a still-running cell breathes."
       },
       {
         "name": "press",
-        "value": "scale 0.97, 160ms",
-        "purpose": "Buttons on :active."
+        "value": "scale 0.97, 160ms var(--sx-ease)",
+        "purpose": "Buttons press."
       },
       {
-        "name": "chevron",
-        "value": "rotate 90deg, 200ms",
-        "purpose": "Disclosure chevrons."
-      },
-      {
-        "name": "hover-plate",
-        "value": "background-color 160ms",
-        "purpose": "Cool Mist plate behind strip cells and rows."
+        "name": "plate",
+        "value": "background-color 160ms var(--sx-ease)",
+        "purpose": "Hover plates on cells and rows; the plate behind a cited question."
       }
     ],
     "breakpoints": [
       {
         "name": "sm",
         "value": "40rem",
-        "purpose": "Wider gutters and hero spacing, band score beside the verdict, row labels inline, display headline."
+        "purpose": "Wider gutters (24px) and band padding, the link's parts inline over brackets, the strip as a 4 x 2 grid, display steps."
+      },
+      {
+        "name": "verdict-full",
+        "value": "768px",
+        "purpose": "The verdict's full 84px cap. A px width (48rem at the default text size), so a larger text size never switches it back to the phone cap."
       },
       {
         "name": "md",
         "value": "48rem",
-        "purpose": "The strip becomes one row of eight."
+        "purpose": "The score takes its right column beside the verdict."
+      },
+      {
+        "name": "lg",
+        "value": "64rem",
+        "purpose": "The strip becomes one row of eight; Summary questions and Full rows hang on a 19rem rail."
       }
     ]
   },
@@ -1795,175 +2021,129 @@
       "name": "Primary Button (Analyze)",
       "kind": "button",
       "refersTo": "button-primary",
-      "description": "The ready primary action beside the URL field; never disabled at rest.",
-      "html": "<button class=\"ds-btn-primary\">Analyze <svg aria-hidden=\"true\" width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" style=\"opacity:.7\"><polyline points=\"9 10 4 15 9 20\"/><path d=\"M20 4v7a4 4 0 0 1-4 4H4\"/></svg></button>",
-      "css": ".ds-btn-primary { display: inline-flex; align-items: center; gap: 6px; height: 48px; min-width: 128px; justify-content: center; padding: 0 20px; border: 1px solid transparent; border-radius: 6px; background: var(--sx-accent-solid); color: var(--sx-accent-fg); font: 500 14px/1 var(--font-geist-sans, Geist, sans-serif); cursor: pointer; transition: scale 160ms cubic-bezier(0.23,1,0.32,1), background-color 160ms cubic-bezier(0.23,1,0.32,1); } .ds-btn-primary:hover { background: var(--sx-accent-solid-hover); } .ds-btn-primary:active { scale: 0.97; } .ds-btn-primary:focus-visible { outline: 2px solid var(--sx-focus-ring); outline-offset: 2px; }"
+      "description": "Ink, never the accent; the ready action beside the URL field, never disabled at rest.",
+      "html": "<button class=\"ds-btn-primary\">Analyze</button>",
+      "css": ".ds-btn-primary { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 56px; min-width: 144px; padding: 0 28px; border: 1px solid var(--sx-button); border-radius: 4px; background: var(--sx-button); color: var(--sx-button-fg); font: 600 16px/1 system-ui, -apple-system, \"Segoe UI\", sans-serif; cursor: pointer; transition: scale 160ms cubic-bezier(0.23,1,0.32,1), background-color 160ms cubic-bezier(0.23,1,0.32,1); } .ds-btn-primary:hover { background: var(--sx-button-hover); border-color: var(--sx-button-hover); } .ds-btn-primary:active { scale: 0.97; } .ds-btn-primary:focus-visible { outline: 2px solid var(--sx-focus-ring); outline-offset: 2px; }"
     },
     {
       "name": "Outline Button",
       "kind": "button",
       "refersTo": "button-outline",
-      "description": "Result actions (Download result (JSON), Share, Re-scan); Analyze while a result is shown.",
-      "html": "<button class=\"ds-btn-outline\">Re-scan</button>",
-      "css": ".ds-btn-outline { display: inline-flex; align-items: center; min-height: 44px; padding: 0 14px; border: 1px solid var(--sx-control); border-radius: 6px; background: var(--sx-surface); color: var(--sx-text); font: 500 13px/20px var(--font-geist-sans, Geist, sans-serif); cursor: pointer; transition: scale 160ms cubic-bezier(0.23,1,0.32,1), border-color 160ms, background-color 160ms; } .ds-btn-outline:hover { border-color: var(--sx-control-hover); background: var(--sx-subtle); } .ds-btn-outline:active { scale: 0.97; } .ds-btn-outline:focus-visible { outline: 2px solid var(--sx-focus-ring); outline-offset: 2px; }"
+      "description": "Result actions: Download result (JSON), Share, Re-scan.",
+      "html": "<button class=\"ds-btn-outline\">Share</button>",
+      "css": ".ds-btn-outline { height: 48px; padding: 0 20px; border: 1px solid var(--sx-control); border-radius: 4px; background: var(--sx-surface); color: var(--sx-text); font: 500 16px/1 system-ui, -apple-system, \"Segoe UI\", sans-serif; cursor: pointer; } .ds-btn-outline:hover { background: var(--sx-subtle); border-color: var(--sx-control-hover); }"
     },
     {
       "name": "Ghost Button",
       "kind": "button",
       "refersTo": "button-ghost",
-      "description": "Quiet actions: Paste, exports, Clear, Undo, Cancel, batch Open.",
-      "html": "<button class=\"ds-btn-ghost\">Export history CSV</button>",
-      "css": ".ds-btn-ghost { display: inline-flex; align-items: center; min-height: 44px; padding: 0 10px; border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--sx-text-muted); font: 500 13px/20px var(--font-geist-sans, Geist, sans-serif); cursor: pointer; transition: scale 160ms, background-color 160ms, color 160ms; } .ds-btn-ghost:hover { background: var(--sx-subtle); color: var(--sx-text); } .ds-btn-ghost:active { scale: 0.97; } .ds-btn-ghost:focus-visible { outline: 2px solid var(--sx-focus-ring); outline-offset: 2px; }"
+      "description": "Paste, exports, Clear/Undo, Cancel scan, batch Open.",
+      "html": "<button class=\"ds-btn-ghost\">Paste</button>",
+      "css": ".ds-btn-ghost { height: 44px; padding: 0 14px; border: 0; border-radius: 4px; background: transparent; color: var(--sx-text-muted); font: 500 16px/1 system-ui, -apple-system, \"Segoe UI\", sans-serif; cursor: pointer; } .ds-btn-ghost:hover { background: var(--sx-subtle); color: var(--sx-text); }"
     },
     {
       "name": "URL Field",
       "kind": "input",
       "refersTo": "input-url",
-      "description": "The 48px mono link field; focus turns its own edge blue.",
-      "html": "<input class=\"ds-input-url\" type=\"text\" placeholder=\"Paste a link\" aria-label=\"URL to analyze\" />",
-      "css": ".ds-input-url { width: 100%; height: 48px; padding: 0 14px; border: 1px solid var(--sx-control); border-radius: 6px; background: var(--sx-surface); color: var(--sx-text); font: 400 15px/24px var(--font-geist-mono, 'Geist Mono', monospace); caret-color: var(--sx-accent); outline: none; transition: border-color 160ms; } .ds-input-url::placeholder { color: var(--sx-text-soft); } .ds-input-url:hover { border-color: var(--sx-control-hover); } .ds-input-url:focus-visible { border-color: var(--sx-focus-ring); outline: 2px solid var(--sx-focus-ring); outline-offset: 0; } .ds-input-url[aria-invalid=true] { border-color: var(--sx-danger-border); }"
+      "description": "Mono at body size, 56px; focus turns the edge Focus Blue.",
+      "html": "<input class=\"ds-input\" placeholder=\"Paste a link\">",
+      "css": ".ds-input { height: 56px; width: 100%; padding: 0 16px; border: 1px solid var(--sx-control); border-radius: 4px; background: var(--sx-surface); color: var(--sx-text); font: 400 16px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; caret-color: var(--sx-accent); } .ds-input::placeholder { color: var(--sx-text-soft); } .ds-input:focus-visible { outline: 2px solid var(--sx-focus-ring); outline-offset: 0; border-color: var(--sx-focus-ring); }"
     },
     {
       "name": "Scan Mode Tabs",
-      "kind": "nav",
-      "refersTo": "tab-trigger-active",
-      "description": "Text tabs on a hairline with a 2px accent underline; no pill.",
-      "html": "<div class=\"ds-tabs\" role=\"tablist\"><button class=\"ds-tab\" role=\"tab\" aria-selected=\"true\">Single</button><button class=\"ds-tab\" role=\"tab\" aria-selected=\"false\">Batch<span class=\"ds-tab-hint\">up to 10 links</span></button></div>",
-      "css": ".ds-tabs { display: flex; gap: 24px; border-bottom: 1px solid var(--sx-border); } .ds-tab { margin-bottom: -1px; min-height: 44px; padding: 0 2px; border: 0; border-bottom: 2px solid transparent; background: none; color: var(--sx-text-soft); font: 500 14px/20px var(--font-geist-sans, Geist, sans-serif); cursor: pointer; transition: color 150ms; } .ds-tab:hover { color: var(--sx-text); } .ds-tab[aria-selected=true] { color: var(--sx-text); border-bottom-color: var(--sx-accent); } .ds-tab:focus-visible { outline: 2px solid var(--sx-focus-ring); outline-offset: 2px; } .ds-tab-hint { margin-left: 6px; font-weight: 400; color: var(--sx-text-soft); }"
+      "kind": "tabs",
+      "refersTo": "tab-trigger",
+      "description": "Text triggers on a hairline baseline; the active one inked with a 2px ink underline.",
+      "html": "<div class=\"ds-tabs\"><button class=\"ds-tab\" aria-selected=\"true\">Single</button><button class=\"ds-tab\">Batch <span>up to 10 links</span></button></div>",
+      "css": ".ds-tabs { display: flex; gap: 30px; border-bottom: 1px solid var(--sx-border); } .ds-tab { height: 44px; min-width: 44px; margin-bottom: -1px; border: 0; border-bottom: 2px solid transparent; background: none; color: var(--sx-text-soft); font: 500 16px/1 system-ui, -apple-system, \"Segoe UI\", sans-serif; } .ds-tab span { font-weight: 400; margin-left: 6px; } .ds-tab[aria-selected=true] { color: var(--sx-text); border-bottom-color: var(--sx-text); }"
     },
     {
       "name": "Header",
-      "kind": "nav",
+      "kind": "navigation",
       "refersTo": "header",
-      "description": "56px column header: eight-square mark, wordmark, About, Privacy, theme toggle, on one hairline.",
-      "html": "<header class=\"ds-header\"><span class=\"ds-wordmark\"><svg aria-hidden=\"true\" viewBox=\"0 0 30 14\" width=\"30\" height=\"14\" fill=\"currentColor\"><rect x=\"0\" y=\"0\" width=\"6\" height=\"6\" rx=\"1\"/><rect x=\"8\" y=\"0\" width=\"6\" height=\"6\" rx=\"1\"/><rect x=\"16\" y=\"0\" width=\"6\" height=\"6\" rx=\"1\"/><rect x=\"24\" y=\"0\" width=\"6\" height=\"6\" rx=\"1\"/><rect x=\"0\" y=\"8\" width=\"6\" height=\"6\" rx=\"1\"/><rect x=\"8\" y=\"8\" width=\"6\" height=\"6\" rx=\"1\"/><rect x=\"16\" y=\"8\" width=\"6\" height=\"6\" rx=\"1\"/><rect x=\"24\" y=\"8\" width=\"6\" height=\"6\" rx=\"1\"/></svg>Scrutinix</span><nav class=\"ds-nav\"><a href=\"#\">About</a><a href=\"#\">Privacy</a></nav></header>",
-      "css": ".ds-header { display: flex; align-items: center; justify-content: space-between; height: 56px; padding: 0 24px; border-bottom: 1px solid var(--sx-border); background: var(--sx-bg); } .ds-wordmark { display: flex; align-items: center; gap: 10px; font: 600 15px/1 var(--font-geist-sans, Geist, sans-serif); letter-spacing: -0.015em; color: var(--sx-text); } .ds-nav { display: flex; gap: 2px; } .ds-nav a { display: inline-flex; align-items: center; min-height: 44px; padding: 0 10px; border-radius: 6px; font: 500 13px/20px var(--font-geist-sans, Geist, sans-serif); color: var(--sx-text-muted); text-decoration: none; transition: color 150ms; } .ds-nav a:hover { color: var(--sx-text); } .ds-nav a:focus-visible { outline: 2px solid var(--sx-focus-ring); outline-offset: 2px; }"
+      "description": "The folded-strip mark beside the serif wordmark; About, Privacy, theme.",
+      "html": "<header class=\"ds-header\"><span class=\"ds-wordmark\">Scrutinix</span><nav><a>About</a><a>Privacy</a></nav></header>",
+      "css": ".ds-header { display: flex; align-items: center; justify-content: space-between; height: 72px; border-bottom: 1px solid var(--sx-border); } .ds-wordmark { font: 600 23px/1 var(--font-display, Newsreader, Georgia, serif); letter-spacing: -0.012em; color: var(--sx-text); } .ds-header a { display: inline-flex; align-items: center; min-height: 44px; padding: 0 12px; font: 500 15px/1 system-ui, -apple-system, \"Segoe UI\", sans-serif; color: var(--sx-text-muted); }"
     },
     {
       "name": "Verdict Band (Malicious)",
-      "kind": "custom",
+      "kind": "card",
       "refersTo": "verdict-band-malicious",
-      "description": "S1: the verdict owns the moment. Low-chroma verdict surface, ink verdict word at display size, the instruction beneath, score only when scored.",
-      "html": "<section class=\"ds-band\" aria-label=\"Scan result: malicious\"><div class=\"ds-band-row\"><div><h2 class=\"ds-band-word\">Malicious</h2><p class=\"ds-band-imperative\">Don't open this link.</p></div><div class=\"ds-band-score\"><span role=\"meter\" aria-label=\"Threat score\" aria-valuenow=\"73\" aria-valuemin=\"0\" aria-valuemax=\"100\" class=\"ds-score\">73<span>/100</span></span><span class=\"ds-band-meta\">Malicious band 55–79</span></div></div><p class=\"ds-band-meta ds-confidence\">Moderate confidence · <a href=\"#\">How scoring works</a></p></section>",
-      "css": ".ds-band { padding: 28px; border: 1px solid var(--sx-malicious-edge); border-radius: 12px; background: var(--sx-malicious-surface); color: var(--sx-text); font-family: var(--font-geist-sans, Geist, sans-serif); transition: background-color 280ms cubic-bezier(0.23,1,0.32,1), border-color 280ms cubic-bezier(0.23,1,0.32,1); } .ds-band-row { display: flex; justify-content: space-between; gap: 32px; align-items: flex-start; } .ds-band-word { margin: 0; font-size: 52px; font-weight: 600; line-height: 1; letter-spacing: -0.036em; } .ds-band-imperative { margin: 12px 0 0; font-size: 21px; line-height: 28px; font-weight: 500; letter-spacing: -0.012em; } .ds-band-score { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; padding-top: 6px; } .ds-score { font-size: 32px; line-height: 1; font-weight: 500; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; } .ds-score span { font: 400 13px/1 var(--font-geist-mono, 'Geist Mono', monospace); color: var(--sx-text-muted); letter-spacing: 0; } .ds-band-meta { font-size: 13px; line-height: 20px; color: var(--sx-text-muted); } .ds-confidence { margin: 20px 0 0; } .ds-confidence a { color: var(--sx-accent); text-decoration: underline; text-decoration-color: color-mix(in oklch, var(--sx-accent) 35%, transparent); text-underline-offset: 3px; } .ds-confidence a:hover { text-decoration-color: var(--sx-accent); } .ds-confidence a:focus-visible { outline: 2px solid var(--sx-focus-ring); outline-offset: 2px; }"
+      "description": "Squared, the only tinted container, under a heavy rule that draws when the verdict lands; the registered domain in the serif under the verdict word.",
+      "html": "<section class=\"ds-band\"><h2>Malicious</h2><p class=\"ds-band-domain\">secure-login.xyz</p><p class=\"ds-band-imp\">Don’t open this link.</p><p class=\"ds-band-conf\"><b>Moderate confidence</b> · <a>How scoring works</a></p></section>",
+      "css": ".ds-band { position: relative; padding: 36px 44px 24px; background: var(--sx-malicious-surface); color: var(--sx-text); } .ds-band::before { content: ''; position: absolute; inset: 0 0 auto; height: 5px; background: var(--sx-malicious); transform-origin: left; animation: ds-draw 240ms cubic-bezier(0.16,1,0.3,1) both; } @keyframes ds-draw { from { transform: scaleX(0); } } .ds-band h2 { font: 600 84px/0.95 var(--font-display, Newsreader, Georgia, serif); letter-spacing: -0.03em; margin: 0; } .ds-band-domain { margin: 12px 0 0; font: 600 44px/1.05 var(--font-display, Newsreader, Georgia, serif); letter-spacing: -0.02em; } .ds-band-imp { margin: 16px 0 0; font: 400 26px/1.32 var(--font-display, Newsreader, Georgia, serif); } .ds-band-conf { margin: 24px 0 0; padding-top: 14px; border-top: 1px solid var(--sx-malicious-edge); font: 400 16px/1.5 system-ui, -apple-system, \"Segoe UI\", sans-serif; color: var(--sx-malicious-ink); } .ds-band-conf b { color: var(--sx-text); } .ds-band-conf a { color: var(--sx-accent); text-decoration: underline; text-underline-offset: 3px; }"
     },
     {
-      "name": "Link Anatomy",
+      "name": "Link Taken Apart",
       "kind": "custom",
-      "refersTo": "owner-domain",
-      "description": "S2: the link taken apart; the registered domain (real owner) emphasised, a look-alike stated once.",
-      "html": "<div class=\"ds-anatomy\"><p class=\"ds-anatomy-line\">https://<span class=\"ds-sub\">paypal.com.</span><span class=\"ds-owner\">secure-login.xyz</span>/verify</p><p class=\"ds-owner-sentence\">This link belongs to <code>secure-login.xyz</code>, not <code>paypal.com</code>.</p></div>",
-      "css": ".ds-anatomy { display: flex; flex-direction: column; gap: 12px; } .ds-anatomy-line { margin: 0; font: 400 15px/24px var(--font-geist-mono, 'Geist Mono', monospace); color: var(--sx-text-soft); word-break: break-word; } .ds-sub { color: var(--sx-text-muted); } .ds-owner { font-size: 17px; line-height: 26px; font-weight: 600; color: var(--sx-text); white-space: nowrap; } .ds-owner-sentence { margin: 0; font: 500 15px/24px var(--font-geist-sans, Geist, sans-serif); color: var(--sx-text); } .ds-owner-sentence code { font-family: var(--font-geist-mono, 'Geist Mono', monospace); font-size: inherit; }"
+      "refersTo": "link-anatomy",
+      "description": "Mono at reading size; a hairline bracket naming each part, a heavy one on the registered domain.",
+      "html": "<p class=\"ds-anat\"><span>https://</span><span class=\"ds-part\"><span>paypal.com.</span><span class=\"ds-cap\">A label anyone can add</span></span><span class=\"ds-part ds-owner\"><span>secure-login.xyz</span><span class=\"ds-cap\">Registered domain</span></span><span class=\"ds-part\"><span>/verify</span><span class=\"ds-cap\">A page on that domain</span></span></p>",
+      "css": ".ds-anat { display: flex; flex-wrap: wrap; align-items: flex-start; font: 400 27px/1.25 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: var(--sx-text-soft); } .ds-part { display: inline-flex; flex-direction: column; } .ds-owner > span:first-child { font-weight: 700; color: var(--sx-text); } .ds-cap { contain: inline-size; min-width: 5.5rem; margin: 14px 4px 0; padding-top: 10px; border-top: 1px solid var(--sx-text-soft); font: 400 15px/1.35 system-ui, -apple-system, \"Segoe UI\", sans-serif; color: var(--sx-text-muted); } .ds-owner .ds-cap { border-top: 2px solid var(--sx-text); font-weight: 600; color: var(--sx-text); }"
     },
     {
-      "name": "Eight-Cell Strip",
+      "name": "Numbered Strip (Evidence Index)",
       "kind": "custom",
       "refersTo": "strip-cell",
-      "description": "S3: one cell per check, fixed order; every state has its own shape (solid, hatch, dash, centred block, outline, dashed, empty track).",
-      "html": "<div class=\"ds-strip\" role=\"toolbar\" aria-label=\"Checks\"><button class=\"ds-cellbtn\"><span class=\"ds-cell\" data-s=\"malicious\"></span><span class=\"ds-name ds-notable\">VirusTotal</span></button><button class=\"ds-cellbtn\"><span class=\"ds-cell\" data-s=\"suspicious\"></span><span class=\"ds-name ds-notable\">Link pattern</span></button><button class=\"ds-cellbtn\"><span class=\"ds-cell\" data-s=\"clear\"></span><span class=\"ds-name\">Safe Browsing</span></button><button class=\"ds-cellbtn\"><span class=\"ds-cell\" data-s=\"clear\"></span><span class=\"ds-name\">Threat feeds</span></button><button class=\"ds-cellbtn\"><span class=\"ds-cell\" data-s=\"error\"></span><span class=\"ds-name ds-notable\">Certificate</span></button><button class=\"ds-cellbtn\"><span class=\"ds-cell\" data-s=\"neutral\"></span><span class=\"ds-name\">Registration</span></button><button class=\"ds-cellbtn\"><span class=\"ds-cell\" data-s=\"skipped\"></span><span class=\"ds-name\">DNS</span></button><button class=\"ds-cellbtn\"><span class=\"ds-cell\" data-s=\"pending\"></span><span class=\"ds-name\">Redirects</span></button></div>",
-      "css": ".ds-strip { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); column-gap: 6px; } .ds-cellbtn { display: flex; flex-direction: column; gap: 8px; min-height: 44px; margin: 0 -4px; padding: 6px 4px 4px; border: 0; border-radius: 6px; background: transparent; text-align: left; cursor: pointer; transition: background-color 160ms cubic-bezier(0.23,1,0.32,1); } .ds-cellbtn:hover { background: var(--sx-subtle); } .ds-cellbtn:focus-visible { outline: 2px solid var(--sx-focus-ring); outline-offset: 2px; } .ds-cell { position: relative; display: block; height: 12px; overflow: hidden; border-radius: 2px; background: var(--sx-cell-track); } .ds-cell::before { content: ''; position: absolute; inset: 0; } .ds-cell[data-s=malicious]::before { background: var(--sx-cell-flagged); } .ds-cell[data-s=suspicious]::before { background: repeating-linear-gradient(-45deg, var(--sx-cell-caution) 0 2px, transparent 2px 3.5px); } .ds-cell[data-s=clear]::before { inset: 36% 0; background: var(--sx-cell-clear); } .ds-cell[data-s=neutral]::before { inset: 20% 30%; border-radius: 1px; background: var(--sx-cell-limited); } .ds-cell[data-s=error] { background: transparent; box-shadow: inset 0 0 0 1.5px var(--sx-cell-failed); } .ds-cell[data-s=skipped] { background: transparent; outline: 1px dashed var(--sx-cell-na); outline-offset: -1px; } .ds-name { font: 400 12px/1.25 var(--font-geist-sans, Geist, sans-serif); letter-spacing: -0.01em; color: var(--sx-text-soft); } .ds-name.ds-notable { font-weight: 500; color: var(--sx-text); }"
+      "description": "Eight cells in fixed order, numbered 1-8, each a control leading to the question that cites it; shape carries every state.",
+      "html": "<div class=\"ds-strip\"><button class=\"ds-cell\"><span class=\"ds-bar ds-flag\"></span><span><i>1</i>VirusTotal</span></button><button class=\"ds-cell\"><span class=\"ds-bar ds-clear\"></span><span><i>2</i>Link pattern</span></button></div>",
+      "css": ".ds-strip { display: grid; grid-template-columns: repeat(8, minmax(0,1fr)); gap: 10px; } .ds-cell { display: flex; flex-direction: column; gap: 10px; padding: 6px; border: 0; background: none; text-align: left; font: 400 15px/1.3 system-ui, -apple-system, \"Segoe UI\", sans-serif; color: var(--sx-text-soft); } .ds-bar { position: relative; height: 28px; border-radius: 2px; background: var(--sx-cell-track); } .ds-flag { background: var(--sx-cell-flagged); } .ds-clear::after { content: ''; position: absolute; inset: calc(50% - 1.7px) 24%; border-radius: 1px; background: var(--sx-cell-clear); } .ds-cell i { display: inline-grid; place-items: center; min-width: 20px; height: 20px; margin-right: 7px; border: 1px solid var(--sx-border); border-radius: 3px; font: 500 12.5px/1 system-ui, -apple-system, \"Segoe UI\", sans-serif; font-style: normal; color: var(--sx-text-muted); }"
     },
     {
-      "name": "Evidence Row",
+      "name": "Summary Question",
       "kind": "custom",
-      "refersTo": "evidence-row",
-      "description": "A hairline-divided disclosure row: strip-cell marker, label, plain finding; opens to a mono evidence plate.",
-      "html": "<ul class=\"ds-rows\"><li><details class=\"ds-row\" open><summary aria-label=\"VirusTotal signal: 7 engines flagged this link as malicious, 2 as suspicious.\"><span class=\"ds-marker\"></span><span class=\"ds-label\">VirusTotal</span><span class=\"ds-finding\">7 engines flagged this link as malicious, 2 as suspicious.</span></summary><dl class=\"ds-plate\"><dt>Malicious</dt><dd>7</dd><dt>Suspicious</dt><dd>2</dd><dt>Took</dt><dd>812 ms</dd></dl></details></li></ul>",
-      "css": ".ds-rows { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--sx-border); border-bottom: 1px solid var(--sx-border); } .ds-row > summary { display: flex; align-items: flex-start; gap: 12px; margin: 0 -8px; padding: 14px 8px; border-radius: 6px; list-style: none; cursor: pointer; transition: background-color 150ms; } .ds-row > summary::-webkit-details-marker { display: none; } .ds-row > summary:hover { background: var(--sx-subtle); } .ds-row > summary:focus-visible { outline: 2px solid var(--sx-focus-ring); outline-offset: 2px; } .ds-marker { flex: none; width: 14px; height: 8px; margin-top: 7px; border-radius: 1.5px; background: var(--sx-cell-flagged); } .ds-label { flex: none; width: 176px; font: 500 14px/22px var(--font-geist-sans, Geist, sans-serif); color: var(--sx-text); } .ds-finding { flex: 1; font: 400 14px/22px var(--font-geist-sans, Geist, sans-serif); color: var(--sx-text-muted); } .ds-plate { display: grid; grid-template-columns: 160px minmax(0, 1fr); gap: 6px 16px; margin: 0 0 16px 26px; padding: 12px 14px; border-radius: 6px; background: var(--sx-subtle); font: 400 12px/20px var(--font-geist-mono, 'Geist Mono', monospace); font-variant-numeric: tabular-nums; } .ds-plate dt { color: var(--sx-text-soft); } .ds-plate dd { margin: 0; color: var(--sx-text-muted); }"
+      "refersTo": "summary-question",
+      "description": "A question and its 'From' citation in a 19rem rail, the answer at reading size beside it.",
+      "html": "<div class=\"ds-qa\"><div><h4>Has it been reported?</h4><p class=\"ds-from\">From <i>1</i>VirusTotal · <i>3</i>Safe Browsing</p></div><div class=\"ds-ans\"><p>7 of 70 VirusTotal engines flag it as malicious.</p><p class=\"ds-why\">Direct threat reports are a reason to stay away.</p></div></div>",
+      "css": ".ds-qa { display: grid; grid-template-columns: 19rem minmax(0,1fr); column-gap: 48px; padding: 20px 0; border-bottom: 1px solid var(--sx-border); } .ds-qa h4 { margin: 0; font: 600 22px/1.3 var(--font-display, Newsreader, Georgia, serif); color: var(--sx-text); } .ds-from { margin-top: 10px; font: 400 15px/1.5 system-ui, -apple-system, \"Segoe UI\", sans-serif; color: var(--sx-text-muted); } .ds-ans { max-width: 44rem; font: 400 21px/1.5 var(--font-display, Newsreader, Georgia, serif); color: var(--sx-text); } .ds-why { color: var(--sx-text-muted); }"
     },
     {
       "name": "History Row",
-      "kind": "custom",
+      "kind": "list-item",
       "refersTo": "history-row",
-      "description": "One row grammar for history and batch: mini strip glyph, verdict word in its -fg colour, compact anatomy, trailing time.",
-      "html": "<button class=\"ds-hrow\"><span class=\"ds-glyph\"><i data-s=\"malicious\"></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span><span class=\"ds-hverdict\">Malicious</span><span class=\"ds-hlink\"><span class=\"ds-hsub\">malicious.</span><b>scrutinix.test</b><span class=\"ds-hsub\">/login</span></span><span class=\"ds-htime\">09:57</span></button>",
-      "css": ".ds-hrow { display: flex; align-items: center; gap: 16px; width: 100%; min-height: 48px; padding: 10px 8px; border: 0; border-radius: 6px; background: transparent; text-align: left; cursor: pointer; transition: background-color 150ms; } .ds-hrow:hover { background: var(--sx-subtle); } .ds-hrow:focus-visible { outline: 2px solid var(--sx-focus-ring); outline-offset: 2px; } .ds-glyph { display: inline-flex; gap: 2px; flex: none; } .ds-glyph i { position: relative; width: 7px; height: 7px; border-radius: 1.5px; background: var(--sx-cell-track); overflow: hidden; } .ds-glyph i::before { content: ''; position: absolute; inset: 36% 0; background: var(--sx-cell-clear); } .ds-glyph i[data-s=malicious]::before { inset: 0; background: var(--sx-cell-flagged); } .ds-hverdict { width: 88px; flex: none; font: 600 13px/20px var(--font-geist-sans, Geist, sans-serif); color: var(--sx-malicious-fg); } .ds-hlink { flex: 1; min-width: 0; font: 400 13px/20px var(--font-geist-mono, 'Geist Mono', monospace); color: var(--sx-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .ds-hlink b { font-weight: 600; } .ds-hsub { color: var(--sx-text-soft); } .ds-htime { flex: none; font: 400 12px/16px var(--font-geist-mono, 'Geist Mono', monospace); color: var(--sx-text-soft); }"
+      "description": "Glyph, verdict word in its -fg colour, the compact link (owner never truncated), time.",
+      "html": "<button class=\"ds-hrow\"><span class=\"ds-hverdict\">Malicious</span><span class=\"ds-hlink\">malicious.<b>scrutinix.test</b>/login</span><time>13:42</time></button>",
+      "css": ".ds-hrow { display: flex; align-items: center; gap: 16px; width: 100%; min-height: 48px; padding: 12px; border: 0; border-radius: 3px; background: none; text-align: left; } .ds-hrow:hover { background: var(--sx-subtle); } .ds-hverdict { width: 96px; font: 600 16px/1 system-ui, -apple-system, \"Segoe UI\", sans-serif; color: var(--sx-malicious-fg); } .ds-hlink { flex: 1; font: 400 15px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: var(--sx-text-soft); } .ds-hlink b { color: var(--sx-text); } .ds-hrow time { font: 400 13px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: var(--sx-text-soft); }"
     }
   ],
   "narrative": {
-    "northStar": "The Plain Answer",
-    "overview": "Scrutinix is the canonical minimal product tool, played straight at Linear and Vercel craft level and made sharper. A person holding a suspicious link gets one answer, said plainly and big, on a precise instrument: a cool, crisp white ground (light) or a deep neutral-cool ground (dark), near-black ink, hairline structure, one static blue accent, and verdict colour only where a verdict is stated. Each theme is designed on its own; dark is not an inversion.\n\nThe page is one centred column that reads top to bottom as the task does: a display headline and one supporting line, the Single/Batch scan form, then the verdict band, the link anatomy (who really owns the link), the eight-cell strip, the Summary/Full evidence rows, the actions, and local history. Density is calm at rest and exact under load: UI type sits on tight 12–17px steps, while the headline and the verdict word jump to display sizes so the answer outranks the chrome. Nothing is costume. Monospace appears only where the content is data.\n\nThe signature is the eight-cell strip. One cell per check, in a fixed order, with a fixed shape for every state. It is the streaming progress, the evidence index, the row marker, the history and batch glyph, the brand mark, the app icon, and the share-image motif: one grammar at every scale.\n\n**Provenance.** Chosen on 2026-10-06 after a critique called the previous minimal build bland and underwhelming. Three committed alternate worlds were dealt and drafted live (Label, Signage, Line; seed `ccccb7f7`); the user chose the standing exit, the category canon, with a cool white light ground instead of warm paper and no grafts of the drafts' world-specific presentations. Direction contract: `.impeccable/surfaces/app-page-tsx.md`.",
+    "northStar": "The Fact-Check",
+    "overview": "The link is the claim under review, and the page reports on it the way a careful fact-check does: a plain question, a rated answer, every source named, with no newspaper props. Serif tells the story (Newsreader, two static cuts), the system sans runs the interface, the system mono carries the link. Light is a cool, crisp near-white sheet with blue-black ink; dark is a deep cool ground with warm paper ink. Buttons are ink; one editor's blue marks only links, focus, the caret, and selection. Verdict hues appear only where a verdict is stated.\n\nOne 71rem column: the question 'Is this link what it says it is?', one supporting line, and the form; then the squared verdict band under its heavy rule (the registered domain in the serif under the verdict word), the link taken apart, the Evidence (the numbered strip as its index, then five questions on a rail or the eight Full rows), the actions, and history.\n\n**Provenance.** Chosen 2026-10-24 by the owner after a 16-draft blind bake-off: P09 editorial as the base, P11's registered-domain line, P09's link taken apart and numbered citations, layer 2B's HTTPS question set; the headline is the one copy change.",
     "keyCharacteristics": [
-      "One 46rem column; the verdict band is the only tinted container.",
-      "Cool white / deep neutral-cool grounds, blue-black ink, one blue accent for actions, links, and focus.",
-      "Geist Sans on a real scale with confident display steps; Geist Mono for links, domains, evidence, and counts.",
-      "Verdict hue appears as a low-chroma band surface; the verdict word itself stays ink.",
-      "The eight-cell strip carries every state by shape as well as hue.",
-      "CSS-only motion under 300ms with one authored moment: the cells fill, then the band takes its colour and the verdict word arrives.",
-      "Browser surfaces are themed: selection, caret, scrollbars, focus rings, underline offset, tabular numerals."
+      "One 71rem column; form, history, and batch at 47.5rem; answers at 44rem.",
+      "Newsreader for the story; system sans for the interface; system mono for the link and data.",
+      "A squared verdict band, the only tinted container, under a heavy rule that draws when the verdict lands.",
+      "The registered domain in the serif directly under the verdict word.",
+      "Ink buttons; the accent never fills a control.",
+      "The strip's cells numbered 1-8 and cited by every Summary answer.",
+      "Shape before hue in the strip; found-nothing is a gray dash."
     ],
     "rules": [
-      {
-        "name": "The Verdict-Only Hue Rule",
-        "body": "Verdict hues appear only where a verdict is stated: the band surface, a history or batch row's verdict word, the share card. Chrome never re-tints; the accent is static.",
-        "section": "colors"
-      },
-      {
-        "name": "The Gray-Means-Nothing Rule",
-        "body": "A check that found nothing is gray (`cell-clear`), never green. Green belongs to a stated Safe verdict, so a quiet source never reads as an endorsement beside a Malicious answer.",
-        "section": "colors"
-      },
-      {
-        "name": "The Danger Is Not a Verdict Rule",
-        "body": "UI failures use `danger`/`danger-edge`. Never borrow `malicious-*` for a form error or a destructive confirm.",
-        "section": "colors"
-      },
-      {
-        "name": "The Guarded Pair Rule",
-        "body": "A new token ships with its pairs added to `PAIRS` in `scripts/check-contrast.mjs`: 4.5:1 for text, 3:1 for graphics and control edges, in both themes. The unit suite fails otherwise.",
-        "section": "colors"
-      },
-      {
-        "name": "The One Display Moment Rule",
-        "body": "Once the verdict band mounts, the home headline steps down from display to headline size (CSS `:has(#sx-verdict-heading)` from 40rem), so one display size owns the moment. The step happens when the scan starts, never after the verdict lands.",
-        "section": "typography"
-      },
-      {
-        "name": "The Mono Is Data Rule",
-        "body": "Geist Mono sets links, registered domains, evidence entries, counts, scores' \"/100\", and timestamps, always with tabular numerals. Never use it to make prose look technical.",
-        "section": "typography"
-      },
-      {
-        "name": "The Taught Scale Rule",
-        "body": "Every custom `text-*` step lives in `@theme` and is registered with tailwind-merge in `lib/utils.ts`; otherwise `cn()` silently drops it when a colour class follows.",
-        "section": "typography"
-      },
-      {
-        "name": "The No-Reflow Rule",
-        "body": "Streaming never moves what is above the strip. Cells fill in place; the anatomy's fact slots are held open (\"Checking…\") until the scan ends; Cancel lives inside the Checking band; the band keeps a slot for its confidence line so the verdict changes the band's tone, not its height.",
-        "section": "layout"
-      },
-      {
-        "name": "The One Tinted Surface Rule",
-        "body": "The verdict band is the only tinted, bordered container on a result. The error boundary reuses its shape on the Error surface. Everything else is type on the ground, divided by hairlines.",
-        "section": "elevation"
-      },
-      {
-        "name": "The Shape Before Hue Rule",
-        "body": "No two strip states differ by colour alone: flagged is a solid block, caution is a −45° hatch, found-nothing is a thin centred dash, a partial answer is a centred short block (never a length that reads as progress), failed is a 1.5px inset outline, didn't-apply is a dashed outline, and still-running is the bare track. Under forced colours the cells redraw the same shapes in system colours. The hatch is the only repeating-gradient pattern in the system and lives only inside cells.",
-        "section": "shapes"
-      }
+      "The Verdict-Only Hue Rule",
+      "The Ink Button Rule",
+      "The Gray-Means-Nothing Rule",
+      "The Danger Is Not a Verdict Rule",
+      "The Tinted Secondary Rule",
+      "The Guarded Pair Rule",
+      "The One Display Moment Rule",
+      "The Mono Is Data Rule",
+      "The Two Cuts Rule",
+      "The No-Reflow Rule",
+      "The One Tinted Surface Rule",
+      "The Shape Before Hue Rule"
     ],
     "dos": [
-      "**Do** keep one 46rem column in the order headline → form → verdict band → link anatomy → strip → evidence → actions → history.",
-      "**Do** state each fact once: one score, one severity per signal, the owner sentence once.",
-      "**Do** put verdict hue on the band surface and keep the verdict word in ink.",
-      "**Do** draw every new strip state with its own shape and add its pair to the contrast guard.",
-      "**Do** use the strip's grammar wherever a result is summarized: history, batch, share cards, icons.",
-      "**Do** theme every browser surface from the palette: selection, caret, scrollbar, focus, tabular numerals.",
-      "**Do** design light and dark separately and check both at every change."
+      "Keep the order headline, form, band, the link taken apart, Evidence, actions, history.",
+      "State each fact once; the band only names the domain, the anatomy says the sentence.",
+      "Cite checks by the strip's numbers, with names alongside and names alone for assistive technology.",
+      "Design light and dark separately."
     ],
     "donts": [
-      "**Don't** use casefile, dossier, or stamp costume; terminal, CRT, radar, or glow theater; or cream-and-purple SaaS.",
-      "**Don't** warm the light ground into paper; it is cool, crisp white.",
-      "**Don't** graft the dealt drafts' presentations: no disclosure-label panel, no road signs, no transit line.",
-      "**Don't** add score rings, gauges, threat-level bars, or stacked per-signal badges repeating one fact.",
-      "**Don't** wrap content in cards or callout boxes; the verdict band is the only tinted container, and errors are plain lines of text.",
-      "**Don't** use pill tab bars or segmented pills; selection is a 2px underline.",
-      "**Don't** add taglines, kickers, stat bands, or feature grids around the one plain headline.",
-      "**Don't** colour a found-nothing check green, or a UI error with a verdict red.",
-      "**Don't** add shadows, gradients, glass, or glows; hover is a Cool Mist plate.",
-      "**Don't** set prose in mono or put a second infinite animation on the page."
+      "No newspaper costume: mastheads, columns, datelines, small caps, newsprint.",
+      "No accent-filled buttons.",
+      "No rounded band, no second tinted container.",
+      "No third font cut or face.",
+      "No 'independent' checks; no 'who owns it'."
     ]
   }
 }

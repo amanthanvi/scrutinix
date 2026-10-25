@@ -34,14 +34,34 @@ const NOTABLE: ReadonlySet<Severity> = new Set([
   "error",
 ]);
 
-/** Four columns on phones and narrow (zoomed) windows, eight from 48rem. */
-const STRIP_GRID =
-  "grid grid-cols-4 gap-x-2 gap-y-3 md:grid-cols-8 md:gap-x-1.5";
+/*
+ * Layout lives in app/scrutinix.css (`.sx-strip` and its parts) so the
+ * first-load script doesn't carry it: on phones two columns of four rows,
+ * numbered down each column, every cell a 44px row with its full name
+ * beside it; from 40rem a 4 x 2 grid; a single row of eight from 64rem.
+ */
+
+/** How many cells sit side by side at this width (matches `.sx-strip`). */
+function stripColumns(): 2 | 4 | 8 {
+  if (window.matchMedia?.("(min-width: 64rem)").matches) return 8;
+  if (window.matchMedia?.("(min-width: 40rem)").matches) return 4;
+  return 2;
+}
 
 /**
- * The visible short name. It wraps (hyphenating a long word) rather than
- * truncating, so a zoomed or narrow strip stays identifiable; the text is
- * static, so wrapping never moves a cell while checks stream.
+ * A cell's number, 1-8 in `signalNames` order: the Summary cites it. Kept
+ * here, not with the server-safe atoms, so the header's mark never pulls
+ * the signal schemas into its chunk.
+ */
+export function cellNumber(name: SignalName): number {
+  return signalNames.indexOf(name) + 1;
+}
+
+/**
+ * The visible number and short name. The name wraps (hyphenating a long
+ * word) rather than truncating, so a zoomed or narrow strip stays
+ * identifiable; the text is static, so wrapping never moves a cell while
+ * checks stream.
  */
 function CellLabel({
   name,
@@ -51,16 +71,11 @@ function CellLabel({
   severity: Severity;
 }) {
   return (
-    <span
-      aria-hidden="true"
-      className={cn(
-        "text-caption leading-tight tracking-[-0.01em] text-balance break-words hyphens-auto",
-        NOTABLE.has(severity)
-          ? "font-medium text-[var(--sx-text)]"
-          : "text-[var(--sx-text-soft)]",
-      )}
-    >
-      {cellNames[name]}
+    <span aria-hidden="true" className="sx-cell-label">
+      <span className="sx-tag" data-n={cellNumber(name)} />
+      <span className="sx-cell-name" data-notable={NOTABLE.has(severity)}>
+        {cellNames[name]}
+      </span>
     </span>
   );
 }
@@ -106,24 +121,29 @@ export function SignalStrip({
     event: KeyboardEvent<HTMLButtonElement>,
     index: number,
   ) => {
-    // Matches the grid's md:grid-cols-8 switch.
-    const columns = window.matchMedia?.("(min-width: 48rem)").matches ? 8 : 4;
-    const keyMoves: Record<string, number> = {
-      ArrowRight: index + 1,
-      ArrowLeft: index - 1,
-      ArrowDown: index + columns,
-      ArrowUp: index - columns,
-      Home: 0,
-      End: signalNames.length - 1,
-    };
-    const target = keyMoves[event.key];
-    if (target === undefined) return;
+    // Left and Right step through the cells in order, as in any toolbar,
+    // wrapping at the ends. Up and Down follow the layout: on phones the
+    // cells run down two columns, so they step in order too; wider, they
+    // move a row and stop at the edge.
+    const columns = stripColumns();
+    const forward = event.key === "ArrowDown" || event.key === "ArrowRight";
+    const step = forward ? 1 : -1;
+    let target: number;
+    if (event.key === "Home") target = 0;
+    else if (event.key === "End") target = signalNames.length - 1;
+    else if (event.key === "ArrowRight" || event.key === "ArrowLeft")
+      target = index + step;
+    else if (event.key === "ArrowDown" || event.key === "ArrowUp")
+      target =
+        columns === 2
+          ? index + step
+          : Math.min(
+              Math.max(index + step * columns, 0),
+              signalNames.length - 1,
+            );
+    else return;
     event.preventDefault();
-    moveFocus(
-      event.key === "ArrowDown" || event.key === "ArrowUp"
-        ? Math.min(Math.max(target, 0), signalNames.length - 1)
-        : target,
-    );
+    moveFocus(target);
   };
 
   return (
@@ -131,7 +151,7 @@ export function SignalStrip({
       role="toolbar"
       aria-label="Checks"
       aria-describedby="sx-strip-hint"
-      className={STRIP_GRID}
+      className="sx-strip"
     >
       <span id="sx-strip-hint" className="sr-only">
         {leadsTo === "question"
@@ -160,12 +180,12 @@ export function SignalStrip({
             }}
             onFocus={() => setFocusIndex(index)}
             onKeyDown={(event) => onKeyDown(event, index)}
-            className="sx-strip-cell -mx-1 flex min-h-11 min-w-0 flex-col items-stretch gap-2 rounded-md px-1 pt-1.5 pb-1 text-left"
+            className="sx-strip-cell"
           >
             <SignalCell
               severity={severity}
               live={streaming}
-              className="h-3 w-full"
+              className="sx-cell-bar"
             />
             <CellLabel name={name} severity={severity} />
           </button>
@@ -178,13 +198,13 @@ export function SignalStrip({
 /** A settled strip drawn from a stored signature (shared snapshots). */
 export function SignatureStrip({ signature }: { signature: SignalSignature }) {
   return (
-    <ul aria-label="Checks" className={STRIP_GRID}>
+    <ul aria-label="Checks" className="sx-strip">
       {signalNames.map((name, index) => {
         const severity = signature[index] ?? "pending";
         return (
           // Real text, not aria-label on the item: browse modes read it.
-          <li key={name} className="flex min-w-0 flex-col gap-2 pt-1.5">
-            <SignalCell severity={severity} settled className="h-3 w-full" />
+          <li key={name} className="sx-strip-item">
+            <SignalCell severity={severity} settled className="sx-cell-bar" />
             <CellLabel name={name} severity={severity} />
             <span className="sr-only">
               {`${signalLabels[name]}: ${severityWords[severity]}`}

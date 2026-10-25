@@ -5,18 +5,17 @@ import { AppHeader } from "@/components/scrutinix/app-header";
 
 /**
  * Prose measure for the public pages: 65-75 characters per line at the
- * 15px body size. (`65ch` measures wide in Geist, whose "0" is wider than
- * its average letter, so the measure is set in rem: at 30rem the rendered
- * /about and /privacy lines measure 63-73 characters, checked by counting
- * characters per rendered line rather than by eye.)
+ * 16px body size in the system sans (checked by counting characters per
+ * rendered line, not by eye: `ch` measures the "0", which runs wider than
+ * the average letter).
  */
-export const PROSE_MEASURE = "max-w-[30rem]";
+export const PROSE_MEASURE = "max-w-[32rem]";
 
 /**
  * Two-column term/description lists: a 10rem term column plus a
  * description column that itself stays within the prose measure.
  */
-export const LIST_MEASURE = "max-w-[40rem]";
+export const LIST_MEASURE = "max-w-[48rem]";
 
 /** Body copy on the public pages. */
 export const PROSE = `${PROSE_MEASURE} text-body text-pretty text-[var(--sx-text-muted)]`;
@@ -27,7 +26,7 @@ interface PublicPageShellProps {
   children: ReactNode;
 }
 
-/** Section heading on the public pages: more space above than below. */
+/** Section heading on the public pages: the serif, more space above than below. */
 export function SectionHeading({
   id,
   children,
@@ -38,10 +37,39 @@ export function SectionHeading({
   return (
     <h2
       id={id}
-      className="text-title scroll-mt-6 font-semibold text-[var(--sx-text)]"
+      className="sm:text-title scroll-mt-6 font-serif text-[1.5rem] leading-[1.15] font-semibold tracking-[-0.015em] text-balance text-[var(--sx-text)]"
     >
       {children}
     </h2>
+  );
+}
+
+/**
+ * A wide table's frame: it scrolls sideways on its own on a phone rather
+ * than widening the page, and takes focus so the keyboard can scroll it.
+ * Tables inside the shell are styled from `app/scrutinix.css` (hairline
+ * rows under an ink header rule, tabular figures), so plain `<table>`
+ * markup needs no classes.
+ */
+export function TableFrame({
+  label,
+  children,
+}: {
+  label: string;
+  children: ReactNode;
+}) {
+  return (
+    <div
+      role="region"
+      aria-label={label}
+      // A scroll container must take focus for keyboard users (axe
+      // scrollable-region-focusable); the region role names it.
+      // eslint-disable-next-line jsx-a11y-x/no-noninteractive-tabindex
+      tabIndex={0}
+      className="sx-table-frame -mx-[16px] overflow-x-auto px-[16px] sm:mx-0 sm:px-0"
+    >
+      {children}
+    </div>
   );
 }
 
@@ -56,18 +84,16 @@ export function PublicPageShell({
 
       <main
         id="main-content"
-        className="mx-auto w-full max-w-[46rem] flex-1 px-4 pt-12 sm:px-6 sm:pt-20"
+        className="sx-public sx-gutter mx-auto w-full max-w-[71rem] flex-1 pt-12 sm:pt-24"
       >
-        <h1 className="text-headline sm:text-display max-w-[36rem] font-semibold text-balance text-[var(--sx-text)]">
+        <h1 className="max-w-[50rem] font-serif text-[clamp(2.5rem,1.6rem+3.6vw,4.25rem)] leading-[1.02] font-semibold tracking-[-0.024em] text-balance text-[var(--sx-text)]">
           {title}
         </h1>
-        <p
-          className={`mt-4 ${PROSE_MEASURE} text-lead text-pretty text-[var(--sx-text-muted)]`}
-        >
+        <p className="mt-5 max-w-[37.5rem] font-serif text-[1.125rem] leading-[1.45] text-pretty text-[var(--sx-text-muted)] sm:mt-7 sm:text-[1.375rem]">
           {lead}
         </p>
 
-        <div className="mt-14 flex flex-col gap-14 border-t border-[var(--sx-border)] pt-12">
+        <div className="mt-12 flex flex-col gap-14 border-t border-[var(--sx-border)] pt-12 sm:mt-16 sm:gap-16 sm:pt-14">
           {children}
         </div>
       </main>

@@ -189,12 +189,25 @@ const lookalikeShare = encodeSharedSnapshot({
   signature: Array(8).fill("clear"),
 });
 
+/**
+ * The link as written, without the anatomy's captions (hidden from
+ * assistive technology) or their spoken names (screen-reader only).
+ */
+function linkText(element: Element | null): string | null {
+  if (!element) return null;
+  const copy = element.cloneNode(true) as Element;
+  copy
+    .querySelectorAll('[aria-hidden="true"], .sr-only')
+    .forEach((node) => node.remove());
+  return copy.textContent;
+}
+
 // First in the file on purpose: the Public Suffix List parser is cached at
 // module level once any test loads it, which would hide the server path.
 describe("shared snapshot first paint", () => {
   it("hedges a shared look-alike from the first render, before the parser loads", () => {
     renderApp(undefined, { payload: lookalikeShare });
-    expect(document.querySelector("#sx-link-anatomy")?.textContent).toBe(
+    expect(linkText(document.querySelector("#sx-link-anatomy"))).toBe(
       "https://paypal.com.secure-login.xyz/verify",
     );
 
@@ -291,11 +304,20 @@ describe("ResultsSection", () => {
     expect(reported?.textContent).toContain(
       "7 of 67 VirusTotal engines flag it as malicious.",
     );
-    // One textual separator; the dot is drawn, so it isn't copied or read.
+    // Spoken as names; seen as the strip's cell numbers, each named.
     expect(reported?.textContent).toContain(
       "Sources: VirusTotal, Safe Browsing, Threat feeds",
     );
-    expect(reported?.textContent).not.toContain("·");
+    expect(reported?.textContent).toContain(
+      "From 1VirusTotal·3Safe Browsing·4Threat feeds",
+    );
+    // A copy gives the plain list once: the numbered line is for the eye,
+    // hidden from assistive technology and not selectable.
+    const numbered = reported?.querySelector(
+      ".sx-sources > [aria-hidden='true']",
+    );
+    expect(numbered?.textContent).toContain("·");
+    expect(numbered?.classList.contains("select-none")).toBe(true);
     expect(screen.queryByRole("list", { name: "Signals" })).toBeNull();
     // No severity colour in the questions: the strip carries it once.
     expect(questions.querySelector("[data-severity]")).toBeNull();
@@ -751,6 +773,20 @@ describe("ResultsSection", () => {
     expect(document.activeElement).toBe(cells[1]);
     fireEvent.keyDown(cells[1]!, { key: "End" });
     expect(document.activeElement).toBe(cells[7]);
+    // Each cell shows its number, 1-8 in signal order: the Summary cites
+    // it. It is drawn from data-n, so the cell's visible text is its name.
+    expect(
+      cells.map((cell) =>
+        cell.querySelector(".sx-tag")?.getAttribute("data-n"),
+      ),
+    ).toEqual(["1", "2", "3", "4", "5", "6", "7", "8"]);
+    // Phones (no wide-layout media match here) run the cells down two
+    // columns: Down steps in order and wraps; Up from the first cell wraps
+    // to the last.
+    fireEvent.keyDown(cells[7]!, { key: "ArrowDown" });
+    expect(document.activeElement).toBe(cells[0]);
+    fireEvent.keyDown(cells[0]!, { key: "ArrowUp" });
+    expect(document.activeElement).toBe(cells[7]);
 
     // Summary: a cell moves focus to the question that cites its check.
     expect(strip.getAttribute("aria-describedby")).toBe("sx-strip-hint");
@@ -936,7 +972,7 @@ describe("shared links and their signature", () => {
     expect(screen.queryByRole("toolbar")).toBeNull();
 
     // The link's anatomy is Scrutinix's own computation, so it stays.
-    expect(document.querySelector("#sx-link-anatomy")?.textContent).toBe(
+    expect(linkText(document.querySelector("#sx-link-anatomy"))).toBe(
       "https://paypal.com.secure-login.xyz/verify",
     );
     expect(

@@ -61,7 +61,7 @@ export function SingleInput({
         URL to analyze
       </label>
 
-      <div className="flex flex-col gap-2.5 sm:flex-row">
+      <div className="sx-input-row flex flex-col gap-2.5 sm:flex-row">
         <div className="relative min-w-0 flex-1">
           <Input
             ref={inputRef}
@@ -89,8 +89,8 @@ export function SingleInput({
             aria-describedby={error ? "sx-url-error" : undefined}
             className={
               canPaste
-                ? "text-body h-12 pr-24 font-mono"
-                : "text-body h-12 font-mono"
+                ? "text-body h-[3.25rem] pr-28 font-mono sm:h-14"
+                : "text-body h-[3.25rem] font-mono sm:h-14"
             }
           />
           {canPaste ? (
@@ -99,7 +99,7 @@ export function SingleInput({
               variant="ghost"
               size="sm"
               onClick={() => void pasteFromClipboard()}
-              className="absolute top-1/2 right-1 -translate-y-1/2 gap-1.5 px-2.5"
+              className="sx-paste absolute top-1/2 right-1.5 -translate-y-1/2 gap-1.5 px-3"
             >
               <ClipboardPaste aria-hidden="true" />
               Paste
@@ -122,7 +122,7 @@ export function SingleInput({
           }}
           aria-disabled={streaming || undefined}
           variant={showingResult && !streaming ? "outline" : "primary"}
-          className="h-12 shrink-0 px-5 text-sm sm:min-w-32"
+          className="h-[3.25rem] shrink-0 px-7 sm:h-14 sm:min-w-36"
         >
           Analyze
           <CornerDownLeft aria-hidden="true" className="opacity-70" />

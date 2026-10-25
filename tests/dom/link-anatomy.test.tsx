@@ -110,6 +110,38 @@ describe("LinkAnatomyView facts", () => {
   });
 });
 
+describe("LinkAnatomyView captions", () => {
+  const captioned = (url: string) =>
+    render(
+      <LinkAnatomyView
+        url={url}
+        anatomy={splitLinkAnatomy(parse, url)}
+        captions
+      />,
+    ).container.querySelector("#sx-link-anatomy");
+
+  it("brackets each part inline when every part can carry its caption", () => {
+    const line = captioned("https://paypal.com.secure-login.xyz/verify");
+    expect(line?.classList.contains("sx-anat")).toBe(true);
+    expect(line?.classList.contains("sx-anat-stacked")).toBe(false);
+  });
+
+  it("stacks the parts when a middle one is too short for its caption", () => {
+    // "a." would carry "A label anyone can add" a word per line.
+    expect(
+      captioned("https://a.example.com/x")?.classList.contains(
+        "sx-anat-stacked",
+      ),
+    ).toBe(true);
+    // A short last part may run its caption past its text.
+    expect(
+      captioned("https://www.example.com/x")?.classList.contains(
+        "sx-anat-stacked",
+      ),
+    ).toBe(false);
+  });
+});
+
 vi.mock("@/components/ui/lazy-toaster", () => ({
   getToast: async () => (await import("sonner")).toast,
 }));

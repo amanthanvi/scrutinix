@@ -49,7 +49,7 @@ const BatchInput = dynamic(() => loadBatchInput(), {
         aria-hidden="true"
         className="invisible flex flex-wrap items-center gap-2"
       >
-        <Button tabIndex={-1} disabled className="h-11 px-5 text-sm">
+        <Button tabIndex={-1} disabled className="h-12 px-6">
           Start batch
         </Button>
       </div>
@@ -59,7 +59,7 @@ const BatchInput = dynamic(() => loadBatchInput(), {
 
 function StreamError({ message }: { message: string }) {
   return (
-    <p role="alert" className="text-meta mt-4 text-[var(--sx-danger-fg)]">
+    <p role="alert" className="text-body mt-4 text-[var(--sx-danger-fg)]">
       {message}
     </p>
   );
@@ -121,12 +121,16 @@ export function ScanForm() {
         <TabsList aria-label="Scan mode">
           <TabsTrigger value="single">Single</TabsTrigger>
           {/* The hint says what Batch is without joining the tab's name. */}
-          <TabsTrigger value="batch" aria-describedby="sx-batch-tab-hint">
+          <TabsTrigger
+            value="batch"
+            aria-describedby="sx-batch-tab-hint"
+            className="flex-wrap gap-x-1.5"
+          >
             Batch
             <span
               id="sx-batch-tab-hint"
               aria-hidden="true"
-              className="ml-1.5 font-normal text-[var(--sx-text-soft)]"
+              className="font-normal text-[var(--sx-text-soft)]"
             >
               up to 10 links
             </span>
@@ -154,7 +158,7 @@ export function ScanForm() {
             onCancel={scan.cancelScan}
           />
           {pasteUrl ? (
-            <div className="mt-6">
+            <div className="mt-7 sm:mt-9">
               <InputAnatomy url={pasteUrl} />
             </div>
           ) : null}

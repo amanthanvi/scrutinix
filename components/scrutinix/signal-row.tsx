@@ -1,6 +1,7 @@
 "use client";
 
 import { SignalCell } from "@/components/scrutinix/signal-cell";
+import { cellNumber } from "@/components/scrutinix/signal-strip";
 import {
   getSignalDetailEntries,
   getSignalFinding,
@@ -58,18 +59,25 @@ export function SignalRow<N extends SignalName>({
       ? { transitionDelay: `${index * 40}ms` }
       : undefined;
 
+  // The Summary's rail: the check (its cell, number, and name) in the
+  // left column from 64rem, the finding beside it.
   const summaryRow = (
     <>
       <SignalCell
         severity={severity}
         settled
-        className="mt-[0.4375rem] h-2 w-3.5 shrink-0 rounded-[1.5px]"
+        className="mt-[0.3125rem] h-3.5 w-6 shrink-0 rounded-[2px]"
       />
-      <span className="flex min-w-0 flex-1 flex-col gap-0.5 sm:flex-row sm:gap-4">
-        <span className="shrink-0 text-sm font-medium whitespace-nowrap text-[var(--sx-text)] sm:w-44">
+      <span className="flex min-w-0 flex-1 flex-col gap-1 sm:flex-row sm:gap-6 lg:gap-12">
+        <span className="text-body flex shrink-0 items-baseline gap-[0.4375rem] font-medium [overflow-wrap:anywhere] text-[var(--sx-text)] sm:w-52 sm:whitespace-nowrap lg:w-[16.625rem]">
+          <span
+            aria-hidden="true"
+            className="sx-tag self-center"
+            data-n={cellNumber(name)}
+          />
           {label}
         </span>{" "}
-        <span className="min-w-0 flex-1 text-sm leading-[1.375rem] break-words text-[var(--sx-text-muted)]">
+        <span className="text-body min-w-0 flex-1 break-words text-[var(--sx-text-muted)]">
           {finding}
         </span>
       </span>
@@ -82,7 +90,7 @@ export function SignalRow<N extends SignalName>({
         data-signal={name}
         aria-label={ariaLabel}
         tabIndex={-1}
-        className="sx-enter flex scroll-mt-4 items-start gap-3 py-3.5 outline-offset-2"
+        className="sx-enter flex scroll-mt-6 items-start gap-3.5 py-4 outline-offset-2"
         style={enterDelay}
       >
         {summaryRow}
@@ -92,26 +100,26 @@ export function SignalRow<N extends SignalName>({
   }
 
   return (
-    <li data-signal={name} className="sx-enter scroll-mt-4" style={enterDelay}>
+    <li data-signal={name} className="sx-enter scroll-mt-6" style={enterDelay}>
       <details className="sx-disclosure">
         <summary
           aria-label={ariaLabel}
-          className="-mx-2 flex items-start gap-3 rounded-md px-2 py-3.5 transition-colors hover:bg-[var(--sx-subtle)]"
+          className="-mx-[12px] flex items-start gap-3.5 rounded-[3px] px-[12px] py-4 transition-colors hover:bg-[var(--sx-subtle)]"
         >
           {summaryRow}
           <svg
             aria-hidden="true"
             viewBox="0 0 8 8"
-            className="sx-chevron mt-1.5 size-2 shrink-0 fill-[var(--sx-text-soft)]"
+            className="sx-chevron mt-2 size-2 shrink-0 fill-[var(--sx-text-soft)]"
           >
             <path d="M2 0l4 4-4 4z" />
           </svg>
         </summary>
-        <dl className="text-caption mb-4 ml-[1.625rem] grid grid-cols-[minmax(6.5rem,auto)_minmax(0,1fr)] gap-x-4 gap-y-1.5 rounded-md bg-[var(--sx-subtle)] px-3.5 py-3 font-mono leading-5 sm:grid-cols-[10rem_minmax(0,1fr)]">
+        <dl className="text-caption mb-5 ml-[2.375rem] grid grid-cols-[minmax(6.5rem,auto)_minmax(0,1fr)] gap-x-4 gap-y-1.5 rounded-[3px] bg-[var(--sx-subtle)] px-4 py-3.5 font-mono leading-5 max-[20rem]:grid-cols-1 sm:grid-cols-[12rem_minmax(0,1fr)] lg:ml-[22rem]">
           {entries.map((entry, entryIndex) => (
             <div key={`${entryIndex}-${entry.label}`} className="contents">
               <dt className="text-[var(--sx-text-soft)]">{entry.label}</dt>
-              <dd className="min-w-0 break-all text-[var(--sx-text-muted)]">
+              <dd className="min-w-0 [overflow-wrap:anywhere] text-[var(--sx-text-muted)]">
                 {entry.value}
               </dd>
             </div>

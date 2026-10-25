@@ -1,9 +1,10 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 import {
   encodeSharedPayload,
   gotoApp,
+  setDefaultTextSize,
   settleAnimations,
   sharedPath,
   signSharedPayload,
@@ -46,6 +47,125 @@ test("result view accessibility @smoke", async ({ page }) => {
 
   const accessibilityReport = await new AxeBuilder({ page }).analyze();
   expect(accessibilityReport.violations).toEqual([]);
+});
+
+/**
+ * No sideways scrolling on the home, a result, the Full list with every
+ * check's details open, a filtered history, and a shared look-alike
+ * (verified, unverified, and expired), at each default text size and
+ * width given.
+ */
+async function expectReflow(
+  page: Page,
+  sizes: ReadonlyArray<readonly [standard: number, width: number]>,
+) {
+  const scrollsSideways = () =>
+    page.evaluate(
+      () =>
+        document.documentElement.scrollWidth >
+        document.documentElement.clientWidth,
+    );
+  // Three saved scans; the first result below makes four, which brings up
+  // the history filter.
+  await gotoApp(page);
+  for (const [link, verdict] of [
+    ["https://malicious.scrutinix.test/", /^scan result: malicious$/i],
+    ["https://unreachable.scrutinix.test/", /^scan result: unknown$/i],
+    ["https://example.com/", /^scan result: safe$/i],
+  ] as const) {
+    await submitSingleScan(page, link);
+    await expect(page.getByLabel(verdict)).toBeVisible({ timeout: 15_000 });
+  }
+
+  // A look-alike whose registered domain ("secure-login.xyz") is kept
+  // whole where it fits.
+  const shared = (capturedAt: Date) =>
+    encodeSharedPayload({
+      verdict: "malicious",
+      url: "https://paypal.com.secure-login.xyz/verify",
+      summary: "Google Safe Browsing flagged this link.",
+      capturedAt: capturedAt.toISOString(),
+      signature: Array(8).fill("malicious"),
+    });
+  const fresh = shared(new Date());
+  const old = shared(new Date(Date.now() - 4 * 24 * 60 * 60 * 1000));
+  const sharedViews = [
+    ["verified", sharedPath(fresh, signSharedPayload(fresh))],
+    ["unverified", sharedPath(fresh, null)],
+    ["expired", sharedPath(old, signSharedPayload(old))],
+  ] as const;
+
+  for (const [standard, width] of sizes) {
+    const at = `${standard}px text at ${width}px`;
+    await page.setViewportSize({ width, height: 700 });
+    await setDefaultTextSize(page, standard);
+    await gotoApp(page);
+    expect(await scrollsSideways(), `home, ${at}`).toBe(false);
+
+    // A short last part ("/login") whose caption runs past it, at the
+    // right edge just after the link goes inline.
+    await submitSingleScan(page, "https://critical.scrutinix.test/login");
+    await expect(page.getByLabel(/^scan result: critical$/i)).toBeVisible();
+    expect(await scrollsSideways(), `result, ${at}`).toBe(false);
+
+    await page.getByRole("switch", { name: /^summary full/i }).click();
+    await page.locator("li[data-signal] details").first().waitFor();
+    await page.evaluate(() => {
+      for (const row of document.querySelectorAll("details")) row.open = true;
+    });
+    expect(await scrollsSideways(), `full details, ${at}`).toBe(false);
+
+    // A filter lengthens the export labels ("Export filtered history …").
+    await page
+      .getByRole("searchbox", { name: "Filter scan history" })
+      .fill("scrutinix");
+    await expect(
+      page.getByRole("button", { name: "Export filtered history JSON" }),
+    ).toBeVisible();
+    expect(await scrollsSideways(), `filtered history, ${at}`).toBe(false);
+
+    for (const [view, path] of sharedViews) {
+      await page.goto(path, { waitUntil: "domcontentloaded" });
+      await expect(
+        page.getByRole("heading", { name: "Check another link" }),
+      ).toBeVisible();
+      expect(await scrollsSideways(), `${view} shared link, ${at}`).toBe(false);
+    }
+  }
+}
+
+// 150% and 200% from the narrowest phone; and where the link first goes
+// inline at each size.
+const REFLOW_SIZES = [
+  [24, 320],
+  [32, 320],
+  [32, 360],
+  [16, 656],
+  [24, 960],
+  [32, 1280],
+] as const;
+
+test("larger default text reflows without sideways scrolling @smoke", async ({
+  page,
+}) => {
+  await expectReflow(page, REFLOW_SIZES);
+});
+
+test.describe("on a phone", () => {
+  // Overlay scrollbars: the full width is the page's, so a bleed past the
+  // gutter shows here even where a desktop scrollbar would absorb it.
+  test.use({ isMobile: true, hasTouch: true });
+
+  test("larger default text reflows without sideways scrolling @smoke", async ({
+    page,
+  }) => {
+    await expectReflow(page, [
+      [24, 320],
+      [32, 320],
+      [32, 360],
+      [32, 375],
+    ]);
+  });
 });
 
 test("home page keyboard navigation @smoke", async ({ page }) => {
