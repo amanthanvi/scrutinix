@@ -452,13 +452,16 @@ export function ResultsSection() {
               </div>
 
               {/* The strip heads the evidence as its index: each numbered
-                  cell leads to the question citing it (or its row in Full). */}
+                  cell leads to the question citing it (or its row in Full,
+                  and on an Error result, whose rows hold no evidence). */}
               <div className="sx-strip-index">
                 <SignalStrip
                   signals={signals}
                   scored={scored}
                   streaming={scan.state.isStreaming && !active}
-                  leadsTo={questions ? "question" : "row"}
+                  leadsTo={
+                    questions ? "question" : hasSummary ? "row" : "status-row"
+                  }
                   onActivate={activateSignal}
                 />
                 {active ? (

@@ -1245,8 +1245,9 @@ describe("ResultsSection focus and states", () => {
       screen.getByRole("list", { name: "Signals" }).querySelectorAll("li"),
     ).toHaveLength(8);
     // The strip leads to the rows it shows, and a cell focuses its row.
+    // They hold no evidence, so the hint promises a move, not an opening.
     expect(document.getElementById("sx-strip-hint")?.textContent).toBe(
-      "Each check opens its evidence below.",
+      "Each check moves to its row below.",
     );
     const strip = screen.getByRole("toolbar", { name: "Checks" });
     fireEvent.click(within(strip).getByRole("button", { name: /^Redirects:/ }));

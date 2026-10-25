@@ -326,11 +326,13 @@ test("an Error result shows its eight rows with no Summary/Full switch, and keep
   await expect(rows.getByRole("listitem")).toHaveCount(8);
   const errorHead = await evidenceHeadHeight(page);
 
-  // The strip leads to the rows it shows: a cell focuses its row.
-  await page
-    .getByRole("toolbar", { name: "Checks" })
-    .getByRole("button", { name: /^Redirects:/ })
-    .click();
+  // The strip leads to the rows it shows: a cell focuses its row (which
+  // holds no evidence to open, and the strip's hint says so).
+  const strip = page.getByRole("toolbar", { name: "Checks" });
+  await expect(strip).toHaveAccessibleDescription(
+    "Each check moves to its row below.",
+  );
+  await strip.getByRole("button", { name: /^Redirects:/ }).click();
   await expect(rows.getByLabel(/^Redirect Chain:/)).toBeFocused();
 
   // The next result has both views, on the stored choice (Summary), and
