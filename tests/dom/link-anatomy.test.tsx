@@ -6,6 +6,7 @@ import { BatchTable } from "@/components/scrutinix/batch-table";
 import { HistoryPanel } from "@/components/scrutinix/history-panel";
 import { LinkAnatomyView } from "@/components/scrutinix/link-anatomy";
 import { splitLinkAnatomy } from "@/lib/domain/link-anatomy";
+import { createPendingSignalResults, signalNames } from "@/lib/domain/types";
 import { buildThreatAssessment } from "@/lib/domain/verdict";
 import type { AnalysisResult, HistoryEntry } from "@/lib/domain/types";
 import { fixtureSignals } from "@/tests/fixtures/scenario-signals";
@@ -107,6 +108,44 @@ describe("LinkAnatomyView facts", () => {
     expect(screen.getAllByText("https://").length).toBeGreaterThan(0);
     expect(screen.getByText("Couldn't check the certificate")).toBeTruthy();
     expect(screen.queryByText("No secure connection")).toBeNull();
+  });
+
+  it("holds no fact slot for evidence on screen, so nothing under the band collapses when a verdict lands", async () => {
+    const url = "https://unreachable.scrutinix.test/";
+    const anatomy = splitLinkAnatomy(parse, url);
+    const { container, rerender } = render(
+      <LinkAnatomyView
+        url={url}
+        anatomy={anatomy}
+        signals={createPendingSignalResults()}
+        visibleSignals={signalNames}
+        streaming
+      />,
+    );
+    expect(container.querySelector("dl")).toBeNull();
+
+    rerender(
+      <LinkAnatomyView
+        url={url}
+        anatomy={anatomy}
+        signals={await fixtureSignals("unreachable.scrutinix.test")}
+        visibleSignals={signalNames}
+      />,
+    );
+    expect(container.querySelector("dl")).toBeNull();
+  });
+
+  it("holds a slot, reading Checking…, for a fact no evidence on screen states", () => {
+    const url = "https://unreachable.scrutinix.test/";
+    render(
+      <LinkAnatomyView
+        url={url}
+        anatomy={splitLinkAnatomy(parse, url)}
+        signals={createPendingSignalResults()}
+        streaming
+      />,
+    );
+    expect(screen.getAllByText("Checking…").length).toBeGreaterThan(0);
   });
 });
 

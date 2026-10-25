@@ -379,7 +379,8 @@ export function ResultsSection() {
                 captions
                 signals={showShared ? null : signals}
                 // The questions and rows state every check's facts, so the
-                // anatomy keeps them only while a scan streams.
+                // anatomy draws none of them, nor holds their room while a
+                // scan streams: nothing under the band collapses as it lands.
                 visibleSignals={hasSignalActivity ? signalNames : []}
                 streaming={scan.state.isStreaming && !active}
               />

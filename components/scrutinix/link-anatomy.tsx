@@ -113,12 +113,15 @@ function OwnershipSentence({
  * mono directly beneath the link: a certificate problem by `https://`, a
  * young domain by the registered domain, and where the link ends when
  * that is another host. Only facts that matter show (no "valid
- * certificate" next to a Malicious verdict), and a fact whose evidence row
- * is already on screen is not repeated.
+ * certificate" next to a Malicious verdict), and a fact whose evidence is
+ * already on screen (`visibleSignals`) is not repeated, nor is its slot
+ * held while the scan runs: the result page's Evidence states all eight
+ * checks, so there it draws no facts at all, and nothing collapses under
+ * the band when the verdict lands.
  *
- * While a scan streams, the fact slots are fixed so nothing above the
- * strip moves: each reads "Checking…" until its check lands, and empty
- * slots collapse only when the scan ends, in the same frame as the verdict.
+ * A fact that could still show (its evidence isn't on screen) holds its
+ * slot while a scan streams, reading "Checking…" until its check lands;
+ * empty slots collapse when the scan ends.
  *
  * `anatomy` is null until the Public Suffix List has loaded (a shared link
  * gets it from the server); the mono URL shows meanwhile, never a naive
@@ -388,14 +391,14 @@ function getAnatomyFacts(
   streaming: boolean,
 ): AnatomyFact[] {
   const facts: AnatomyFact[] = [];
-  // While streaming, Summary's rows change as checks land: ignore them so
-  // the slots stay fixed; the dedupe applies once the result is settled.
-  const shown = (name: SignalName) =>
-    !streaming && visibleSignals.includes(name);
+  // Evidence on screen states the fact, so it neither shows here nor holds
+  // a slot while the scan runs (a held slot would collapse under the band
+  // when the verdict lands).
+  const shown = (name: SignalName) => visibleSignals.includes(name);
 
   const ssl = signals.ssl;
   const sslValue = schemeFact(anatomy, signals);
-  if (streaming || (sslValue && !shown("ssl"))) {
+  if (!shown("ssl") && (streaming || sslValue)) {
     facts.push({
       key: "scheme",
       term: `${anatomy.scheme}://`,
@@ -412,7 +415,7 @@ function getAnatomyFacts(
         ? whois.data.ageDays
         : null;
     const young = ageDays !== null && ageDays < YOUNG_DOMAIN_DAYS;
-    if (streaming || (young && !shown("whois"))) {
+    if (!shown("whois") && (streaming || young)) {
       facts.push({
         key: "domain",
         term: anatomy.registeredDomain,
@@ -439,7 +442,7 @@ function getAnatomyFacts(
       anchor: "label",
       value: <span className="font-mono">{destination}</span>,
     });
-  } else if (streaming) {
+  } else if (streaming && !shown("redirectChain")) {
     // Sized but empty: most links end where they start.
     facts.push({
       key: "destination",
