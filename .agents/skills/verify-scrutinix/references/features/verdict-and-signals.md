@@ -19,7 +19,7 @@ The verdict band, the threat-score meter, the numbered eight-cell strip, Summary
   - `https`: `Does HTTPS make it safe?`
   - `other`: `What did the other checks find?`
 - full: switch `Summary Full signal list` (`aria-checked="true"` on Full), list `Signals`, eight `li[data-signal]` rows labelled `<Label>: <finding>`; a row with evidence is a disclosure of label and value pairs
-- error: an Error result keeps the eight rows on Summary (there is nothing to answer the questions with)
+- error: an Error result has one view, its eight rows, and no switch (there is nothing to answer the questions with, so no control offers Summary); a strip cell focuses its row; the chosen view comes back for the next result
 - details: `How we reached this verdict` (closed): `What we found`, `What to do`, `Caveats`, `Why <level> confidence`, then `<n>/8 checks · <ms> ms · finished <time>` (plus `· cached`), and `Reference: <scan id>` once for a failed or partial scan
 
 ## How to get to it (user POV)
@@ -33,7 +33,7 @@ Fixture URLs, typed as a person would:
 - `https://feed-hit.scrutinix.test/payload.exe` shows `Malicious`; `reported` says `URLhaus lists this link as active malware distribution (listed 6 hours ago).`; the Full row is `Threat Feeds: URLhaus lists this link as active malware distribution.`
 - `https://critical.scrutinix.test/login` shows `Critical`, `Don't open this link — it's a known threat.`, and a score of 80 or more
 - `https://unreachable.scrutinix.test/` shows `Unknown`, `We couldn't check this link — treat it as unsafe.`, no meter, and `destination` says `We couldn't reach the site, so we can't say where it leads.`
-- `https://error.scrutinix.test/` shows `Error`, `The scan failed — try again.`, eight rows `This check could not be completed.`, and a `Reference:` line in the details
+- `https://error.scrutinix.test/` shows `Error`, `The scan failed — try again.`, eight rows `This check could not be completed.`, no `Summary Full signal list` switch, and a `Reference:` line in the details
 - `https://paypal.com.secure-login.xyz/verify` shows `Look-alike` with `secure-login.xyz` under it (a login part spelling out a site, `https://paypal.com@secure-login.xyz/`, is a look-alike too, captioned `Ignored by browsers`)
 - any safe link while the parser chunk fails shows `Unconfirmed`
 
@@ -64,7 +64,7 @@ Screenshots: `verdict-malicious.png`, `verdict-unknown.png`, `verdict-feed.png`,
 
 - Match the region by the word shown, case-insensitively: `Scan result: Look-alike` for a Safe look-alike, never `Scan result: safe`.
 - Row names are `<Label>: <finding>` (`VirusTotal: No engines flagged this link.`), not `… signal: …`. Match with a prefix such as `/^DNS Profile:/`. Strip cells use the short names (`DNS:`, `Registration:`, `Threat feeds:`).
-- Summary has no per-check rows, so a row label is only on the page after the switch is on (except on an Error result). The view mode lasts for the page, so a later scan in the same test stays on Full.
+- Summary has no per-check rows, so a row label is only on the page after the switch is on (except on an Error result, which has no switch). The view mode lasts for the page, so a later scan in the same test stays on Full.
 - The band's `because` sentence shows only when no question or row already states it. Do not require it.
 - `unknown` must not present a `Scan result: safe` region. Absence of findings is not a safe verdict.
 - There is no `suspicious` fixture hostname. Do not invent one.
