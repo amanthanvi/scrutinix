@@ -130,9 +130,10 @@ export async function setDefaultTextSize(page: Page, standard: number) {
 
 /** Why `pageAtDefaultTextSize` skips the test in WebKit. */
 export const NO_DEFAULT_TEXT_SIZE_IN_SAFARI =
-  "Safari has no default text size setting (its text-size controls, macOS " +
-  "zoom and iOS's Aa, zoom the page, which the 320px reflow checks cover), " +
-  "and WebKit gives Playwright no way to set one";
+  "Safari has no default text size setting: its text-size controls (View > " +
+  "Zoom In on macOS, Aa on iOS) zoom the page, which the 'page zoom reflows " +
+  "without sideways scrolling' tests cover, and WebKit gives Playwright no " +
+  "way to set one";
 
 /**
  * Firefox's default text size, as Settings > Fonts > Size stores it for
