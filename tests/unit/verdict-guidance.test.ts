@@ -9,8 +9,10 @@ import {
 } from "@/lib/domain/types";
 import { sanitizeHistoryEntry } from "@/lib/domain/runtime-safety";
 import {
-  BAND_SAYS,
+  ANY_BAND,
   SCORE_BANDS,
+  SCORE_BAND_TOPS,
+  bandSays,
   clampScore,
   getConfidenceReasons,
   getCoverageCaveat,
@@ -141,69 +143,101 @@ describe("getVerdictGuidance", () => {
 });
 
 describe("what a band can say", () => {
-  // A scan's band holds the room the tallest band with a score, and the
-  // tallest without one, takes, so a verdict lands without moving the page.
-  // Each list must be exactly what such a band can show: a missing entry
-  // could outgrow the room, a stale one holds room for nothing.
-  it("lists every word, instruction, and note the band can show, by whether it shows a score", async () => {
+  // A scan's band holds the room the tallest band with something in the
+  // score's place, and the tallest without, takes, so a verdict lands
+  // without moving the page; Look-alike and Unconfirmed only while the
+  // link's address check leaves them possible. Each list must be exactly
+  // what such a band can show: a missing entry could outgrow the room, a
+  // stale one holds room for nothing.
+  it("lists every word, instruction, and note each band can show, by where the address check stands", async () => {
     const confirmed = await fixtureSignals("critical.scrutinix.test");
-    const seen = {
-      scored: { words: new Set<string>(), imperatives: new Set<string>() },
-      unscored: {
-        words: new Set<string>(),
-        imperatives: new Set<string>(),
-        notes: new Set<string>(),
-      },
-    };
-    for (const verdict of [
-      "safe",
-      "suspicious",
-      "malicious",
-      "critical",
-      "unknown",
-      "error",
-    ] as const) {
-      for (const signals of [completeSignals(), confirmed]) {
-        for (const confidenceLabel of ["high", "moderate", "low"] as const) {
-          for (const hasPositiveEvidence of [false, true]) {
-            for (const impersonates of [null, "paypal.com"]) {
-              for (const addressUnchecked of [false, true]) {
-                const result = {
-                  ...buildResult(verdict, {
-                    confidenceLabel,
-                    hasPositiveEvidence,
-                    signals,
-                  }),
-                  impersonates,
-                  addressUnchecked,
-                };
-                const guidance = getVerdictGuidance(result);
-                const group = guidance.showScore ? seen.scored : seen.unscored;
-                group.words.add(verdictWord(result));
-                group.imperatives.add(guidance.imperative);
-                if (guidance.confidenceNote) {
-                  // Only a band without a score shows a note.
-                  expect(guidance.showScore).toBe(false);
-                  seen.unscored.notes.add(guidance.confidenceNote);
+    const sorted = (values: Iterable<string>) => [...new Set(values)].sort();
+    for (const lookAlike of [false, true]) {
+      for (const unconfirmed of [false, true]) {
+        const seen = {
+          beside: { words: [] as string[], imperatives: [] as string[] },
+          across: {
+            words: [] as string[],
+            imperatives: [] as string[],
+            notes: [] as string[],
+          },
+        };
+        for (const verdict of [
+          "safe",
+          "suspicious",
+          "malicious",
+          "critical",
+          "unknown",
+          "error",
+        ] as const) {
+          for (const signals of [completeSignals(), confirmed]) {
+            for (const confidenceLabel of [
+              "high",
+              "moderate",
+              "low",
+            ] as const) {
+              for (const hasPositiveEvidence of [false, true]) {
+                // Every result the address check's state still allows.
+                for (const impersonates of lookAlike
+                  ? [null, "paypal.com"]
+                  : [null]) {
+                  for (const addressUnchecked of unconfirmed
+                    ? [false, true]
+                    : [false]) {
+                    const result = {
+                      ...buildResult(verdict, {
+                        confidenceLabel,
+                        hasPositiveEvidence,
+                        signals,
+                      }),
+                      impersonates,
+                      addressUnchecked,
+                    };
+                    const guidance = getVerdictGuidance(result);
+                    // The score's place holds the score, or a failed
+                    // scan's Try again (verdict-panel.tsx).
+                    const group =
+                      guidance.showScore || verdict === "error"
+                        ? seen.beside
+                        : seen.across;
+                    group.words.push(verdictWord(result));
+                    group.imperatives.push(guidance.imperative);
+                    if (guidance.confidenceNote) {
+                      // Only a band with nothing in the score's place
+                      // shows a note.
+                      expect(group).toBe(seen.across);
+                      seen.across.notes.push(guidance.confidenceNote);
+                    }
+                  }
                 }
               }
             }
           }
         }
+        const says = bandSays({ lookAlike, unconfirmed });
+        const at = JSON.stringify({ lookAlike, unconfirmed });
+        for (const group of ["beside", "across"] as const) {
+          expect(sorted(seen[group].words), `${group} ${at}`).toEqual(
+            sorted(says[group].words),
+          );
+          expect(sorted(seen[group].imperatives), `${group} ${at}`).toEqual(
+            sorted(says[group].imperatives),
+          );
+        }
+        expect(sorted(seen.across.notes), at).toEqual(
+          sorted(says.across.notes),
+        );
       }
     }
-    const sorted = (values: Iterable<string>) => [...values].sort();
-    for (const group of ["scored", "unscored"] as const) {
-      expect(sorted(seen[group].words), group).toEqual(
-        sorted(BAND_SAYS[group].words),
-      );
-      expect(sorted(seen[group].imperatives), group).toEqual(
-        sorted(BAND_SAYS[group].imperatives),
-      );
-    }
-    expect(sorted(seen.unscored.notes)).toEqual(
-      sorted(BAND_SAYS.unscored.notes),
-    );
+  });
+
+  it("holds every band until the address check says otherwise", () => {
+    expect(bandSays()).toEqual(bandSays(ANY_BAND));
+    expect(bandSays().across.words).toEqual([
+      "Unknown",
+      "Look-alike",
+      "Unconfirmed",
+    ]);
   });
 
   it("lists every score band and confidence label", () => {
@@ -211,7 +245,14 @@ describe("what a band can say", () => {
       Array.from({ length: 101 }, (_, score) => getScoreBandText(score)),
     );
     expect([...bands].sort()).toEqual([...SCORE_BANDS].sort());
-    expect(BAND_SAYS.confidenceLabels).toEqual([
+    // Each band's room holds its widest score: as many digits as any in it.
+    for (let score = 0; score <= 100; score += 1) {
+      const top = SCORE_BAND_TOPS.find(
+        (candidate) => getScoreBandText(candidate) === getScoreBandText(score),
+      );
+      expect(String(top).length).toBeGreaterThanOrEqual(String(score).length);
+    }
+    expect(bandSays().confidenceLabels).toEqual([
       "High confidence",
       "Moderate confidence",
       "Low confidence",

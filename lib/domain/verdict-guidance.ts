@@ -221,8 +221,8 @@ export function getVerdictGuidance(result: GuidanceInput): VerdictGuidance {
 
 /**
  * Every instruction a band can give. While a scan runs the band holds the
- * room the longest of them takes (`BAND_IMPERATIVES`), so whichever lands
- * never moves the page.
+ * room the longest of them takes (`bandSays`), so whichever lands never
+ * moves the page.
  */
 const IMPERATIVE = {
   knownThreat: "Don't open this link — it's a known threat.",
@@ -304,47 +304,74 @@ function getInstruction(
 }
 
 /**
- * Everything a band can say, grouped the way a band shows it: a verdict
- * with a score (its word, its instruction, the score, a confidence label)
- * or one without (its word, its instruction, and a confidence label or a
- * note in its place). While a scan runs the band holds the room of the
- * tallest of each group (`components/scrutinix/verdict-panel.tsx`), so
- * the verdict that lands, whichever it is, fills it in place.
- * `tests/unit/verdict-guidance.test.ts` checks every branch against it.
+ * What can still land on a scan's band, as far as the link's address check
+ * knows. Only a Safe result depends on it: it reads "Look-alike" when the
+ * link spells out another site and "Unconfirmed" when the check failed.
  */
-export const BAND_SAYS = {
-  scored: {
-    words: (["safe", "suspicious", "malicious", "critical"] as const).map(
-      verdictLabel,
-    ),
-    imperatives: [
-      IMPERATIVE.knownThreat,
-      IMPERATIVE.dontOpen,
-      IMPERATIVE.noPayment,
-      IMPERATIVE.provisionalSafe,
-      IMPERATIVE.safe,
-    ],
-  },
-  unscored: {
-    words: [
-      verdictLabel("unknown"),
-      verdictLabel("error"),
-      LOOK_ALIKE_WORD,
-      UNCONFIRMED_WORD,
-    ],
-    imperatives: [
-      IMPERATIVE.lookAlike,
-      IMPERATIVE.unchecked,
-      IMPERATIVE.unknown,
-      IMPERATIVE.error,
-    ],
-    notes: Object.values(CONFIDENCE_NOTE),
-  },
-  /** "High confidence", … */
-  confidenceLabels: (["high", "moderate", "low"] as const).map(
-    (label) => `${capitalize(label)} confidence`,
-  ),
-} as const;
+export interface BandOutcomes {
+  /** The link spells out another site, or the check hasn't said yet. */
+  lookAlike: boolean;
+  /** The check failed, or hasn't said yet. */
+  unconfirmed: boolean;
+}
+
+/** Before the link's address check has said anything: any band. */
+export const ANY_BAND: BandOutcomes = { lookAlike: true, unconfirmed: true };
+
+/** "High confidence", … */
+const CONFIDENCE_LABELS = (["high", "moderate", "low"] as const).map(
+  (label) => `${capitalize(label)} confidence`,
+);
+
+/**
+ * Everything a band can say, grouped the way a band lays it out. `beside`:
+ * a band with something in the score's place (a score, or a failed scan's
+ * Try again), whose word and instruction sit beside it. `across`: a band
+ * with nothing there, whose word and instruction take the band's width,
+ * then a confidence label or a note in its place; Look-alike's and
+ * Unconfirmed's only while `outcomes` leaves them possible. While a scan
+ * runs the band holds the room of the tallest of each
+ * (`components/scrutinix/verdict-panel.tsx`), so the verdict that lands,
+ * whichever it is, fills it in place. `tests/unit/verdict-guidance.test.ts`
+ * checks every branch against it.
+ */
+export function bandSays(outcomes: BandOutcomes = ANY_BAND) {
+  const { lookAlike, unconfirmed } = outcomes;
+  return {
+    beside: {
+      words: (
+        ["safe", "suspicious", "malicious", "critical", "error"] as const
+      ).map(verdictLabel),
+      imperatives: [
+        IMPERATIVE.knownThreat,
+        IMPERATIVE.dontOpen,
+        IMPERATIVE.noPayment,
+        IMPERATIVE.provisionalSafe,
+        IMPERATIVE.safe,
+        IMPERATIVE.error,
+      ],
+    },
+    across: {
+      words: [
+        verdictLabel("unknown"),
+        ...(lookAlike ? [LOOK_ALIKE_WORD] : []),
+        ...(unconfirmed ? [UNCONFIRMED_WORD] : []),
+      ],
+      imperatives: [
+        IMPERATIVE.unknown,
+        ...(lookAlike ? [IMPERATIVE.lookAlike] : []),
+        ...(unconfirmed ? [IMPERATIVE.unchecked] : []),
+      ],
+      notes: [
+        ...(lookAlike
+          ? [CONFIDENCE_NOTE.lookAlike, CONFIDENCE_NOTE.lookAlikeMinor]
+          : []),
+        ...(unconfirmed ? [CONFIDENCE_NOTE.unchecked] : []),
+      ],
+    },
+    confidenceLabels: CONFIDENCE_LABELS,
+  };
+}
 
 /** Clamp a stored score into the 0-100 range the meter promises. */
 export function clampScore(score: number | null | undefined): number {
@@ -359,10 +386,16 @@ export function getScoreBandText(score: number): string {
   return "Safe band 0–24";
 }
 
-/** Every score band's wording (one score from each band). */
-export const SCORE_BANDS: readonly string[] = [100, 79, 54, 24].map(
-  getScoreBandText,
-);
+/**
+ * Each score band's highest score: as wide as any score in its band (the
+ * numerals are tabular), so a band holding room for a score holds this
+ * one beside its band's wording.
+ */
+export const SCORE_BAND_TOPS: readonly number[] = [100, 79, 54, 24];
+
+/** Every score band's wording. */
+export const SCORE_BANDS: readonly string[] =
+  SCORE_BAND_TOPS.map(getScoreBandText);
 
 /**
  * What the polite live region says when a result is shown, e.g.

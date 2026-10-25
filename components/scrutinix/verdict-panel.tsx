@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import type { CSSProperties, ReactNode } from "react";
+import { useState, type CSSProperties, type ReactNode } from "react";
 
 import { SIGNAL_COUNT } from "@/components/shared/scrutinix-types";
 import type { LinkParserStatus } from "@/hooks/use-link-anatomy";
@@ -14,9 +14,10 @@ import type {
 } from "@/lib/domain/types";
 import {
   ADDRESS_CHECK_PENDING,
-  BAND_SAYS,
-  SCORE_BANDS,
+  SCORE_BAND_TOPS,
+  bandSays,
   clampScore,
+  type BandOutcomes,
   getConfidenceReasons,
   getCoverageCaveat,
   getScoreBandText,
@@ -49,9 +50,17 @@ function bandStyle(verdict: Verdict | "pending"): CSSProperties {
 
 /**
  * The band's last line (confidence, or a verified share's note), set off
- * by the band's own hairline. Checking holds its slot.
+ * by the band's own hairline. A scan's band holds its room (`BandRoom`).
  */
 const CONFIDENCE_LINE = "sx-band-line";
+
+/** Cancel while checking: a quiet button in the score's place. */
+const CANCEL_BUTTON =
+  "sx-btn-press text-body -mr-[12px] inline-flex min-h-11 items-center rounded-md px-[12px] font-medium";
+
+/** The band's one ink button (a shared band's scan, a failed scan's retry). */
+const INK_BUTTON =
+  "sx-btn-press text-body inline-flex min-h-12 items-center rounded-md px-5 font-semibold";
 
 /** Secondary text on the band: tinted from its hue, never plain gray. */
 const BAND_INK = "text-[var(--sx-band-ink)]";
@@ -111,13 +120,14 @@ function formatTimestamp(value: string): string {
  * While the link parser loads, `holdDomain` keeps its line's height so
  * nothing below the band moves when it arrives.
  *
- * `holdsRoom` marks a scan's band (Checking, the address check, and the
- * verdict it lands as). It holds the room its tallest verdict takes
- * (`BandRoom`), so Checking and every verdict are one height and nothing
- * on the page moves when one lands. What the band says sits at its top
- * and the confidence line at its foot, so any room a verdict leaves opens
- * above the hairline, never between the word, the site, and the
- * instruction. A shared band holds nothing: only a tap replaces it.
+ * `room` marks a scan's band (Checking, the address check, and the verdict
+ * it lands as). It holds the room the tallest verdict that can still land
+ * takes (`BandRoom`), so Checking and that verdict are one height and
+ * nothing on the page moves when it lands. What the band says sits at its
+ * top and the confidence line at its foot, so any room a verdict leaves
+ * opens above the hairline (or, with no last line, at the band's foot),
+ * never between the word, the site, the instruction, and the score's place.
+ * A shared band holds nothing: only a tap replaces it.
  */
 function Band({
   label,
@@ -129,7 +139,7 @@ function Band({
   holdDomain = false,
   aside,
   imperative,
-  holdsRoom = false,
+  room,
   children,
 }: {
   label: string;
@@ -140,12 +150,14 @@ function Band({
   domain?: string | null;
   holdDomain?: boolean;
   /**
-   * The score, or Cancel while checking: its own element with
-   * `.sx-band-aside`, so one never turns into (or slides into) the other.
+   * The score's place: the score, Cancel while checking, or a failed
+   * scan's Try again, each its own element with `.sx-band-aside`, so one
+   * never turns into (or slides into) another. Without it the word and
+   * instruction take the band's width (`.sx-band-across`).
    */
   aside?: ReactNode;
   imperative: ReactNode;
-  holdsRoom?: boolean;
+  room?: BandOutcomes;
   children?: ReactNode;
 }) {
   return (
@@ -157,18 +169,34 @@ function Band({
       {arrival ? (
         <span key={arrival} aria-hidden="true" className="sx-band-rule" />
       ) : null}
-      <div className="sx-band-body">
+      <div className={cn("sx-band-body", !aside && "sx-band-across")}>
+        {/* First, so a selection from the word to the last line never
+            crosses it. */}
+        {room ? (
+          <BandRoom
+            domain={domain ?? (holdDomain ? " " : null)}
+            outcomes={room}
+          />
+        ) : null}
         <div className="sx-band-head">
-          <h2
-            id={VERDICT_HEADING_ID}
-            tabIndex={-1}
-            className={cn(
-              "sx-band-heading font-serif font-semibold",
-              headingClassName,
-            )}
-          >
-            {heading}
-          </h2>
+          <div className="sx-slot sx-band-word">
+            {room ? (
+              <StandIns
+                texts={wordsOf(room)}
+                className="sx-band-heading font-serif font-semibold"
+              />
+            ) : null}
+            <h2
+              id={VERDICT_HEADING_ID}
+              tabIndex={-1}
+              className={cn(
+                "sx-band-heading font-serif font-semibold",
+                headingClassName,
+              )}
+            >
+              {heading}
+            </h2>
+          </div>
           {domain ? (
             <p className="sx-band-domain">{domain}</p>
           ) : holdDomain ? (
@@ -179,9 +207,6 @@ function Band({
         </div>
         <p className="sx-band-imperative">{imperative}</p>
         {aside}
-        {holdsRoom ? (
-          <BandRoom domain={domain ?? (holdDomain ? "\u00a0" : null)} />
-        ) : null}
         {children ? <div className="sx-band-tail">{children}</div> : null}
       </div>
     </section>
@@ -189,7 +214,7 @@ function Band({
 }
 
 /**
- * A scan's band without a verdict yet says what a scored band would: a
+ * A scan's band without a verdict yet is laid out like one with a score: a
  * word, a progress line (or the address check), and Cancel in the score's
  * place.
  */
@@ -202,18 +227,43 @@ const HELD = {
 };
 
 /**
+ * Every word a scan's band can show. At a larger text size on a narrow
+ * phone one word can wrap where another doesn't ("Checking" onto two lines,
+ * "Safe" on one), so the band's own word slot holds the tallest of them
+ * (`.sx-band-word`): the site and the instruction under it never move when
+ * the verdict replaces "Checking".
+ */
+function wordsOf(outcomes: BandOutcomes): string[] {
+  const { beside, across } = bandSays(outcomes);
+  return [...beside.words, ...HELD.words, ...across.words];
+}
+
+/** The buttons that can take the score's place. */
+const ASIDE_BUTTONS = [
+  ["Cancel scan", CANCEL_BUTTON],
+  ["Try again", INK_BUTTON],
+] as const;
+
+/**
  * The room a scan's band holds: the band's own layout drawn twice more,
  * invisibly, over the whole band (`.sx-band-room` shares its columns). One
- * holds the tallest band with a score (its longest word and instruction, a
- * score, a confidence label; Checking fits it too), the other the tallest
- * band without one (its longest word and instruction, then the longest
- * note or label). The band is as tall as the taller of the two in every
- * state; its last row is the only flexible one, so the room a verdict
- * doesn't use opens there, above the hairline, never between the word,
- * the site, the instruction, and the score.
+ * holds the tallest band with something in the score's place (its longest
+ * word and instruction, a score or a button, a confidence label; Checking
+ * fits it too), the other the tallest band without (its longest word and
+ * instruction across the band, then the longest note or label), of the
+ * verdicts `outcomes` leaves possible. The band is as tall as the taller
+ * of the two in every state; its last row is the only flexible one, so
+ * the room a verdict doesn't use opens there, at the band's foot, never
+ * between the word, the site, the instruction, and the score's place.
  */
-function BandRoom({ domain }: { domain: string | null }) {
-  const { scored, unscored, confidenceLabels } = BAND_SAYS;
+function BandRoom({
+  domain,
+  outcomes,
+}: {
+  domain: string | null;
+  outcomes: BandOutcomes;
+}) {
+  const { beside, across, confidenceLabels } = bandSays(outcomes);
   const head = (words: readonly string[]) => (
     <div className="sx-band-head">
       <div className="sx-slot">
@@ -233,11 +283,19 @@ function BandRoom({ domain }: { domain: string | null }) {
   return (
     <>
       <div aria-hidden="true" className="sx-band-room sx-stand-in">
-        {head([...scored.words, ...HELD.words])}
-        {instruction([...scored.imperatives, ...HELD.lines])}
+        {head([...beside.words, ...HELD.words])}
+        {instruction([...beside.imperatives, ...HELD.lines])}
         <div className="sx-band-aside sx-slot">
-          {SCORE_BANDS.map((text) => (
-            <ScoreLine key={text} band={text} />
+          {SCORE_BAND_TOPS.map((top) => (
+            <ScoreLine
+              key={top}
+              score={top}
+              band={getScoreBandText(top)}
+              standIn
+            />
+          ))}
+          {ASIDE_BUTTONS.map(([text, box]) => (
+            <span key={text} data-stand-in={text} className={box} />
           ))}
         </div>
         <div className="sx-band-tail sx-slot">
@@ -246,11 +304,14 @@ function BandRoom({ domain }: { domain: string | null }) {
           ))}
         </div>
       </div>
-      <div aria-hidden="true" className="sx-band-room sx-stand-in">
-        {head(unscored.words)}
-        {instruction(unscored.imperatives)}
+      <div
+        aria-hidden="true"
+        className="sx-band-room sx-band-across sx-stand-in"
+      >
+        {head(across.words)}
+        {instruction(across.imperatives)}
         <div className="sx-band-tail sx-slot">
-          {[...confidenceLabels, ...unscored.notes].map((text) => (
+          {[...confidenceLabels, ...across.notes].map((text) => (
             <ConfidenceLine
               key={text}
               text={text}
@@ -286,23 +347,25 @@ function StandIns({
 }
 
 /**
- * The score with its band ("62/100", "Malicious band 55–79"), or (without
- * `score`) the room a score in that band takes, as a stand-in.
+ * The score with its band ("62/100", "Malicious band 55–79"), or (as a
+ * `standIn`) the room that score and band take.
  */
 function ScoreLine({
   score,
   band,
+  standIn = false,
   className,
 }: {
-  score?: number;
+  score: number;
   band: string;
+  standIn?: boolean;
   className?: string;
 }) {
-  if (score === undefined) {
+  if (standIn) {
     return (
       <div className="sx-score">
         <span
-          data-stand-in="100"
+          data-stand-in={String(score)}
           className="sx-score-value font-serif tabular-nums"
         >
           <span data-stand-in="/100" />
@@ -391,8 +454,8 @@ function ConfidenceLine({
 
 /**
  * The band before there is a verdict to state: "Checking" in soft ink on
- * the neutral surface and a progress line, in a band holding the room any
- * verdict takes (`holdsRoom`), so the verdict changes the band's tone in
+ * the neutral surface and a progress line, in a band holding the room the
+ * verdict will take (`room`), so the verdict changes the band's tone in
  * place rather than growing it. Called as a function, not rendered as a
  * component, so the root stays a `Band` and the heading node (and its
  * focus) survives.
@@ -403,12 +466,14 @@ function heldBand({
   aside,
   domain,
   holdDomain,
+  room,
 }: {
   label: string;
   line: ReactNode;
   aside?: ReactNode;
   domain: string | null;
   holdDomain: boolean;
+  room: BandOutcomes;
 }) {
   return (
     <Band
@@ -422,28 +487,66 @@ function heldBand({
       imperative={
         <span className="text-[var(--sx-text-muted)] tabular-nums">{line}</span>
       }
-      holdsRoom
+      room={room}
     />
   );
 }
 
-/** A shared band's one primary action: an ink button. */
-function RunSharedScanButton({
+/** The band's one primary action: an ink button. */
+function InkButton({
   onClick,
   label,
+  className,
 }: {
   onClick: () => void;
   label: string;
+  className?: string;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="sx-btn-press text-body inline-flex min-h-12 items-center rounded-md bg-[var(--sx-button)] px-5 font-semibold text-[var(--sx-button-fg)] hover:bg-[var(--sx-button-hover)]"
+      className={cn(
+        INK_BUTTON,
+        "bg-[var(--sx-button)] text-[var(--sx-button-fg)] hover:bg-[var(--sx-button-hover)]",
+        className,
+      )}
     >
       {label}
     </button>
   );
+}
+
+/** Stands for the band phase a `room` belongs to (see `useRoom`). */
+const CHECKING = "checking";
+
+/**
+ * Which verdicts a scan's band holds room for. It starts from what the
+ * link's address check knows when a scan starts (or a stored result
+ * opens): once the check is ready, a link that spells out no other site
+ * can't land as Look-alike or Unconfirmed, so their longer words and notes
+ * hold no room. Until the next such start it only ever widens, so a check
+ * that settles mid-scan, or after the verdict lands, never shrinks the
+ * band under the reader.
+ */
+function useRoom(phase: string | null, known: BandOutcomes): BandOutcomes {
+  const [held, setHeld] = useState({ phase, room: known });
+  const fresh =
+    held.phase !== phase && (phase === CHECKING || held.phase !== CHECKING);
+  const room = fresh
+    ? known
+    : {
+        lookAlike: held.room.lookAlike || known.lookAlike,
+        unconfirmed: held.room.unconfirmed || known.unconfirmed,
+      };
+  if (
+    held.phase !== phase ||
+    held.room.lookAlike !== room.lookAlike ||
+    held.room.unconfirmed !== room.unconfirmed
+  ) {
+    setHeld({ phase, room });
+  }
+  return room;
 }
 
 interface VerdictBandProps {
@@ -512,16 +615,26 @@ export function VerdictBand({
   onRetry,
 }: VerdictBandProps) {
   const domainProps = { domain: registeredDomain, holdDomain };
+  const checking = isStreaming && !result;
+  const room = useRoom(checking ? CHECKING : (result?.id ?? null), {
+    lookAlike: impersonates !== null || addressCheck === "pending",
+    unconfirmed: addressCheck !== "ready",
+  });
 
-  if (isStreaming && !result) {
+  if (checking) {
     return heldBand({
       label: "Scanning URL",
       ...domainProps,
+      room,
       aside: onCancelScan ? (
         <button
           type="button"
           onClick={onCancelScan}
-          className="sx-band-aside sx-btn-press text-body -mr-[12px] inline-flex min-h-11 items-center rounded-md px-[12px] font-medium text-[var(--sx-text-muted)] hover:bg-[var(--sx-subtle)] hover:text-[var(--sx-text)]"
+          className={cn(
+            "sx-band-aside",
+            CANCEL_BUTTON,
+            "text-[var(--sx-text-muted)] hover:bg-[var(--sx-subtle)] hover:text-[var(--sx-text)]",
+          )}
         >
           Cancel scan
         </button>
@@ -567,10 +680,7 @@ export function VerdictBand({
           )}
         >
           {onRunSharedScan ? (
-            <RunSharedScanButton
-              onClick={onRunSharedScan}
-              label="Run a fresh scan"
-            />
+            <InkButton onClick={onRunSharedScan} label="Run a fresh scan" />
           ) : null}
           <p className={cn("text-meta", BAND_INK)}>
             Verified Scrutinix result · checked{" "}
@@ -601,10 +711,7 @@ export function VerdictBand({
       >
         {onRunSharedScan ? (
           <div className="mt-6">
-            <RunSharedScanButton
-              onClick={onRunSharedScan}
-              label="Scan this link"
-            />
+            <InkButton onClick={onRunSharedScan} label="Scan this link" />
           </div>
         ) : null}
       </Band>
@@ -621,6 +728,7 @@ export function VerdictBand({
       label: ADDRESS_CHECK_PENDING,
       line: ADDRESS_CHECK_PENDING,
       ...domainProps,
+      room,
     });
   }
 
@@ -663,12 +771,21 @@ export function VerdictBand({
       headingClassName="text-[var(--sx-text)]"
       {...domainProps}
       imperative={guidance.imperative}
-      holdsRoom
+      room={room}
       aside={
         guidance.showScore ? (
           <ScoreLine
             score={score}
             band={getScoreBandText(score)}
+            className="sx-band-aside"
+          />
+        ) : result.verdict === "error" && onRetry ? (
+          // A failed scan has no score or confidence to state; the score's
+          // place offers what its instruction says ("The scan failed — try
+          // again."), where Cancel stood while it ran.
+          <InkButton
+            onClick={onRetry}
+            label="Try again"
             className="sx-band-aside"
           />
         ) : null
@@ -684,19 +801,6 @@ export function VerdictBand({
       ) : null}
       {confidence ? (
         <ConfidenceLine text={confidence} emphasis={!guidance.confidenceNote} />
-      ) : result.verdict === "error" && onRetry ? (
-        // A failed scan has no confidence to state; its last line offers
-        // what its instruction says ("The scan failed — try again."). The
-        // hit area grows past the line without changing its height.
-        <p className={CONFIDENCE_LINE}>
-          <button
-            type="button"
-            onClick={onRetry}
-            className="sx-link relative font-medium after:absolute after:-inset-x-2 after:-inset-y-3 after:content-['']"
-          >
-            Try again
-          </button>
-        </p>
       ) : null}
     </Band>
   );

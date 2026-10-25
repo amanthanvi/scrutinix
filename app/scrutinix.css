@@ -569,18 +569,21 @@ main:has(#sx-verdict-heading) > .sx-hero-form {
 
 /*
  * The band's grid. Phones: the word and domain; the instruction; the aside
- * (the score, or Cancel while checking) on its own row; then the band's
- * last block (caveat and confidence line) at its foot. From 56rem the
- * aside takes a column beside the word, domain, and instruction, and the
- * last block spans the band.
+ * (the score's place: the score, Cancel while checking, or a failed scan's
+ * Try again) on its own row; then the band's last block (caveat and
+ * confidence line) at its foot. From 48rem the aside takes a column beside
+ * the word, domain, and instruction, and the last block spans the band; a
+ * band with nothing there (`.sx-band-across`) gives its word and
+ * instruction the band's width.
  *
  * A scan's band holds room (`.sx-band-room`): the same layout drawn twice
  * more, invisibly, over the whole band and sharing its columns (subgrid),
- * filled with the longest of everything the band can say. Checking and
- * every verdict are therefore one height and nothing moves when a verdict
- * lands. The last row is the only flexible one, so the room a verdict
- * doesn't use opens there, above the hairline: the word, the site, the
- * instruction, and the score stay together at the top.
+ * filled with the longest of everything the band can still say. Checking
+ * and every verdict it can land as are therefore one height and nothing
+ * moves when a verdict lands. The last row is the only flexible one, so
+ * the room a verdict doesn't use opens there, at the band's foot: the
+ * word, the site, the instruction, and the score's place stay together at
+ * the top.
  */
 .sx-band-body {
   display: grid;
@@ -628,6 +631,28 @@ main:has(#sx-verdict-heading) > .sx-hero-form {
 .sx-slot > * {
   grid-area: 1 / 1;
   min-width: 0;
+}
+
+/*
+ * The word's slot. On a scan's band it holds the tallest word the band can
+ * show, since a larger text size on a narrow phone can wrap one word and
+ * not another; a shorter word sits at the slot's foot, on the site, so the
+ * site and the instruction stay put when the verdict replaces "Checking".
+ * From 48rem every word fits its line, and a word that would sit across
+ * the band would wrap in the column beside the score, so there the slot
+ * holds only the word shown.
+ */
+.sx-band-word > h2 {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+
+@media (min-width: 48rem) {
+  .sx-band-word > [data-stand-in] {
+    display: none;
+  }
 }
 
 /* Holds the room its text takes; drawn as generated content, so it is
@@ -760,7 +785,7 @@ main:has(#sx-verdict-heading) > .sx-hero-form {
 
 /* The verdict's full size from 768px, a px width (48rem at the default
    text size), so a larger text size can't switch it back to the smaller
-   cap. The score's column below still waits for 56rem of text. */
+   cap. The score's column below still waits for 48rem of text. */
 @media (min-width: 768px) {
   .sx-band-heading {
     font-size: clamp(2rem, 16.4cqi, var(--text-verdict));
@@ -769,11 +794,12 @@ main:has(#sx-verdict-heading) > .sx-hero-form {
   }
 }
 
-/* The score takes its own column only once the longest word any band can
-   show ("Unconfirmed": a scan's band holds its room, scored or not) and a
-   three-digit score with its band both fit, with a wider system sans to
-   spare. */
-@media (min-width: 56rem) {
+/* The score takes its own column only once the longest word beside it
+   ("Suspicious") and a three-digit score both fit. A band with nothing in
+   the score's place (Unknown, Look-alike, Unconfirmed, a shared link)
+   gives its word and instruction the whole width, which the word's size
+   (16.4cqi) is measured against. */
+@media (min-width: 48rem) {
   .sx-band-body {
     grid-template-columns: minmax(0, 1fr) auto;
     grid-template-rows: auto auto 1fr;
@@ -784,6 +810,11 @@ main:has(#sx-verdict-heading) > .sx-hero-form {
     grid-area: 1 / 2 / 3 / 3;
     justify-self: end;
     margin-top: 0;
+  }
+
+  .sx-band-across > .sx-band-head,
+  .sx-band-across > .sx-band-imperative {
+    grid-column: 1 / -1;
   }
 
   .sx-band-tail {
