@@ -180,23 +180,9 @@ interface Context extends SummaryQuestionInput {
   lists: ListReading[];
 }
 
-/**
- * When a result's evidence was gathered: `checkedAt` (a cache hit keeps
- * the original scan's), else `completedAt`. A reopened result's ages count
- * from here, never from when it is reopened, so a certificate "issued 2
- * hours ago" stays beside the domain "registered 3 days ago" it was
- * checked with.
- */
-export function evidenceTimeOf(metadata: {
-  checkedAt?: string;
-  completedAt?: string;
-}): number | undefined {
-  for (const value of [metadata.checkedAt, metadata.completedAt]) {
-    const time = value ? Date.parse(value) : Number.NaN;
-    if (Number.isFinite(time)) return time;
-  }
-  return undefined;
-}
+// The evidence clock lives beside the verdict basis, which ages a
+// VirusTotal conviction by it too; Summary's callers import it from here.
+export { evidenceTimeOf } from "@/lib/domain/verdict-basis";
 
 export function getSummaryQuestions(
   input: SummaryQuestionInput,

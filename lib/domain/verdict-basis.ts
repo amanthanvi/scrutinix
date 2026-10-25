@@ -39,18 +39,24 @@ export function getVerdictBasis(result: {
     confirmed: result.signals
       ? hasConfirmedReputationHit(
           result.signals,
-          checkedAt(result.metadata) ?? Date.now(),
+          evidenceTimeOf(result.metadata ?? {}) ?? Date.now(),
         )
       : false,
   };
 }
 
-/** When the evidence was gathered: `checkedAt`, else `completedAt`. */
-function checkedAt(
-  metadata:
-    Partial<Pick<ScanMetadata, "checkedAt" | "completedAt">> | null | undefined,
-): number | undefined {
-  for (const value of [metadata?.checkedAt, metadata?.completedAt]) {
+/**
+ * When a result's evidence was gathered: `checkedAt` (a cache hit keeps
+ * the original scan's), else `completedAt`. A reopened result's ages count
+ * from here, never from when it is reopened, so a certificate "issued 2
+ * hours ago" stays beside the domain "registered 3 days ago" it was
+ * checked with, and a VirusTotal analysis is as current as it was then.
+ */
+export function evidenceTimeOf(metadata: {
+  checkedAt?: string;
+  completedAt?: string;
+}): number | undefined {
+  for (const value of [metadata.checkedAt, metadata.completedAt]) {
     const time = value ? Date.parse(value) : Number.NaN;
     if (Number.isFinite(time)) return time;
   }
