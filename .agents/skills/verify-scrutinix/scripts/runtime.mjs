@@ -193,12 +193,13 @@ function assertPrivateDir(dir) {
 }
 
 // The evidence directory this skill created carries this regular file. A
-// symlink does not count. An existing VERIFY_EVIDENCE_DIR is never given one:
-// that would claim a folder the variable was pointed at. The default evidence
-// directory, when VERIFY_EVIDENCE_DIR is unset, is adopted by
-// clearEvidenceFiles: a directory left by an older version of this skill gets
-// the marker once. evidence.ts writes the same name when a screenshot creates
-// the directory.
+// symlink does not count. A non-empty VERIFY_EVIDENCE_DIR is never given one:
+// that would claim a folder the variable was pointed at. An empty one is
+// marked, which is what the refusal hint tells the operator to use. The
+// default evidence directory, when VERIFY_EVIDENCE_DIR is unset, is adopted
+// by clearEvidenceFiles: a directory left by an older version of this skill
+// gets the marker once. evidence.ts writes the same name when a screenshot
+// creates the directory.
 export const evidenceMarkerName = ".verify-evidence";
 
 // Download filenames saveDownload is called with in drive.spec.ts. Anything
@@ -284,6 +285,16 @@ function isDefaultEvidencePath(dir) {
   return canonicalPath(dir) === canonicalPath(path.join(stateDir, "evidence"));
 }
 
+// No names at all, including dotfiles and subdirectories. readdir omits
+// "." and "..".
+function directoryIsEmpty(dir) {
+  try {
+    return readdirSync(dir).length === 0;
+  } catch {
+    return false;
+  }
+}
+
 const unmarkedEvidenceReason =
   "has no .verify-evidence marker, so this skill did not create it. Point VERIFY_EVIDENCE_DIR at an empty or new directory, or unset it to use the default evidence directory.";
 
@@ -292,20 +303,22 @@ const unmarkedEvidenceReason =
 // names above. Every other file stays, including next-env-*.snapshot recovery
 // copies and the marker. Unlink does not follow a symlink, so a link's target
 // is left alone. The state directory is never cleared: run.json lives there.
-// An unmarked VERIFY_EVIDENCE_DIR is not cleared either. The default evidence
-// directory is adopted: the marker is written once, then only skill artifacts
-// are removed.
+// A non-empty unmarked VERIFY_EVIDENCE_DIR is not cleared either. An empty
+// one is marked, matching the refusal hint. The default evidence directory
+// is adopted even when it already holds files: the marker is written once,
+// then only skill artifacts are removed.
 export function clearEvidenceFiles(dir = evidenceDir) {
   if (existsSync(dir) && canonicalPath(dir) === canonicalPath(stateDir)) {
     refuseToClear(dir, "is the state directory.");
   }
-  // Refuse an override before ensureDirs so it is not marked and nothing in
-  // it is removed. The default directory is left for adoption after the
-  // privacy checks.
+  // Refuse a non-empty override before ensureDirs so it is not marked and
+  // nothing in it is removed. An empty override, and the default directory,
+  // are marked after the privacy checks.
   if (
     existsSync(dir) &&
     !hasEvidenceMarker(dir) &&
-    !isDefaultEvidencePath(dir)
+    !isDefaultEvidencePath(dir) &&
+    !directoryIsEmpty(dir)
   ) {
     refuseToClear(dir, unmarkedEvidenceReason);
   }
@@ -314,8 +327,9 @@ export function clearEvidenceFiles(dir = evidenceDir) {
     refuseToClear(dir, "is the state directory.");
   }
   if (!hasEvidenceMarker(dir)) {
-    if (isDefaultEvidencePath(dir)) writeEvidenceMarker(dir);
-    else refuseToClear(dir, unmarkedEvidenceReason);
+    if (isDefaultEvidencePath(dir) || directoryIsEmpty(dir)) {
+      writeEvidenceMarker(dir);
+    } else refuseToClear(dir, unmarkedEvidenceReason);
   }
   let removed = 0;
   for (const name of readdirSync(dir)) {

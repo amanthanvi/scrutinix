@@ -125,9 +125,9 @@ export function runSuite(argv, cli) {
 
   // Doctor failed above, so a NOT_READY run keeps the previous evidence.
   // This run's directory should not still hold an earlier run's shots.
-  // The state directory, and an unmarked VERIFY_EVIDENCE_DIR, are refused
-  // before Playwright. The default evidence directory is adopted. run.json
-  // is left where it is.
+  // The state directory, and a non-empty unmarked VERIFY_EVIDENCE_DIR, are
+  // refused before Playwright. An empty override is marked. The default
+  // evidence directory is adopted. run.json is left where it is.
   let removed;
   try {
     removed = clearEvidenceFiles();
