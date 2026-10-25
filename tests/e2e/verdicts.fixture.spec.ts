@@ -482,30 +482,51 @@ test("an Unconfirmed verdict grows with twice the default text size and wraps in
   expect(enlarged.inside).toBe(true);
 });
 
+/**
+ * Scan a Critical link and measure its verdict at each width, from the
+ * narrowest phone through the rem breakpoints (40rem, 48rem) as they move
+ * with the text size, checking at each that the word stays inside its band.
+ */
+async function scoredVerdictAtWidths(page: Page, standard: number) {
+  await gotoApp(page);
+  await submitSingleScan(page, "https://critical.scrutinix.test/login");
+  const verdict = page.getByLabel(/^scan result: critical$/i);
+  await expect(verdict.getByRole("meter")).toBeVisible({ timeout: 15_000 });
+
+  const sizes = new Map<number, number>();
+  for (const width of [320, 414, 640, 768, 1024, 1280]) {
+    await page.setViewportSize({ width, height: 800 });
+    const current = await measureVerdict(page);
+    expect(current.inside, `${width}px wide, ${standard}px text`).toBe(true);
+    sizes.set(width, current.size);
+  }
+  return sizes;
+}
+
+test("a scored verdict stays inside its band at every width", async ({
+  page,
+}) => {
+  // The engine's own default text size, so this runs in every engine.
+  await scoredVerdictAtWidths(page, 16);
+});
+
 test("a larger default text size never shrinks a scored verdict, at any width, and keeps it inside its band", async ({
   pageAtDefaultTextSize,
 }) => {
-  const widths = [320, 414, 640, 768, 1024, 1280];
   // Each width's verdict size at the previous, smaller text size.
-  const previous = new Map(widths.map((width) => [width, 0]));
+  let previous: Map<number, number> | undefined;
   const sizeAt320 = new Map<number, number>();
   for (const standard of [16, 24, 32]) {
     const page = await pageAtDefaultTextSize(standard);
-    await gotoApp(page);
-    await submitSingleScan(page, "https://critical.scrutinix.test/login");
-    const verdict = page.getByLabel(/^scan result: critical$/i);
-    await expect(verdict.getByRole("meter")).toBeVisible({ timeout: 15_000 });
-
-    // Through the rem breakpoints (40rem, 48rem) as they move with the text.
-    for (const width of widths) {
-      await page.setViewportSize({ width, height: 800 });
-      const current = await measureVerdict(page);
-      const at = `${width}px wide, ${standard}px text`;
-      expect(current.size, at).toBeGreaterThanOrEqual(previous.get(width)!);
-      expect(current.inside, at).toBe(true);
-      previous.set(width, current.size);
-      if (width === 320) sizeAt320.set(standard, current.size);
+    const sizes = await scoredVerdictAtWidths(page, standard);
+    for (const [width, size] of sizes) {
+      expect(
+        size,
+        `${width}px wide, ${standard}px text`,
+      ).toBeGreaterThanOrEqual(previous?.get(width) ?? 0);
     }
+    previous = sizes;
+    sizeAt320.set(standard, sizes.get(320)!);
   }
 
   // The narrowest phone: the 2rem floor makes it larger, not just equal.

@@ -8,6 +8,7 @@ import {
 import {
   encodeSharedPayload,
   gotoApp,
+  pressShiftTab,
   pressTab,
   settleAnimations,
   sharedPath,
@@ -158,12 +159,12 @@ async function expectReflow(
 }
 
 // 150% and 200% from the narrowest phone; and where the link first goes
-// inline at each size.
+// inline at each larger size (at the default size, 656px: the page zoom
+// test, which every engine runs).
 const REFLOW_SIZES = [
   [24, 320],
   [32, 320],
   [32, 360],
-  [16, 656],
   [24, 960],
   [32, 1280],
 ] as const;
@@ -177,21 +178,27 @@ test("larger default text reflows without sideways scrolling @smoke", async ({
 
 /**
  * Page zoom keeps the default text size and narrows the viewport: 400% of
- * a 1280px window, or 200% of 640px, lays out at 320px. Safari's text-size
- * controls zoom the page, so this is WebKit's reflow check too, where the
- * larger-default-text ones are skipped.
+ * a 1280px window lays out at 320px, and 200% of a 1312px one at 656px,
+ * where the link first goes inline at the default size. Safari's page zoom
+ * (View > Zoom In, Aa on iOS) is this, so in WebKit, where the
+ * larger-default-text tests are skipped, these are the reflow checks. Each
+ * width runs on the test's own page, at the engine's default text size.
  */
-function expectZoomReflow(page: Page) {
-  return expectReflow(page, [[16, 320]], async (_standard, { viewport }) => {
-    if (viewport) await page.setViewportSize(viewport);
-    return page;
-  });
+function expectZoomReflow(page: Page, widths: readonly number[]) {
+  return expectReflow(
+    page,
+    widths.map((width) => [16, width] as const),
+    async (_standard, { viewport }) => {
+      if (viewport) await page.setViewportSize(viewport);
+      return page;
+    },
+  );
 }
 
 test("page zoom reflows without sideways scrolling @smoke", async ({
   page,
 }) => {
-  await expectZoomReflow(page);
+  await expectZoomReflow(page, [320, 656]);
 });
 
 test.describe("on a phone", () => {
@@ -218,14 +225,14 @@ test.describe("on a phone", () => {
   test("page zoom reflows without sideways scrolling @smoke", async ({
     page,
   }) => {
-    await expectZoomReflow(page);
+    await expectZoomReflow(page, [320]);
   });
 });
 
 test("home page keyboard navigation @smoke", async ({ page }) => {
   await gotoApp(page);
 
-  // Tab, or Option+Tab in Safari on macOS (pressTab).
+  // Tab, or Option+Tab in Safari on macOS (pressTab, pressShiftTab).
   await pressTab(page);
   const skipLink = page.getByRole("link", { name: /skip to content/i });
   await expect(skipLink).toBeFocused();
@@ -242,6 +249,12 @@ test("home page keyboard navigation @smoke", async ({ page }) => {
   const themeToggle = page.getByRole("button", {
     name: /switch to light theme|switch to dark theme|toggle theme/i,
   });
+  await expect(themeToggle).toBeFocused();
+
+  // And back: a button to the link before it.
+  await pressShiftTab(page);
+  await expect(header.getByRole("link", { name: /^privacy$/i })).toBeFocused();
+  await pressTab(page);
   await expect(themeToggle).toBeFocused();
 
   await pressTab(page);

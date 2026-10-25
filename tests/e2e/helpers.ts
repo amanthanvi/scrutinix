@@ -102,16 +102,29 @@ export function sharedPath(payload: string, sig: string | null): string {
 }
 
 /**
- * Move focus to the next control, links included, with the key a reader of
- * this engine presses: Tab, or Option+Tab in WebKit on macOS, where Tab
- * skips links as Safari does unless "Press Tab to highlight each item on a
- * webpage" is on. (WebKit on Linux, like Chromium and Firefox, tabs to
- * links.)
+ * The key that moves focus through every control in this engine: Tab, or
+ * Option+Tab in WebKit on macOS. There, as in Safari unless "Press Tab to
+ * highlight each item on a webpage" is on, Tab reaches only text fields,
+ * selects, and elements with an explicit tabindex: it skips links, buttons,
+ * and checkboxes. (WebKit on Linux, like Chromium and Firefox, tabs to
+ * every control.)
  */
-export async function pressTab(page: Page) {
+function tabKey(page: Page): "Tab" | "Alt+Tab" {
   const engine = page.context().browser()?.browserType().name();
+  return engine === "webkit" && process.platform === "darwin"
+    ? "Alt+Tab"
+    : "Tab";
+}
+
+/** Move focus to the next control, as a keyboard reader of this engine does. */
+export async function pressTab(page: Page) {
+  await page.keyboard.press(tabKey(page));
+}
+
+/** Move focus to the previous control (Shift+Tab, or Option+Shift+Tab). */
+export async function pressShiftTab(page: Page) {
   await page.keyboard.press(
-    engine === "webkit" && process.platform === "darwin" ? "Alt+Tab" : "Tab",
+    tabKey(page) === "Alt+Tab" ? "Alt+Shift+Tab" : "Shift+Tab",
   );
 }
 
@@ -130,21 +143,23 @@ export async function setDefaultTextSize(page: Page, standard: number) {
 
 /** Why `pageAtDefaultTextSize` skips the test in WebKit. */
 export const NO_DEFAULT_TEXT_SIZE_IN_SAFARI =
-  "Safari has no default text size setting: its text-size controls (View > " +
-  "Zoom In on macOS, Aa on iOS) zoom the page, which the 'page zoom reflows " +
-  "without sideways scrolling' tests cover, and WebKit gives Playwright no " +
-  "way to set one";
+  "Safari has no default text size setting. Its page zoom (View > Zoom In " +
+  "on macOS, Aa on iOS) is covered by the 'page zoom reflows without " +
+  "sideways scrolling' tests; its text-only zoom (View > Make Text Bigger, " +
+  "Option-Command-Plus) is not a default size, and WebKit gives Playwright " +
+  "no way to set either";
 
 /**
- * Firefox's default text size, as Settings > Fonts > Size stores it for
- * Latin text (the page is lang="en"); monospace stays at its own default.
+ * Firefox's default text size for Latin text (the page is lang="en"), the
+ * one preference Settings > Fonts > Size changes; monospace keeps the
+ * platform's own default, as it does for a reader.
  */
 function firefoxTextSizePrefs(standard: number) {
-  return {
-    "font.size.variable.x-western": standard,
-    "font.size.monospace.x-western": 13,
-  };
+  return { "font.size.variable.x-western": standard };
 }
+
+/** The value Firefox ships for that preference. */
+const FIREFOX_DEFAULT_TEXT_SIZE = 16;
 
 /**
  * Opens a new page, in a new context with the test's options (viewport,
@@ -165,7 +180,8 @@ export type PageAtDefaultTextSize = (
  *   anything loads.
  * - Firefox: a context in a browser launched with the reader's preference
  *   (Playwright sets Firefox preferences only at launch), one browser per
- *   size, shared by the worker's tests.
+ *   size, shared by the worker's tests; at Firefox's default (16px), the
+ *   test's own browser.
  * - WebKit: the test is skipped (NO_DEFAULT_TEXT_SIZE_IN_SAFARI) before it
  *   starts, so request the fixture only in tests that need the setting.
  *
@@ -209,7 +225,7 @@ export const test = base.extend<
     const contexts: BrowserContext[] = [];
     await provide(async (standard, options = {}) => {
       const host =
-        browserName === "firefox"
+        browserName === "firefox" && standard !== FIREFOX_DEFAULT_TEXT_SIZE
           ? await firefoxAtDefaultTextSize(standard)
           : browser;
       const context = await host.newContext(options);
