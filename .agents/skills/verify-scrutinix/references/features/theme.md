@@ -30,6 +30,6 @@ Screenshot: `chrome-theme.png`.
 
 ## Gotchas
 
-- Do not assume the first theme. Headless Chromium follows the host color scheme, and the default is `system`.
+- Do not assume the first theme. The default is `system`, and Playwright emulates `prefers-color-scheme: light` unless a test sets `colorScheme`, so a fresh drive context usually starts light; read the button's name instead of assuming.
 - The storage key is `theme` (`next-themes` default). There is no Scrutinix-specific key.
 - A fresh Playwright context has an empty `localStorage`. Theme does not leak into the next test.

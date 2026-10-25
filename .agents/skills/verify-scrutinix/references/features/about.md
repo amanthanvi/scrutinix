@@ -1,21 +1,26 @@
 # About
 
-How a scan becomes a verdict. This is the method page. It is not a second scanner.
+`How a scan becomes a verdict.` The open methodology: every weight, threshold, and rule the verdict engine uses, printed from `lib/domain/methodology.ts` (which `tests/unit/methodology.test.ts` runs through the engine). It is not a second scanner.
 
 ## Sub-features
 
-- scoring: which signals move risk, and which only support it
-- score-bands: Safe, Suspicious, Malicious, Critical
-- confidence: coverage-aware confidence, stated next to partial results
-- using-the-scanner: signal rows, batch rows, history, feed match rules
+- scoring: what moves the verdict (Safe Browsing, the threat feeds, VirusTotal, the link pattern model), what only supports it (certificate, domain age and registrar, DNS, redirects), and how points add up to a 0 to 100 score
+- score-bands: `0–24` Safe, `25–54` Suspicious, `55–79` Malicious, `80–100` Critical; Unknown and Error show no score
+- points: section `Points for each finding`, three tables captioned `Lists of known bad links`, `Checks of the link itself`, and `What lowers the score`, each with columns `Finding` and `Points` and notes under it
+- rules: section `The rules`, a definition list of the engine's rules
+- confidence: High and Moderate thresholds, the limits on confidence, and the disclosure `How the figure adds up` (a table with columns `For` and `Percentage points`)
+- cells: `Reading the eight cells`, the strip's order and a legend of each state's shape
+- ownership: `Which site a link belongs to`, the registered domain explained with `paypal.com.secure-login.xyz`
+- using-the-scanner: Summary's five questions, Full's eight rows, Batch, and history, with links to `/#scan-console` and `/privacy`
+- name: `The name`, with the pronunciation `Scrutinix (SCROO-tih-nix)`
 
 ## How to get to it (user POV)
 
-From any page, open About in the header or the footer. The heading is `How a scan becomes a verdict.` The current nav link has `aria-current="page"`. A link in the body goes back to `/#scan-console`. Another goes to Privacy.
+From any page, open About in the header or the footer. The heading is `How a scan becomes a verdict.` The current nav link has `aria-current="page"`. On a result, the band's `How scoring works` link opens `/about#scoring`. Sections have anchors: `#scoring`, `#points`, `#rules`, `#confidence`, `#name`.
 
 ## Driving it with Playwright
 
-`npm run verify:drive` test `about and privacy`.
+`npm run verify:drive` test `about and privacy`, plus the band link in `error and critical verdicts`.
 
 ```ts
 await page
@@ -23,15 +28,28 @@ await page
   .getByRole("link", { name: "About" })
   .click();
 await expect(
-  page.getByRole("heading", { name: "How a scan becomes a verdict." }),
+  page.getByRole("heading", {
+    level: 1,
+    name: "How a scan becomes a verdict.",
+  }),
 ).toBeVisible();
-await expect(page.getByRole("heading", { name: "Score bands" })).toBeVisible();
+await expect(
+  page.getByRole("table", { name: "Lists of known bad links" }),
+).toBeVisible();
+await page.getByText("How the figure adds up", { exact: true }).click();
+await expect(
+  page.getByRole("columnheader", { name: "Percentage points" }),
+).toBeVisible();
 ```
+
+The drive checks all nine section headings, the three scoring tables by caption, the bands (`Safe`, `80–100`), the confidence disclosure opening, and `SCROO-tih-nix`.
 
 Screenshot: `about.png`.
 
 ## Gotchas
 
 - The page is static. There is no scan here, and no IndexedDB write.
-- Score band labels are visible text (`Safe`, `Suspicious`, `Malicious`, `Critical`). They are not a live verdict.
-- Do not treat this page as proof that a scan scored inside a band. That proof is a verdict region on `/`.
+- Score band labels are visible text (`Safe`, `Suspicious`, `Malicious`, `Critical`). They are not a live verdict. Do not treat this page as proof that a scan scored inside a band; that proof is a verdict region on `/`.
+- The table rows are generated from the engine's constants. Do not hard-code a point value in a drive: the methodology unit test already ties every printed number to the engine, and a weight change would break the drive for no product reason.
+- `Confidence` and `Scoring` are both section headings and words in body text. Match headings by role with `exact: true`.
+- The confidence table is inside a closed `details`; it is hidden until `How the figure adds up` is opened.

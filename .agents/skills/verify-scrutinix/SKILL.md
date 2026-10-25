@@ -6,7 +6,7 @@ disable-model-invocation: true
 
 # Verify Scrutinix
 
-Scrutinix is a Next.js web app. A person pastes a URL, reads a verdict band, the link's real owner, and an eight-cell signal strip, and can run a batch, export, share a signed link, or keep history in IndexedDB on this device. There is no account system. Theme is stored in `localStorage` under `theme`.
+Scrutinix is a Next.js web app that asks "Is this link what it says it is?". A person pastes a link and sees it taken apart at once (which site it really belongs to, and whether it only spells out another one), before anything is scanned. Analyze streams eight checks into a verdict band (the verdict word, the registered domain under it, one instruction), then Evidence: a numbered eight-cell strip over five plain questions (Summary) or the eight check rows (Full). They can run a batch of up to 10, export, share a signed result, or keep history in IndexedDB on this device. A link can also arrive from outside (`/?url=`, or the Android share target `POST /share`); it is filled in and taken apart, and nothing scans until the person taps Analyze. There is no account system. Theme is stored in `localStorage` under `theme`.
 
 The feature map is [`references/features/README.md`](references/features/README.md). Open the one file that matches the change. Walk the README top to bottom for a broad sweep, and finish with `journeys.md`.
 
@@ -59,9 +59,12 @@ The share key is public and test-only. `lib/config/env.ts` accepts it only while
 Fixture mode swaps the analyze orchestrator onto `lib/server/test-fixtures.ts`. Hostnames:
 
 - `malicious.scrutinix.test` renders a VirusTotal conviction (`malicious`)
-- `unreachable.scrutinix.test` renders `unknown`
-- `feed-hit.scrutinix.test` renders a threat-feed conviction (`malicious`)
-- any other public hostname, including `example.com`, renders `safe`
+- `feed-hit.scrutinix.test` renders a URLhaus listing (`malicious`)
+- `critical.scrutinix.test` renders VirusTotal, Safe Browsing, and a feed together (`critical`)
+- `unreachable.scrutinix.test` renders a dead host (`unknown`)
+- `error.scrutinix.test` fails every check (`error`)
+- `long-hop.scrutinix.test` redirects once to a 63-letter hostname
+- any other public hostname, including `example.com`, renders `safe`. A safe link whose subdomain spells out another site (`https://paypal.com.secure-login.xyz/verify`) is shown as `Look-alike`; the stored verdict stays `safe`.
 
 Those fixture hostnames do not exist in public DNS. A `malicious` verdict for `malicious.scrutinix.test` is the observation that fixture mode is on. Live VirusTotal, Google Safe Browsing, URLhaus, ThreatFox, Spamhaus, WHOIS, and real DNS are not contacted. A proof of those live providers is `INCONCLUSIVE` in this loop: it needs API keys and network, and this skill does not turn fixture mode off.
 
@@ -138,7 +141,7 @@ Do not use `pkill`, `killall`, or kill by process name or pattern. `verify:clean
 
 Prefer the Playwright runner in this skill. It uses the same accessible names as `tests/e2e/`, and reuses `isolateRateLimit` from `tests/e2e/helpers.ts`.
 
-Fast path (home, scan `example.com`, read the safe verdict, read IndexedDB):
+Fast path (home, `example.com` taken apart in the field, scan it, read the safe band, the five questions, and the strip, read IndexedDB):
 
 ```bash
 npm run verify:smoke
@@ -164,15 +167,18 @@ npm run verify:drive -- -g "batch scan"
 
 Stable handles:
 
-- Roles and names: textbox `URL to analyze`, button `Analyze URL`, tab `Single`, tab `Batch`, textbox `URLs to analyze, one per line`, button `Start batch`, switch `Summary Full signal list`, region `Scan console`, region `Scan history`, region `Batch scan results`, region `Scan result: <verdict>`, meter `Threat score`, navigation `Primary`, navigation `Footer`, button `Switch to light theme` or `Switch to dark theme`, link `Skip to content`.
-- Signal rows: label `VirusTotal signal:`, `ML Ensemble signal:`, `Google Safe Browsing signal:`, `Threat Feeds signal:`, `TLS Certificate signal:`, `Domain Registration signal:`, `DNS Profile signal:`, `Redirect Chain signal:`. On Summary, a clean scan shows `All 8 checks found nothing.` instead of rows.
-- History: heading `History (<n> scans)`, textbox `Filter scan history` (visible after more than 3 saved scans), button `Clear all history`, button `Confirm clear all history`, button `Undo clear history`, button `Export history CSV`, button `Export history JSON`. One row per link: a re-scan replaces the earlier entry.
-- Result actions: button `Download result (JSON)`, button `Share`, button `Re-scan`, disclosure `How we reached this verdict`.
-- Shared links: a signed link opens region `Scan result: <verdict>` with `Verified Scrutinix result · checked …` and button `Run a fresh scan`. An unsigned or edited one opens label `Shared link, not verified`, heading `Check this shared link yourself`, button `Scan this link`.
-- Batch: button `Export batch CSV`, button `Export batch JSON`, buttons `Open result for <host>`.
-- Hooks: `#scan-console`, `#sx-url-input`, `#sx-url-error`, `#sx-batch-input`, `#main-content`.
+- Page: heading level 1 `Is this link what it says it is?` on `/` (visually hidden, still in the outline, as soon as the band is on the page, `Checking` included; a shared link's page has the visually hidden h1 `A link shared with you` instead), navigation `Primary` (About, Privacy, the theme button), navigation `Footer` (About, Privacy, Source), link `Skip to content`, link `Scrutinix home` (the wordmark, off the home page only), button `Switch to light theme` or `Switch to dark theme`.
+- Form: region `Scan console`, tablist `Scan mode` with tab `Single` and tab `Batch` (its visible hint `up to 10 links` is a description, not part of the name), textbox `URL to analyze`, button `Analyze URL` (visible text `Analyze`), button `Paste` (only where the browser lets a page read the clipboard), textbox `URLs to analyze, one per line`, button `Start batch`, button `Cancel batch`.
+- The link, taken apart: region `The link, taken apart` under the field while it holds a checkable link that is not already on screen, with the parts captioned (`Registered domain`, `A label anyone can add`, `A page on that domain`), the sentence `This link belongs to <owner>, not <site>.` for a look-alike, button `Expecting a particular site?`, then textbox `Which site were you expecting?`. On a result the same breakdown sits under the heading `The link, taken apart` (a heading, not a second region).
+- Verdict band: region `Scan result: <word>`, where the word is the one shown (`Safe`, `Suspicious`, `Malicious`, `Critical`, `Unknown`, `Error`, `Look-alike`, `Unconfirmed`). Its h2 (`#sx-verdict-heading`) is the word, the registered domain follows in serif, then the instruction, then a last line with the confidence (or a note in its place) and `How scoring works` (an Error band has no last line; a verified shared band has the check time and `Run a fresh scan` there instead). Before there is a word the band is region `Scanning URL` (heading `Checking`, `<n> of 8 checks finished`, button `Cancel scan`) or region `Checking the link's address` (a Safe result waiting for the link parser). Meter `Threat score` (`aria-valuetext` `<n> out of 100`) only where a number means something: never for Unknown, Error, Look-alike, Unconfirmed, or a shared snapshot. Link `How scoring works` goes to `/about#scoring`.
+- Evidence: region `Evidence`, switch `Summary Full signal list`, toolbar `Checks` with eight numbered buttons named `<cell>: <finding>` (cells `VirusTotal`, `Link pattern`, `Safe Browsing`, `Threat feeds`, `Certificate`, `Registration`, `DNS`, `Redirects`). Summary is list `Questions`: five `li[data-question]` (`reported`, `destination`, `concern`, `https`, `other`) whose h4s are `Has it been reported?`, `Where would it take me?`, `What else raises concern?`, `Does HTTPS make it safe?`, `What did the other checks find?`. Full is list `Signals`: eight `li[data-signal]` rows labelled `<Label>: <finding>` (`VirusTotal:`, `Link Pattern Model:`, `Google Safe Browsing:`, `Threat Feeds:`, `TLS Certificate:`, `Domain Registration:`, `DNS Profile:`, `Redirect Chain:`); a row with evidence carries the label on its `summary`. An Error result keeps the eight rows on Summary too.
+- Result actions: disclosure `How we reached this verdict` (ends `<n>/8 checks · … · cached` on a cache hit, and `Reference: <scan id>` for a failed or partial scan), button `Download result (JSON)`, button `Share`, button `Re-scan`. The live region is `p[aria-live='polite']` in region `Results` (match the region with `exact: true`: `Batch scan results` contains the word): `Result for <host>: <word>, <n> out of 100. <instruction>`, without the score where the band shows none, and with `This link belongs to <owner>, not <site>.` after a Look-alike's instruction or `We couldn't check whether this address imitates another site.` after an Unconfirmed one. The expected-site answer is another polite `p`, so scope to `Results`.
+- History: heading `History (<n> scans)`, searchbox `Filter scan history` (visible after more than 3 saved scans), button `Clear all history`, button `Confirm clear all history`, button `Undo clear history`, button `Export history CSV`, button `Export history JSON`. One row per link: a re-scan replaces the earlier entry.
+- Shared links: a signed link opens region `Scan result: <word>` with `Verified Scrutinix result · checked … It may be out of date.`, button `Run a fresh scan`, list `Checks` (eight items), then heading `Check another link` over the form. An unsigned or edited one opens region `Shared link, not verified`; a signed one past 3 days opens region `Shared result, expired`; both have heading `Check this shared link yourself` and button `Scan this link`.
+- Batch: tabpanel `Batch`, region `Batch scan results` (`Checking links`, `Batch results`, or `Batch stopped`, and `<done>/<total>`), button `Export batch CSV`, button `Export batch JSON`, buttons `Open result for <link>`, the normalized link without its scheme (`Open result for example.org/`, plus ` (look-alike link)` for a look-alike). A Batch chunk that fails to load shows alert `Batch didn't load. Check your connection and try again.` (and `Batch results didn't load. …` in region `Results`, matched with `exact: true`), each with button `Try again`.
+- Hooks: `#scan-console`, `#sx-url-input`, `#sx-url-error`, `#sx-analyze`, `#sx-batch-input`, `#sx-verdict-heading`, `#main-content`, `li[data-question]`, `li[data-signal]`.
 
-The dev server allows 10 analyze requests per minute and 50 per day for each client address, counted in process memory for `next dev`. Every drive test presents its own address (`x-real-ip` from `isolateRateLimit`), as `tests/e2e` does, so `verify:smoke` (1 scan) and `verify:drive` (8 scans) never share a budget. A person driving one browser by hand shares one address.
+The dev server allows 10 analyze requests per minute and 50 per day for each client address, counted in process memory for `next dev`. Every drive test presents its own address (`x-real-ip` from `isolateRateLimit`), as `tests/e2e` does, so no test can run into the limit: `verify:smoke` spends 1 scan and no `verify:drive` test spends more than 4. The address is derived from the runner's pid, so two runs within a minute can land on the same one; 1 + 4 still fits. A batch spends one per link. A person driving one browser by hand shares one address.
 
 The full e2e contract remains `npm run test:e2e` (production build, same fixtures and share key). Use it when the change touches a behavior the sweep does not list. `verify:smoke` is the short loop.
 
@@ -180,26 +186,28 @@ The full e2e contract remains `npm run test:e2e` (production build, same fixture
 
 Proof artifacts go to the evidence directory (`/tmp/scrutinix-verify/evidence/`, or `VERIFY_EVIDENCE_DIR`). Cleanup never deletes that directory.
 
-- `*.png` screenshots taken by the specs (`smoke-home.png`, `smoke-safe.png`, and the drive shots such as `verdict-malicious.png` and `single-shared-verified.png`)
+- `*.png` screenshots taken by the specs (`smoke-home.png`, `smoke-safe.png`, and the drive shots such as `anatomy-paste.png`, `verdict-look-alike.png`, `share-target-prefilled.png`, and `single-shared-verified.png`; each feature file lists its own)
 - `scan.json`, `scan-history.csv`, and `batch.csv` saved from the download the UI produced
 
 Playwright traces and HTML reports are not evidence. They embed raw test output, so they live in the private state directory, under `playwright/<suite>/test-results/` (`trace.zip` per test, trace is `on`) and `playwright/<suite>/report/`. A later smoke run does not delete drive traces, and a later drive run does not delete smoke traces. Read them locally; do not upload, attach, or paste them.
 
-A proof exercises the user path: type in the scan box, click Analyze, press Enter, switch Summary to Full, open a signal row, export, share, clear history. Reading `GET /` is the doctor check, not the proof that a scan works.
+A proof exercises the user path: paste or type a link and read it taken apart, click Analyze or press Enter, read the band and the questions, click a strip cell, switch Summary to Full, open a signal row, export, share and open the shared link, open a `/?url=` link, clear history. Reading `GET /` is the doctor check, not the proof that a scan works.
 
 Capture the action and the end state. Examples: the scan box filled, then region `Scan result: safe`; Clear confirmed, then IndexedDB `scrutinix-v2` has no rows; Undo, then those rows are back.
 
 Side effects worth reading:
 
-- Verdict region accessible name and meter `aria-valuenow`
+- Verdict region accessible name, its h2 word, and meter `aria-valuenow`
+- The live region, `p[aria-live='polite']` inside region `Results` (what a screen reader hears when a result lands or is reopened)
+- Requests to `/api/analyze`: none while a pasted or arriving link waits for Analyze, exactly one after the tap (`recordScans` in `scripts/support.ts`)
 - IndexedDB database `scrutinix-v2`, object store `scans`, field `url` (normalized, so `example.com` is stored as `https://example.com/`)
 - Downloaded `scan.json`, `scan-history.csv`, and `batch.csv` contents
-- Clipboard text after Share: a `shared` payload and a `sig`, and what each URL opens (verified with `sig`, neutral without)
+- Clipboard text after Share: a `shared` payload and a `sig`, and what each URL opens (verified with `sig`, neutral without), including its `og:image` (`/og/result?shared=…&sig=…` only when verified)
 - `localStorage['theme']` and the `class` on `html` after a reload
 - Signal detail text that only the fixture provider would produce, such as `Fixture CA` on the TLS row
-- Re-scan of the same URL shows `· cached` under `How we reached this verdict` within 15 minutes
+- Re-scan of the same URL shows `· cached` under `How we reached this verdict` within 15 minutes, for a complete result only (a failed or partial scan is never cached)
 
-The fixture table is the same production orchestrator path with the provider functions replaced. Do not stub the React tree or call the verdict builder from the test. Cancel during an in-flight scan is `INCONCLUSIVE` here: fixture signals resolve before the Cancel button is a stable target. Observe Cancel only against a slow live provider, which this loop does not run.
+The fixture table is the same production orchestrator path with the provider functions replaced. Do not stub the React tree or call the verdict builder from the test. Cancel during an in-flight scan (button `Cancel scan` in the `Scanning URL` band, or Escape in the field) is `INCONCLUSIVE` here: fixture signals resolve before the button is a stable target. Observe Cancel only against a slow live provider, which this loop does not run.
 
 ## Cleanup
 
@@ -244,7 +252,7 @@ node .agents/skills/verify-scrutinix/scripts/cleanup.mjs --help
 
 `npm run verify:check` runs in under a minute and needs no server. It starts its own supervisors, stand-in apps, and stranger processes on free ports in private scratch directories under `/tmp`. Each stranger must survive every cleanup. It stops only what it started, by the handles it holds: supervisors and direct children through their `ChildProcess` handles, and every stand-in (fake apps and their children, strangers, sleepers, and the fake `next dev`) through a lifeline, a socket connection to the check that the stand-in exits on when it closes. If the check throws, it tears down on exit; if it is killed, every lifeline closes, every stand-in exits, and each supervisor follows 10 seconds after its app. It never signals a saved pid or process group. A failing check prints its name and selected fields only (numbers, booleans, null); any string, array, or object prints as its kind and size, so no captured output, `run.json`, or run token reaches the terminal. It runs the smoke runner with a stand-in Playwright only by passing it to `runSuite` in `scripts/suite.mjs`; `smoke.mjs` always runs the real one. Its refusal tests run against a state directory every command refuses, so a broken guard fails the check instead of launching anything, and it keeps its scratch directory, and fails, if any supervisor there still answers.
 
-`scripts/supervisor.mjs` is the run supervisor; launch starts it, and nothing else should. `scripts/evidence.ts` writes screenshots and downloads into `VERIFY_EVIDENCE_DIR`. `scripts/support.ts` holds the shared Playwright steps (`gotoApp`, `fillSingle`, `scanSingle`, `historyState`).
+`scripts/supervisor.mjs` is the run supervisor; launch starts it, and nothing else should. `scripts/evidence.ts` writes screenshots and downloads into `VERIFY_EVIDENCE_DIR`. `scripts/support.ts` holds the shared Playwright steps (`gotoApp`, `waitForHydration`, `fillSingle`, `scanSingle`, `historyState`, `recordScans`, `launchFromShareSheet`) and re-exports `isolateRateLimit` and `setDefaultTextSize` from `tests/e2e/helpers.ts`.
 
 ## How to report
 
