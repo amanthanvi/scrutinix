@@ -16,7 +16,10 @@ import { ResultsSection } from "@/components/scrutinix/results-section";
 import { ScanForm } from "@/components/scrutinix/scan-form";
 import { VERDICT_HEADING_ID } from "@/components/scrutinix/verdict-panel";
 import { sanitizeHistoryEntry } from "@/lib/domain/runtime-safety";
-import { encodeSharedSnapshot } from "@/lib/domain/signal-signature";
+import {
+  buildSharedSnapshot,
+  encodeSharedSnapshot,
+} from "@/lib/domain/signal-signature";
 import { buildThreatAssessment } from "@/lib/domain/verdict";
 import { resetEnvForTests } from "@/lib/config/env";
 import type { SharedView } from "@/lib/domain/signal-signature";
@@ -1040,6 +1043,63 @@ describe("shared links and their signature", () => {
       now: Date.parse("2026-10-09T09:00:00.000Z"),
     });
     expect(screen.getByLabelText(/^scan result: malicious$/i)).toBeTruthy();
+  });
+
+  it.each([
+    ["critical.scrutinix.test", "Don't open this link — it's a known threat."],
+    ["example.com", "Looks safe to open."],
+  ])(
+    "gives the recipient of %s the instruction the sender's band showed",
+    async (host, imperative) => {
+      const result = resultFrom(
+        host,
+        await fixtureSignals(host),
+        `https://${host}/login`,
+      );
+      const instruction = (band: HTMLElement) =>
+        band.querySelector(".sx-band-imperative")?.textContent;
+
+      // The sender's own band.
+      const sender = renderApp(<OpenStored result={result} />);
+      fireEvent.click(screen.getByRole("button", { name: "open stored" }));
+      await waitFor(() =>
+        expect(instruction(screen.getByLabelText(/^scan result: /i))).toBe(
+          imperative,
+        ),
+      );
+      sender.unmount();
+
+      // The share the server issues for it, opened by the recipient.
+      renderApp(undefined, {
+        payload: encodeSharedSnapshot(buildSharedSnapshot(result)),
+      });
+      const band = screen.getByLabelText(/^scan result: /i);
+      expect(band.textContent).toMatch(/Verified Scrutinix result/);
+      expect(instruction(band)).toBe(imperative);
+    },
+  );
+
+  it("keeps a snapshot signed before the basis existed hedged", () => {
+    for (const [verdict, hedged] of [
+      ["critical", "Don't open this link."],
+      ["safe", "Probably safe — still check who sent it."],
+    ] as const) {
+      const { unmount } = renderApp(undefined, {
+        payload: encodeSharedSnapshot({
+          verdict,
+          url: "https://example.com/login",
+          summary: "",
+          capturedAt: "2026-10-06T09:00:00.000Z",
+          signature: Array(8).fill("clear"),
+        }),
+      });
+      const band = screen.getByLabelText(/^scan result: /i);
+      expect(
+        band.querySelector(".sx-band-imperative")?.textContent,
+        verdict,
+      ).toBe(hedged);
+      unmount();
+    }
   });
 });
 

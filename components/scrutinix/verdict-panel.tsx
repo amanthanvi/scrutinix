@@ -18,6 +18,7 @@ import {
   getConfidenceReasons,
   getCoverageCaveat,
   getScoreBandText,
+  getSharedGuidance,
   getUnderlyingVerdictNote,
   getVerdictGuidance,
   getVerdictRecommendations,
@@ -310,13 +311,10 @@ export function VerdictBand({
   }
 
   if (!result && sharedSnapshot) {
-    // Snapshots carry no score: the instruction falls back to its hedged
-    // forms and no meter is shown.
-    const guidance = getVerdictGuidance({
-      verdict: sharedSnapshot.verdict,
-      threatInfo: null,
-      impersonates,
-    });
+    // Snapshots carry no score, so no meter is shown. The instruction is
+    // worded from the basis the server signed with the verdict, as the
+    // sender's band was; a snapshot without one keeps the hedged forms.
+    const guidance = getSharedGuidance(sharedSnapshot, impersonates);
     const word = verdictWord({ verdict: sharedSnapshot.verdict, impersonates });
     return (
       <Band

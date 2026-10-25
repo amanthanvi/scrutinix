@@ -143,6 +143,52 @@ describe("shared snapshots", () => {
     );
   });
 
+  it("carries the basis the instruction is worded from", async () => {
+    const result = resultFor(
+      await fixtureSignals("feed-hit.scrutinix.test"),
+      "https://feed-hit.scrutinix.test/payload.exe",
+    );
+    const snapshot = buildSharedSnapshot(result);
+    expect(snapshot.basis).toEqual({
+      confidence: result.threatInfo?.confidenceLabel,
+      clean: false,
+      partial: false,
+      // URLhaus lists the exact link: a convicting listing.
+      confirmed: true,
+    });
+    expect(decodeSharedSnapshot(encodeSharedSnapshot(snapshot))?.basis).toEqual(
+      snapshot.basis,
+    );
+
+    const { basis, ...withoutBasis } = snapshot;
+    expect(basis).toBeDefined();
+    // What the basis costs a share link: a fixed, small amount.
+    const added =
+      encodeSharedSnapshot(snapshot).length -
+      encodeSharedSnapshot(withoutBasis).length;
+    expect(added).toBeGreaterThan(0);
+    expect(added).toBeLessThanOrEqual(180);
+  });
+
+  it("drops a malformed basis instead of rejecting the snapshot", () => {
+    for (const basis of [
+      { confidence: "certain", clean: true, partial: false, confirmed: true },
+      { confidence: "high", clean: "yes", partial: false, confirmed: false },
+      { confidence: "high" },
+      "high",
+    ]) {
+      const parsed = sharedSnapshotSchema.parse({
+        verdict: "critical",
+        url: "https://example.com/",
+        summary: "",
+        capturedAt: "2026-10-06T00:00:00.000Z",
+        basis,
+      });
+      expect(parsed.basis).toBeUndefined();
+      expect(parsed.verdict).toBe("critical");
+    }
+  });
+
   it("still parses links shared before the signature existed", () => {
     const old = {
       verdict: "malicious",
@@ -157,6 +203,7 @@ describe("shared snapshots", () => {
       const decoded = decodeSharedSnapshot(payload);
       expect(decoded).toMatchObject(old);
       expect(decoded?.signature).toBeUndefined();
+      expect(decoded?.basis).toBeUndefined();
     }
   });
 

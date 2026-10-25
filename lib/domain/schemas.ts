@@ -758,6 +758,26 @@ export const signalSignatureSchema = z
 
 export type SignalSignature = z.infer<typeof signalSignatureSchema>;
 
+/**
+ * What a result's instruction rests on besides its verdict: four neutral
+ * facts, read from the result by `getVerdictBasis`
+ * (`lib/domain/verdict-basis.ts`). A share signs them so the recipient's
+ * band can word the instruction the way the sender's did; the wording
+ * itself is never stored.
+ */
+export const verdictBasisSchema = z.object({
+  /** `threatInfo.confidenceLabel`; "low" when there is none. */
+  confidence: z.enum(["low", "moderate", "high"]),
+  /** The engine scored nothing against the link; false when unknown. */
+  clean: z.boolean(),
+  /** A check failed or only partly finished (`metadata.partialFailure`). */
+  partial: z.boolean(),
+  /** A reputation source confirmed the threat (`hasConfirmedReputationHit`). */
+  confirmed: z.boolean(),
+});
+
+export type VerdictBasis = z.infer<typeof verdictBasisSchema>;
+
 export const sharedSnapshotSchema = z.object({
   verdict: verdictSchema,
   url: z.string().max(2048),
@@ -765,6 +785,10 @@ export const sharedSnapshotSchema = z.object({
   capturedAt: z.string().max(128),
   // Added with the eight-cell strip; links shared before it still parse.
   signature: signalSignatureSchema.optional().catch(undefined),
+  // Added so a recipient's instruction matches the sender's. Links shared
+  // before it (or with a malformed basis) still parse and keep the hedged
+  // instruction.
+  basis: verdictBasisSchema.optional().catch(undefined),
 });
 
 export type SharedSnapshot = z.infer<typeof sharedSnapshotSchema>;

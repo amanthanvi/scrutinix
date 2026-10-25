@@ -1,8 +1,13 @@
 import { capitalize } from "@/lib/domain/copy";
 import { describeLimitedChecks, getLimitedChecks } from "@/lib/domain/coverage";
-import type { AnalysisResult, Verdict } from "@/lib/domain/types";
-import { hasConfirmedReputationHit } from "@/lib/domain/reputation";
+import type {
+  AnalysisResult,
+  SharedSnapshot,
+  Verdict,
+  VerdictBasis,
+} from "@/lib/domain/types";
 import { isLegacySignalRecord } from "@/lib/domain/signal-signature";
+import { getVerdictBasis } from "@/lib/domain/verdict-basis";
 
 /**
  * Pure presentation logic for a finished verdict: the one-line instruction,
@@ -43,7 +48,21 @@ type GuidanceInput = Pick<AnalysisResult, "verdict" | "threatInfo"> & {
    * with no anatomy line (the live region) append the ownership sentence.
    */
   registeredDomain?: string | null;
+  /**
+   * A verified shared snapshot's signed basis (`SharedSnapshot.basis`),
+   * standing in for the threatInfo, metadata, and signals a snapshot
+   * doesn't carry. Absent for a result: its basis is read from the result
+   * itself (`getVerdictBasis`), so the two word the instruction the same.
+   */
+  basis?: VerdictBasis | null;
 };
+
+/** The facts the instruction is worded from (`getVerdictBasis`). */
+function basisOf(
+  result: Pick<GuidanceInput, "threatInfo" | "metadata" | "signals" | "basis">,
+): VerdictBasis {
+  return result.basis ?? getVerdictBasis(result);
+}
 
 const VERDICTS: readonly Verdict[] = [
   "safe",
@@ -150,10 +169,12 @@ export function shareHeadline(
  * Whether we may say no check flagged the link: only when the verdict
  * engine scored nothing against it. A Safe verdict can still carry minor
  * findings (one VirusTotal engine, a few structure points), and a shared
- * snapshot carries no evidence to say either way.
+ * snapshot without a basis carries no evidence to say either way.
  */
-function nothingFlagged(result: Pick<GuidanceInput, "threatInfo">): boolean {
-  return Boolean(result.threatInfo && !result.threatInfo.hasPositiveEvidence);
+function nothingFlagged(
+  result: Pick<GuidanceInput, "threatInfo" | "basis">,
+): boolean {
+  return basisOf(result).clean;
 }
 
 /**
@@ -166,7 +187,7 @@ function nothingFlagged(result: Pick<GuidanceInput, "threatInfo">): boolean {
 export function getUnderlyingVerdictNote(
   result: Pick<
     GuidanceInput,
-    "verdict" | "impersonates" | "addressUnchecked" | "threatInfo"
+    "verdict" | "impersonates" | "addressUnchecked" | "threatInfo" | "basis"
   >,
 ): string | null {
   if (!isLookAlikeSafe(result) && !isUncheckedSafe(result)) {
@@ -196,18 +217,15 @@ export function ownershipSentence(
 /**
  * A Safe verdict we cannot fully stand behind: confidence below high, a
  * check that failed or only partly finished, or one with minor warning
- * signs.
+ * signs (or a shared snapshot with no basis to say otherwise).
  */
 export function isProvisionalSafe(result: GuidanceInput): boolean {
   if (result.verdict !== "safe") {
     return false;
   }
 
-  return (
-    result.threatInfo?.confidenceLabel !== "high" ||
-    Boolean(result.threatInfo?.hasPositiveEvidence) ||
-    Boolean(result.metadata?.partialFailure)
-  );
+  const basis = basisOf(result);
+  return basis.confidence !== "high" || !basis.clean || basis.partial;
 }
 
 export function getVerdictGuidance(result: GuidanceInput): VerdictGuidance {
@@ -228,10 +246,9 @@ function getInstruction(
       // Critical can come from local heuristics alone; "known threat" is
       // only true when a reputation source confirmed it.
       return {
-        imperative:
-          result.signals && hasConfirmedReputationHit(result.signals)
-            ? "Don't open this link — it's a known threat."
-            : "Don't open this link.",
+        imperative: basisOf(result).confirmed
+          ? "Don't open this link — it's a known threat."
+          : "Don't open this link.",
         showScore: true,
       };
     case "malicious":
@@ -281,6 +298,27 @@ function getInstruction(
     default:
       return { imperative: "The scan failed — try again.", showScore: false };
   }
+}
+
+/**
+ * The guidance for a verified shared snapshot: its verdict and the basis
+ * the server signed with it, plus the look-alike from Scrutinix's own
+ * anatomy of the link. The shared band, the page's metadata, and the share
+ * card all take their instruction from here, so a recipient reads what the
+ * sender's band said. A snapshot signed before the basis existed keeps the
+ * hedged forms ("Probably safe — still check who sent it.", a plain
+ * "Don't open this link."). Call it only with a verified snapshot.
+ */
+export function getSharedGuidance(
+  snapshot: Pick<SharedSnapshot, "verdict" | "basis">,
+  impersonates: string | null,
+): VerdictGuidance {
+  return getVerdictGuidance({
+    verdict: snapshot.verdict,
+    threatInfo: null,
+    basis: snapshot.basis ?? null,
+    impersonates,
+  });
 }
 
 /** Why an "Unconfirmed" Safe carries no score or confidence on its band. */
