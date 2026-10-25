@@ -150,3 +150,59 @@ jobs:
 
       - name: Lighthouse
         run: npm run lighthouse
+
+  # The same e2e suite in Firefox and WebKit, beside Verify's Chromium run.
+  # Not a required check: Verify gates merges, and these show where another
+  # engine reads the page differently (tests/e2e is written to pass in all
+  # three; AGENTS.md, "Engine-portable e2e tests").
+  e2e-engines:
+    name: E2E (${{ matrix.engine }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    if: github.event_name != 'schedule'
+
+    strategy:
+      fail-fast: false
+      matrix:
+        engine: [firefox, webkit]
+
+    env:
+      ENGINE: ${{ matrix.engine }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - name: Setup Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ matrix.engine }}-${{ hashFiles('package-lock.json') }}
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps "$ENGINE"
+
+      - name: E2E tests (offline fixtures)
+        run: npm run test:e2e -- --project="$ENGINE"
+        env:
+          SKIP_BUILD: "1"
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: playwright-report-${{ matrix.engine }}
+          path: playwright-report/
+          retention-days: 7
