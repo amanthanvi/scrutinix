@@ -458,9 +458,11 @@ export function ResultsSection() {
                   leadsTo={questions ? "question" : "row"}
                   onActivate={activateSignal}
                 />
-                {active ? (
-                  <StripLegend signals={signals} scored={scored} />
-                ) : null}
+                <StripLegend
+                  signals={signals}
+                  scored={scored}
+                  settled={active !== null}
+                />
               </div>
 
               {questions ? (
@@ -546,29 +548,48 @@ const LEGEND_ORDER: readonly Severity[] = [
 ];
 
 /**
- * A key to the strip's shapes: only the states it actually draws, in the
- * words its names and titles use. For the eye (each cell already states
- * its own answer), so hidden from assistive technology.
+ * A key to the strip's shapes once the result settles: only the states it
+ * actually draws, in the words its names and titles use. For the eye (each
+ * cell already states its own answer), so hidden from assistive
+ * technology. From the scan's start it holds the room every state's key
+ * takes (an invisible stand-in), so the key that draws when the verdict
+ * lands never moves the evidence below it.
  */
 function StripLegend({
   signals,
   scored,
+  settled,
 }: {
   signals: SignalResults;
   scored: ReadonlySet<SignalName>;
+  settled: boolean;
 }) {
   const present = new Set(getSignalSignature(signals, scored));
-  const states = LEGEND_ORDER.filter((severity) => present.has(severity));
-  return states.length > 0 ? (
-    <p aria-hidden="true" className="sx-legend">
-      {states.map((severity) => (
-        <span key={severity}>
-          <SignalCell severity={severity} settled />
-          {capitalize(severityWords[severity])}
-        </span>
-      ))}
-    </p>
-  ) : null;
+  const states = settled
+    ? LEGEND_ORDER.filter((severity) => present.has(severity))
+    : [];
+  return (
+    <div className="sx-slot">
+      <p aria-hidden="true" className="sx-legend sx-stand-in">
+        {LEGEND_ORDER.map((severity) => (
+          <span key={severity}>
+            <span className="sx-cell" />
+            <span data-stand-in={capitalize(severityWords[severity])} />
+          </span>
+        ))}
+      </p>
+      {states.length > 0 ? (
+        <p aria-hidden="true" className="sx-legend">
+          {states.map((severity) => (
+            <span key={severity}>
+              <SignalCell severity={severity} settled />
+              {capitalize(severityWords[severity])}
+            </span>
+          ))}
+        </p>
+      ) : null}
+    </div>
+  );
 }
 
 function LiveStatus({ text }: { text: string }) {
