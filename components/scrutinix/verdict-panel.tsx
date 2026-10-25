@@ -22,6 +22,7 @@ import {
   getUnderlyingVerdictNote,
   getVerdictGuidance,
   getVerdictRecommendations,
+  shouldShowSharedSummary,
   shouldShowVerdictSummary,
   verdictWord,
 } from "@/lib/domain/verdict-guidance";
@@ -332,7 +333,7 @@ export function VerdictBand({
         {...domainProps}
         imperative={guidance.imperative}
       >
-        {sharedSnapshot.summary ? (
+        {shouldShowSharedSummary(sharedSnapshot, impersonates) ? (
           <p className="text-body mt-4 max-w-[65ch] text-[var(--sx-text)]">
             {sharedSnapshot.summary}
           </p>

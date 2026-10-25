@@ -32,6 +32,7 @@ import type {
 } from "@/lib/domain/types";
 import { signalLabels, signalNames } from "@/lib/domain/types";
 import { threatScoreToVerdict } from "@/lib/domain/score-bands";
+import { NOTHING_FLAGGED_SUMMARY } from "@/lib/domain/verdict-guidance";
 
 export { hasConfirmedReputationHit } from "@/lib/domain/reputation";
 
@@ -238,7 +239,7 @@ export function buildThreatAssessment(
     score,
     summary: buildSummary(verdict, contributions, reasons, limitedCoverage),
     categories,
-    reasons: reasons.length ? reasons : ["No check flagged this link."],
+    reasons: reasons.length ? reasons : [NOTHING_FLAGGED_SUMMARY],
     recommendations: buildRecommendations(verdict, {
       limitedCoverage,
       // Same rule as the "Probably safe" imperative, so the first "What
@@ -1073,7 +1074,7 @@ function buildSummary(
 
     return limitedCoverage
       ? "No check flagged this link, but some checks were limited."
-      : "No check flagged this link.";
+      : NOTHING_FLAGGED_SUMMARY;
   }
 
   if (verdict === "error") {

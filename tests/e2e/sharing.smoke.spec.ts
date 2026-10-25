@@ -328,7 +328,9 @@ test("a signed share states the instruction its basis supports; one signed befor
     signature: Array(8).fill("clear"),
   };
 
-  for (const [snapshot, word, instruction] of [
+  // The summary shows unless it only repeats the instruction ("Looks safe
+  // to open." over "No check flagged this link."), as on the sender's band.
+  for (const [snapshot, word, instruction, summaryShown] of [
     [
       {
         ...confirmedCritical,
@@ -341,6 +343,7 @@ test("a signed share states the instruction its basis supports; one signed befor
       },
       "critical",
       "Don't open this link — it's a known threat.",
+      true,
     ],
     [
       {
@@ -354,10 +357,11 @@ test("a signed share states the instruction its basis supports; one signed befor
       },
       "safe",
       "Looks safe to open.",
+      false,
     ],
     // Signed before the basis existed: the hedged forms, as before.
-    [confirmedCritical, "critical", "Don't open this link."],
-    [cleanSafe, "safe", "Probably safe — still check who sent it."],
+    [confirmedCritical, "critical", "Don't open this link.", true],
+    [cleanSafe, "safe", "Probably safe — still check who sent it.", true],
   ] as const) {
     const payload = encodeSharedPayload(snapshot);
     await page.goto(sharedPath(payload, signSharedPayload(payload)));
@@ -371,6 +375,9 @@ test("a signed share states the instruction its basis supports; one signed befor
     // Exactly this sentence: "Don't open this link." never passes for the
     // known-threat form, or the other way round.
     await expect(band.locator(".sx-band-imperative")).toHaveText(instruction);
+    await expect(band.getByText(snapshot.summary, { exact: true })).toHaveCount(
+      summaryShown ? 1 : 0,
+    );
     expect((await metaDescription(page))?.startsWith(`${instruction} `)).toBe(
       true,
     );

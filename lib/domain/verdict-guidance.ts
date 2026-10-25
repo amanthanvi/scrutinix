@@ -450,6 +450,36 @@ export function shouldShowVerdictSummary(
 }
 
 /**
+ * A Safe result's summary when the engine scored nothing and every check
+ * finished in full (`buildSummary` in `lib/domain/verdict.ts`).
+ */
+export const NOTHING_FLAGGED_SUMMARY = "No check flagged this link.";
+
+/**
+ * Whether a verified shared band prints the snapshot's summary. With no
+ * evidence beneath it, it is the one sentence a recipient gets on why, so
+ * it shows, except where it only repeats the instruction: under "Looks
+ * safe to open.", "No check flagged this link." says it again, and the
+ * sender's band left it out too (`shouldShowVerdictSummary`). "…, but some
+ * checks were limited." adds something, so it stays.
+ */
+export function shouldShowSharedSummary(
+  snapshot: Pick<SharedSnapshot, "verdict" | "summary" | "basis">,
+  impersonates: string | null,
+): boolean {
+  if (!snapshot.summary) return false;
+  const saysLooksSafe =
+    snapshot.verdict === "safe" &&
+    !impersonates &&
+    !isProvisionalSafe({
+      verdict: snapshot.verdict,
+      threatInfo: null,
+      basis: snapshot.basis ?? null,
+    });
+  return !(saysLooksSafe && snapshot.summary === NOTHING_FLAGGED_SUMMARY);
+}
+
+/**
  * One sentence naming the checks that limited coverage, e.g. "VirusTotal
  * didn't finish; TLS Certificate couldn't be fully verified." Built from
  * the same `getLimitedChecks` list the verdict summary's "some checks were

@@ -20,6 +20,8 @@ import {
   isProvisionalSafe,
   ownershipSentence,
   shareHeadline,
+  NOTHING_FLAGGED_SUMMARY,
+  shouldShowSharedSummary,
   shouldShowVerdictSummary,
   verdictWord,
 } from "@/lib/domain/verdict-guidance";
@@ -455,6 +457,49 @@ describe("shouldShowVerdictSummary", () => {
     expect(result.verdict).toBe("safe");
     expect(result.threatInfo?.summary).toBe("No check flagged this link.");
     expect(shouldShowVerdictSummary(result)).toBe(false);
+  });
+});
+
+describe("shouldShowSharedSummary", () => {
+  const clean = {
+    confidence: "high",
+    clean: true,
+    partial: false,
+    confirmed: false,
+  } as const;
+
+  it("drops only the clean summary under an unhedged Safe", async () => {
+    // The engine's own clean summary is the one it drops.
+    const result = resultFrom(await fixtureSignals("example.com"));
+    expect(result.threatInfo?.summary).toBe(NOTHING_FLAGGED_SUMMARY);
+    const safe = {
+      verdict: "safe" as const,
+      summary: NOTHING_FLAGGED_SUMMARY,
+      basis: clean,
+    };
+    expect(shouldShowSharedSummary(safe, null)).toBe(false);
+    // Anything the instruction doesn't already say stays.
+    expect(shouldShowSharedSummary(safe, "paypal.com")).toBe(true);
+    expect(
+      shouldShowSharedSummary(
+        {
+          ...safe,
+          summary: "No check flagged this link, but some checks were limited.",
+        },
+        null,
+      ),
+    ).toBe(true);
+    for (const basis of [
+      undefined,
+      { ...clean, confidence: "moderate" as const },
+      { ...clean, partial: true },
+    ]) {
+      expect(shouldShowSharedSummary({ ...safe, basis }, null)).toBe(true);
+    }
+    expect(shouldShowSharedSummary({ ...safe, verdict: "unknown" }, null)).toBe(
+      true,
+    );
+    expect(shouldShowSharedSummary({ ...safe, summary: "" }, null)).toBe(false);
   });
 });
 
