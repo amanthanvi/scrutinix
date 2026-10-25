@@ -119,11 +119,17 @@ function scanNdjson(result: AnalysisResult) {
     .join("\n")}\n`;
 }
 
-function OpenStored({ result }: { result: AnalysisResult }) {
+function OpenStored({
+  result,
+  label = "open stored",
+}: {
+  result: AnalysisResult;
+  label?: string;
+}) {
   const { openStoredResult } = useAnalyzerRuntime();
   return (
     <button type="button" onClick={() => openStoredResult(result)}>
-      open stored
+      {label}
     </button>
   );
 }
@@ -1205,6 +1211,69 @@ describe("ResultsSection focus and states", () => {
     expect(
       screen.getByRole("list", { name: "Signals" }).querySelectorAll("li"),
     ).toHaveLength(8);
+  });
+
+  it("draws no Summary/Full switch for an Error result and keeps the choice for the next", async () => {
+    const signals = createPendingSignalResults();
+    for (const name of signalNames) {
+      signals[name] = {
+        status: "error",
+        data: null,
+        error: "The provider timed out.",
+        durationMs: 0,
+      };
+    }
+    const failed = resultFrom("all-failed", signals, "https://down.example/");
+    expect(failed.verdict).toBe("error");
+    const safe = resultFrom("safe", cleanSignals(), "https://example.com/");
+    expect(safe.verdict).toBe("safe");
+    renderApp(
+      <>
+        <OpenStored result={failed} label="open error" />
+        <OpenStored result={safe} label="open safe" />
+      </>,
+    );
+    const viewSwitch = () =>
+      screen.queryByRole("switch", { name: /^Summary Full/ });
+
+    // One view, so no control: nothing claims Summary while rows show.
+    fireEvent.click(screen.getByRole("button", { name: "open error" }));
+    await screen.findByRole("heading", { level: 2, name: "Error" });
+    expect(viewSwitch()).toBeNull();
+    expect(screen.queryByRole("list", { name: "Questions" })).toBeNull();
+    expect(
+      screen.getByRole("list", { name: "Signals" }).querySelectorAll("li"),
+    ).toHaveLength(8);
+    // The strip leads to the rows it shows, and a cell focuses its row.
+    expect(document.getElementById("sx-strip-hint")?.textContent).toBe(
+      "Each check opens its evidence below.",
+    );
+    const strip = screen.getByRole("toolbar", { name: "Checks" });
+    fireEvent.click(within(strip).getByRole("button", { name: /^Redirects:/ }));
+    await waitFor(() => {
+      expect(document.activeElement).toBe(
+        screen.getByLabelText(/^Redirect Chain:/, { selector: "li" }),
+      );
+    });
+
+    // The stored choice (Summary) is untouched for the next result.
+    fireEvent.click(screen.getByRole("button", { name: "open safe" }));
+    await screen.findByRole("list", { name: "Questions" });
+    expect(viewSwitch()?.getAttribute("aria-checked")).toBe("false");
+    expect(document.getElementById("sx-strip-hint")?.textContent).toBe(
+      "Each check moves to the question it answers below.",
+    );
+
+    // Full, then an Error, then back: Full is still the choice.
+    fireEvent.click(viewSwitch()!);
+    expect(viewSwitch()?.getAttribute("aria-checked")).toBe("true");
+    fireEvent.click(screen.getByRole("button", { name: "open error" }));
+    await screen.findByRole("heading", { level: 2, name: "Error" });
+    expect(viewSwitch()).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "open safe" }));
+    await screen.findByRole("list", { name: "Signals" });
+    expect(viewSwitch()?.getAttribute("aria-checked")).toBe("true");
+    expect(screen.queryByRole("list", { name: "Questions" })).toBeNull();
   });
 });
 

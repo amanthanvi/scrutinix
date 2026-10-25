@@ -298,6 +298,74 @@ test("strip cells open their evidence: the question in Summary, the row in Full"
   await expect(page.getByLabel(/DNS Profile:/i)).toBeFocused();
 });
 
+/** The Evidence head's height: where its ink rule sits under the title. */
+function evidenceHeadHeight(page: Page) {
+  return page
+    .locator("#sx-evidence-heading")
+    .evaluate(
+      (heading) => heading.parentElement!.getBoundingClientRect().height,
+    );
+}
+
+test("an Error result shows its eight rows with no Summary/Full switch, and keeps the choice", async ({
+  page,
+}) => {
+  await gotoApp(page);
+  await submitSingleScan(page, "https://error.scrutinix.test/");
+  const band = page.getByRole("region", { name: /^scan result: error$/i });
+  await expect(band.getByText("The scan failed — try again.")).toBeVisible();
+
+  // One view, so no control claiming another: the eight rows, no switch.
+  const viewSwitch = page.getByRole("switch", {
+    name: "Summary Full signal list",
+  });
+  await expect(page.getByRole("region", { name: "Evidence" })).toBeVisible();
+  await expect(page.getByRole("switch")).toHaveCount(0);
+  await expect(page.getByRole("list", { name: "Questions" })).toHaveCount(0);
+  const rows = page.getByRole("list", { name: "Signals" });
+  await expect(rows.getByRole("listitem")).toHaveCount(8);
+  const errorHead = await evidenceHeadHeight(page);
+
+  // The strip leads to the rows it shows: a cell focuses its row.
+  await page
+    .getByRole("toolbar", { name: "Checks" })
+    .getByRole("button", { name: /^Redirects:/ })
+    .click();
+  await expect(rows.getByLabel(/^Redirect Chain:/)).toBeFocused();
+
+  // The next result has both views, on the stored choice (Summary), and
+  // its rule sits where the Error's did.
+  await submitSingleScan(page, "example.com");
+  await expect(
+    page.getByRole("region", { name: /^scan result: safe$/i }),
+  ).toBeVisible();
+  await expect(viewSwitch).toHaveAttribute("aria-checked", "false");
+  await expect(page.getByRole("list", { name: "Questions" })).toBeVisible();
+  expect(await evidenceHeadHeight(page)).toBe(errorHead);
+  await viewSwitch.click();
+  await expect(viewSwitch).toHaveAttribute("aria-checked", "true");
+
+  // Reopened from history: still no switch, focus on the verdict, and the
+  // announcement says nothing of a view.
+  const history = page.getByRole("region", { name: /scan history/i });
+  await history
+    .getByRole("button", { name: /error\.scrutinix\.test/i })
+    .click();
+  await expect(
+    page.getByRole("heading", { level: 2, name: /^error$/i }),
+  ).toBeFocused();
+  await expect(page.getByRole("switch")).toHaveCount(0);
+  await expect(rows.getByRole("listitem")).toHaveCount(8);
+  await expect(page.locator("[aria-live='polite']").first()).toHaveText(
+    "Result for error.scrutinix.test: Error. The scan failed — try again.",
+  );
+
+  // Back to the Safe result: Full is still the choice.
+  await history.getByRole("button", { name: /example\.com/i }).click();
+  await expect(viewSwitch).toHaveAttribute("aria-checked", "true");
+  await expect(rows.getByRole("listitem")).toHaveCount(8);
+});
+
 /** The lazily loaded link parser's chunk: tldts and its Public Suffix List. */
 const isParserChunk = (body: string) => body.includes("getPublicSuffix");
 
