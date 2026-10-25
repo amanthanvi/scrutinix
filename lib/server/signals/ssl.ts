@@ -56,6 +56,9 @@ export async function runSslSignal(
   }
 
   let lastResult: SSLData | null = null;
+  // An unexpected failure on one address is lost coverage even when the
+  // next address merely refuses or times out; only a certificate clears it.
+  let unexpectedFailure: SSLData | null = null;
 
   for (const probeAddress of probeAddresses) {
     const remaining = deadline - Date.now();
@@ -74,10 +77,14 @@ export async function runSslSignal(
     if (result.available) {
       return result;
     }
+    if (result.probeFailed) {
+      unexpectedFailure ??= result;
+    }
     lastResult = result;
   }
 
   return (
+    unexpectedFailure ??
     lastResult ??
     createUnavailableSslData("The TLS probe failed for every resolved address.")
   );
