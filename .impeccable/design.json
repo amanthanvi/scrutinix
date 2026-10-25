@@ -2006,8 +2006,8 @@
       },
       {
         "name": "md",
-        "value": "56rem",
-        "purpose": "The score takes its right column beside the verdict, once Unconfirmed (the longest word a band holds room for) fits beside it."
+        "value": "48rem",
+        "purpose": "The score (or Cancel, or Try again) takes its right column beside the verdict; a band with nothing there gives its word the full width."
       },
       {
         "name": "lg",
