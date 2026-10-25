@@ -32,6 +32,7 @@ Paste a link: it is taken apart under the field. Analyze it. Reload: the row is 
 11. `batch scan` proves two more URLs land in IndexedDB and Open returns to Single.
 12. `a Batch panel that fails to load retries in place` proves the lazy panel's failure and recovery.
 13. `larger default text reflows without sideways scrolling` proves 200% text on a 320px phone.
+14. `a long destination host stays on the page` proves a Safe redirect to a 63-letter hostname is named in full in `destination` and wraps inside a 390px-wide page.
 
 Each test presents its own client address to the rate limiter (`isolateRateLimit`), so the sweep fits the dev server's 10 per minute per-client limit; no test spends more than 4. A reviewer who drives one browser context by hand shares one address, and should keep to 10 scans a minute.
 

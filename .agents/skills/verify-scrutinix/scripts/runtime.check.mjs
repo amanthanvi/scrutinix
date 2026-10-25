@@ -911,6 +911,15 @@ fs.writeFileSync(process.env.VERIFY_REPORT_FILE, JSON.stringify({
 process.exit(1);
 `,
 );
+const driveEvidence = path.join(runDir, "evidence");
+mkdirSync(driveEvidence, { recursive: true, mode: 0o700 });
+const staleShot = path.join(driveEvidence, "stale-from-last-run.png");
+writeFileSync(staleShot, "old");
+const keptOutside = path.join(scratch, "outside-evidence.txt");
+writeFileSync(keptOutside, "keep");
+symlinkSync(keptOutside, path.join(driveEvidence, "linked.txt"));
+mkdirSync(path.join(driveEvidence, "nested"));
+writeFileSync(path.join(driveEvidence, "nested", "keep.png"), "keep");
 const driveRun = await runSuiteWith(
   fakePlaywright,
   ["--drive", "--port", String(portA), "-g", "signed"],
@@ -930,6 +939,17 @@ check(
     ) &&
     driveRun.stderr.includes(`drive: log ${driveLog}`),
   cli(driveRun),
+);
+check(
+  "a drive replaces previous evidence files and leaves the directory",
+  driveRun.stdout.includes("cleared 2 previous files") &&
+    !existsSync(staleShot) &&
+    !existsSync(path.join(driveEvidence, "linked.txt")) &&
+    readFileSync(keptOutside, "utf8") === "keep" &&
+    readFileSync(path.join(driveEvidence, "nested", "keep.png"), "utf8") ===
+      "keep" &&
+    existsSync(driveEvidence),
+  { cleared: driveRun.stdout.includes("cleared 2 previous files") },
 );
 check(
   "Playwright's output is kept in a 0600 log",
@@ -1618,6 +1638,30 @@ check(
     foreignNext.includes("another next dev") &&
     !foreignNext.includes(holderScript),
   { length: foreignNext.length },
+);
+const lockDir = path.join(otherCheckout, ".next", "dev");
+mkdirSync(lockDir, { recursive: true });
+const lockFile = path.join(lockDir, "lock");
+writeFileSync(lockFile, JSON.stringify({ pid: holder.pid, port: holderPort }), {
+  mode: 0o644,
+});
+const held = runtime.heldProjectDevServer(otherCheckout);
+const heldNote = held ? runtime.sameDirectoryDevNote(held) : "";
+check(
+  "a project lock names the next dev to stop, and does not offer another port",
+  held?.pid === holder.pid &&
+    held?.port === holderPort &&
+    heldNote.includes("will not start") &&
+    heldNote.includes("Stop that pid") &&
+    !heldNote.includes("launch on another port"),
+  { matched: held?.pid === holder.pid },
+);
+writeFileSync(lockFile, JSON.stringify({ pid: 1, port: holderPort }), {
+  mode: 0o644,
+});
+check(
+  "a lock whose pid is not next dev is not a holder",
+  runtime.heldProjectDevServer(otherCheckout) === null,
 );
 
 // Finding 6 of round 4: the sleepers and the fake next end through their

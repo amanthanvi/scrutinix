@@ -763,6 +763,28 @@ test("error and critical verdicts", async ({ page }) => {
   ).toBeVisible();
 });
 
+test("a long destination host stays on the page", async ({ page }) => {
+  // lib/server/test-fixtures.ts sends this host through one redirect to a
+  // 63-letter label, the longest a DNS label can be.
+  await page.setViewportSize({ width: 390, height: 844 });
+  await gotoApp(page);
+  await scanSingle(page, "https://long-hop.scrutinix.test/", "safe");
+  const destination = page.locator('[data-question="destination"]');
+  const host =
+    "accountverificationandsecuritycheckpointforyoursigninportalnowx.com";
+  await expect(destination).toContainText(
+    `It ends on ${host}, a different site`,
+  );
+  const overflow = await page.evaluate(() => ({
+    page: document.documentElement.scrollWidth,
+    viewport: document.documentElement.clientWidth,
+  }));
+  expect(overflow.page).toBeLessThanOrEqual(overflow.viewport);
+  const box = await destination.boundingBox();
+  expect(box && box.x + box.width).toBeLessThanOrEqual(overflow.viewport);
+  await capture(page, "verdict-long-hop.png");
+});
+
 test("an address check that fails to load reads Unconfirmed", async ({
   page,
 }) => {

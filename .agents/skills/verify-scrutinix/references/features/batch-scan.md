@@ -14,7 +14,7 @@ Analyze up to 10 URLs, then open one result in the single scanner. The Batch pan
 
 ## How to get to it (user POV)
 
-On `/`, choose the Batch tab (`Batch up to 10 links`). Paste URLs, one per line. The hint says up to 10 and Cmd/Ctrl+Enter. Click Start batch. When the list says `Batch results` and `2/2`, use `Export batch CSV` or `Export batch JSON`. Click Open on a row to read the full verdict.
+On `/`, choose the Batch tab. Its accessible name is `Batch`; the visible hint `up to 10 links` is not part of that name. Paste URLs, one per line. The hint says up to 10 and Cmd/Ctrl+Enter. Click Start batch. When the list says `Batch results` and `2/2`, use `Export batch CSV` or `Export batch JSON`. Click Open on a row to read the full verdict.
 
 ## Driving it with Playwright
 

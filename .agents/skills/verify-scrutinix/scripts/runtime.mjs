@@ -210,6 +210,28 @@ export function ensureDirs(dirs = [stateDir, evidenceDir]) {
   }
 }
 
+// A new smoke or drive replaces the previous run's files. The directory
+// itself stays, and so does anything that is not a file or a symlink at
+// the top (cleanup still never deletes this directory). Unlink does not
+// follow a symlink, so a link's target is left alone.
+export function clearEvidenceFiles(dir = evidenceDir) {
+  ensureDirs([dir]);
+  let removed = 0;
+  for (const name of readdirSync(dir)) {
+    const file = path.join(dir, name);
+    let stat;
+    try {
+      stat = lstatSync(file);
+    } catch {
+      continue;
+    }
+    if (!stat.isFile() && !stat.isSymbolicLink()) continue;
+    unlinkSync(file);
+    removed += 1;
+  }
+  return removed;
+}
+
 // Read a state file only when it is a regular file owned by this user that
 // nobody else can write, and never through a symlink. null when missing.
 export function readPrivateFile(file) {
@@ -772,6 +794,37 @@ export function formatForeignNext(port, exclude = []) {
     })
     .join("; ");
   return `another next dev holds port ${port} (${detail}). This skill did not start it and will not stop it.`;
+}
+
+// The dev lock Next writes under .next/dev. One next dev per project
+// directory: a second server in this checkout exits even on a free port.
+export function heldProjectDevServer(root = repoRoot) {
+  const lockFile = path.join(root, ".next", "dev", "lock");
+  let text;
+  try {
+    text = readPrivateFile(lockFile);
+  } catch {
+    return null;
+  }
+  if (!text) return null;
+  let parsed;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  const pid = Number(parsed?.pid);
+  const lockPort = Number(parsed?.port);
+  if (!validPid(pid) || !validPort(lockPort)) return null;
+  if (!isNextDevCommand(commandLine(pid))) return null;
+  const identity = processIdentity(pid);
+  if (!identity?.cwd) return null;
+  if (canonicalPath(identity.cwd) !== canonicalPath(root)) return null;
+  return { pid, port: lockPort, cwd: identity.cwd };
+}
+
+export function sameDirectoryDevNote(held) {
+  return `another next dev already holds this project directory (pid ${held.pid}, port ${held.port}, cwd ${held.cwd}). Next runs one next dev per project directory, so another --port here will not start. Stop that pid, then launch again.`;
 }
 
 // ---- State lock -------------------------------------------------------------
