@@ -299,6 +299,17 @@ function OwnershipLine({
   );
 }
 
+/**
+ * The home headline as the default card sets it, in explicit lines broken
+ * where the question pauses ("Is this link / what it says it is?"), not
+ * mid-clause after "what". Satori's own wrap breaks by width alone and has
+ * justified a wide gap into a first line, so the card never relies on it.
+ */
+export const DEFAULT_CARD_HEADLINE = [
+  "Is this link",
+  "what it says it is?",
+] as const;
+
 /** The default card: what Scrutinix does, in the product's own voice. */
 export function DefaultCard() {
   return (
@@ -317,8 +328,6 @@ export function DefaultCard() {
     >
       <Brand />
       <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
-        {/* Explicit lines: Satori's own wrap strands "click." alone and
-            justifies a wide gap into the first line. */}
         <div
           style={{
             display: "flex",
@@ -330,8 +339,11 @@ export function DefaultCard() {
             letterSpacing: "-0.026em",
           }}
         >
-          <div style={{ display: "flex" }}>Check a link before</div>
-          <div style={{ display: "flex" }}>you click.</div>
+          {DEFAULT_CARD_HEADLINE.map((line) => (
+            <div key={line} style={{ display: "flex" }}>
+              {line}
+            </div>
+          ))}
         </div>
         <div
           style={{
