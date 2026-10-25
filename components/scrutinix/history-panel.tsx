@@ -85,9 +85,18 @@ export function HistoryPanel({
         <h2 className="text-base font-semibold tracking-[-0.01em] text-[var(--sx-text)]">
           History
           {totalCount > 0 ? (
-            <span className="ml-2 font-mono text-xs font-normal text-[var(--sx-text-soft)] tabular-nums">
-              {totalCount}
-            </span>
+            <>
+              <span
+                aria-hidden="true"
+                className="ml-2 font-mono text-xs font-normal text-[var(--sx-text-soft)] tabular-nums"
+              >
+                {totalCount}
+              </span>
+              {/* Name reads "History (2 scans)", not "History2". */}
+              <span className="sr-only">
+                {totalCount === 1 ? " (1 scan)" : ` (${totalCount} scans)`}
+              </span>
+            </>
           ) : null}
         </h2>
 
@@ -98,7 +107,7 @@ export function HistoryPanel({
               onClick={onUndoClear}
               variant="ghost"
               size="sm"
-              aria-label="Undo clearing scan history"
+              aria-label="Undo clear history"
             >
               Undo clear
             </Button>
@@ -130,6 +139,9 @@ export function HistoryPanel({
 
       {totalCount > 3 ? (
         <Input
+          id="sx-history-filter"
+          name="history-filter"
+          type="search"
           value={historyQuery}
           onChange={(event) => onHistoryQueryChange(event.target.value)}
           placeholder="Filter by URL or verdict"
@@ -142,7 +154,7 @@ export function HistoryPanel({
         <p className="mt-3 text-[0.8125rem] text-[var(--sx-text-soft)]">
           {historyQuery
             ? "No scans match this filter."
-            : "Completed scans stay on this device and appear here."}
+            : "Finished scans appear here."}
         </p>
       ) : (
         <>
@@ -179,9 +191,10 @@ export function HistoryPanel({
               }
               variant="ghost"
               size="sm"
-              aria-label={`Export ${historyQuery ? "filtered " : ""}history as CSV`}
             >
-              {historyQuery ? "Export filtered CSV" : "Export CSV"}
+              {historyQuery
+                ? "Export filtered history CSV"
+                : "Export history CSV"}
             </Button>
             <Button
               type="button"
@@ -194,9 +207,10 @@ export function HistoryPanel({
               }
               variant="ghost"
               size="sm"
-              aria-label={`Export ${historyQuery ? "filtered " : ""}history as JSON`}
             >
-              {historyQuery ? "Export filtered JSON" : "Export JSON"}
+              {historyQuery
+                ? "Export filtered history JSON"
+                : "Export history JSON"}
             </Button>
           </div>
         </>

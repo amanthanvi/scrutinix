@@ -46,6 +46,11 @@
   --sx-error-fg: oklch(0.47 0.08 20);
   --sx-info: oklch(0.55 0.1 255);
   --sx-info-fg: oklch(0.47 0.09 255);
+  /* Unknown verdict and caveated checks: slate, distinct from the accent. */
+  --sx-unknown: oklch(0.58 0.035 230);
+  --sx-unknown-fg: oklch(0.46 0.035 230);
+  /* "This source found nothing": neutral gray, never green. Graphic only. */
+  --sx-clear: oklch(0.66 0 0);
 }
 
 .dark {
@@ -79,6 +84,9 @@
   --sx-error-fg: oklch(0.7 0.07 20);
   --sx-info: oklch(0.72 0.09 255);
   --sx-info-fg: oklch(0.72 0.09 255);
+  --sx-unknown: oklch(0.7 0.03 230);
+  --sx-unknown-fg: oklch(0.76 0.03 230);
+  --sx-clear: oklch(0.52 0.006 260);
 }
 
 @theme inline {
@@ -101,6 +109,8 @@
 
 html {
   scroll-behavior: smooth;
+  /* Results growing past the fold must not shift the centered column. */
+  scrollbar-gutter: stable;
 }
 
 body {

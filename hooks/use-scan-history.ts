@@ -13,6 +13,7 @@ import { toast } from "sonner";
 
 import { sanitizeHistoryEntry } from "@/lib/domain/runtime-safety";
 import type { AnalysisResult, HistoryEntry } from "@/lib/domain/types";
+import { normalizeUrlInput } from "@/lib/domain/url";
 
 interface HistoryDatabase extends DBSchema {
   scans: {
@@ -81,13 +82,31 @@ export function useScanHistory() {
           ...result,
           savedAt: new Date().toISOString(),
         };
+        const key = historyUrlKey(entry.url);
         const db = await getDatabase();
-        await db.put(STORE_NAME, entry);
+        // One entry per URL: a new scan replaces older scans of the same
+        // link instead of stacking beside them (batch re-scans included).
+        const tx = db.transaction(STORE_NAME, "readwrite");
+        let cursor = await tx.store.openCursor();
+        while (cursor) {
+          if (
+            cursor.value.id !== entry.id &&
+            historyUrlKey(cursor.value.url) === key
+          ) {
+            await cursor.delete();
+          }
+          cursor = await cursor.continue();
+        }
+        await tx.store.put(entry);
+        await tx.done;
         startTransition(() => {
           setEntries((previous) =>
             sortEntries([
               entry,
-              ...previous.filter((item) => item.id !== entry.id),
+              ...previous.filter(
+                (item) =>
+                  item.id !== entry.id && historyUrlKey(item.url) !== key,
+              ),
             ]),
           );
           setLastClearedEntries([]);
@@ -164,15 +183,69 @@ export function useScanHistory() {
   };
 }
 
+/**
+ * The identity history dedupes on: the normalized URL, so "example.com"
+ * and "https://example.com/" are one link. Unparseable legacy values fall
+ * back to their trimmed text.
+ */
+export function historyUrlKey(url: unknown): string {
+  const raw = typeof url === "string" ? url.trim() : "";
+  const normalized = normalizeUrlInput(raw);
+  return normalized.ok ? normalized.value.normalizedUrl : raw;
+}
+
+/** Newest entry per URL key; older duplicates from before upserts hide. */
+function latestPerUrl(entries: HistoryEntry[]) {
+  const seen = new Set<string>();
+  return entries.filter((entry) => {
+    const key = historyUrlKey(entry.url);
+    if (seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
+}
+
 async function loadHistory() {
   const db = await getDatabase();
   const values = await db.getAllFromIndex(STORE_NAME, "by-saved-at");
-  return sortEntries(
-    values.flatMap((value) => {
-      const entry = sanitizeHistoryEntry(value);
-      return entry ? [entry] : [];
-    }),
+  return latestPerUrl(
+    sortEntries(
+      await withDerivedDrivers(
+        values.flatMap((value) => {
+          const entry = sanitizeHistoryEntry(value);
+          return entry ? [entry] : [];
+        }),
+      ),
+    ),
   );
+}
+
+/**
+ * Entries saved before `threatInfo.scoredSignals` existed have no driver
+ * list, so Summary would pick rows by severity alone and could hide the
+ * checks behind a Suspicious verdict. Derive the list with the verdict
+ * engine, loaded only when such an entry exists so the scorer and the
+ * public-suffix list stay out of the main bundle.
+ */
+async function withDerivedDrivers(
+  entries: HistoryEntry[],
+): Promise<HistoryEntry[]> {
+  const needsDrivers = entries.some(
+    (entry) => entry.threatInfo && entry.threatInfo.scoredSignals === undefined,
+  );
+  if (!needsDrivers) {
+    return entries;
+  }
+
+  try {
+    const { withScoredSignals } = await import("@/lib/domain/verdict");
+    return entries.map((entry) => withScoredSignals(entry));
+  } catch (error) {
+    console.warn("[Scrutinix] Could not derive verdict drivers.", error);
+    return entries;
+  }
 }
 
 function sortEntries(entries: HistoryEntry[]) {

@@ -24,18 +24,20 @@ function StreamError({ message }: { message: string }) {
 
 export function ScanForm() {
   const {
+    active,
     activeTab,
     batch,
     batchInput,
     formError,
+    inputEditedSinceResult,
     scan,
     setActiveTab,
     setBatchInput,
     setFormError,
-    setSingleUrl,
     singleUrl,
     startBatchScan,
     startSingleScan,
+    updateSingleUrl,
   } = useAnalyzerRuntime();
 
   return (
@@ -58,10 +60,11 @@ export function ScanForm() {
             url={singleUrl}
             onUrlChange={(value) => {
               setFormError(null);
-              setSingleUrl(value);
+              updateSingleUrl(value);
             }}
             error={activeTab === "single" ? formError : null}
             streaming={scan.state.isStreaming}
+            showingResult={Boolean(active) && !inputEditedSinceResult}
             onSubmit={() => void startSingleScan()}
             onCancel={scan.cancelScan}
           />
@@ -81,7 +84,7 @@ export function ScanForm() {
             hasResults={batch.state.results.length > 0}
             onCsv={() => {
               downloadTextFile("batch.csv", resultsToCsv(batch.state.results));
-              toast.success("Exported batch.csv");
+              toast.success("Downloaded batch.csv");
             }}
             onJson={() => {
               downloadTextFile(
@@ -89,7 +92,7 @@ export function ScanForm() {
                 resultsToJson(batch.state.results),
                 "application/json",
               );
-              toast.success("Exported batch.json");
+              toast.success("Downloaded batch.json");
             }}
           />
         </TabsContent>

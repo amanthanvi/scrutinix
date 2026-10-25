@@ -48,7 +48,7 @@
 - **Owner (DRI):** Aman Thanvi (@amanthanvi)
 - **Stakeholders:** Aman Thanvi
 - **Status:** Deployed on Vercel preview and production
-- **Last updated:** 2026-09-03
+- **Last updated:** 2026-10-06
 - **Shipping model:** Continuous delivery
 - **Links:** [GitHub](https://github.com/amanthanvi/scrutinix)
 
@@ -109,7 +109,7 @@ Both personas use the same tool. A **view mode toggle** (Summary / Full Report) 
 1. User lands on a scanner-first home route with the dock in the first viewport and only minimal supporting context above the fold
 2. Pastes URL, client-side validation, submits
 3. Streaming results appear: verdict first, then enrichment signals populate as they resolve
-4. Default: Summary view (verdict + top 3 signals). Toggle to Full Report for all data
+4. Default: Summary view (verdict, a one-line instruction, and only the signals that drove the verdict, with the other checks folded into one line). Toggle to Full Report for all data
 5. Option to share result or scan another URL
 
 **Flow 2: Batch Scan**
@@ -129,19 +129,20 @@ Both personas use the same tool. A **view mode toggle** (Summary / Full Report) 
 
 ### 2.3 UX states checklist
 
-- **Loading/streaming:** Pending signal rows update independently as each source resolves. A transform-only progress line shows aggregate completion
-- **Empty:** Scanner-first landing state in the centered product shell, with brief framing and links to privacy/methodology; deeper explanation lives on `/about` and `/privacy`
-- **Error (partial):** Failed or non-applicable sources show "failed", "caveat", or "n/a" state with the reason surfaced inline. Verdict is computed from available data, safe-result confidence is capped when primary reputation coverage is missing, and the user can rerun the full scan from the primary controls
+- **Loading/streaming:** Pending signal rows update independently as each source resolves. A transform-only progress line shows aggregate completion; the polite live region reports "N of 8 checks finished." and, on completion, the host, verdict, score, and instruction ("Result for evil.example: Malicious, 73 out of 100. Don't open this link."); reopening a stored result re-announces it
+- **Verdict:** every verdict shows one imperative line under the verdict word (Malicious/Critical "Don't open this link.", Suspicious "Don't sign in or enter payment details here.", Critical adds "— it's a known threat" only when a reputation source confirmed it, Safe "Looks safe to open." or, when confidence is below high, coverage was partial, or minor warning signs turned up, "Probably safe — still check who sent it.", Unknown "We couldn't check this link — treat it as unsafe.", Error "The scan failed — try again."). Unknown and Error show no score. The summary sentence names the evidence in plain words; it never repeats the instruction, and a clean, fully covered Safe omits it because the quiet-checks line says the same thing. Reasons live under Details ("What we found"); Caveats lists only real limitations, and "Why {level} confidence" names shortfalls by check rather than restating the check count. Unknown says its cause once: "The site didn't respond, so we couldn't look at the page itself."
+- **Empty:** Scanner-first landing state in the centered product shell, with brief framing and links to privacy/methodology; deeper explanation lives on `/about` and `/privacy`. Analyze stays enabled; an empty submit shows "Paste a link to check." inline
+- **Error (partial):** Failed or non-applicable sources show their reason as the row's finding. Verdict is computed from available data, safe-result confidence is capped when primary reputation coverage is missing, one caveat line names the checks that limited coverage ("VirusTotal didn't finish."; absent when every check ran in full), and the user can rerun the full scan from the primary controls
 - **Error (total):** All sources failed — show error message with "Retry All" button and suggestion to check network
 - **Offline/degraded:** N/A (server-side tool, requires network). Client-side history remains accessible offline via IndexedDB
 - **Accessibility:** WCAG 2.1 AA compliance. Semantic HTML, ARIA labels on interactive elements, skip-to-content navigation, 44x44 touch targets, sufficient color contrast, stable focus indicators, and screen reader friendly status announcements
 
 ### 2.4 View modes
 
-| Mode            | Content                                                                                                                                                          | Target                     |
-| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- |
-| **Summary**     | Overall verdict (Safe/Suspicious/Malicious/Critical) with confidence, the three most relevant completed signals as disclosure rows, and a concise recommendation | Casual users, quick checks |
-| **Full Report** | All eight signals in fixed-order disclosure rows, with engine results, classifier details, WHOIS/SSL/DNS evidence, redirect hops, and threat-feed matches        | Power users, investigation |
+| Mode            | Content                                                                                                                                                                                                                                                                                                                                                                      | Target                     |
+| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- |
+| **Summary**     | Overall verdict with a one-line instruction and confidence, plus only the signals that drove it (every check the verdict engine scored, plus any malicious, suspicious, or failed one — fixed order) as disclosure rows; every other check folds into one line ("6 other checks found nothing." / "All 8 checks found nothing.") that opens Full. A clean scan shows no rows | Casual users, quick checks |
+| **Full Report** | All eight signals in fixed-order disclosure rows, with engine results, classifier details, WHOIS/SSL/DNS evidence, redirect hops, and threat-feed matches                                                                                                                                                                                                                    | Power users, investigation |
 
 ## 3) Functional Requirements
 
@@ -168,7 +169,7 @@ Both personas use the same tool. A **view mode toggle** (Summary / Full Report) 
 
 ### History & Export
 
-- **FR-16** SHOULD persist scan history in IndexedDB with search/filter across every verdict, including unreachable-host `unknown` results
+- **FR-16** SHOULD persist scan history in IndexedDB with search/filter across every verdict, including unreachable-host `unknown` results, keeping one entry (the latest scan) per normalized URL
 - **FR-17** SHOULD support CSV/JSON export for individual and batch results
 - **FR-18** SHOULD support history export and a short undo window after clearing local history
 

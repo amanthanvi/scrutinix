@@ -23,7 +23,7 @@ export function normalizeUrlInput(input: string): UrlValidationResult {
   const trimmed = input.trim();
 
   if (!trimmed) {
-    return { ok: false, error: "Enter a URL to analyze." };
+    return { ok: false, error: "Paste a link to check." };
   }
 
   if (trimmed.length > MAX_URL_LENGTH) {
@@ -42,7 +42,10 @@ export function normalizeUrlInput(input: string): UrlValidationResult {
   try {
     url = new URL(candidate);
   } catch {
-    return { ok: false, error: "Enter a valid HTTP or HTTPS URL." };
+    return {
+      ok: false,
+      error: "That doesn't look like a web link. Check it and try again.",
+    };
   }
 
   if (!["http:", "https:"].includes(url.protocol)) {

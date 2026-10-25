@@ -82,6 +82,10 @@ export async function runAnalysis(
     const completedAt = new Date().toISOString();
     const cachedResult = {
       ...cached,
+      // Re-derive the verdict from the cached signals so results cached by
+      // an older release get current copy and `scoredSignals` (the Summary
+      // view's source of truth). The engine is pure, so this is cheap.
+      ...buildThreatAssessment(cached.signals),
       id: scanId,
       metadata: {
         ...cached.metadata,
