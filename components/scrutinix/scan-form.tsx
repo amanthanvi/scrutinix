@@ -1,6 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { useEffect } from "react";
 import { getToast } from "@/components/ui/lazy-toaster";
 
 import {
@@ -72,6 +73,7 @@ export function ScanForm() {
     batchInput,
     formError,
     inputEditedSinceResult,
+    prefilled,
     scan,
     setActiveTab,
     setBatchInput,
@@ -82,6 +84,13 @@ export function ScanForm() {
     startSingleScan,
     updateSingleUrl,
   } = useAnalyzerRuntime();
+
+  // Arrived through `?url=`: the link is in the field and taken apart
+  // below it, and Analyze holds focus for the tap (or Enter) that scans it.
+  // Not the field: on a phone that would raise the keyboard over the link.
+  useEffect(() => {
+    if (prefilled) document.getElementById("sx-analyze")?.focus();
+  }, [prefilled]);
 
   // The link in the field, taken apart before a scan: only while it is a
   // valid web link that isn't already the one on screen (a result, a

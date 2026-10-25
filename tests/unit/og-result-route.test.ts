@@ -97,6 +97,23 @@ describe("GET /og/result", () => {
     expect(cacheControl).not.toContain("stale-while-revalidate");
   });
 
+  it("never lets a cache keep the image past the snapshot's three days", async () => {
+    const sig = signSharePayload(payload)!;
+    const expiresAt = Date.parse("2026-10-06T09:00:00.000Z") + 72 * 3_600_000;
+
+    vi.setSystemTime(new Date(expiresAt - 10 * 60_000));
+    const late = await GET(imageRequest({ shared: payload, sig }));
+    expect(late.status).toBe(200);
+    expect(late.headers.get("cache-control")).toBe(
+      "public, max-age=600, s-maxage=600",
+    );
+
+    vi.setSystemTime(new Date(expiresAt - 500));
+    const last = await GET(imageRequest({ shared: payload, sig }));
+    expect(last.status).toBe(200);
+    expect(last.headers.get("cache-control")).toBe("no-store");
+  });
+
   it('never leads a Safe look-alike\'s card with "Safe"', async () => {
     const sig = signSharePayload(payload)!;
     await GET(imageRequest({ shared: payload, sig }));

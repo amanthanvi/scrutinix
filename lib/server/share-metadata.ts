@@ -8,6 +8,7 @@ import {
   type SharedView,
 } from "@/lib/domain/signal-signature";
 import type { SharedSnapshot } from "@/lib/domain/types";
+import { normalizeUrlInput } from "@/lib/domain/url";
 import { verifySharePayload } from "@/lib/server/share-signing";
 import {
   getVerdictGuidance,
@@ -59,7 +60,8 @@ export function normalizeSharedPayload(
 
 /**
  * What the page shows for a `?shared=` link at `now` (epoch ms). Null when
- * the payload fails validation or its link is not an http(s) URL.
+ * the payload fails validation or its link is not one Scrutinix could
+ * check (`normalizeUrlInput`: http(s), public host).
  * Otherwise the link and its anatomy (Scrutinix's own computation), plus
  * the snapshot only when `sig` is this server's signature of the payload
  * and its check is within `SHARE_MAX_AGE` (and not in the future): an
@@ -75,6 +77,10 @@ export function resolveSharedView(
   const snapshot = decodeSharedSnapshot(payload);
   if (!snapshot) return null;
 
+  // The same check a typed link gets: a private, local, or otherwise
+  // unscannable host opens nothing, rather than a band whose "Scan this
+  // link" can only fail.
+  if (!normalizeUrlInput(snapshot.url).ok) return null;
   const anatomy = splitLinkAnatomy(parse, snapshot.url);
   if (!anatomy) return null;
 

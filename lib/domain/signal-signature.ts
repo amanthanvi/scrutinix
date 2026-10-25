@@ -166,6 +166,20 @@ export const SHARE_MAX_AGE_WORDS = `${SHARE_MAX_AGE / 86_400_000} days`;
 const SHARE_FUTURE_SKEW = 5 * 60 * 1000;
 
 /**
+ * How long, in milliseconds, a signed snapshot checked at `capturedAt` may
+ * still be shown as of `now`; 0 once it has expired or can't be read.
+ * Caches of anything drawn from it must not outlive this.
+ */
+export function sharedSnapshotRemainingMs(
+  capturedAt: string,
+  now: number,
+): number {
+  const at = Date.parse(capturedAt);
+  if (!Number.isFinite(at) || !Number.isFinite(now)) return 0;
+  return Math.max(0, at + SHARE_MAX_AGE - now);
+}
+
+/**
  * Whether a signed snapshot's check time is within `SHARE_MAX_AGE` of
  * `now` (epoch ms). "expired" is older than that; "invalid" is an
  * unparseable time or one more than five minutes in the future. Only

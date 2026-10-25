@@ -45,10 +45,50 @@ and ML scoring in one place.
   rest of the run.
 - Summary and Full Report modes present the same scan at different levels of
   density.
-- Share links are client-generated snapshots; they do not create a server-side
-  share database.
+- Share links carry a server-signed snapshot; they do not create a
+  server-side share database. Whoever opens one sees the result first, then
+  "Check another link".
 - `/about` and `/privacy` explain how verdicts are formed and what data stays in
   the browser.
+
+## Check links from your phone
+
+**Android (Chrome):** open `https://www.scrutinix.net`, then use Chrome's menu
+→ **Install app** (or **Add to Home screen** → **Install**). Scrutinix then
+appears in the system share sheet: in a chat, email, or browser, **Share →
+Scrutinix** opens the app with the first link in what you shared filled in
+and taken apart; tap **Analyze** to check it. Desktop browsers can install it
+too, but the share-sheet entry is an Android (and ChromeOS) feature; elsewhere
+use the bookmarklet below.
+
+**iPhone and iPad (Shortcuts):** iOS has no web share target, so a Shortcut
+you build once opens Scrutinix with the link filled in; tap **Analyze** to
+check it.
+
+1. Open **Shortcuts**, tap **+**, and name the shortcut **Check with
+   Scrutinix**.
+2. Tap the **ⓘ** (Details) button, turn on **Show in Share Sheet**, and set
+   the share-sheet types to **URLs**, **Safari web pages**, and **Text**.
+   Under **If there's no input**, choose **Get Clipboard**.
+3. Add **Get URLs from Input** (input: **Shortcut Input**). It finds links
+   inside shared text too.
+4. Add **Get Item from List** → **First Item**.
+5. Add **URL Encode** → **Encode** the **Item from List**.
+6. Add **URL** and type `https://www.scrutinix.net/?url=`, then insert the
+   **URL Encoded Text** variable right after the `=`.
+7. Add **Open URLs** (input: **URL**).
+
+**Bookmarklet (any desktop browser):** save this as a bookmark's URL to open
+the page you're on in Scrutinix, ready to check:
+
+```text
+javascript:location.href='https://www.scrutinix.net/?url='+encodeURIComponent(location.href)
+```
+
+Every way of sending a link (Share → Scrutinix, the Shortcut, the bookmarklet,
+or any `https://www.scrutinix.net/?url=<encoded link>` link) fills it in and
+waits for you to tap **Analyze**, so no other site or app can start a scan in
+your browser.
 
 ## Stack
 
@@ -168,6 +208,7 @@ npm run lighthouse
 - `components/scrutinix/`: the analyzer UI: verdict band, link anatomy, the
   eight-cell signal strip, evidence rows, history, and client runtime islands
 - `app/og/result/`: per-result share images for `?shared=` links
+- `app/share/route.ts`: the installed app's Web Share Target (`POST /share`)
 - `hooks/`: NDJSON stream readers and IndexedDB-backed history
 - `tests/`: unit, integration, accessibility, keyboard, and E2E smoke coverage
 

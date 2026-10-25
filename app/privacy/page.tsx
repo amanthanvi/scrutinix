@@ -32,7 +32,7 @@ const sections = [
   },
   {
     title: "Logging",
-    body: "Our logs keep timings and a scrambled fingerprint of the link, never the link itself.",
+    body: "Our logs keep timings and a scrambled fingerprint of the link, never the link itself. Our hosting provider keeps its own record of the pages requested, so a link carried in a page's address, such as a link opened with ?url= (including after you share one to Scrutinix) or a shared result, can appear in its request logs for a limited time under its own policy.",
   },
   {
     title: "Rate limits",
@@ -41,6 +41,10 @@ const sections = [
   {
     title: "Shared links",
     body: `A shared link carries the result inside the link itself: the verdict, the link, a one-line summary, and the eight check results. We have no database of shared links. Our server signs each link it creates, so it can tell its own results from edited ones: a link without a valid signature opens as a link to check yourself, with no verdict and no preview of one. Opening a shared link sends it to our server so it can check the signature; the link inside is not scanned unless you choose to scan it. When a chat app previews a signed link, our server draws the preview image from what is in the link and doesn't save it, though the image may be cached for up to an hour so previews load fast. A shared result shows one moment in time, so a signed link shows its result for ${SHARE_MAX_AGE_WORDS} after the check, then opens as a link to check yourself.`,
+  },
+  {
+    title: "Sharing to Scrutinix",
+    body: "When you share a link to Scrutinix from your phone, your phone sends what you shared to our server, which keeps only the first web link, discards the rest, and logs none of it. Scrutinix opens with that link filled in and taken apart, and checks it only when you tap Analyze. A link that opens Scrutinix with a link filled in, from a bookmarklet, a Shortcut, or another site, works the same way.",
   },
 ] as const;
 

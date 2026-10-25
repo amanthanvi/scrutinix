@@ -148,6 +148,10 @@ for (const colorScheme of ["light", "dark"] as const) {
         waitUntil: "domcontentloaded",
       });
       await expect(page.getByLabel(label)).toBeVisible();
+      // Recipient-first: the form follows the shared result.
+      await expect(
+        page.getByRole("heading", { name: "Check another link" }),
+      ).toBeVisible();
       await settleAnimations(page);
       await page
         .getByRole("button", { name: /open next\.js dev tools/i })

@@ -7,6 +7,7 @@ import { ScrutinixErrorBoundary } from "@/components/scrutinix/error-boundary";
 import { HistorySection } from "@/components/scrutinix/history-section";
 import { ResultsSection } from "@/components/scrutinix/results-section";
 import { ScanForm } from "@/components/scrutinix/scan-form";
+import { PREFILL_PARAM, resolvePrefill } from "@/lib/domain/share-launch";
 import {
   getSharedMetadata,
   resolveSharedView,
@@ -16,7 +17,7 @@ type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
 function paramOf(
   params: Awaited<SearchParams>,
-  name: "shared" | "sig",
+  name: "shared" | "sig" | typeof PREFILL_PARAM,
 ): string | null {
   const value = params[name];
   return typeof value === "string" && value ? value : null;
@@ -63,8 +64,22 @@ export default async function HomePage({
     Date.now(),
   );
 
+  // `?url=` (a bookmarklet, the iOS Shortcut, another site, or the share
+  // target's redirect) fills in the Single field and waits for a tap on
+  // Analyze; nothing scans on its own. A shared result outranks it.
+  const prefill = shared
+    ? null
+    : resolvePrefill(paramOf(params, PREFILL_PARAM));
+
+  const lead = (
+    <p className="text-lead mt-3 max-w-[34rem] text-pretty text-[var(--sx-text-muted)]">
+      Paste a link from an email, text, or chat. Eight separate checks tell you
+      whether it&apos;s safe to open, and which site it really belongs to.
+    </p>
+  );
+
   return (
-    <AnalyzerRuntimeProvider shared={shared}>
+    <AnalyzerRuntimeProvider shared={shared} prefill={prefill}>
       <div className="flex min-h-screen flex-col">
         <AppHeader />
 
@@ -72,23 +87,48 @@ export default async function HomePage({
           id="main-content"
           className="mx-auto w-full max-w-[46rem] flex-1 px-4 pt-12 sm:px-6 sm:pt-20"
         >
-          <h1 className="sx-hero-title text-headline sm:text-display font-semibold text-balance text-[var(--sx-text)]">
-            Check a link before you click.
-          </h1>
-          <p className="text-lead mt-3 max-w-[34rem] text-pretty text-[var(--sx-text-muted)]">
-            Paste a link from an email, text, or chat. Eight separate checks
-            tell you whether it&apos;s safe to open, and which site it really
-            belongs to.
-          </p>
+          {shared ? (
+            // Recipient-first: whoever opened a shared link sees it (the
+            // band, its anatomy, the strip when verified) before anything
+            // asks them for a link of their own. The order is fixed for
+            // the visit, so a fresh scan replaces the band in place.
+            <>
+              <h1 className="sr-only">A link shared with you</h1>
+              <ScrutinixErrorBoundary>
+                <div className="flex flex-col gap-16">
+                  <ResultsSection />
+                  <section aria-labelledby="sx-check-another">
+                    <h2
+                      id="sx-check-another"
+                      className="text-headline font-semibold text-balance text-[var(--sx-text)]"
+                    >
+                      Check another link
+                    </h2>
+                    {lead}
+                    <div className="mt-8">
+                      <ScanForm />
+                    </div>
+                  </section>
+                </div>
+              </ScrutinixErrorBoundary>
+            </>
+          ) : (
+            <>
+              <h1 className="sx-hero-title text-headline sm:text-display font-semibold text-balance text-[var(--sx-text)]">
+                Check a link before you click.
+              </h1>
+              {lead}
 
-          <div className="sx-hero-form mt-8 sm:mt-10">
-            <ScrutinixErrorBoundary>
-              <div className="flex flex-col gap-10">
-                <ScanForm />
-                <ResultsSection />
+              <div className="sx-hero-form mt-8 sm:mt-10">
+                <ScrutinixErrorBoundary>
+                  <div className="flex flex-col gap-10">
+                    <ScanForm />
+                    <ResultsSection />
+                  </div>
+                </ScrutinixErrorBoundary>
               </div>
-            </ScrutinixErrorBoundary>
-          </div>
+            </>
+          )}
 
           {/* No gap when history is empty: its region draws nothing. */}
           <div className="mt-20 has-[>div[aria-busy]]:mt-0 has-[>section:empty]:mt-0">

@@ -18,7 +18,16 @@ export type UrlValidationResult =
     };
 
 const MAX_URL_LENGTH = 2048;
+const TOO_LONG = "That link is too long to check (over 2,048 characters).";
 
+/**
+ * The link as Scrutinix checks it, or why it can't be checked. The length
+ * limit holds for the normalized link it returns, which every later
+ * boundary (`/share`'s redirect, `?url=`, the analyze routes) receives:
+ * measured as typed, `https://example.com/` and 400 × "é" passed here at
+ * 420 characters and then failed there at 2,420 percent-encoded. Input
+ * over the limit as typed is refused before it is parsed.
+ */
 export function normalizeUrlInput(input: string): UrlValidationResult {
   const trimmed = input.trim();
 
@@ -27,10 +36,7 @@ export function normalizeUrlInput(input: string): UrlValidationResult {
   }
 
   if (trimmed.length > MAX_URL_LENGTH) {
-    return {
-      ok: false,
-      error: "That link is too long to check (over 2,048 characters).",
-    };
+    return { ok: false, error: TOO_LONG };
   }
 
   const candidate = withDefaultScheme(trimmed);
@@ -75,11 +81,16 @@ export function normalizeUrlInput(input: string): UrlValidationResult {
 
   url.hash = "";
 
+  const normalizedUrl = url.toString();
+  if (normalizedUrl.length > MAX_URL_LENGTH) {
+    return { ok: false, error: TOO_LONG };
+  }
+
   return {
     ok: true,
     value: {
       input: trimmed,
-      normalizedUrl: url.toString(),
+      normalizedUrl,
       hostname,
       protocol: url.protocol as "http:" | "https:",
     },
