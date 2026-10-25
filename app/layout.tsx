@@ -58,18 +58,19 @@ export const metadata: Metadata = {
     ],
   },
   manifest: "/site.webmanifest",
+  // No `images` here: app/opengraph-image.tsx supplies the default card on
+  // every page (hashed URL, alt, size), and Next copies it to twitter:image.
+  // Setting `images` would replace it with a bare URL and no alt text.
   openGraph: {
     title: "Scrutinix — Is this link what it says it is?",
     description: "Eight separate checks, one plain verdict.",
     url: siteUrl,
     siteName: "Scrutinix",
-    images: ["/opengraph-image"],
   },
   twitter: {
     card: "summary_large_image",
     title: "Scrutinix — Is this link what it says it is?",
     description: "Eight separate checks, one plain verdict.",
-    images: ["/opengraph-image"],
   },
 };
 

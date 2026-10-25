@@ -16,6 +16,8 @@ const legacyHistoryEntry = buildLegacyHistoryEntry();
 
 /** The site's default title: the home headline, which every preview states. */
 const SITE_TITLE = "Scrutinix — Is this link what it says it is?";
+/** The approved line under that title in the site's own previews. */
+const SITE_PREVIEW_DESCRIPTION = "Eight separate checks, one plain verdict.";
 
 test("legacy history migrates into the Scrutinix database @smoke", async ({
   page,
@@ -408,28 +410,40 @@ test("every preview of the site states the home headline @smoke", async ({
   const title = `Scrutinix — ${headline}`;
   expect(title).toBe(SITE_TITLE);
   await expect(page).toHaveTitle(title);
+  // The default card's lines are the same words; the unit test
+  // og-default-card.test.ts checks the card draws exactly these lines.
+  expect(DEFAULT_CARD_HEADLINE.join(" ")).toBe(headline);
+
   const meta = (selector: string) =>
     page.locator(`meta[${selector}]`).getAttribute("content");
-  expect(await meta('property="og:title"')).toBe(title);
-  expect(await meta('name="twitter:title"')).toBe(title);
-  // The descriptions add to the title instead of repeating it.
-  for (const selector of [
-    'property="og:description"',
-    'name="twitter:description"',
-  ]) {
-    const description = await meta(selector);
-    expect(description, selector).toBeTruthy();
-    expect(description, selector).not.toContain(headline!);
+  // /about and /privacy keep their own titles but preview like the home.
+  for (const path of ["/", "/about", "/privacy"]) {
+    if (path !== "/") await page.goto(path, { waitUntil: "domcontentloaded" });
+    expect(await meta('property="og:title"'), path).toBe(title);
+    expect(await meta('name="twitter:title"'), path).toBe(title);
+    // The descriptions add to the title instead of repeating it.
+    expect(await meta('property="og:description"'), path).toBe(
+      SITE_PREVIEW_DESCRIPTION,
+    );
+    expect(await meta('name="twitter:description"'), path).toBe(
+      SITE_PREVIEW_DESCRIPTION,
+    );
+    // One card everywhere, X included: the file convention's hashed URL
+    // (a new hash makes crawlers fetch the card again) and its alt text.
+    expect(await ogImagePath(page), path).toMatch(/^\/opengraph-image\?\w+$/);
+    expect(await meta('name="twitter:image"'), path).toBe(
+      await meta('property="og:image"'),
+    );
+    const alt = await meta('property="og:image:alt"');
+    expect(alt, path).toContain(headline!);
+    expect(await meta('name="twitter:image:alt"'), path).toBe(alt);
   }
-
-  // The default card sets the same words, and its alt text reads them.
-  expect(DEFAULT_CARD_HEADLINE.join(" ")).toBe(headline);
-  expect(await ogImagePath(page)).toMatch(/^\/opengraph-image/);
-  expect(await meta('property="og:image:alt"')).toContain(headline!);
 
   const manifest = await request.get("/site.webmanifest");
   expect(manifest.ok()).toBe(true);
-  expect((await manifest.json()).description).toContain(headline!);
+  expect((await manifest.json()).description).toBe(
+    `${headline} ${SITE_PREVIEW_DESCRIPTION}`,
+  );
 });
 
 /** The neutral view: no verdict, score, summary, or strip from the payload. */

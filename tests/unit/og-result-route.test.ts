@@ -5,6 +5,8 @@ import { encodeSharedSnapshot } from "@/lib/domain/signal-signature";
 import { ResultCard } from "@/lib/og/cards";
 import { signSharePayload } from "@/lib/server/share-signing";
 
+import { textOf } from "./helpers/og-card-text";
+
 // Stand-ins for the renderer: record what the card would draw.
 const rendered = vi.hoisted(() => [] as unknown[]);
 vi.mock("next/og", () => ({
@@ -38,23 +40,6 @@ function imageRequest(params: Record<string, string>) {
     url.searchParams.set(key, value);
   }
   return new Request(url);
-}
-
-/** Every string a card element tree draws, components expanded. */
-function textOf(node: unknown): string[] {
-  if (typeof node === "string" || typeof node === "number") {
-    return [String(node)];
-  }
-  if (Array.isArray(node)) return node.flatMap(textOf);
-  if (!node || typeof node !== "object" || !("props" in node)) return [];
-  const element = node as {
-    type: unknown;
-    props: { children?: unknown };
-  };
-  if (typeof element.type === "function") {
-    return textOf((element.type as (props: unknown) => unknown)(element.props));
-  }
-  return textOf(element.props.children);
 }
 
 function expectDefaultCard(response: Response) {
