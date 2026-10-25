@@ -30,6 +30,15 @@ export const NEW_DOMAIN_DAYS = 30;
  * certificate younger than this on a brand-new domain.
  */
 export const LONG_REDIRECT_CHAIN_HOPS = 3;
+/**
+ * The statuses the redirect probe follows. A hop with one of these and a
+ * Location redirected; when the chain's last hop still does, the probe
+ * stopped there (a non-web or unreadable address) and the chain is not
+ * finished, though the host answered.
+ */
+export const REDIRECT_STATUSES: ReadonlySet<number> = new Set([
+  301, 302, 303, 307, 308,
+]);
 export const MANY_FRAMES = 3;
 export const OBFUSCATION_HINTS = 2;
 export const FRESH_CERTIFICATE_DAYS = 7;

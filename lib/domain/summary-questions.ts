@@ -24,6 +24,7 @@ import {
   MANY_FRAMES,
   NEW_DOMAIN_DAYS,
   OBFUSCATION_HINTS,
+  REDIRECT_STATUSES,
   YOUNG_DOMAIN_DAYS,
 } from "@/lib/domain/signal-severity";
 import type {
@@ -453,6 +454,15 @@ function answerReported({ signals, lists, now }: Context): Answer {
 
 const UNSEEN_PAGE = "If we can't open the page, we can't vouch for it.";
 
+/** "mailto:" for a Location the probe didn't open; null if it isn't a link. */
+function schemeOf(location: string, base: string): string | null {
+  try {
+    return new URL(location, base || undefined).protocol;
+  } catch {
+    return null;
+  }
+}
+
 function answerDestination({
   url,
   signals,
@@ -479,8 +489,15 @@ function answerDestination({
     };
   }
   // A chain we couldn't finish keeps the hops we saw (the engine scores
-  // them), but where it stopped is not where it ends.
-  const finished = data.reachable;
+  // them), but where it stopped is not where it ends. Nor is a last
+  // response that still redirects: the probe never opens a non-web or
+  // unreadable address, but a browser would go on to it.
+  const last = hops.at(-1);
+  const unopened =
+    last?.location && REDIRECT_STATUSES.has(last.status)
+      ? { location: last.location, from: last.url }
+      : null;
+  const finished = data.reachable && unopened === null;
 
   // Sites by registered domain when the parser is here; hosts otherwise,
   // and then a different host is never claimed to be a different site.
@@ -509,7 +526,19 @@ function answerDestination({
   const after = redirects ? ` after ${redirects}` : "";
 
   let route: string;
-  if (!finished) {
+  if (data.reachable && unopened) {
+    // Every hop before the last was followed; the last one wasn't.
+    const followed = data.totalHops - 1;
+    const through = via.length > 0 ? ` through ${formatList(via)}` : "";
+    const lead =
+      followed > 0
+        ? `After ${countOf(followed, "redirect")}${through}, the next one points`
+        : "Its redirect points";
+    const scheme = schemeOf(unopened.location, unopened.from);
+    route = scheme
+      ? `${lead} to a non-web address (${scheme}), which we don't open, so we can't confirm where it finally leads.`
+      : `${lead} to an address that isn't a valid link, so we can't confirm where it finally leads.`;
+  } else if (!finished) {
     const through = via.length > 0 ? `, through ${formatList(via)},` : "";
     route = `We followed ${redirects ?? "the link"}${through} but couldn't reach the end, so we can't confirm where it finally leads.`;
   } else if (endsElsewhere && registeredDomainOf) {

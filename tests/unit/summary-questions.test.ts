@@ -744,6 +744,42 @@ describe("Where would it take me?", () => {
     });
   });
 
+  it("never calls a chain finished when its last redirect points to an address we don't open", () => {
+    const signals = cleanSignals();
+    // The probe stops at a non-web scheme, yet the host answered.
+    signals.redirectChain.data = chain(
+      [["https://example.com/", 302, "mailto:help@example.com"]],
+      { finalUrl: "https://example.com/" },
+    );
+    expect(byId(ask(signals), "destination")).toMatchObject({
+      answer:
+        "Its redirect points to a non-web address (mailto:), which we don't open, so we can't confirm where it finally leads.",
+      why: "If we can't see where a link ends, we can't vouch for it.",
+    });
+
+    signals.redirectChain.data = chain(
+      [
+        ["https://example.com/", 301, "https://track.example.net/a"],
+        ["https://track.example.net/a", 302, "https://example.com/b"],
+        ["https://example.com/b", 302, "intent://open#Intent;end"],
+      ],
+      { finalUrl: "https://example.com/b" },
+    );
+    const destination = byId(ask(signals), "destination");
+    expect(destination.answer).toBe(
+      "After 2 redirects through example.net, the next one points to a non-web address (intent:), which we don't open, so we can't confirm where it finally leads.",
+    );
+    expect(destination.answer).not.toMatch(/stays on this site|ends on/);
+
+    signals.redirectChain.data = chain(
+      [["https://example.com/", 302, "https://[not-an-address"]],
+      { finalUrl: "https://example.com/" },
+    );
+    expect(byId(ask(signals), "destination").answer).toBe(
+      "Its redirect points to an address that isn't a valid link, so we can't confirm where it finally leads.",
+    );
+  });
+
   it("names a page built from several frames, hidden or not", () => {
     const signals = cleanSignals();
     signals.redirectChain.data = chain([["https://example.com/", 200]], {
