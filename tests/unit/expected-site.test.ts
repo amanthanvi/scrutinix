@@ -90,6 +90,15 @@ describe("compareExpectedSite", () => {
     expect(compareExpectedSite(parse, real, "!!")).toBeNull();
   });
 
+  it("answers a name in any script, still without confirming or denying it", () => {
+    for (const name of ["Сбербанк", "支付宝", "पेटीएम"]) {
+      expect(compareExpectedSite(parse, real, name)).toEqual({
+        outcome: "unknown",
+        sentence: `We can't tell from a name whether paypal.com is ${name}'s site. Type its address to compare.`,
+      });
+    }
+  });
+
   it("treats a site under a hosting suffix as its own site", () => {
     const tenant = anatomyOf("https://login-verify.github.io/");
     expect(tenant.registeredDomain).toBe("login-verify.github.io");

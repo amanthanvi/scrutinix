@@ -25,9 +25,12 @@ export interface ExpectedSiteComparison {
   sentence: string;
 }
 
-/** Letters and digits only: "Bank of America" → "bankofamerica". */
+/**
+ * Letters and digits only, in any script: "Bank of America" →
+ * "bankofamerica", "Сбербанк" stays "сбербанк".
+ */
 function compact(value: string): string {
-  return value.toLowerCase().replace(/[^a-z0-9]/g, "");
+  return value.toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
 }
 
 /**
