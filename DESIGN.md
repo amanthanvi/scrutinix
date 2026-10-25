@@ -167,18 +167,18 @@ typography:
     fontWeight: 400
     lineHeight: "1rem"
   link-data:
-    fontFamily: "Geist Mono, monospace"
+    fontFamily: "ui-monospace, monospace"
     fontSize: "0.9375rem"
     fontWeight: 400
     lineHeight: "1.5rem"
     fontFeature: '"tnum"'
   owner-domain:
-    fontFamily: "Geist Mono, monospace"
+    fontFamily: "ui-monospace, monospace"
     fontSize: "1.0625rem"
     fontWeight: 600
     lineHeight: "1.625rem"
   evidence-data:
-    fontFamily: "Geist Mono, monospace"
+    fontFamily: "ui-monospace, monospace"
     fontSize: "0.75rem"
     fontWeight: 400
     lineHeight: "1.25rem"
@@ -327,7 +327,7 @@ The signature is the eight-cell strip. One cell per check, in a fixed order, wit
 
 - One 46rem column; the verdict band is the only tinted container.
 - Cool white / deep neutral-cool grounds, blue-black ink, one blue accent for actions, links, and focus.
-- Geist Sans on a real scale with confident display steps; Geist Mono for links, domains, evidence, and counts.
+- The system sans on a real scale with confident display steps; the system mono for links, domains, evidence, and counts. The page loads no web fonts.
 - Verdict hue appears as a low-chroma band surface; the verdict word itself stays ink.
 - The eight-cell strip carries every state by shape as well as hue.
 - CSS-only motion under 300ms with one authored moment: the cells fill, then the band takes its colour and the verdict word arrives.
@@ -394,7 +394,7 @@ Each verdict owns four tokens: a graphic hue (`<v>`, 3:1 on the ground), a text 
 ## Typography
 
 **Display Font:** `--font-display`, defaulting to the system `--font-sans` stack (P29.4; identity layer may replace this hook).
-**Body Font:** Geist Sans
+**Body Font:** system `--font-sans` stack (`system-ui`, -apple-system, BlinkMacSystemFont, "Segoe UI")
 **Label/Mono Font:** system `--font-mono` stack (`ui-monospace`, SFMono-Regular, Menlo, Consolas).
 
 **Character:** One neo-grotesque family does everything a word does; its mono sibling does everything a measurement does. The pairing reads as a precise instrument, not a terminal.
@@ -404,7 +404,7 @@ Each verdict owns four tokens: a graphic hue (`<v>`, 3:1 on the ground), a text 
 - **Verdict** (600, 52px from 40rem, 40px below; line-height 1; −0.036em / −0.032em): the verdict word in the band, the largest type on any result.
 - **Display** (600, 44px, 1.06, −0.032em): the home headline and public page titles from 40rem.
 - **Headline** (600, 34px, 1.1, −0.028em): the same headlines on phones, and the home headline once a verdict band is on the page.
-- **Score** (500, 32px, 1, −0.02em, tabular): the threat score numeral. Set in Geist Sans because Geist Mono's slashed zero reads as "Ø" at this size; the "/100" beside it is mono meta.
+- **Score** (500, 32px, 1, −0.02em, tabular): the threat score numeral. Set in the sans because a monospace slashed zero can read as "Ø" at this size; the "/100" beside it is mono meta.
 - **Imperative** (500, 21px, 28px, −0.012em): the one instruction under the verdict word ("Don't open this link.").
 - **Title** (600, 20px, 28px, −0.012em): History, batch, and public-page section headings.
 - **Lead** (400, 17px, 26px): the supporting line under a headline; also the registered domain in the anatomy line (mono, 600).
@@ -416,7 +416,7 @@ Each verdict owns four tokens: a graphic hue (`<v>`, 3:1 on the ground), a text 
 
 **The One Display Moment Rule.** Once the verdict band mounts, the home headline steps down from display to headline size (CSS `:has(#sx-verdict-heading)` from 40rem), so one display size owns the moment. The step happens when the scan starts, never after the verdict lands.
 
-**The Mono Is Data Rule.** Geist Mono sets links, registered domains, evidence entries, counts, scores' "/100", and timestamps, always with tabular numerals. Never use it to make prose look technical.
+**The Mono Is Data Rule.** The system mono sets links, registered domains, evidence entries, counts, scores' "/100", and timestamps, always with tabular numerals. Never use it to make prose look technical.
 
 **The Taught Scale Rule.** Every custom `text-*` step lives in `@theme` and is registered with tailwind-merge in `lib/utils.ts`; otherwise `cn()` silently drops it when a colour class follows.
 
