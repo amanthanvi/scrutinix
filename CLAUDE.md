@@ -91,7 +91,7 @@ lib/
     signal-severity.ts    # Per-signal severity ("clear" = found nothing; scored => warning)
     signal-signature.ts   # Eight-cell signature, legacy-record check, share snapshot encode/decode
     link-anatomy.ts       # Isomorphic URL anatomy + look-alike detection (tldts passed in)
-    expected-site.ts      # "Were you expecting…?": compare an expected domain with the link's registered domain (names never confirmed or denied)
+    expected-site.ts      # "Were you expecting…?": compare an expected domain (or IP) with the link's registered domain (names never confirmed or denied)
     impersonated-brands.ts # Shared brand list (look-alike ccTLD runs, structure-risk scoring)
     registrable-domain.ts # Server wrapper over link-anatomy's registrableDomainOf
     copy.ts               # countOf / formatList / capitalize / formatAge for user-facing copy

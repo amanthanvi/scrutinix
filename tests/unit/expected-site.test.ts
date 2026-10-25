@@ -99,6 +99,44 @@ describe("compareExpectedSite", () => {
     }
   });
 
+  it("compares a typed IP address with an IP link's address directly", () => {
+    const v4 = anatomyOf("https://1.1.1.1/");
+    expect(compareExpectedSite(parse, v4, "1.1.1.1")).toEqual({
+      outcome: "match",
+      sentence: "Matches 1.1.1.1.",
+    });
+    expect(
+      compareExpectedSite(parse, v4, "https://1.1.1.1/dns-query"),
+    ).toMatchObject({ outcome: "match" });
+    expect(compareExpectedSite(parse, v4, "8.8.8.8")).toEqual({
+      outcome: "mismatch",
+      sentence: "This link belongs to 1.1.1.1, not 8.8.8.8.",
+    });
+
+    const v6 = anatomyOf("https://[2606:4700:4700::1111]/");
+    expect(v6.registeredDomain).toBe("[2606:4700:4700::1111]");
+    for (const typed of [
+      "[2606:4700:4700::1111]",
+      "2606:4700:4700::1111",
+      "2606:4700:4700:0:0:0:0:1111",
+    ]) {
+      expect(compareExpectedSite(parse, v6, typed), typed).toEqual({
+        outcome: "match",
+        sentence: "Matches [2606:4700:4700::1111].",
+      });
+    }
+
+    // A link with a name never belongs to a typed address.
+    expect(compareExpectedSite(parse, real, "1.1.1.1")).toEqual({
+      outcome: "mismatch",
+      sentence: "This link belongs to paypal.com, not 1.1.1.1.",
+    });
+    // A bare number is a name, not an address.
+    expect(compareExpectedSite(parse, real, "7")).toMatchObject({
+      outcome: "unknown",
+    });
+  });
+
   it("treats a site under a hosting suffix as its own site", () => {
     const tenant = anatomyOf("https://login-verify.github.io/");
     expect(tenant.registeredDomain).toBe("login-verify.github.io");

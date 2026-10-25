@@ -1,5 +1,6 @@
 import {
   registrableDomainOf,
+  splitLinkAnatomy,
   type LinkAnatomy,
   type ParseHostname,
 } from "@/lib/domain/link-anatomy";
@@ -33,6 +34,31 @@ function compact(value: string): string {
   return value.toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
 }
 
+const HAS_SCHEME = /^[a-z][a-z0-9+.-]*:\/\//i;
+
+/**
+ * An IP address typed bare ("1.1.1.1", "2606:4700::1111"), bracketed, or
+ * in a link, written exactly as a link's anatomy writes its owner
+ * ("[2606:4700::1111]"); null if it isn't one.
+ */
+function expectedIp(parse: ParseHostname, expected: string): string | null {
+  if (/\s/.test(expected)) return null;
+  let link = expected;
+  if (!HAS_SCHEME.test(expected)) {
+    const host = expected.split(/[/?#]/, 1)[0] ?? "";
+    if (host.startsWith("[")) {
+      link = `https://${expected}`;
+    } else if (parse(host).isIp) {
+      const bracketed = host.includes(":") ? `[${host}]` : host;
+      link = `https://${bracketed}${expected.slice(host.length)}`;
+    } else {
+      return null;
+    }
+  }
+  const typed = splitLinkAnatomy(parse, link);
+  return typed?.isIp ? typed.registeredDomain : null;
+}
+
 /**
  * The registered domain of something typed as a domain or link
  * ("paypal.com", "www.paypal.com", "https://paypal.com/login"), worked out
@@ -41,7 +67,7 @@ function compact(value: string): string {
  */
 function expectedDomain(parse: ParseHostname, expected: string): string | null {
   if (/\s/.test(expected) || !expected.includes(".")) return null;
-  const withScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(expected)
+  const withScheme = HAS_SCHEME.test(expected)
     ? expected
     : `https://${expected}`;
   let hostname: string;
@@ -62,6 +88,19 @@ export function compareExpectedSite(
   const expected = rawExpected.trim();
   if (!expected) return null;
   const owner = anatomy.registeredDomain.toLowerCase();
+
+  // An IP address, compared directly: an IP link's anatomy names its
+  // address as the owner, and an address has no registered domain.
+  const ip = expectedIp(parse, expected);
+  if (ip) {
+    if (ip === owner) return { outcome: "match", sentence: `Matches ${ip}.` };
+    return {
+      outcome: "mismatch",
+      sentence: anatomy.impersonates
+        ? `No. This link doesn't belong to ${ip}.`
+        : ownershipSentence(owner, ip),
+    };
+  }
 
   // A domain or link: compare registered domains exactly.
   const domain = expectedDomain(parse, expected);
