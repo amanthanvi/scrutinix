@@ -40,6 +40,7 @@
     "test:dom": "vitest --config vitest.dom.config.ts",
     "test:coverage": "vitest --config vitest.unit.config.ts --coverage --run",
     "test:e2e": "node ./scripts/run-e2e.mjs",
+    "test:e2e:engines": "node ./scripts/run-e2e.mjs --project=chromium --project=firefox --project=webkit",
     "audit:ci": "node ./scripts/audit-gate.mjs",
     "check:trace": "node ./scripts/check-function-trace.mjs",
     "check:contrast": "node ./scripts/check-contrast.mjs",

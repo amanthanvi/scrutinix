@@ -1,14 +1,19 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test, type Page } from "@playwright/test";
+import {
+  expect,
+  type BrowserContextOptions,
+  type Page,
+} from "@playwright/test";
 
 import {
   encodeSharedPayload,
   gotoApp,
-  setDefaultTextSize,
+  pressTab,
   settleAnimations,
   sharedPath,
   signSharedPayload,
   submitSingleScan,
+  test,
 } from "./helpers";
 
 test("home page accessibility @smoke", async ({ page }) => {
@@ -53,28 +58,24 @@ test("result view accessibility @smoke", async ({ page }) => {
  * No sideways scrolling on the home, a result, the Full list with every
  * check's details open, a filtered history, a shared look-alike
  * (verified, unverified, and expired), and /about and /privacy with every
- * disclosure open, at each default text size and width given.
+ * disclosure open, at each default text size and width given. `open`
+ * gives the page for one size and width, starting with `seed`'s history.
  */
 async function expectReflow(
-  page: Page,
+  seed: Page,
   sizes: ReadonlyArray<readonly [standard: number, width: number]>,
+  open: (standard: number, options: BrowserContextOptions) => Promise<Page>,
 ) {
-  const scrollsSideways = () =>
-    page.evaluate(
-      () =>
-        document.documentElement.scrollWidth >
-        document.documentElement.clientWidth,
-    );
   // Three saved scans; the first result below makes four, which brings up
   // the history filter.
-  await gotoApp(page);
+  await gotoApp(seed);
   for (const [link, verdict] of [
     ["https://malicious.scrutinix.test/", /^scan result: malicious$/i],
     ["https://unreachable.scrutinix.test/", /^scan result: unknown$/i],
     ["https://example.com/", /^scan result: safe$/i],
   ] as const) {
-    await submitSingleScan(page, link);
-    await expect(page.getByLabel(verdict)).toBeVisible({ timeout: 15_000 });
+    await submitSingleScan(seed, link);
+    await expect(seed.getByLabel(verdict)).toBeVisible({ timeout: 15_000 });
   }
 
   // A look-alike whose registered domain ("secure-login.xyz") is kept
@@ -95,10 +96,21 @@ async function expectReflow(
     ["expired", sharedPath(old, signSharedPayload(old))],
   ] as const;
 
+  // History lives in IndexedDB, which a new context starts without.
+  const storageState = await seed.context().storageState({ indexedDB: true });
+
   for (const [standard, width] of sizes) {
     const at = `${standard}px text at ${width}px`;
-    await page.setViewportSize({ width, height: 700 });
-    await setDefaultTextSize(page, standard);
+    const page = await open(standard, {
+      storageState,
+      viewport: { width, height: 700 },
+    });
+    const scrollsSideways = () =>
+      page.evaluate(
+        () =>
+          document.documentElement.scrollWidth >
+          document.documentElement.clientWidth,
+      );
     await gotoApp(page);
     expect(await scrollsSideways(), `home, ${at}`).toBe(false);
 
@@ -158,8 +170,28 @@ const REFLOW_SIZES = [
 
 test("larger default text reflows without sideways scrolling @smoke", async ({
   page,
+  pageAtDefaultTextSize,
 }) => {
-  await expectReflow(page, REFLOW_SIZES);
+  await expectReflow(page, REFLOW_SIZES, pageAtDefaultTextSize);
+});
+
+/**
+ * Page zoom keeps the default text size and narrows the viewport: 400% of
+ * a 1280px window, or 200% of 640px, lays out at 320px. Safari's text-size
+ * controls zoom the page, so this is WebKit's reflow check too, where the
+ * larger-default-text ones are skipped.
+ */
+function expectZoomReflow(page: Page) {
+  return expectReflow(page, [[16, 320]], async (_standard, { viewport }) => {
+    if (viewport) await page.setViewportSize(viewport);
+    return page;
+  });
+}
+
+test("page zoom reflows without sideways scrolling @smoke", async ({
+  page,
+}) => {
+  await expectZoomReflow(page);
 });
 
 test.describe("on a phone", () => {
@@ -169,38 +201,50 @@ test.describe("on a phone", () => {
 
   test("larger default text reflows without sideways scrolling @smoke", async ({
     page,
+    pageAtDefaultTextSize,
   }) => {
-    await expectReflow(page, [
-      [24, 320],
-      [32, 320],
-      [32, 360],
-      [32, 375],
-    ]);
+    await expectReflow(
+      page,
+      [
+        [24, 320],
+        [32, 320],
+        [32, 360],
+        [32, 375],
+      ],
+      pageAtDefaultTextSize,
+    );
+  });
+
+  test("page zoom reflows without sideways scrolling @smoke", async ({
+    page,
+  }) => {
+    await expectZoomReflow(page);
   });
 });
 
 test("home page keyboard navigation @smoke", async ({ page }) => {
   await gotoApp(page);
 
-  await page.keyboard.press("Tab");
+  // Tab, or Option+Tab in Safari on macOS (pressTab).
+  await pressTab(page);
   const skipLink = page.getByRole("link", { name: /skip to content/i });
   await expect(skipLink).toBeFocused();
 
   const header = page.getByRole("banner");
 
-  await page.keyboard.press("Tab");
+  await pressTab(page);
   await expect(header.getByRole("link", { name: /^about$/i })).toBeFocused();
 
-  await page.keyboard.press("Tab");
+  await pressTab(page);
   await expect(header.getByRole("link", { name: /^privacy$/i })).toBeFocused();
 
-  await page.keyboard.press("Tab");
+  await pressTab(page);
   const themeToggle = page.getByRole("button", {
     name: /switch to light theme|switch to dark theme|toggle theme/i,
   });
   await expect(themeToggle).toBeFocused();
 
-  await page.keyboard.press("Tab");
+  await pressTab(page);
   await expect(page.getByRole("tab", { name: /^single$/i })).toBeFocused();
 
   await page.keyboard.press("ArrowRight");
