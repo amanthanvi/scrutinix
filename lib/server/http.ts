@@ -1,3 +1,5 @@
+import { PublicError } from "@/lib/domain/public-error";
+
 /** Outbound identity; rdap.org rejects requests with no or a generic UA (403). */
 export const SCRUTINIX_USER_AGENT = "scrutinix/3.0";
 
@@ -8,7 +10,9 @@ export async function fetchWithTimeout(
 ) {
   const controller = new AbortController();
   const timeout = setTimeout(() => {
-    controller.abort(new Error(`Timed out after ${timeoutMs}ms`));
+    controller.abort(
+      new PublicError("lookup_failed", `Timed out after ${timeoutMs}ms.`),
+    );
   }, timeoutMs);
 
   // Combine the caller's signal with the timeout instead of letting one
@@ -28,6 +32,10 @@ export async function fetchWithTimeout(
   }
 }
 
+/**
+ * `label` is client-visible when the timeout wins. Pass a fixed phrase,
+ * never a URL, hostname, or other request data.
+ */
 export async function withTimeout<T>(
   promise: Promise<T>,
   timeoutMs: number,
@@ -37,7 +45,13 @@ export async function withTimeout<T>(
 
   const timeoutPromise = new Promise<T>((_, reject) => {
     timeoutId = setTimeout(
-      () => reject(new Error(`${label} timed out after ${timeoutMs}ms`)),
+      () =>
+        reject(
+          new PublicError(
+            "lookup_failed",
+            `${label} timed out after ${timeoutMs}ms.`,
+          ),
+        ),
       timeoutMs,
     );
   });

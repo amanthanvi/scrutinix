@@ -4,6 +4,7 @@ import type { IncomingMessage } from "node:http";
 
 import { analyzePageContent } from "@/lib/domain/content-analysis";
 import type { RedirectData } from "@/lib/domain/types";
+import { checkFailureMessage } from "@/lib/server/client-error";
 import { SCRUTINIX_USER_AGENT } from "@/lib/server/http";
 import {
   assertPublicNetworkTarget,
@@ -23,6 +24,7 @@ const BODY_CAPTURE_TIMEOUT_MS = 3_000;
 export async function runRedirectSignal(
   url: string,
   signal?: AbortSignal,
+  scanId?: string,
 ): Promise<RedirectData> {
   const hops: RedirectData["hops"] = [];
   let currentUrl = url;
@@ -64,6 +66,7 @@ export async function runRedirectSignal(
       currentUrl,
       currentResolution,
       deadline,
+      scanId,
       signal,
     );
     if ("error" in outcome) {
@@ -154,6 +157,7 @@ async function requestRedirectHop(
   url: string,
   resolution: PublicNetworkTargetResolution,
   deadline: number,
+  scanId: string | undefined,
   signal?: AbortSignal,
 ) {
   const target = new URL(url);
@@ -186,6 +190,7 @@ async function requestRedirectHop(
       address,
       Math.min(REQUEST_TIMEOUT_MS, remaining),
       deadline,
+      scanId,
       signal,
     );
     if (!("error" in outcome)) {
@@ -206,6 +211,7 @@ async function requestRedirectHopAtAddress(
   address: string,
   timeoutMs: number,
   deadline: number,
+  scanId: string | undefined,
   signal?: AbortSignal,
 ) {
   return await new Promise<
@@ -276,7 +282,7 @@ async function requestRedirectHopAtAddress(
 
     request.once("error", (error) => {
       resolve({
-        error: describeRedirectFailure(error),
+        error: describeRedirectFailure(error, target, scanId),
       });
     });
 
@@ -332,24 +338,32 @@ function captureBody(
   });
 }
 
-function describeRedirectFailure(error: unknown) {
-  if (!(error instanceof Error)) {
-    return "The redirect probe failed unexpectedly.";
-  }
+const REDIRECT_FAILURE_SUMMARIES: Record<string, string> = {
+  ECONNREFUSED: "The host refused the redirect probe on the target port.",
+  ENOTFOUND: "The hostname could not be resolved during the redirect probe.",
+  ECONNRESET:
+    "The redirect probe connection was reset before a response arrived.",
+  ETIMEDOUT: "The redirect probe timed out before the host responded.",
+};
 
+function describeRedirectFailure(
+  error: unknown,
+  target: URL,
+  scanId: string | undefined,
+) {
   const code =
-    "code" in error && typeof error.code === "string" ? error.code : null;
-
-  switch (code) {
-    case "ECONNREFUSED":
-      return "The host refused the redirect probe on the target port.";
-    case "ENOTFOUND":
-      return "The hostname could not be resolved during the redirect probe.";
-    case "ECONNRESET":
-      return "The redirect probe connection was reset before a response arrived.";
-    case "ETIMEDOUT":
-      return "The redirect probe timed out before the host responded.";
-    default:
-      return error.message || "The redirect probe failed unexpectedly.";
+    error instanceof Error && "code" in error && typeof error.code === "string"
+      ? error.code
+      : null;
+  const summary = code ? REDIRECT_FAILURE_SUMMARIES[code] : undefined;
+  if (summary) {
+    return summary;
   }
+
+  return checkFailureMessage(error, {
+    correlationId: scanId,
+    summary: "The redirect probe failed unexpectedly.",
+    logEvent: "redirect.probe_failed",
+    redact: [target.toString(), target.hostname],
+  });
 }

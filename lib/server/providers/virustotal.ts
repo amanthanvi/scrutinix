@@ -1,6 +1,7 @@
 import { Buffer } from "node:buffer";
 
 import { getEnv } from "@/lib/config/env";
+import { PublicError } from "@/lib/domain/public-error";
 import type { VirusTotalData } from "@/lib/domain/types";
 import { fetchWithTimeout, sleep, withTimeout } from "@/lib/server/http";
 
@@ -171,7 +172,10 @@ export async function runVirusTotalProvider(
   const apiKey = env.VIRUSTOTAL_API_KEY;
 
   if (!apiKey) {
-    throw new Error("VirusTotal API key is not configured.");
+    throw new PublicError(
+      "not_configured",
+      "VirusTotal API key is not configured.",
+    );
   }
 
   const context: VtRequestContext = {
@@ -195,7 +199,8 @@ export async function runVirusTotalProvider(
   }
 
   if (reportResponse.status !== 404) {
-    throw new Error(
+    throw new PublicError(
+      "lookup_failed",
       `VirusTotal lookup failed with status ${reportResponse.status}.`,
     );
   }
@@ -227,7 +232,8 @@ async function submitAndPollAnalysis(
   );
 
   if (!submitResponse.ok) {
-    throw new Error(
+    throw new PublicError(
+      "lookup_failed",
       `VirusTotal submission failed with status ${submitResponse.status}.`,
     );
   }
@@ -235,7 +241,10 @@ async function submitAndPollAnalysis(
   const submitPayload = asRecord(await submitResponse.json());
   const analysisId = asRecord(submitPayload?.data)?.id;
   if (typeof analysisId !== "string" || !analysisId) {
-    throw new Error("VirusTotal submission did not return an analysis id.");
+    throw new PublicError(
+      "lookup_failed",
+      "VirusTotal submission did not return an analysis id.",
+    );
   }
 
   for (let attempt = 0; attempt < VT_MAX_POLL_ATTEMPTS; attempt += 1) {
@@ -252,7 +261,8 @@ async function submitAndPollAnalysis(
     );
 
     if (!analysisResponse.ok) {
-      throw new Error(
+      throw new PublicError(
+        "lookup_failed",
         `VirusTotal analysis polling failed with status ${analysisResponse.status}.`,
       );
     }
@@ -266,7 +276,8 @@ async function submitAndPollAnalysis(
     }
   }
 
-  throw new Error(
+  throw new PublicError(
+    "lookup_failed",
     "VirusTotal analysis did not complete before the timeout budget.",
   );
 }

@@ -21,7 +21,7 @@ state plus the landed analysis-hardening and review-remediation work.
 ## Current Snapshot
 
 - Date: 2026-10-06
-- Execution status: `P21-P27 complete; P28 canonical redesign implemented, verified locally, and documented (DESIGN.md)`
+- Execution status: `P21-P27 complete; P28 canonical redesign implemented, verified locally, and documented (DESIGN.md); P29 layer 0 (public errors) implemented and verified locally`
 - Platform:
   - Next.js `16.3.4`
   - React `19.2.x`
@@ -213,6 +213,20 @@ on a cool crisp white ground. Direction contract:
 - [x] Share-signing env docs (2026-10-11): `.env.example` now carries an annotated `SHARE_SIGNING_SECRET` / `SHARE_SIGNING_SECRET_PREVIOUS` block (32+ characters, `openssl rand -base64 48` or a Node `randomBytes` one-liner, Production-only scoping, rotation steps with the 72-hour overlap), and the README Environment section lists both keys. Both stay empty in the example file so a copied `.env.example` degrades to unsigned sharing. Setting `SHARE_SIGNING_SECRET` in the Vercel Production environment (then redeploying) is an operator step, not part of this branch.
 - [x] Main sync (2026-10-11): `main` (next `16.3.8` and sharp `0.35.5` from #60, the minor-and-patch group, msw `3.0.1`) was merged into `t3/verdict-trust-fixes`, then that branch into this one. Both merges were textually clean; `package.json` and `package-lock.json` take main's versions (so the branch's own sharp override bump is subsumed by #60), plus this branch's `server-only`, `sharp` devDependency pin, and `check:contrast`/`icons` scripts. Verified: lint, typecheck, format clean; unit 41 files / 470 tests, integration 3 / 37, DOM 9 / 61, e2e 29 passed, build and `check:trace` green, `npm audit --omit=dev` 0 vulnerabilities.
 - [ ] Follow-up (drift found while documenting, not canonized in DESIGN.md): `components/ui/sonner.tsx` keeps `richColors`, whose unlayered `[data-rich-colors][data-type=success]` rules beat the token classes, so success toasts ("Downloaded scan.json", "Link copied to clipboard") paint green outside a Safe verdict; its toast class also pairs a border with `shadow-lg`, the system's only shadow. The share card's didn't-apply cell (`lib/og/cards.tsx`, `#8f9297`) is one step off `--sx-cell-na` (`#898c91`).
+
+### P29 Distinctiveness stack: layer 0, public errors (ported from #63)
+
+Raw exception text (hostnames, Redis DSNs, runtime internals) still reached
+the stream and the UI at the head of the redesign stack. PR #63 (by the
+Cursor agent, written against `main`) fixed it; this layer rebuilds its
+design on #59's code with the independent review's fixes.
+
+- [x] `PublicError` (`lib/domain/public-error.ts`) is the only error whose message a client sees; copy we write (validation, rate limit, provider status, timeouts, `SignalSkipError`) is thrown as one. Everything else is internal: logged through `lib/server/client-error.ts` with the scanned URL, hostname, and any scheme-bearing URL redacted.
+- [x] Leak paths closed: single and batch routes, signal error rows, threat-feed warnings, TLS and redirect probe fallbacks, WHOIS parse errors, the client stream-error path, and the error boundary (keeps #59's copy and classes; drops only the raw message).
+- [x] Stream backstop: an exception that escapes a route handler becomes a schema-valid `scan_error`/`batch_error` line instead of `controller.error()`; the client keeps the first terminal event.
+- [x] Review fixes over #63: one reference per scan (the scan id, or the batch id for a whole-batch failure; no random UUID per failure); failed rows, feed warnings, probe fallbacks, and failed batch items keep a plain sentence (`checkFailureMessage`) and log under the scan id, and `VerdictDetails` states `Reference: <scanId>` once for a failed or partial result; #59's `describeRateLimitWait` tiers kept (#63's fixed rate-limit text dropped); `withResultShare` kept in both routes; the backstop names its route ("The scan failed unexpectedly." / "The batch failed unexpectedly.").
+- [x] Verified (`E2E_PORT=3107`): format, lint, typecheck clean; unit 42 files / 484 tests, integration 3 / 42, DOM 10 / 69, e2e 29 passed, build green.
+- [x] Review round: shared-cache keys carry a version (`v2`) so results cached before public errors (possibly holding raw TLS text) are never replayed after deploy; an unexpected TLS probe failure marks `ssl.probeFailed`, so the result is partial (shows its reference, never cached); local-classifier fallback logs carry the scan id.
 
 ### P24 Resolve September dependency maintenance
 
@@ -422,3 +436,5 @@ on a cool crisp white ground. Direction contract:
 - 2026-08-10: Resolved the seven-PR queue by merging the six current implementation/dependency PRs and closing the conflicted, superseded spec-reconciliation draft; the final aggregate passed the full local CI-equivalent chain on Node 22.23.2.
 - 2026-08-10: Re-enabled repository-level GitHub Actions after clearing the open PR queue; the final `main` CI workflow passed install, audit, format, lint, typecheck, unit/integration/DOM tests, build, fixture-backed Playwright, and Lighthouse.
 - 2026-05-01: Keeping parallel PRs out of `PLAN.md` avoided artificial merge conflicts; use one consolidated plan update after the code branches land.
+- 2026-10-10: Unexpected analyze failures no longer forward `error.message`. `PublicError` is the allowlist for intentional copy (validation, rate limit, authored provider status). Full exception text is logged with URL redaction. The stream backstop writes a route-specific terminal error (required argument, no default) and the client keeps the first terminal event.
+- 2026-10-24: Porting #63 onto the redesign stack, a random reference per failed check made one scan show several unrelated ids. The scan id is now the only reference, stated once per result; rows stay plain.

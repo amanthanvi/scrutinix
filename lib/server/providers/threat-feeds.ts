@@ -1,15 +1,16 @@
 import { getEnv } from "@/lib/config/env";
 import { countOf } from "@/lib/domain/copy";
 import { describeFeedMatch, humanizeThreatType } from "@/lib/domain/feed-copy";
+import { PublicError } from "@/lib/domain/public-error";
 import { getRegistrableDomain } from "@/lib/domain/registrable-domain";
 import { isSharedPlatformHost } from "@/lib/domain/shared-platforms";
 import type { ThreatFeedsData } from "@/lib/domain/types";
 import { simplifyUrlForMatching } from "@/lib/domain/url";
+import { checkFailureMessage } from "@/lib/server/client-error";
 import { fetchWithTimeout } from "@/lib/server/http";
 import { queryDnsbls } from "@/lib/server/providers/dnsbl";
 import { checkOpenPhishFeed } from "@/lib/server/providers/openphish-feed";
 import { checkThreatFox } from "@/lib/server/providers/threatfox";
-import { getErrorMessage } from "@/lib/server/signal-error";
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -26,6 +27,7 @@ export const URLHAUS_NO_LISTING_OBSERVATION =
 export async function runThreatFeedsProvider(
   url: string,
   signal?: AbortSignal,
+  scanId?: string,
 ): Promise<ThreatFeedsData> {
   const warnings: string[] = [];
   const observations: string[] = [];
@@ -41,6 +43,15 @@ export async function runThreatFeedsProvider(
       queryDnsbls(registrableDomain),
     ]);
 
+  const redact = [url, hostname, registrableDomain];
+  const feedFailureMessage = (error: unknown, summary: string) =>
+    checkFailureMessage(error, {
+      correlationId: scanId,
+      summary,
+      logEvent: "threat_feed.lookup_failed",
+      redact,
+    });
+
   if (urlhausResult.status === "fulfilled") {
     if (urlhausResult.value.match) {
       matches.push(urlhausResult.value.match);
@@ -50,7 +61,7 @@ export async function runThreatFeedsProvider(
     }
   } else {
     warnings.push(
-      getErrorMessage(urlhausResult.reason, "URLhaus lookup failed."),
+      feedFailureMessage(urlhausResult.reason, "URLhaus lookup failed."),
     );
   }
 
@@ -60,7 +71,7 @@ export async function runThreatFeedsProvider(
     }
   } else {
     warnings.push(
-      getErrorMessage(openPhishResult.reason, "OpenPhish lookup failed."),
+      feedFailureMessage(openPhishResult.reason, "OpenPhish lookup failed."),
     );
   }
 
@@ -73,7 +84,7 @@ export async function runThreatFeedsProvider(
     }
   } else {
     warnings.push(
-      getErrorMessage(threatFoxResult.reason, "ThreatFox lookup failed."),
+      feedFailureMessage(threatFoxResult.reason, "ThreatFox lookup failed."),
     );
   }
 
@@ -82,7 +93,9 @@ export async function runThreatFeedsProvider(
     warnings.push(...dnsblResult.value.warnings);
     observations.push(...dnsblResult.value.observations);
   } else {
-    warnings.push(getErrorMessage(dnsblResult.reason, "DNSBL lookup failed."));
+    warnings.push(
+      feedFailureMessage(dnsblResult.reason, "DNSBL lookup failed."),
+    );
   }
 
   const rejectedCount = [
@@ -93,7 +106,7 @@ export async function runThreatFeedsProvider(
   ].filter((result) => result.status === "rejected").length;
 
   if (matches.length === 0 && rejectedCount === 4) {
-    throw new Error("All threat-feed lookups failed.");
+    throw new PublicError("lookup_failed", "All threat-feed lookups failed.");
   }
 
   // On a path-tenanted platform a host-level listing describes other
@@ -144,7 +157,10 @@ async function checkUrlhaus(
   );
 
   if (!response.ok) {
-    throw new Error(`URLhaus lookup failed with status ${response.status}.`);
+    throw new PublicError(
+      "lookup_failed",
+      `URLhaus lookup failed with status ${response.status}.`,
+    );
   }
 
   const payload = asRecord(await response.json());
@@ -188,10 +204,9 @@ async function checkUrlhausHost(
   signal?: AbortSignal,
 ): Promise<ThreatFeedsData["matches"][number] | null> {
   const hostname = new URL(url).hostname;
-  let response: Response;
-
-  try {
-    response = await fetchWithTimeout("https://urlhaus-api.abuse.ch/v1/host/", {
+  const response = await fetchWithTimeout(
+    "https://urlhaus-api.abuse.ch/v1/host/",
+    {
       method: "POST",
       signal,
       headers: {
@@ -200,15 +215,12 @@ async function checkUrlhausHost(
         ...(authKey ? { "Auth-Key": authKey } : {}),
       },
       body: new URLSearchParams({ host: hostname }),
-    });
-  } catch (error) {
-    throw new Error(`URLhaus host lookup failed: ${getErrorMessage(error)}`, {
-      cause: error,
-    });
-  }
+    },
+  );
 
   if (!response.ok) {
-    throw new Error(
+    throw new PublicError(
+      "lookup_failed",
       `URLhaus host lookup failed with status ${response.status}.`,
     );
   }

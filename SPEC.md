@@ -300,8 +300,10 @@ BatchUpdate: { type: 'url_complete', url: string, result: AnalysisResult }
 
 Implementation note: batch streams also emit `batch_started`, `url_started`, and `batch_error`, with a concurrency limit of 3 URLs in flight.
 
-- **Error model:** `{ error: { code: string, message: string, retryable: boolean } }`
-- **Idempotency:** Same normalized URL returns a cached result with a new scan ID only when a complete, non-partial result remains inside the 15-minute TTL
+Implementation note: every stream ends with one terminal event (`scan_complete`/`scan_error`, `batch_complete`/`batch_error`). If a handler throws after it already sent one, the stream backstop appends a second error event; clients keep the first terminal event and ignore the rest.
+
+- **Error model:** `{ error: { code: string, message: string, retryable: boolean } }`. Unexpected terminal failures return a generic summary plus `Reference: <id>`, where the id is the scan id (the batch id for a whole-batch failure). A failed check (signal row, feed warning, probe fallback, failed batch item) shows a plain sentence instead; the result states its scan id once in the verdict details when the scan failed or was partial. The exception text is logged server-side, under that id and with URL redaction, and is not sent to the client. Intentional copy — invalid URL, batch size, rate limit, and other messages thrown as `PublicError` — keeps its specific text.
+- **Idempotency:** Same normalized URL returns a cached result with a new scan ID only when a complete, non-partial result remains inside the 15-minute TTL (shared-cache keys carry a result-format version, bumped whenever older cached results must not be replayed; an unexpected TLS probe failure counts as partial)
 - **Rate limits:** 10 tokens/min per IP, 50 tokens/day per IP. An admitted batch costs one token per URL; rejected requests cost one token (enforced in `proxy.ts` before analysis work starts). The per-result share image route is metered separately (30/min, 600/day per IP) so link previews never spend scan quota
 
 ### 4.4 State, caching, concurrency

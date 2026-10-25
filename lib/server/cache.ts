@@ -147,11 +147,18 @@ if (!globalThis.__analysisCache) {
 }
 
 /** Hash cache keys so raw scanned URLs never appear as Redis keys. */
+/**
+ * Bump when cached results written by older code must not be replayed: the
+ * production namespace outlives releases. v2: results from before public
+ * errors could hold raw exception text (a TLS probe's OpenSSL message).
+ */
+const RESULT_CACHE_VERSION = "v2";
+
 /** Null when no isolated namespace is available; the shared cache is then skipped. */
 function remoteKey(key: string) {
   const namespace = cacheNamespace();
   return namespace
-    ? `sx:result:${namespace}:${createHash("sha256").update(key).digest("hex")}`
+    ? `sx:result:${RESULT_CACHE_VERSION}:${namespace}:${createHash("sha256").update(key).digest("hex")}`
     : null;
 }
 

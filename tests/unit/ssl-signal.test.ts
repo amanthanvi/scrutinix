@@ -76,6 +76,98 @@ describe("runSslSignal", () => {
     expect(result.observations[0]).toContain("38376");
   });
 
+  it("does not return raw TLS exception text", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.spyOn(tls, "connect").mockImplementation(() => {
+      const socket = {
+        setTimeout: vi.fn(),
+        once: vi.fn((event: string, handler: (err?: Error) => void) => {
+          if (event === "error") {
+            queueMicrotask(() => {
+              handler(
+                new Error(
+                  "handshake failed for redis://default:s3cret-token@cache.internal ONNXRuntime",
+                ),
+              );
+            });
+          }
+        }),
+        destroy: vi.fn(),
+        end: vi.fn(),
+      };
+      return socket as unknown as tls.TLSSocket;
+    });
+
+    const result = await runSslSignal(
+      "https://15.58.86.110:38376/bin.sh",
+      undefined,
+      "scan-1234",
+    );
+    const observation = result.observations.join("\n");
+
+    expect(result.available).toBe(false);
+    // Lost coverage, not a finding: the scan result becomes partial.
+    expect(result.probeFailed).toBe(true);
+    expect(observation).toContain("The TLS probe failed unexpectedly.");
+    // The result states the scan's reference once; the row stays plain.
+    expect(observation).not.toContain("Reference");
+    expect(observation).not.toContain("s3cret-token");
+    expect(observation).not.toContain("redis://");
+    expect(observation).not.toContain("ONNXRuntime");
+
+    const logged = errorSpy.mock.calls.map((call) => String(call[0])).join("");
+    expect(logged).toContain('"correlationId":"scan-1234"');
+    expect(logged).toContain("ONNXRuntime");
+    expect(logged).not.toContain("redis://");
+  });
+
+  it("keeps an unexpected failure when the next address only refuses", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    lookupMock.mockResolvedValueOnce([
+      { address: "93.184.215.14", family: 4 },
+      { address: "2606:4700:4700::1111", family: 6 },
+    ] as never);
+    const connectSpy = vi
+      .spyOn(tls, "connect")
+      .mockImplementation((options) => {
+        const host = (options as tls.ConnectionOptions).host;
+        const socket = {
+          setTimeout: vi.fn(),
+          once: vi.fn((event: string, handler: (err?: Error) => void) => {
+            if (event !== "error") return;
+            queueMicrotask(() => {
+              if (host === "93.184.215.14") {
+                handler(new Error("unexpected handshake state"));
+                return;
+              }
+              const refused = new Error("connect ECONNREFUSED") as Error & {
+                code?: string;
+              };
+              refused.code = "ECONNREFUSED";
+              handler(refused);
+            });
+          }),
+          destroy: vi.fn(),
+          end: vi.fn(),
+        };
+        return socket as unknown as tls.TLSSocket;
+      });
+
+    const result = await runSslSignal(
+      "https://example.test/",
+      undefined,
+      "scan-5678",
+    );
+
+    expect(connectSpy).toHaveBeenCalledTimes(2);
+    expect(result.available).toBe(false);
+    // The refusal on the second address must not hide the lost coverage.
+    expect(result.probeFailed).toBe(true);
+    expect(result.observations.join("\n")).toContain(
+      "The TLS probe failed unexpectedly.",
+    );
+  });
+
   it("blocks private literal IPs before opening a TLS socket", async () => {
     const connectSpy = vi.spyOn(tls, "connect");
 

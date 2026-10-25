@@ -1,6 +1,11 @@
 import { createErrorAnalysisResult } from "@/lib/domain/analysis-result";
 import { runAnalysis, SCAN_BUDGET_MS } from "@/lib/server/analyze";
 import { createApiError } from "@/lib/server/api-error";
+import {
+  checkFailureMessage,
+  exposeClientError,
+  type ClientErrorView,
+} from "@/lib/server/client-error";
 import { parseScanRequest } from "@/lib/server/scan-request";
 import { withResultShare } from "@/lib/server/share-signing";
 import { createNdjsonResponse } from "@/lib/server/stream";
@@ -10,6 +15,13 @@ export const maxDuration = 300;
 
 const CONCURRENCY = 3;
 
+function batchErrorEvent(failure: ClientErrorView) {
+  return {
+    type: "batch_error" as const,
+    error: createApiError(failure.code, failure.message, failure.retryable),
+  };
+}
+
 export async function POST(request: Request) {
   const parsed = await parseScanRequest(request, "batch");
   if (!parsed.ok) {
@@ -17,85 +29,99 @@ export async function POST(request: Request) {
   }
 
   const targets = parsed.targets;
+  const batchId = crypto.randomUUID();
 
-  return createNdjsonResponse(async (writer, clientGone) => {
-    writer.startKeepalive();
-    writer.send({
-      type: "batch_started",
-      total: targets.length,
-      startedAt: new Date().toISOString(),
-    });
+  return createNdjsonResponse(
+    async (writer, clientGone) => {
+      writer.startKeepalive();
+      writer.send({
+        type: "batch_started",
+        total: targets.length,
+        startedAt: new Date().toISOString(),
+      });
 
-    try {
-      const dispatchSignal = AbortSignal.any([request.signal, clientGone]);
-      const results = await mapWithConcurrency(
-        targets,
-        CONCURRENCY,
-        dispatchSignal,
-        async (target, index) => {
-          const scanId = crypto.randomUUID();
-          const startedAt = new Date().toISOString();
-          const signal = AbortSignal.any([
-            request.signal,
-            clientGone,
-            AbortSignal.timeout(SCAN_BUDGET_MS),
-          ]);
+      try {
+        const dispatchSignal = AbortSignal.any([request.signal, clientGone]);
+        const results = await mapWithConcurrency(
+          targets,
+          CONCURRENCY,
+          dispatchSignal,
+          async (target, index) => {
+            const scanId = crypto.randomUUID();
+            const startedAt = new Date().toISOString();
+            const signal = AbortSignal.any([
+              request.signal,
+              clientGone,
+              AbortSignal.timeout(SCAN_BUDGET_MS),
+            ]);
 
-          writer.send({
-            type: "url_started",
-            index,
-            url: target.normalizedUrl,
-          });
-
-          let analysed;
-          try {
-            analysed = await runAnalysis(target, {
-              scanId,
-              startedAt,
-              signal,
-            });
-          } catch (error) {
-            analysed = createErrorAnalysisResult({
+            writer.send({
+              type: "url_started",
+              index,
               url: target.normalizedUrl,
-              scanId,
-              startedAt,
-              message:
-                error instanceof Error
-                  ? error.message
-                  : "The batch item failed unexpectedly.",
             });
-          }
 
-          // The server-issued (signed) share link travels with the result.
-          const result = withResultShare(analysed);
-          writer.send({
-            type: "url_complete",
-            index,
-            url: result.url,
-            result,
-          });
+            let analysed;
+            try {
+              analysed = await runAnalysis(target, {
+                scanId,
+                startedAt,
+                signal,
+              });
+            } catch (error) {
+              // The message lands in all eight rows; the result shows its
+              // reference (this scan id) once, in the verdict details.
+              analysed = createErrorAnalysisResult({
+                url: target.normalizedUrl,
+                scanId,
+                startedAt,
+                message: checkFailureMessage(error, {
+                  correlationId: scanId,
+                  summary: "This URL could not be scanned.",
+                  logEvent: "scan.failed",
+                  redact: [target.normalizedUrl, target.hostname],
+                  logFields: { batchId },
+                }),
+              });
+            }
 
-          return result;
-        },
-      );
+            // The server-issued (signed) share link travels with the result.
+            const result = withResultShare(analysed);
+            writer.send({
+              type: "url_complete",
+              index,
+              url: result.url,
+              result,
+            });
 
-      writer.send({
-        type: "batch_complete",
-        results,
-      });
-    } catch (error) {
-      writer.send({
-        type: "batch_error",
-        error: createApiError(
-          "batch_failed",
-          error instanceof Error
-            ? error.message
-            : "The batch failed unexpectedly.",
-          true,
-        ),
-      });
-    }
-  });
+            return result;
+          },
+        );
+
+        writer.send({
+          type: "batch_complete",
+          results,
+        });
+      } catch (error) {
+        const failure = exposeClientError(error, {
+          correlationId: batchId,
+          summary: "The batch failed unexpectedly.",
+          code: "batch_failed",
+          logEvent: "batch.failed",
+          redact: targets.flatMap((target) => [
+            target.normalizedUrl,
+            target.hostname,
+          ]),
+        });
+        writer.send(batchErrorEvent(failure));
+      }
+    },
+    {
+      terminalError: batchErrorEvent,
+      failureSummary: "The batch failed unexpectedly.",
+      correlationId: batchId,
+    },
+  );
 }
 
 async function mapWithConcurrency<T, R>(

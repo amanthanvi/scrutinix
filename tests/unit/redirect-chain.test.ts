@@ -212,6 +212,50 @@ describe("runRedirectSignal", () => {
     ]);
   });
 
+  it("does not return raw redirect exception text", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    mockLookupAll([{ address: "93.184.216.34", family: 4 }]);
+    requestMock.mockImplementationOnce(() => {
+      const handlers = new Map<string, (error?: Error) => void>();
+      return {
+        once: vi.fn((event: string, handler: (error?: Error) => void) => {
+          handlers.set(event, handler);
+        }),
+        setTimeout: vi.fn(),
+        destroy: vi.fn(),
+        end: vi.fn(() => {
+          queueMicrotask(() => {
+            handlers.get("error")?.(
+              new Error(
+                "socket hang up redis://default:s3cret-token@cache.internal ONNXRuntime",
+              ),
+            );
+          });
+        }),
+      } as never;
+    });
+
+    const result = await runRedirectSignal(
+      "http://example.test/start",
+      undefined,
+      "scan-1234",
+    );
+    const terminalError = result.terminalError ?? "";
+
+    expect(result.reachable).toBe(false);
+    // The result states the scan's reference once; the row stays plain.
+    expect(terminalError).toBe("The redirect probe failed unexpectedly.");
+    expect(terminalError).not.toContain("s3cret-token");
+    expect(terminalError).not.toContain("redis://");
+    expect(terminalError).not.toContain("ONNXRuntime");
+
+    const logged = errorSpy.mock.calls.map((call) => String(call[0])).join("");
+    expect(logged).toContain('"correlationId":"scan-1234"');
+    expect(logged).toContain("ONNXRuntime");
+    expect(logged).not.toContain("example.test");
+    expect(logged).not.toContain("redis://");
+  });
+
   it("reports an indeterminate result when the redirect limit is exhausted", async () => {
     lookupMock.mockResolvedValue([
       { address: "93.184.216.34", family: 4 },

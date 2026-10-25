@@ -4,6 +4,7 @@ import { classifyConsensus } from "@/lib/domain/ml-consensus";
 import type { ClassificationFinding, MLSignalData } from "@/lib/domain/types";
 import { getUrlStructureRisk } from "@/lib/domain/url-structure-risk";
 import { normalizeUrlInput } from "@/lib/domain/url";
+import { redactForLogs } from "@/lib/server/client-error";
 import { logWarn } from "@/lib/server/logger";
 import { classifyUrlLocally } from "@/lib/server/ml/local-classifier";
 import { getErrorMessage } from "@/lib/server/signal-error";
@@ -47,6 +48,7 @@ const RISKY_TLDS = new Set(["zip", "click", "top", "gq", "work", "country"]);
 // init/inference timeouts.
 export async function runMlEnsembleProvider(
   url: string,
+  scanId?: string,
 ): Promise<MLSignalData> {
   const lexicalModel = buildLexicalModel(url);
   const warnings: string[] = [];
@@ -57,13 +59,14 @@ export async function runMlEnsembleProvider(
   } catch (error) {
     // Raw errors can carry module paths and require stacks; keep them in
     // (URL-free, per AGENTS.md) logs rather than the public stream.
-    const hostname = URL.parse(url)?.hostname || "[host]";
+    const hostname = URL.parse(url)?.hostname ?? "";
     logWarn("ml.classifier_unavailable", {
-      detail: getErrorMessage(error, "The local URL classifier failed.")
-        .split(url)
-        .join("[url]")
-        .split(hostname)
-        .join("[host]"),
+      // The reference a partial result shows is its scan id.
+      ...(scanId ? { correlationId: scanId } : {}),
+      detail: redactForLogs(
+        getErrorMessage(error, "The local URL classifier failed."),
+        [url, hostname],
+      ),
     });
     warnings.push(
       "The link pattern model was unavailable, so only the structure checks ran.",

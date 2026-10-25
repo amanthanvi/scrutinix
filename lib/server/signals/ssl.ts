@@ -3,6 +3,10 @@ import { isIP } from "node:net";
 
 import type { SSLData } from "@/lib/domain/types";
 import {
+  checkFailureMessage,
+  type CheckFailureOptions,
+} from "@/lib/server/client-error";
+import {
   assertPublicNetworkTarget,
   selectPublicProbeAddresses,
 } from "@/lib/server/public-network-target";
@@ -31,6 +35,7 @@ const SSL_PROBE_TIMEOUT_MS = 8_000;
 export async function runSslSignal(
   url: string,
   signal?: AbortSignal,
+  scanId?: string,
 ): Promise<SSLData> {
   const { hostname, port } = getTlsProbeTarget(url);
   const deadline = Date.now() + SSL_SIGNAL_BUDGET_MS;
@@ -51,6 +56,9 @@ export async function runSslSignal(
   }
 
   let lastResult: SSLData | null = null;
+  // An unexpected failure on one address is lost coverage even when the
+  // next address merely refuses or times out; only a certificate clears it.
+  let unexpectedFailure: SSLData | null = null;
 
   for (const probeAddress of probeAddresses) {
     const remaining = deadline - Date.now();
@@ -63,15 +71,20 @@ export async function runSslSignal(
       port,
       probeAddress,
       Math.min(SSL_PROBE_TIMEOUT_MS, remaining),
+      { correlationId: scanId, redact: [url, hostname] },
       signal,
     );
     if (result.available) {
       return result;
     }
+    if (result.probeFailed) {
+      unexpectedFailure ??= result;
+    }
     lastResult = result;
   }
 
   return (
+    unexpectedFailure ??
     lastResult ??
     createUnavailableSslData("The TLS probe failed for every resolved address.")
   );
@@ -82,6 +95,7 @@ function runSslProbe(
   port: number,
   probeAddress: string,
   timeoutMs: number,
+  failureLog: ProbeFailureLog,
   signal?: AbortSignal,
 ): Promise<SSLData> {
   return new Promise<SSLData>((resolve) => {
@@ -180,7 +194,12 @@ function runSslProbe(
 
     socket.once("error", (error) => {
       socket.destroy();
-      resolve(createUnavailableSslData(describeTlsFailure(error, port)));
+      const failure = describeTlsFailure(error, port, failureLog);
+      resolve(
+        createUnavailableSslData(failure.message, {
+          probeFailed: failure.unexpected,
+        }),
+      );
     });
   });
 }
@@ -211,8 +230,12 @@ function buildSslObservations(
   return observations;
 }
 
-function createUnavailableSslData(message: string): SSLData {
+function createUnavailableSslData(
+  message: string,
+  { probeFailed = false }: { probeFailed?: boolean } = {},
+): SSLData {
   return {
+    ...(probeFailed ? { probeFailed: true } : {}),
     protocol: null,
     available: false,
     validationState: "unavailable",
@@ -268,26 +291,38 @@ function getValidationState(
   return "invalid";
 }
 
-function describeTlsFailure(error: unknown, port: number) {
-  if (!(error instanceof Error)) {
-    return "The TLS probe failed unexpectedly.";
-  }
+const TLS_FAILURE_SUMMARIES: Record<string, (port: number) => string> = {
+  ECONNREFUSED: (port) => `The host refused a TLS connection on port ${port}.`,
+  ENOTFOUND: () => "The hostname could not be resolved for the TLS probe.",
+  ECONNRESET: () =>
+    "The TLS connection was reset before the handshake completed.",
+  ETIMEDOUT: () => "The TLS probe timed out before the host responded.",
+};
 
+type ProbeFailureLog = Pick<CheckFailureOptions, "correlationId" | "redact">;
+
+function describeTlsFailure(
+  error: unknown,
+  port: number,
+  failureLog: ProbeFailureLog,
+) {
   const code =
-    "code" in error && typeof error.code === "string" ? error.code : null;
-
-  switch (code) {
-    case "ECONNREFUSED":
-      return `The host refused a TLS connection on port ${port}.`;
-    case "ENOTFOUND":
-      return "The hostname could not be resolved for the TLS probe.";
-    case "ECONNRESET":
-      return "The TLS connection was reset before the handshake completed.";
-    case "ETIMEDOUT":
-      return "The TLS probe timed out before the host responded.";
-    default:
-      return error.message || "The TLS probe failed unexpectedly.";
+    error instanceof Error && "code" in error && typeof error.code === "string"
+      ? error.code
+      : null;
+  const summary = code ? TLS_FAILURE_SUMMARIES[code] : undefined;
+  if (summary) {
+    return { message: summary(port), unexpected: false };
   }
+
+  return {
+    message: checkFailureMessage(error, {
+      ...failureLog,
+      summary: "The TLS probe failed unexpectedly.",
+      logEvent: "ssl.probe_failed",
+    }),
+    unexpected: true,
+  };
 }
 
 function normalizeCertificateName(

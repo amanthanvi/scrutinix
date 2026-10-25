@@ -228,6 +228,12 @@ export const sslDataSchema = z.object({
   selfSigned: tolerantBoolean(false),
   fingerprint256: nullableString,
   observations: stringArray,
+  /**
+   * The probe failed for a reason we don't recognise (not a timeout, a
+   * refusal, or a known TLS error). Lost coverage: the result is partial,
+   * so it shows its reference and is never cached.
+   */
+  probeFailed: z.boolean().optional().catch(undefined),
 });
 
 export type SSLData = z.infer<typeof sslDataSchema>;
@@ -519,6 +525,10 @@ export function createAnalysisResultSchema(fallbackTimestamp: string) {
     });
 }
 
+/**
+ * Client-visible error. `message` is either intentional PublicError copy or
+ * a generic summary plus `Reference: <id>`. It must not carry exception text.
+ */
 export interface ApiError {
   code: string;
   message: string;

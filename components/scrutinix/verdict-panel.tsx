@@ -404,12 +404,19 @@ export function VerdictDetails({
   const completed = Object.values(result.signals).filter(
     (signal) => signal.status !== "pending",
   ).length;
+  // Failed checks keep a plain sentence; the scan id is the one reference
+  // for every server log line behind them, so it is stated once, here.
+  const reference =
+    result.verdict === "error" || metadata?.partialFailure
+      ? metadata?.scanId || result.id
+      : null;
 
   if (
     reasons.length === 0 &&
     recommendations.length === 0 &&
     limitations.length === 0 &&
-    confidenceReasons.length === 0
+    confidenceReasons.length === 0 &&
+    !reference
   ) {
     return null;
   }
@@ -479,6 +486,11 @@ export function VerdictDetails({
             : ""}
           {metadata?.cacheHit ? " · cached" : ""}
         </p>
+        {reference ? (
+          <p className="text-caption font-mono break-all text-[var(--sx-text-soft)]">
+            Reference: {reference}
+          </p>
+        ) : null}
       </div>
     </details>
   );

@@ -11,12 +11,13 @@ import {
   type SignalResults,
 } from "@/lib/domain/types";
 import { analysisCache, FULL_RESULT_TTL_MS } from "@/lib/server/cache";
-import { logError, logInfo, createSafeLogContext } from "@/lib/server/logger";
+import { checkFailureMessage } from "@/lib/server/client-error";
+import { logInfo, createSafeLogContext } from "@/lib/server/logger";
 import { runGoogleSafeBrowsingProvider } from "@/lib/server/providers/google-safe-browsing";
 import { runMlEnsembleProvider } from "@/lib/server/providers/ml-ensemble";
 import { runThreatFeedsProvider } from "@/lib/server/providers/threat-feeds";
 import { runVirusTotalProvider } from "@/lib/server/providers/virustotal";
-import { getErrorMessage, isSignalSkipError } from "@/lib/server/signal-error";
+import { isSignalSkipError } from "@/lib/server/signal-error";
 import {
   getFixtureSignalProviders,
   type SignalProviderTable,
@@ -113,19 +114,24 @@ export async function runAnalysis(
   // for deterministic offline data; see lib/server/test-fixtures.ts.
   const providers: SignalProviderTable = getFixtureSignalProviders(target) ?? {
     virusTotal: () => runVirusTotalProvider(normalizedUrl, signal),
-    mlEnsemble: () => runMlEnsembleProvider(normalizedUrl),
+    mlEnsemble: () => runMlEnsembleProvider(normalizedUrl, scanId),
     googleSafeBrowsing: () =>
       runGoogleSafeBrowsingProvider(normalizedUrl, signal),
-    threatFeeds: () => runThreatFeedsProvider(normalizedUrl, signal),
-    ssl: () => runSslSignal(normalizedUrl, signal),
+    threatFeeds: () => runThreatFeedsProvider(normalizedUrl, signal, scanId),
+    ssl: () => runSslSignal(normalizedUrl, signal, scanId),
     whois: () => runWhoisSignal(normalizedUrl, signal),
     dns: () => runDnsSignal(normalizedUrl),
-    redirectChain: () => runRedirectSignal(normalizedUrl, signal),
+    redirectChain: () => runRedirectSignal(normalizedUrl, signal, scanId),
   };
   const task = <Name extends SignalName>(
     name: Name,
     handler: () => Promise<SignalPayloadMap[Name]>,
-  ) => createSignalTask(name, handler, signal, target.hostname);
+  ) =>
+    createSignalTask(name, handler, signal, {
+      scanId,
+      hostname: target.hostname,
+      normalizedUrl,
+    });
   const signalTasks = [
     task("virusTotal", providers.virusTotal),
     task("mlEnsemble", providers.mlEnsemble),
@@ -216,7 +222,8 @@ function hasPartialFailure(signals: SignalResults): boolean {
     (signals.threatFeeds.status === "success" &&
       (signals.threatFeeds.data?.warnings.length ?? 0) > 0) ||
     (signals.redirectChain.status === "success" &&
-      Boolean(signals.redirectChain.data?.terminalError))
+      Boolean(signals.redirectChain.data?.terminalError)) ||
+    (signals.ssl.status === "success" && Boolean(signals.ssl.data?.probeFailed))
   );
 }
 
@@ -224,7 +231,7 @@ function createSignalTask<Name extends SignalName>(
   name: Name,
   handler: () => Promise<SignalPayloadMap[Name]>,
   signal: AbortSignal | undefined,
-  hostname: string,
+  context: { scanId: string; hostname: string; normalizedUrl: string },
 ) {
   return async (): Promise<SignalOutcome<Name>> => {
     const start = performance.now();
@@ -257,17 +264,19 @@ function createSignalTask<Name extends SignalName>(
         };
       }
 
+      // Cancellation is expected. The abort reason itself can be an internal
+      // error object, so the client only sees the fixed budget message. An
+      // internal failure is logged under the scan id; the result shows that
+      // reference once, so the row keeps a plain sentence.
       const message = signal?.aborted
         ? ABORTED_SIGNAL_MESSAGE
-        : getErrorMessage(error);
-
-      // Provider errors (ENOTFOUND, TLS failures) can embed the scanned
-      // hostname; server logs must stay URL-free per AGENTS.md, so redact
-      // it here. The client-facing signal error keeps the full message.
-      logError("signal.failed", {
-        signal: name,
-        message: hostname ? message.split(hostname).join("[host]") : message,
-      });
+        : checkFailureMessage(error, {
+            correlationId: context.scanId,
+            summary: "This check could not be completed.",
+            logEvent: "signal.failed",
+            redact: [context.normalizedUrl, context.hostname],
+            logFields: { signal: name },
+          });
 
       const result: SignalResult<SignalPayloadMap[Name]> = {
         status: "error",

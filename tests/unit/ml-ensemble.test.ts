@@ -83,10 +83,17 @@ describe("runMlEnsembleProvider", () => {
       new Error("Local URL classifier initialization timed out after 10000ms"),
     );
 
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     const result = await runMlEnsembleProvider(
       "https://45.151.155.223/x86_64?download=setup",
+      "scan-5678",
     );
 
+    // The partial result shows its scan id as the reference: the log must
+    // be findable by it.
+    const logged = warnSpy.mock.calls.map((call) => String(call[0])).join("");
+    expect(logged).toContain('"correlationId":"scan-5678"');
+    warnSpy.mockRestore();
     expect(result.transformerModel).toBeNull();
     expect(result.warnings[0]).toMatch(/only the structure checks ran/);
     expect(result.warnings[0]).not.toMatch(/timed out/);
