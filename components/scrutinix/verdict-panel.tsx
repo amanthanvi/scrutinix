@@ -548,6 +548,10 @@ export function VerdictDetails({
   const completed = Object.values(result.signals).filter(
     (signal) => signal.status !== "pending",
   ).length;
+  // "8/8 checks" alone reads as eight answers when all eight failed.
+  const failed = Object.values(result.signals).filter(
+    (signal) => signal.status === "error",
+  ).length;
   // Failed checks keep a plain sentence; the scan id is the one reference
   // for every server log line behind them, so it is stated once, here.
   const reference =
@@ -618,7 +622,13 @@ export function VerdictDetails({
 
         {confidenceReasons.length > 0 ? (
           <div>
-            <h3 className={DETAIL_HEADING}>Why {confidenceLabel} confidence</h3>
+            <h3 className={DETAIL_HEADING}>
+              {/* A look-alike's (or unconfirmed) band claims no confidence;
+                  this is the checks' own. */}
+              {underlying
+                ? `Why the checks have ${confidenceLabel} confidence`
+                : `Why ${confidenceLabel} confidence`}
+            </h3>
             <ul className="mt-1.5 space-y-1 text-[var(--sx-text-muted)]">
               {confidenceReasons.slice(0, 4).map((item, index) => (
                 <li key={`${index}-${item}`}>{item}</li>
@@ -629,6 +639,7 @@ export function VerdictDetails({
 
         <p className="text-caption font-mono text-[var(--sx-text-soft)]">
           {completed}/{SIGNAL_COUNT} checks
+          {failed > 0 ? ` · ${failed} failed` : ""}
           {metadata?.durationMs ? ` · ${metadata.durationMs} ms` : ""}
           {metadata?.completedAt
             ? ` · finished ${formatTimestamp(metadata.completedAt)}`

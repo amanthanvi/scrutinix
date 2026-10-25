@@ -560,3 +560,45 @@ describe("VerdictDetails reference", () => {
     expect(screen.queryByText(/Reference/)).toBeNull();
   });
 });
+
+describe("VerdictDetails wording", () => {
+  it("says how many checks failed, so 8/8 never reads as eight answers", () => {
+    const signals = Object.fromEntries(
+      Object.entries(settledSignals()).map(([name, signal]) => [
+        name,
+        { ...signal, status: "error", data: null, error: "Check failed." },
+      ]),
+    ) as SignalResults;
+    renderPanel(buildResult("error", {}, { signals }));
+    expect(screen.getByText(/^8\/8 checks · 8 failed/)).toBeTruthy();
+  });
+
+  it("names no failures when every check answered", () => {
+    renderPanel(
+      buildResult("safe", {
+        score: 4,
+        confidenceReasons: ["Every check answered."],
+      }),
+    );
+    expect(screen.getByText(/^8\/8 checks/).textContent).not.toMatch(/failed/);
+  });
+
+  it("calls a look-alike's confidence the checks' own, as its band claims none", () => {
+    renderPanel(
+      buildResult("safe", {
+        score: 4,
+        confidenceReasons: ["Every check answered."],
+      }),
+      { impersonates: "paypal.com" },
+    );
+    expect(
+      screen.getByRole("heading", {
+        level: 3,
+        name: "Why the checks have high confidence",
+      }),
+    ).toBeTruthy();
+    expect(
+      screen.queryByRole("heading", { level: 3, name: "Why high confidence" }),
+    ).toBeNull();
+  });
+});
