@@ -38,7 +38,7 @@ const newsreader = localFont({
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
-  title: "Scrutinix — Check a link before you click",
+  title: "Scrutinix — Is this link what it says it is?",
   description:
     "Paste a link from an email, text, or chat. Eight separate checks tell you whether it's safe to open, and which site it really belongs to.",
   icons: {
@@ -59,18 +59,16 @@ export const metadata: Metadata = {
   },
   manifest: "/site.webmanifest",
   openGraph: {
-    title: "Scrutinix — Check a link before you click",
-    description:
-      "Check a link before you click. Eight separate checks, one plain verdict.",
+    title: "Scrutinix — Is this link what it says it is?",
+    description: "Eight separate checks, one plain verdict.",
     url: siteUrl,
     siteName: "Scrutinix",
     images: ["/opengraph-image"],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Scrutinix — Check a link before you click",
-    description:
-      "Check a link before you click. Eight separate checks, one plain verdict.",
+    title: "Scrutinix — Is this link what it says it is?",
+    description: "Eight separate checks, one plain verdict.",
     images: ["/opengraph-image"],
   },
 };

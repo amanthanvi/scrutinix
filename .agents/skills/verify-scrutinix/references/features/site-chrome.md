@@ -8,6 +8,7 @@ The frame around every page: skip link, wordmark, About and Privacy, theme contr
 - header: wordmark, navigation `Primary` (About, Privacy, the theme button)
 - keyboard: Tab order is Skip to content, About, Privacy, the theme button, then tab `Single`; the arrow keys move between `Single` and `Batch`
 - headline: the home `<h1>` is `Is this link what it says it is?`, in the Newsreader display serif
+- previews: the headline is the site's line everywhere it is stated. The title (and `og:title`, `twitter:title`) is `Scrutinix — Is this link what it says it is?` on `/` and on a shared link that isn't verified or has expired; `og:description` and `twitter:description` are `Eight separate checks, one plain verdict.`; `og:image` is `/opengraph-image`, the default card with the headline in two lines (`Is this link` / `what it says it is?`) and the alt text `Scrutinix: Is this link what it says it is?` followed by the card's supporting line; the `public/site.webmanifest` description is `Is this link what it says it is? Eight separate checks, one plain verdict.` `/about` and `/privacy` have their own titles and inherit the same `og:` and `twitter:` lines.
 - footer: the wordmark, navigation `Footer` with About, Privacy, and Source, and `Free and open source. No account needed.`
 - not-found: unknown paths render the framework 404
 
@@ -20,6 +21,7 @@ Open `/`. The wordmark on the home page is text, not a link. On `/about` and `/p
 `npm run verify:drive` test `site chrome and theme`, plus the navigation in `about and privacy`.
 
 - `page.getByRole("heading", { level: 1, name: "Is this link what it says it is?" })`
+- `expect(page).toHaveTitle("Scrutinix — Is this link what it says it is?")`; the e2e test `every preview of the site states the home headline` (`tests/e2e/app.smoke.spec.ts`) checks the `og:`/`twitter:` tags, the card's lines, and the manifest against the `<h1>`
 - `page.getByRole("link", { name: "Skip to content" })` after one Tab, then About and Privacy in `page.getByRole("navigation", { name: "Primary" })`, the theme button, and `page.getByRole("tab", { name: "Single" })`; ArrowRight focuses tab `Batch`
 - `page.getByRole("navigation", { name: "Footer" })` has links `About`, `Privacy`, and `Source`
 - The empty `Scan history` region is attached and draws nothing
