@@ -118,12 +118,19 @@ export async function historyState(page: Page): Promise<{
   });
 }
 
+/**
+ * How long a scan may take to land. The first scan after a launch also
+ * compiles the analyze route in `next dev`, which the 20-second assertion
+ * default does not always cover.
+ */
+export const SCAN_TIMEOUT_MS = 60_000;
+
 export async function scanSingle(page: Page, url: string, verdict: string) {
   await fillSingle(page, url);
   await page.getByRole("button", { name: "Analyze URL" }).click();
   const region = page.getByRole("region", {
     name: new RegExp(`^scan result: ${verdict}$`, "i"),
   });
-  await expect(region).toBeVisible();
+  await expect(region).toBeVisible({ timeout: SCAN_TIMEOUT_MS });
   return region;
 }

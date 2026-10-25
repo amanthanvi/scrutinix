@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 import { capture } from "./evidence";
-import { fillSingle, gotoApp, historyState } from "./support";
+import { SCAN_TIMEOUT_MS, fillSingle, gotoApp, historyState } from "./support";
 
 test("smoke home and safe scan", async ({ page }) => {
   await gotoApp(page);
@@ -24,7 +24,7 @@ test("smoke home and safe scan", async ({ page }) => {
   await page.getByRole("button", { name: "Analyze URL" }).click();
 
   const verdict = page.getByRole("region", { name: /^scan result: safe$/i });
-  await expect(verdict).toBeVisible();
+  await expect(verdict).toBeVisible({ timeout: SCAN_TIMEOUT_MS });
   await expect(
     verdict.getByRole("heading", { level: 2, name: "Safe" }),
   ).toBeVisible();

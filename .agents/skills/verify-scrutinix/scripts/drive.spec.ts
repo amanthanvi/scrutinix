@@ -2,6 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 import { capture, readEvidence, saveDownload } from "./evidence";
 import {
+  SCAN_TIMEOUT_MS,
   fillSingle,
   gotoApp,
   historyState,
@@ -46,6 +47,13 @@ function scrollsSideways(page: Page) {
       document.documentElement.scrollWidth >
       document.documentElement.clientWidth,
   );
+}
+
+/** The result's polite live region (the expected-site answer is another). */
+function liveRegion(page: Page) {
+  return page
+    .getByRole("region", { name: "Results", exact: true })
+    .locator("p[aria-live='polite']");
 }
 
 async function ogImagePath(page: Page): Promise<string> {
@@ -191,6 +199,7 @@ test("about and privacy", async ({ page }) => {
 });
 
 test("hostile and empty inputs", async ({ page }) => {
+  const scans = recordScans(page);
   await gotoApp(page);
   const pasted = page.getByRole("region", { name: "The link, taken apart" });
 
@@ -199,6 +208,11 @@ test("hostile and empty inputs", async ({ page }) => {
   await expect(page.locator("#sx-url-error")).toHaveText(
     "Paste a link to check.",
   );
+
+  // A checkable link is taken apart once the parser is here, so an
+  // absent breakdown below is a refusal, not a parser still loading.
+  await fillSingle(page, "example.com");
+  await expect(pasted).toContainText("example.com");
 
   // Only a checkable web link is taken apart.
   await fillSingle(page, "javascript:alert(1)");
@@ -216,12 +230,18 @@ test("hostile and empty inputs", async ({ page }) => {
     "Links to your own computer or private network can't be checked.",
   );
 
+  await fillSingle(page, "https://");
+  await expect(pasted).toHaveCount(0);
+  await page.getByRole("button", { name: "Analyze URL" }).click();
+  await expect(page.locator("#sx-url-error")).toHaveText(
+    "That doesn't look like a web link. Check it and try again.",
+  );
+
   await fillSingle(page, `https://example.com/${"a".repeat(2100)}`);
   await page.getByRole("button", { name: "Analyze URL" }).click();
   await expect(page.locator("#sx-url-error")).toHaveText(
     "That link is too long to check (over 2,048 characters).",
   );
-  await expect.poll(async () => (await historyState(page)).urls).toEqual([]);
   await capture(page, "validation-hostile.png");
 
   await page.getByRole("tab", { name: "Batch" }).click();
@@ -248,14 +268,30 @@ test("hostile and empty inputs", async ({ page }) => {
     ),
   ).toBeVisible();
 
+  // Every refusal happened in the browser: no request, nothing saved.
+  expect(scans).toEqual([]);
+  expect((await historyState(page)).urls).toEqual([]);
+
+  // A payload that does not decode is no shared link at all: the plain
+  // home page, not the neutral band.
   await page.goto("/?shared=not-a-snapshot");
   await waitForHydration(page);
+  await expect(
+    page.getByRole("heading", {
+      level: 1,
+      name: "Is this link what it says it is?",
+    }),
+  ).toBeVisible();
   await expect(
     page.getByRole("textbox", { name: "URL to analyze" }),
   ).toBeVisible();
   await expect(page.getByRole("region", { name: /scan result:/i })).toHaveCount(
     0,
   );
+  await expect(
+    page.getByRole("region", { name: "Shared link, not verified" }),
+  ).toHaveCount(0);
+  expect(scans).toEqual([]);
 });
 
 test("legacy history migration", async ({ page }) => {
@@ -321,8 +357,10 @@ test("legacy history migration", async ({ page }) => {
 });
 
 test("single scan share and rescan", async ({ page }) => {
+  const scans = recordScans(page);
   await gotoApp(page);
   const verdict = await scanSingle(page, "example.com", "safe");
+  await expect.poll(() => scans.length).toBe(1);
   await expect(verdict.getByText("Looks safe to open.")).toBeVisible();
   // The registered domain sits under the verdict word.
   await expect(verdict).toContainText("example.com");
@@ -366,8 +404,11 @@ test("single scan share and rescan", async ({ page }) => {
     page.getByText("Downloaded scan.json", { exact: true }),
   ).toBeVisible();
 
+  // Re-scan asks the server again (an earlier smoke run may already have
+  // cached example.com, so "cached" alone would not prove it ran).
   await page.getByRole("button", { name: "Re-scan" }).click();
-  await expect(verdict).toBeVisible();
+  await expect.poll(() => scans.length).toBe(2);
+  await expect(verdict.getByText("Looks safe to open.")).toBeVisible();
   await page.getByText("How we reached this verdict", { exact: true }).click();
   await expect(page.getByText(/· cached/)).toBeVisible();
   // History keeps one row per link: the re-scan replaces the first entry.
@@ -501,12 +542,8 @@ test("verdicts and history", async ({ page }) => {
   await expect(
     unknown.getByText("We couldn't check this link — treat it as unsafe."),
   ).toBeVisible();
-  await expect(page.getByRole("meter", { name: "Threat score" })).toHaveCount(
-    0,
-  );
-  await expect(
-    page.getByRole("region", { name: /^scan result: safe$/i }),
-  ).toHaveCount(0);
+  // Absence of findings is not a reason to score it: no meter.
+  await expect(unknown.getByRole("meter")).toHaveCount(0);
   await expect(page.locator('[data-question="destination"]')).toContainText(
     "We couldn't reach the site, so we can't say where it leads.",
   );
@@ -578,7 +615,7 @@ test("verdicts and history", async ({ page }) => {
   await expect(
     page.getByRole("region", { name: /^scan result: malicious$/i }),
   ).toBeVisible();
-  await expect(page.locator("p[aria-live='polite']")).toHaveText(
+  await expect(liveRegion(page)).toHaveText(
     /^Result for malicious\.scrutinix\.test: Malicious, \d+ out of 100\. Don't open this link\.$/,
   );
 
@@ -598,6 +635,22 @@ test("verdicts and history", async ({ page }) => {
     history.getByRole("button", { name: /example\.org/i }),
   ).toBeVisible();
   await capture(page, "history-restored.png");
+
+  // The public pages leave history alone: About, Privacy, then the
+  // wordmark back to the scanner, and all four rows are still here.
+  const primary = page.getByRole("navigation", { name: "Primary" });
+  await primary.getByRole("link", { name: "About" }).click();
+  await expect(page).toHaveURL(/\/about$/);
+  await primary.getByRole("link", { name: "Privacy" }).click();
+  await expect(page).toHaveURL(/\/privacy$/);
+  await page.getByRole("link", { name: "Scrutinix home" }).click();
+  await expect(page).toHaveURL(/\/$/);
+  await expect(
+    history.getByRole("heading", { name: /^History \(4 scans\)$/ }),
+  ).toBeVisible();
+  await expect
+    .poll(async () => (await historyState(page)).urls)
+    .toHaveLength(4);
 });
 
 test("link taken apart on paste, then a look-alike", async ({ page }) => {
@@ -637,9 +690,11 @@ test("link taken apart on paste, then a look-alike", async ({ page }) => {
   const verdict = page.getByRole("region", {
     name: /^scan result: look-alike$/i,
   });
-  await expect(verdict).toBeVisible();
+  await expect(verdict).toBeVisible({ timeout: SCAN_TIMEOUT_MS });
   await expect(pasted).toHaveCount(0);
   await expect.poll(() => scans.length).toBe(1);
+  await page.waitForTimeout(QUIET_WINDOW_MS);
+  expect(scans).toHaveLength(1);
   await expect(
     verdict.getByRole("heading", { level: 2, name: "Look-alike" }),
   ).toBeVisible();
@@ -681,7 +736,7 @@ test("error and critical verdicts", async ({ page }) => {
     page.getByRole("list", { name: "Signals" }).getByRole("listitem"),
   ).toHaveCount(8);
   await page.getByText("How we reached this verdict", { exact: true }).click();
-  await expect(page.getByText(/^Reference: \S+$/)).toHaveCount(1);
+  await expect(page.getByText(/^Reference: \S+$/)).toBeVisible();
   await capture(page, "verdict-error.png");
 
   const critical = await scanSingle(
@@ -813,9 +868,11 @@ test("sharing to Scrutinix fills in the link and waits for Analyze", async ({
   await analyze.click();
   await expect(
     page.getByRole("region", { name: /^scan result: malicious$/i }),
-  ).toBeVisible();
+  ).toBeVisible({ timeout: SCAN_TIMEOUT_MS });
   await expect.poll(() => scans.length).toBe(1);
-  expect(new URL(page.url()).searchParams.has("url")).toBe(false);
+  await expect(page).not.toHaveURL(/[?&]url=/);
+  await page.waitForTimeout(QUIET_WINDOW_MS);
+  expect(scans).toHaveLength(1);
 
   // Opened by hand, /share has nothing to receive and goes home.
   const opened = await page.request.get("/share", { maxRedirects: 0 });
@@ -841,10 +898,16 @@ test("batch scan", async ({ page }) => {
   await expect(results).toContainText("Batch results");
   await expect(results).toContainText("2/2");
   await expect(
-    results.getByRole("button", { name: "Open result for example.org" }),
+    results.getByRole("button", {
+      name: "Open result for example.org/",
+      exact: true,
+    }),
   ).toBeVisible();
   await expect(
-    results.getByRole("button", { name: "Open result for example.net" }),
+    results.getByRole("button", {
+      name: "Open result for example.net/",
+      exact: true,
+    }),
   ).toBeVisible();
   await expect
     .poll(async () => (await historyState(page)).urls)
@@ -863,7 +926,7 @@ test("batch scan", async ({ page }) => {
   expect(csv).toContain("example.net");
 
   await results
-    .getByRole("button", { name: "Open result for example.org" })
+    .getByRole("button", { name: "Open result for example.org/", exact: true })
     .click();
   await expect(page.getByRole("tab", { name: "Single" })).toHaveAttribute(
     "aria-selected",
@@ -885,7 +948,7 @@ test("a Batch panel that fails to load retries in place", async ({ page }) => {
   const batchTab = page.getByRole("tab", { name: "Batch" });
   await batchTab.click();
   const panel = page.getByRole("tabpanel", { name: "Batch" });
-  const results = page.getByRole("region", { name: "Results" });
+  const results = page.getByRole("region", { name: "Results", exact: true });
   await expect(panel.getByRole("alert")).toHaveText(
     "Batch didn't load. Check your connection and try again.",
   );
