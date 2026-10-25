@@ -125,8 +125,8 @@ export function runSuite(argv, cli) {
 
   // Doctor failed above, so a NOT_READY run keeps the previous evidence.
   // This run's directory should not still hold an earlier run's shots.
-  // Overlapping the state directory is a misconfiguration: stop before
-  // Playwright, and leave run.json where it is.
+  // The state directory, and a directory this skill did not create, are
+  // refused before Playwright. run.json is left where it is.
   let removed;
   try {
     removed = clearEvidenceFiles();

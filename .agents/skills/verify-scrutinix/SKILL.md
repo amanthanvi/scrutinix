@@ -78,7 +78,7 @@ Logs and state (`VERIFY_STATE_DIR` overrides `/tmp/scrutinix-verify`):
 - `supervisor.sock` is the supervisor's socket; `supervisor.log` is its own log
 - `next.log` is the dev server log, `install.log` and `browsers.log` hold `npm ci` and the Chromium install, and `smoke.log` and `drive.log` hold Playwright's output, with `smoke-report.json` and `drive-report.json` beside them. All are mode `0600`, and none is printed or excerpted: commands print exit statuses, counts, failing test titles, and these paths. A failed launch prints what failed (`npm ci failed`, `next dev exited`, …), how it exited, and the log's path, and nothing from the log. Nothing is redacted, because no subprocess text is ever printed. The raw logs hold whatever the tools wrote. Read them only when you need to, and do not paste them into a PR or a CI log.
 - `playwright/smoke/` and `playwright/drive/` hold Playwright's HTML report and traces (see "Drive"); they are raw too
-- `evidence/` is created at launch and kept by cleanup
+- `evidence/` is created at launch, with a `.verify-evidence` marker, and kept by cleanup. A directory that already existed without that marker is not marked and is not cleared
 
 ## Doctor
 
@@ -184,7 +184,7 @@ The full e2e contract remains `npm run test:e2e` (production build, same fixture
 
 ## Evidence
 
-Proof artifacts go to the evidence directory (`/tmp/scrutinix-verify/evidence/`, or `VERIFY_EVIDENCE_DIR`). Each `verify:smoke` or `verify:drive` removes the previous screenshots and downloads there (`.png`, `.csv`, `.json`) after doctor is `READY` and before Playwright starts, so the directory holds that run's shots. It leaves `next-env-*.snapshot` recovery copies, and it refuses to clear anything when the evidence directory is the state directory. A symlink is removed and its target is left in place. A doctor failure leaves the previous files alone. Cleanup never deletes the directory.
+Proof artifacts go to the evidence directory (`/tmp/scrutinix-verify/evidence/`, or `VERIFY_EVIDENCE_DIR`). When the skill creates that directory it writes a `.verify-evidence` marker in it. Each `verify:smoke` or `verify:drive` then removes the previous screenshots (`*.png`) and the downloads this skill saved (`scan.json`, `scan-history.csv`, `batch.csv`) after doctor is `READY` and before Playwright starts, so the directory holds that run's shots. Every other file stays, including `next-env-*.snapshot` recovery copies. It refuses to clear anything, and exits 2 before Playwright, when the evidence directory is the state directory or when that directory already existed without the marker. A symlink is removed and its target is left in place. A doctor failure leaves the previous files alone. Cleanup never deletes the directory.
 
 - `*.png` screenshots taken by the specs (`smoke-home.png`, `smoke-safe.png`, and the drive shots such as `anatomy-paste.png`, `verdict-look-alike.png`, `share-target-prefilled.png`, and `single-shared-verified.png`; each feature file lists its own)
 - `scan.json`, `scan-history.csv`, and `batch.csv` saved from the download the UI produced

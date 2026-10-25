@@ -339,6 +339,40 @@ check(
 runtime.ensureDirs();
 assertPrivate(stateDir);
 assertPrivate(evidenceDir);
+const evidenceMarker = path.join(evidenceDir, runtime.evidenceMarkerName);
+let markerMode = null;
+let markerText = null;
+try {
+  markerMode = lstatSync(evidenceMarker).mode & 0o777;
+  markerText = readFileSync(evidenceMarker, "utf8");
+} catch {
+  markerMode = null;
+  markerText = null;
+}
+check(
+  "creating the evidence directory writes .verify-evidence",
+  runtime.hasEvidenceMarker(evidenceDir) &&
+    markerMode === 0o600 &&
+    markerText === "scrutinix verify evidence\n" &&
+    !runtime.hasEvidenceMarker(stateDir),
+  {
+    marked: runtime.hasEvidenceMarker(evidenceDir),
+    stateMarked: runtime.hasEvidenceMarker(stateDir),
+  },
+);
+rmSync(evidenceMarker, { force: true });
+const plantedPackage = path.join(evidenceDir, "package.json");
+writeFileSync(plantedPackage, '{"name":"keep"}\n');
+runtime.ensureDirs();
+check(
+  "an existing evidence directory is not marked after the fact",
+  !runtime.hasEvidenceMarker(evidenceDir) &&
+    readFileSync(plantedPackage, "utf8") === '{"name":"keep"}\n',
+);
+rmSync(plantedPackage);
+if (!runtime.hasEvidenceMarker(evidenceDir)) {
+  runtime.writeEvidenceMarker(evidenceDir);
+}
 
 chmodSync(stateDir, 0o755);
 let rejectedLoose = false;
@@ -913,6 +947,11 @@ process.exit(1);
 );
 const driveEvidence = path.join(runDir, "evidence");
 mkdirSync(driveEvidence, { recursive: true, mode: 0o700 });
+writeFileSync(
+  path.join(driveEvidence, runtime.evidenceMarkerName),
+  "scrutinix verify evidence\n",
+  { mode: 0o600 },
+);
 const staleShot = path.join(driveEvidence, "stale-from-last-run.png");
 writeFileSync(staleShot, "old");
 const keptOutside = path.join(scratch, "outside-evidence.txt");
@@ -995,6 +1034,90 @@ check(
   cli(overlap),
 );
 rmSync(overlapShot, { force: true });
+
+// A marked directory keeps files this skill did not write. An unmarked
+// directory is refused before anything in it is removed.
+const ownedEvidence = path.join(scratch, "owned-evidence");
+mkdirSync(ownedEvidence, { mode: 0o700 });
+writeFileSync(
+  path.join(ownedEvidence, runtime.evidenceMarkerName),
+  "scrutinix verify evidence\n",
+  { mode: 0o600 },
+);
+const ownedKeep = {
+  "package.json": '{"name":"keep"}\n',
+  "data.csv": "keep,csv\n",
+  "notes.txt": "keep-note\n",
+};
+for (const [name, text] of Object.entries(ownedKeep)) {
+  writeFileSync(path.join(ownedEvidence, name), text);
+}
+const ownedDrop = [
+  "stale-shot.png",
+  "scan.json",
+  "scan-history.csv",
+  "batch.csv",
+];
+for (const name of ownedDrop) {
+  writeFileSync(path.join(ownedEvidence, name), "stale\n");
+}
+const ownedRemoved = runtime.clearEvidenceFiles(ownedEvidence);
+check(
+  "a marked evidence dir keeps foreign files and removes this skill's artifacts",
+  ownedRemoved === ownedDrop.length &&
+    Object.entries(ownedKeep).every(
+      ([name, text]) =>
+        readFileSync(path.join(ownedEvidence, name), "utf8") === text,
+    ) &&
+    ownedDrop.every((name) => !existsSync(path.join(ownedEvidence, name))) &&
+    runtime.hasEvidenceMarker(ownedEvidence),
+  { removed: ownedRemoved },
+);
+const driveSource = readFileSync(path.join(scriptDir, "drive.spec.ts"), "utf8");
+const savedDownloads = [
+  ...driveSource.matchAll(/saveDownload\(\s*\w+\s*,\s*"([^"]+)"\s*\)/g),
+].map((match) => match[1]);
+check(
+  "cleared download names are the ones drive.spec.ts saves",
+  savedDownloads.length === runtime.skillEvidenceDownloads.length &&
+    savedDownloads.every((name) =>
+      runtime.skillEvidenceDownloads.includes(name),
+    ) &&
+    runtime.skillEvidenceDownloads.every((name) =>
+      savedDownloads.includes(name),
+    ),
+  { saved: savedDownloads.length },
+);
+const evidenceSource = readFileSync(
+  path.join(scriptDir, "evidence.ts"),
+  "utf8",
+);
+check(
+  "evidence.ts marks a directory only when it creates one",
+  evidenceSource.includes(`"${runtime.evidenceMarkerName}"`) &&
+    evidenceSource.includes("created === undefined") &&
+    evidenceSource.includes("O_EXCL"),
+);
+const unmarkedDir = path.join(scratch, "unmarked-evidence");
+mkdirSync(unmarkedDir, { mode: 0o700 });
+const unmarkedFile = path.join(unmarkedDir, "package.json");
+writeFileSync(unmarkedFile, '{"name":"keep"}\n');
+const unmarked = await runSuiteWith(
+  fakePlaywright,
+  ["--drive", "--port", String(portA)],
+  envFor(runDir, { VERIFY_EVIDENCE_DIR: unmarkedDir }),
+);
+check(
+  "drive refuses to clear an evidence directory it did not create",
+  unmarked.status === 2 &&
+    unmarked.stderr.includes("has no .verify-evidence marker") &&
+    unmarked.stderr.includes("Refusing to clear") &&
+    !unmarked.stdout.includes("cleared") &&
+    !unmarked.stderr.includes("Playwright exited") &&
+    readFileSync(unmarkedFile, "utf8") === '{"name":"keep"}\n' &&
+    !existsSync(path.join(unmarkedDir, runtime.evidenceMarkerName)),
+  cli(unmarked),
+);
 check(
   "Playwright's output is kept in a 0600 log",
   existsSync(driveLog) &&

@@ -192,9 +192,55 @@ function assertPrivateDir(dir) {
   }
 }
 
+// The evidence directory this skill created carries this regular file. A
+// directory that already existed does not, and is never given one: that would
+// claim a folder VERIFY_EVIDENCE_DIR was pointed at. evidence.ts writes the
+// same name when a screenshot creates the directory. A symlink does not count.
+export const evidenceMarkerName = ".verify-evidence";
+
+// Download filenames saveDownload is called with in drive.spec.ts. Anything
+// else, including other .json and .csv files, is not a skill artifact.
+export const skillEvidenceDownloads = Object.freeze([
+  "scan.json",
+  "scan-history.csv",
+  "batch.csv",
+]);
+
+const evidenceDownloadNames = new Set(skillEvidenceDownloads);
+
+function evidenceMarkerPath(dir) {
+  return path.join(dir, evidenceMarkerName);
+}
+
+export function hasEvidenceMarker(dir) {
+  try {
+    return lstatSync(evidenceMarkerPath(dir)).isFile();
+  } catch {
+    return false;
+  }
+}
+
+export function writeEvidenceMarker(dir) {
+  const fd = openSync(
+    evidenceMarkerPath(dir),
+    constants.O_WRONLY |
+      constants.O_CREAT |
+      constants.O_EXCL |
+      constants.O_NOFOLLOW,
+    0o600,
+  );
+  try {
+    writeFileSync(fd, "scrutinix verify evidence\n");
+  } finally {
+    closeSync(fd);
+  }
+}
+
 // Create (0700) or validate the state and evidence directories for writing.
+// The evidence directory is marked only when this call creates it.
 export function ensureDirs(dirs = [stateDir, evidenceDir]) {
   for (const dir of dirs) {
+    let created = false;
     if (!existsSync(dir)) {
       // Nothing is created under a path someone else could swap.
       const problem = ancestorProblem(dir);
@@ -203,39 +249,52 @@ export function ensureDirs(dirs = [stateDir, evidenceDir]) {
           `verify: ${problem}. Refusing to use it for verify state.`,
         );
       }
-      mkdirSync(dir, { recursive: true, mode: 0o700 });
+      created = mkdirSync(dir, { recursive: true, mode: 0o700 }) !== undefined;
       chmodSync(dir, 0o700);
     }
     assertPrivateDir(dir);
+    if (created && canonicalPath(dir) === canonicalPath(evidenceDir)) {
+      writeEvidenceMarker(dir);
+    }
   }
 }
 
-// Screenshots and downloads from the previous smoke or drive. The directory
-// itself stays. Recovery copies cleanup writes here (next-env-*.snapshot)
-// stay, and so does anything that is not a screenshot or a download. Unlink
-// does not follow a symlink, so a link's target is left alone. The state
-// directory is never this directory: run.json lives there.
-const EVIDENCE_DOWNLOAD = /\.(?:png|csv|json)$/;
+function skillEvidenceArtifact(name) {
+  return name.endsWith(".png") || evidenceDownloadNames.has(name);
+}
 
-function keptEvidenceName(name) {
-  return (
-    name === "run.json" ||
-    name === "next-env.json" ||
-    name === "verify.lock" ||
-    /^next-env-[0-9a-z]+\.snapshot$/.test(name)
+function refuseToClear(dir, reason) {
+  throw new UnsafeStateError(
+    `verify: evidence directory ${dir} ${reason} Refusing to clear it.`,
   );
 }
 
+// Previous screenshots and the downloads this skill saved. The directory
+// itself stays. A *.png screenshot is removed, and so are the exact download
+// names above. Every other file stays, including next-env-*.snapshot recovery
+// copies and the marker. Unlink does not follow a symlink, so a link's target
+// is left alone. The state directory is never cleared: run.json lives there.
+// An existing directory without the marker is not cleared either.
 export function clearEvidenceFiles(dir = evidenceDir) {
+  const assertClearable = () => {
+    if (canonicalPath(dir) === canonicalPath(stateDir)) {
+      refuseToClear(dir, "is the state directory.");
+    }
+    if (!hasEvidenceMarker(dir)) {
+      refuseToClear(
+        dir,
+        "has no .verify-evidence marker, so this skill did not create it.",
+      );
+    }
+  };
+  // Refuse before ensureDirs so an existing unmarked directory is not marked
+  // on the way to a clear, and nothing in it is removed.
+  if (existsSync(dir)) assertClearable();
   ensureDirs([dir]);
-  if (canonicalPath(dir) === canonicalPath(stateDir)) {
-    throw new UnsafeStateError(
-      `verify: evidence directory ${dir} is the state directory. Refusing to clear it.`,
-    );
-  }
+  assertClearable();
   let removed = 0;
   for (const name of readdirSync(dir)) {
-    if (keptEvidenceName(name) || !EVIDENCE_DOWNLOAD.test(name)) continue;
+    if (!skillEvidenceArtifact(name)) continue;
     const file = path.join(dir, name);
     let stat;
     try {
