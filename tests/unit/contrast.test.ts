@@ -40,10 +40,12 @@ describe("strip cell shapes", () => {
     path.join(process.cwd(), "app/scrutinix.css"),
     "utf8",
   );
+  /** The rule drawing a state's mark: the full fill, or a smaller box. */
   const ruleFor = (severity: string) => {
+    const pseudo = ["clear", "neutral"].includes(severity) ? "after" : "before";
     const match = css.match(
       new RegExp(
-        `\\.sx-cell\\[data-severity="${severity}"\\]::before \\{([^}]*)\\}`,
+        `\\.sx-cell\\[data-severity="${severity}"\\]::${pseudo} \\{([^}]*)\\}`,
       ),
     );
     return match?.[1]?.replace(/var\(--sx-cell-[\w-]+\)/g, "").trim() ?? null;
@@ -69,6 +71,23 @@ describe("strip cell shapes", () => {
     expect(failed).toBeTruthy();
     expect(skipped).toBeTruthy();
     expect(failed).not.toBe(skipped);
+  });
+
+  it("draws the smaller marks as their own boxes over a fill that never changes size", () => {
+    // A check the verdict scores turns from a dash to a hatch as it lands:
+    // the dash's box goes, the fill shows, and no box moves.
+    const fills = css.match(
+      /\.sx-cell\[data-severity="clear"\]::before,\s*\.sx-cell\[data-severity="neutral"\]::before \{([^}]*)\}/,
+    )?.[1];
+    expect(fills).toContain("background: transparent");
+    expect(fills).not.toMatch(/inset|clip-path/);
+    for (const severity of ["clear", "neutral"]) {
+      const mark = ruleFor(severity) ?? "";
+      expect(mark).toMatch(/inset: /);
+      expect(mark).not.toContain("clip-path");
+    }
+    // Every fill keeps the cell's own box.
+    expect(css).not.toMatch(/\.sx-cell\[[^\]]+\]::before \{[^}]*inset/);
   });
 
   it("draws a partial answer as a centred block, never a length", () => {

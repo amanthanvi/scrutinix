@@ -40,7 +40,6 @@ import {
 import { capitalize } from "@/lib/domain/copy";
 import type { Severity } from "@/lib/domain/signal-severity";
 import {
-  getSignalSignature,
   isLegacySignalRecord,
   severityWords,
 } from "@/lib/domain/signal-signature";
@@ -458,11 +457,7 @@ export function ResultsSection() {
                   leadsTo={questions ? "question" : "row"}
                   onActivate={activateSignal}
                 />
-                <StripLegend
-                  signals={signals}
-                  scored={scored}
-                  settled={active !== null}
-                />
+                <StripLegend />
               </div>
 
               {questions ? (
@@ -548,47 +543,23 @@ const LEGEND_ORDER: readonly Severity[] = [
 ];
 
 /**
- * A key to the strip's shapes once the result settles: only the states it
- * actually draws, in the words its names and titles use. For the eye (each
- * cell already states its own answer), so hidden from assistive
- * technology. From the scan's start it holds the room every state's key
- * takes (an invisible stand-in), so the key that draws when the verdict
- * lands never moves the evidence below it.
+ * A key to the strip's shapes: every state a settled strip can draw, in
+ * the words its names and titles use. The whole key, from the scan's
+ * start: it explains the cells as they fill and never grows, shrinks, or
+ * appears as checks or the verdict land, so the evidence below it never
+ * moves. For the eye (each cell already states its own answer), so hidden
+ * from assistive technology.
  */
-function StripLegend({
-  signals,
-  scored,
-  settled,
-}: {
-  signals: SignalResults;
-  scored: ReadonlySet<SignalName>;
-  settled: boolean;
-}) {
-  const present = new Set(getSignalSignature(signals, scored));
-  const states = settled
-    ? LEGEND_ORDER.filter((severity) => present.has(severity))
-    : [];
+function StripLegend() {
   return (
-    <div className="sx-slot">
-      <p aria-hidden="true" className="sx-legend sx-stand-in">
-        {LEGEND_ORDER.map((severity) => (
-          <span key={severity}>
-            <span className="sx-cell" />
-            <span data-stand-in={capitalize(severityWords[severity])} />
-          </span>
-        ))}
-      </p>
-      {states.length > 0 ? (
-        <p aria-hidden="true" className="sx-legend">
-          {states.map((severity) => (
-            <span key={severity}>
-              <SignalCell severity={severity} settled />
-              {capitalize(severityWords[severity])}
-            </span>
-          ))}
-        </p>
-      ) : null}
-    </div>
+    <p aria-hidden="true" className="sx-legend">
+      {LEGEND_ORDER.map((severity) => (
+        <span key={severity}>
+          <SignalCell severity={severity} settled />
+          {capitalize(severityWords[severity])}
+        </span>
+      ))}
+    </p>
   );
 }
 

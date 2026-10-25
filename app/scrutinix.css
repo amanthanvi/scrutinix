@@ -83,17 +83,28 @@
 }
 
 /*
- * Found nothing: a short centred dash, never a block. The dash and the
- * partial block below are clipped out of the full cell rather than drawn
- * as smaller boxes, so a cell that changes state (a check the verdict
- * scored turns from a dash to a hatch when the result lands) never moves
- * a box. Where `round()` is supported the clip snaps to whole pixels, so
- * the edges stay as crisp as a laid-out box's (below).
+ * Found nothing and a partial answer are smaller marks, each its own box
+ * (`::after`, laid out, so it snaps to whole pixels), drawn only in its
+ * state. The full-cell fill (`::before`) keeps one size in every state and
+ * stays empty under them, so when the verdict lands and a check it scored
+ * turns from a dash to a hatch, the dash goes and the fill shows: no box
+ * moves.
  */
-.sx-cell[data-severity="clear"]::before {
-  clip-path: inset(calc(50% - max(1px, 6%)) 24% round 1px);
+.sx-cell[data-severity="clear"]::before,
+.sx-cell[data-severity="neutral"]::before {
+  background: transparent;
+  transform: scaleX(1);
+  transition: none;
+}
+
+/* Found nothing: a short centred dash, never a block. */
+.sx-cell[data-severity="clear"]::after {
+  content: "";
+  position: absolute;
+  inset: calc(50% - max(1px, 6%)) 24%;
+  border-radius: 1px;
   background: var(--sx-cell-clear);
-  transform-origin: 24% center;
+  transform-origin: left center;
   transform: scaleX(1);
 }
 
@@ -102,20 +113,26 @@
  * the centre, so left-anchored length stays reserved for arrival fills
  * and a settled cell never reads as a check stuck halfway.
  */
-.sx-cell[data-severity="neutral"]::before {
-  clip-path: inset(20% 30% round 1px);
+.sx-cell[data-severity="neutral"]::after {
+  content: "";
+  position: absolute;
+  inset: 20% 30%;
+  border-radius: 1px;
   background: var(--sx-cell-limited);
   transform-origin: center;
   transform: scaleX(1);
 }
 
-@supports (clip-path: inset(round(1px, 1px))) {
-  .sx-cell[data-severity="clear"]::before {
-    clip-path: inset(round(50% - max(1px, 6%), 1px) round(24%, 1px) round 1px);
-  }
+/* A check landing while the scan runs: its mark grows in, as a fill does.
+   A strip drawn already settled shows it at once. */
+.sx-cell-live[data-severity="clear"]::after,
+.sx-cell-live[data-severity="neutral"]::after {
+  animation: sx-mark 260ms var(--sx-ease);
+}
 
-  .sx-cell[data-severity="neutral"]::before {
-    clip-path: inset(round(20%, 1px) round(30%, 1px) round 1px);
+@keyframes sx-mark {
+  from {
+    transform: scaleX(0);
   }
 }
 
@@ -169,6 +186,11 @@
 
   .sx-cell[data-severity="clear"]::before,
   .sx-cell[data-severity="neutral"]::before {
+    background: transparent;
+  }
+
+  .sx-cell[data-severity="clear"]::after,
+  .sx-cell[data-severity="neutral"]::after {
     background: CanvasText;
   }
 
@@ -1404,7 +1426,8 @@ main:has(#sx-verdict-heading) > .sx-hero-form {
   }
 
   .sx-live,
-  .sx-cell-live[data-severity="pending"] {
+  .sx-cell-live[data-severity="pending"],
+  .sx-cell::after {
     animation: none;
   }
 
