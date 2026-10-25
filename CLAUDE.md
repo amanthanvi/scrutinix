@@ -172,7 +172,16 @@ tests/
   reduced motion. The registered domain sits in the serif under the verdict
   word (`registeredDomain`, with `holdDomain` keeping its height while the
   parser loads); it only names the site, and the anatomy's
-  `ownershipSentence` stays the one place the owner sentence is said. The
+  `ownershipSentence` stays the one place the owner sentence is said. A
+  scan's band (`holdsRoom`: Checking, the address check, the verdict) is
+  one height whatever lands: `BandRoom` draws the band's own layout twice
+  more, invisibly (generated stand-ins, a subgrid over the band), filled
+  with the tallest band with a score and the tallest without one
+  (`BAND_SAYS` in `verdict-guidance.ts`, which a unit test checks against
+  every branch); the last row is the only flexible one, so unused room
+  opens above the hairline. Nothing moves when a verdict lands
+  (`tests/e2e/landing.fixture.spec.ts`).
+  An Error band's last line is "Try again". The
   summary sentence ("because" line) yields whenever the questions or rows
   state the evidence (`evidenceShown`), so in practice only a legacy record
   shows it. It is the only tinted container; once it mounts, the home

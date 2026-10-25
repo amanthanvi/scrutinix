@@ -4,7 +4,8 @@ The verdict band, the threat-score meter, the numbered eight-cell strip, Summary
 
 ## Sub-features
 
-- band: region `Scan result: <word>`; h2 the word, the registered domain in serif under it, one instruction, then a last line (confidence, or a note in its place) with `How scoring works`. An Error band has no last line; a verified shared band has its check time and `Run a fresh scan` there instead. The band is the only tinted container; its tone follows the word shown, the word itself stays ink.
+- band: region `Scan result: <word>`; h2 the word, the registered domain in serif under it, one instruction, then a last line (confidence, or a note in its place) with `How scoring works`. An Error band's last line is button `Try again` (it scans the link again); a verified shared band has its check time and `Run a fresh scan` there instead. The band is the only tinted container; its tone follows the word shown, the word itself stays ink.
+- landing: a scan's band (`Scanning URL`, `Checking the link's address`, and the verdict it lands as) is one height whatever lands, so nothing on the page moves when the verdict arrives; the last line sits at the band's foot, so a verdict with less to say (Unknown, Error, Look-alike) shows room above the hairline. `tests/e2e/landing.fixture.spec.ts` holds every fixture verdict to zero band growth and zero layout shift at 375px and 1280px (an Error result still trades its questions for its eight rows). The score sits under the instruction below 56rem and in its own column from 56rem.
 - words: `Safe`, `Suspicious`, `Malicious`, `Critical`, `Unknown`, `Error`, plus two presentation words for a Safe result:
   - `Look-alike`: the link spells out another site. Instruction `Don't sign in or enter details here.`, no meter, and in place of confidence `No check flagged it, but the name is misleading.` (or `The checks found nothing serious, but the name is misleading.` when some finding scored); the details state `No check flagged it: on their own, the checks scored it Safe, <n> out of 100.` (or `On their own, the checks scored it Safe, <n> out of 100.`)
   - `Unconfirmed`: the link parser that spots look-alikes failed to load. Instruction `Check the link's address before you open it.`, no meter, `We couldn't check whether this address imitates another site.`; the details state the checks' own verdict and score the same way as a Look-alike's
@@ -33,7 +34,7 @@ Fixture URLs, typed as a person would:
 - `https://feed-hit.scrutinix.test/payload.exe` shows `Malicious`; `reported` says `URLhaus lists this link as active malware distribution (listed 6 hours ago).`; the Full row is `Threat Feeds: URLhaus lists this link as active malware distribution.`
 - `https://critical.scrutinix.test/login` shows `Critical`, `Don't open this link — it's a known threat.`, and a score of 80 or more
 - `https://unreachable.scrutinix.test/` shows `Unknown`, `We couldn't check this link — treat it as unsafe.`, no meter, and `destination` says `We couldn't reach the site, so we can't say where it leads.`
-- `https://error.scrutinix.test/` shows `Error`, `The scan failed — try again.`, eight rows `This check could not be completed.`, and a `Reference:` line in the details
+- `https://error.scrutinix.test/` shows `Error`, `The scan failed — try again.`, button `Try again` on the band's last line, eight rows `This check could not be completed.`, and a `Reference:` line in the details
 - `https://paypal.com.secure-login.xyz/verify` shows `Look-alike` with `secure-login.xyz` under it (a login part spelling out a site, `https://paypal.com@secure-login.xyz/`, is a look-alike too, captioned `Ignored by browsers`)
 - any safe link while the parser chunk fails shows `Unconfirmed`
 
