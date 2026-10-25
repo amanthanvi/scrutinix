@@ -9,10 +9,11 @@ import {
 
 /**
  * Nothing on the page moves when a scan lands. From "Checking" on, the
- * band holds the room its tallest verdict takes, and nothing above the
- * evidence collapses or appears as the verdict lands, so for every fixture
- * verdict the band keeps its height, the evidence keeps its place, and the
- * browser records no layout shift. Depends on SCRUTINIX_TEST_FIXTURES=1
+ * band holds the room the tallest verdict that can still land takes, and
+ * nothing above the evidence collapses or appears as the verdict lands, so
+ * for every fixture verdict the band keeps its height, the evidence keeps
+ * its place, and the browser records no layout shift. The one exception,
+ * a coverage caveat, is pinned below. Depends on SCRUTINIX_TEST_FIXTURES=1
  * (scripts/run-e2e.mjs); see lib/server/test-fixtures.ts for the scenarios.
  */
 
@@ -27,9 +28,14 @@ const VERDICTS = [
   ["https://paypal.com.safe.scrutinix.test/login", "Look-alike"],
 ] as const;
 
+const PHONE = { name: "phone", width: 375, height: 812, mobile: true };
+const DESKTOP = { name: "desktop", width: 1280, height: 900, mobile: false };
+
 const VIEWPORTS = [
-  { name: "phone", width: 375, height: 812, mobile: true },
-  { name: "desktop", width: 1280, height: 900, mobile: false },
+  PHONE,
+  // 48rem: the score's column starts here.
+  { name: "tablet", width: 768, height: 1024, mobile: false },
+  DESKTOP,
 ] as const;
 
 /**
@@ -123,6 +129,12 @@ function layout(page: Page) {
     );
     return {
       band: band.getBoundingClientRect().height,
+      // What the band says first: the word, the site, the instruction.
+      said: [
+        heading,
+        band.querySelector(":scope > .sx-band-body > .sx-band-head > p"),
+        band.querySelector(":scope > .sx-band-body > .sx-band-imperative"),
+      ].map((node) => (node ? top(node) : null)),
       tops: marks.map(top),
       list: questions.length > 0 ? "questions" : "rows",
       items: [
@@ -180,6 +192,9 @@ for (const viewport of VIEWPORTS) {
         const shifts = await landingShifts(page);
         const after = await layout(page);
         expect(after.band, `${link}: band height`).toBe(before.band);
+        expect(after.said, `${link}: word, site, instruction`).toEqual(
+          before.said,
+        );
         expect(after.tops, `${link}: positions`).toEqual(before.tops);
         if (word === "Error") {
           expect([before.list, after.list]).toEqual(["questions", "rows"]);
@@ -289,3 +304,72 @@ test.describe("on a phone", () => {
     expect(shifts.sum, `moved ${shifts.moved.join(", ")}`).toBe(0);
   });
 });
+
+/**
+ * A coverage caveat is the one thing a landing still adds. Which checks
+ * failed or only partly answered is known before the verdict, but the
+ * sentence that qualifies the verdict is stated with it, under the
+ * instruction, and holding a line for it would leave a gap in every band.
+ * It may grow the band by its own lines, at most (none where the verdict
+ * leaves room), and moves nothing else: the word and instruction stay, and
+ * everything below moves by exactly what the band grew.
+ */
+for (const viewport of [PHONE, DESKTOP]) {
+  test.describe(`on a ${viewport.name}`, () => {
+    test.use({
+      viewport: { width: viewport.width, height: viewport.height },
+      isMobile: viewport.mobile,
+      hasTouch: viewport.mobile,
+    });
+
+    test(`a coverage caveat adds only its own lines (${viewport.width}px)`, async ({
+      page,
+    }) => {
+      test.setTimeout(60_000);
+      await holdScanStream(page, { failCheck: "whois" });
+      for (const [link, word] of [
+        ["https://malicious.scrutinix.test/login", "Malicious"],
+        ["https://example.com/", "Safe"],
+        ["https://unreachable.scrutinix.test/", "Unknown"],
+      ] as const) {
+        await gotoApp(page);
+        await page.evaluate(() => document.fonts.ready);
+        await submitSingleScan(page, link);
+        await releaseScanLines(page, 8);
+        await expectChecksLanded(page);
+        const before = await layout(page);
+
+        await releaseScanLines(page, 1);
+        const band = page.getByLabel(`Scan result: ${word}`, { exact: true });
+        await expect(band).toBeVisible();
+        const caveat = band.locator(
+          ":scope > .sx-band-body > .sx-band-tail > p:not(.sx-band-line)",
+        );
+        await expect(caveat).toHaveText("Domain Registration didn't finish.");
+        const lines = await caveat.evaluate(
+          (node) =>
+            node.getBoundingClientRect().height +
+            parseFloat(getComputedStyle(node).marginTop),
+        );
+        const after = await layout(page);
+        const grew = after.band - before.band;
+        expect(grew, `${link}: band growth`).toBeGreaterThanOrEqual(0);
+        expect(grew, `${link}: band growth`).toBeLessThanOrEqual(lines + 0.5);
+        expect(after.said, `${link}: word and instruction`).toEqual(
+          before.said,
+        );
+        // Layout offsets are whole pixels: everything below the band moves
+        // by one amount, the band's growth.
+        const moved = (after.tops[1] ?? 0) - (before.tops[1] ?? 0);
+        expect(Math.abs(moved - grew), `${link}: moved`).toBeLessThanOrEqual(1);
+        expect(after.tops, `${link}: positions`).toEqual([
+          before.tops[0],
+          ...before.tops.slice(1).map((offset) => offset + moved),
+        ]);
+        expect(after.items, `${link}: answers`).toEqual(
+          before.items.map((offset) => offset + moved),
+        );
+      }
+    });
+  });
+}

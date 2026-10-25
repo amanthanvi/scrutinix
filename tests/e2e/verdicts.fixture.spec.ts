@@ -62,7 +62,8 @@ test("a failed scan's band offers Try again, which scans the link again", async 
 
   const verdict = page.getByLabel(/^scan result: error$/i);
   await expect(verdict.getByText("The scan failed — try again.")).toBeVisible();
-  // No confidence to state: the last line is the action the line asks for.
+  // No score or confidence to state: the score's place holds the action
+  // its instruction asks for.
   await expect(verdict.getByText(/confidence/i)).toHaveCount(0);
   await verdict.getByRole("button", { name: "Try again" }).click();
 
