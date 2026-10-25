@@ -6,6 +6,7 @@ import {
   type Tab,
   useAnalyzerRuntime,
 } from "@/components/scrutinix/analyzer-runtime";
+import { InputAnatomy } from "@/components/scrutinix/input-anatomy";
 import { BatchInput, SingleInput } from "@/components/scrutinix/input-panels";
 import { loadLinkParser } from "@/hooks/use-link-anatomy";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -14,6 +15,7 @@ import {
   resultsToCsv,
   resultsToJson,
 } from "@/lib/client/export";
+import { displayUrlOf, normalizeUrlInput } from "@/lib/domain/url";
 
 function StreamError({ message }: { message: string }) {
   return (
@@ -41,6 +43,22 @@ export function ScanForm() {
     startSingleScan,
     updateSingleUrl,
   } = useAnalyzerRuntime();
+
+  // The link in the field, taken apart before a scan: only while it is a
+  // valid web link that isn't already the one on screen (a result, a
+  // running scan, or a shared link), whose own anatomy shows below.
+  const typed = normalizeUrlInput(singleUrl);
+  const shownUrl =
+    active?.url ??
+    (scan.state.isStreaming ? scan.state.url : null) ??
+    shared?.url ??
+    null;
+  // Shown with its fragment ("#/login"), which the scan itself never sees,
+  // so a fragment alone doesn't make it a different link.
+  const pasteUrl =
+    typed.ok && typed.value.normalizedUrl !== shownUrl
+      ? displayUrlOf(typed.value)
+      : null;
 
   return (
     <section id="scan-console" aria-label="Scan console">
@@ -87,6 +105,11 @@ export function ScanForm() {
             onSubmit={() => void startSingleScan()}
             onCancel={scan.cancelScan}
           />
+          {pasteUrl ? (
+            <div className="mt-6">
+              <InputAnatomy url={pasteUrl} />
+            </div>
+          ) : null}
         </TabsContent>
 
         <TabsContent value="batch" className="mt-0">

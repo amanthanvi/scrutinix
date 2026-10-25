@@ -123,6 +123,73 @@ test("a look-alike subdomain is named plainly and shown as Look-alike", async ({
   ).toBeVisible();
 });
 
+test("a pasted link is taken apart before any scan, then hands over to the result", async ({
+  page,
+}) => {
+  await gotoApp(page);
+  const input = page.getByRole("textbox", { name: /url to analyze/i });
+  await input.fill("https://paypal.com.secure-login.xyz/verify");
+
+  const pasted = page.getByRole("region", { name: "The link, taken apart" });
+  await expect(pasted).toBeVisible();
+  await expect(pasted).toContainText("Registered domain");
+  await expect(pasted).toContainText(
+    "This link belongs to secure-login.xyz, not paypal.com.",
+  );
+
+  await pasted
+    .getByRole("button", { name: "Expecting a particular site?" })
+    .click();
+  await page
+    .getByRole("textbox", { name: "Which site were you expecting?" })
+    .fill("paypal.com");
+  await expect(pasted).toContainText(
+    "No. The link only spells out paypal.com.",
+  );
+  // The owner is stated once, by the anatomy, not again by the answer.
+  await expect(
+    pasted.getByText("This link belongs to secure-login.xyz, not paypal.com."),
+  ).toHaveCount(1);
+
+  // Scanning the same link: the result's own anatomy takes over, so the
+  // owner is stated once.
+  await page.getByRole("button", { name: /analyze url/i }).click();
+  await expect(page.getByLabel(/^scan result: look-alike$/i)).toBeVisible();
+  await expect(pasted).toHaveCount(0);
+});
+
+test("a long expected site wraps its answer instead of widening a phone", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 320, height: 700 });
+  await gotoApp(page);
+  await page
+    .getByRole("textbox", { name: /url to analyze/i })
+    .fill("https://example.com/");
+  const pasted = page.getByRole("region", { name: "The link, taken apart" });
+  await pasted
+    .getByRole("button", { name: "Expecting a particular site?" })
+    .click();
+  const expected = page.getByRole("textbox", {
+    name: "Which site were you expecting?",
+  });
+  for (const typed of [
+    "accountverificationandsecuritycheckpointforyoursigninportalnowx.com",
+    "Accountverificationandsecuritycheckpointforyoursigninportal",
+  ]) {
+    await expected.fill(typed);
+    await expect(pasted).toContainText(typed);
+    expect(
+      await page.evaluate(
+        () =>
+          document.documentElement.scrollWidth <=
+          document.documentElement.clientWidth,
+      ),
+      typed,
+    ).toBe(true);
+  }
+});
+
 test("a phone-width history row keeps a look-alike's real owner visible", async ({
   page,
 }) => {

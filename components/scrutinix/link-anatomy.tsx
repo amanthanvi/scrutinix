@@ -72,6 +72,8 @@ export function LinkAnatomyView({
   signals,
   visibleSignals = [],
   streaming = false,
+  id = "sx-link-anatomy",
+  captions = false,
 }: {
   url: string;
   anatomy: LinkAnatomy | null;
@@ -80,6 +82,13 @@ export function LinkAnatomyView({
   visibleSignals?: readonly SignalName[];
   /** The scan is running: hold every fact slot open. */
   streaming?: boolean;
+  /** Element id of the link line (the form's own breakdown needs its own). */
+  id?: string;
+  /**
+   * Name each part of the link beneath it ("A label anyone can add",
+   * "Registered domain", "A page on that domain"): the link taken apart.
+   */
+  captions?: boolean;
 }) {
   const [expandedFor, setExpandedFor] = useState<string | null>(null);
   const expanded = expandedFor === url;
@@ -91,55 +100,63 @@ export function LinkAnatomyView({
 
   return (
     <div className="flex flex-col gap-3">
-      <p
-        id="sx-link-anatomy"
-        title={anatomy?.href ?? url}
-        className="text-body font-mono break-words text-[var(--sx-text-soft)]"
-      >
-        {anatomy ? (
-          <>
-            <span>{anatomy.scheme}://</span>
-            {anatomy.userinfo ? (
-              // Browsers ignore a login name when choosing the site; show it
-              // struck through so the line stays faithful to what was pasted.
-              <span className="break-all text-[var(--sx-text-soft)] line-through">
-                <span className="sr-only">ignored login name </span>
-                {anatomy.userinfo}@
+      {anatomy && captions ? (
+        <CaptionedLink
+          id={id}
+          anatomy={anatomy}
+          path={expanded ? anatomy.path : shorten(anatomy.path)}
+        />
+      ) : (
+        <p
+          id={id}
+          title={anatomy?.href ?? url}
+          className="text-body font-mono break-words text-[var(--sx-text-soft)]"
+        >
+          {anatomy ? (
+            <>
+              <span>{anatomy.scheme}://</span>
+              {anatomy.userinfo ? (
+                // Browsers ignore a login name when choosing the site; show it
+                // struck through so the line stays faithful to what was pasted.
+                <span className="break-all text-[var(--sx-text-soft)] line-through">
+                  <span className="sr-only">ignored login name </span>
+                  {anatomy.userinfo}@
+                </span>
+              ) : null}
+              {anatomy.subdomain ? (
+                <span className="break-all text-[var(--sx-text-muted)]">
+                  {anatomy.subdomain}.
+                </span>
+              ) : null}
+              {/* The owner never splits mid-name unless it cannot fit. */}
+              <span
+                className={cn(
+                  "text-lead font-semibold text-[var(--sx-text)]",
+                  anatomy.registeredDomain.length <= LONG_DOMAIN
+                    ? "whitespace-nowrap"
+                    : "break-all",
+                )}
+              >
+                {anatomy.registeredDomain}
               </span>
-            ) : null}
-            {anatomy.subdomain ? (
-              <span className="break-all text-[var(--sx-text-muted)]">
-                {anatomy.subdomain}.
-              </span>
-            ) : null}
-            {/* The owner never splits mid-name unless it cannot fit. */}
-            <span
-              className={cn(
-                "text-lead font-semibold text-[var(--sx-text)]",
-                anatomy.registeredDomain.length <= LONG_DOMAIN
-                  ? "whitespace-nowrap"
-                  : "break-all",
-              )}
-            >
-              {anatomy.registeredDomain}
-            </span>
-            {anatomy.port ? <span>{anatomy.port}</span> : null}
-            {anatomy.path ? (
-              <span className="break-all">
-                {expanded ? anatomy.path : shorten(anatomy.path)}
-              </span>
-            ) : null}
-          </>
-        ) : (
-          <span className="break-all text-[var(--sx-text-muted)]">{url}</span>
-        )}
-      </p>
+              {anatomy.port ? <span>{anatomy.port}</span> : null}
+              {anatomy.path ? (
+                <span className="break-all">
+                  {expanded ? anatomy.path : shorten(anatomy.path)}
+                </span>
+              ) : null}
+            </>
+          ) : (
+            <span className="break-all text-[var(--sx-text-muted)]">{url}</span>
+          )}
+        </p>
+      )}
 
       {truncates ? (
         <button
           type="button"
           aria-expanded={expanded}
-          aria-controls="sx-link-anatomy"
+          aria-controls={id}
           onClick={() => setExpandedFor(expanded ? null : url)}
           className="text-meta sx-link -my-2 inline-flex min-h-11 items-center self-start"
         >
@@ -185,6 +202,84 @@ export function LinkAnatomyView({
         </dl>
       ) : null}
     </div>
+  );
+}
+
+/**
+ * The link with each part named beneath it. Parts wrap as units, so a
+ * caption always stays under the text it names; long parts break inside
+ * their own column. Assistive technology hears each part after its name
+ * ("Registered domain: secure-login.xyz"), in the link's own order, so the
+ * breakdown isn't only visual.
+ */
+function CaptionedLink({
+  id,
+  anatomy,
+  path,
+}: {
+  id: string;
+  anatomy: LinkAnatomy;
+  path: string;
+}) {
+  return (
+    <p
+      id={id}
+      title={anatomy.href}
+      className="text-body flex flex-wrap items-baseline font-mono text-[var(--sx-text-soft)]"
+    >
+      <span>{anatomy.scheme}://</span>
+      {anatomy.userinfo ? (
+        <LinkPart caption="Ignored by browsers">
+          <span className="break-all line-through">{anatomy.userinfo}@</span>
+        </LinkPart>
+      ) : null}
+      {anatomy.subdomain ? (
+        <LinkPart caption="A label anyone can add">
+          <span className="break-all text-[var(--sx-text-muted)]">
+            {anatomy.subdomain}.
+          </span>
+        </LinkPart>
+      ) : null}
+      <LinkPart caption="Registered domain">
+        <span
+          className={cn(
+            "text-lead font-semibold text-[var(--sx-text)]",
+            anatomy.registeredDomain.length <= LONG_DOMAIN
+              ? "whitespace-nowrap"
+              : "break-all",
+          )}
+        >
+          {anatomy.registeredDomain}
+        </span>
+      </LinkPart>
+      {anatomy.port ? <span>{anatomy.port}</span> : null}
+      {path ? (
+        <LinkPart caption="A page on that domain">
+          <span className="break-all">{path}</span>
+        </LinkPart>
+      ) : null}
+    </p>
+  );
+}
+
+function LinkPart({
+  caption,
+  children,
+}: {
+  caption: string;
+  children: ReactNode;
+}) {
+  return (
+    <span className="inline-flex max-w-full min-w-0 flex-col">
+      <span className="sr-only">{caption}: </span>
+      {children}
+      <span
+        aria-hidden="true"
+        className="text-caption mt-0.5 pr-3 font-sans text-[var(--sx-text-soft)]"
+      >
+        {caption}
+      </span>
+    </span>
   );
 }
 

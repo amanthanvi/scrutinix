@@ -103,6 +103,31 @@ for (const colorScheme of ["light", "dark"] as const) {
     expect(full.violations, "Full").toEqual([]);
   });
 
+  test(`${colorScheme} theme has zero axe violations on a pasted link taken apart @smoke`, async ({
+    page,
+  }) => {
+    await page.emulateMedia({ colorScheme });
+    await gotoApp(page);
+    await page
+      .getByRole("textbox", { name: /url to analyze/i })
+      .fill("https://paypal.com.secure-login.xyz/verify");
+    await page
+      .getByRole("button", { name: "Expecting a particular site?" })
+      .click();
+    await page
+      .getByRole("textbox", { name: "Which site were you expecting?" })
+      .fill("PayPal");
+    await settleAnimations(page);
+    await page
+      .getByRole("button", { name: /open next\.js dev tools/i })
+      .evaluateAll((elements) =>
+        elements.forEach((element) => element.remove()),
+      );
+
+    const report = await new AxeBuilder({ page }).analyze();
+    expect(report.violations).toEqual([]);
+  });
+
   test(`${colorScheme} theme has zero axe violations on shared links, verified or not @smoke`, async ({
     page,
   }) => {
