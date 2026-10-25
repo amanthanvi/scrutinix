@@ -358,17 +358,26 @@ for (const viewport of [PHONE, DESKTOP]) {
         expect(after.said, `${link}: word and instruction`).toEqual(
           before.said,
         );
-        // Layout offsets are whole pixels: everything below the band moves
-        // by one amount, the band's growth.
-        const moved = (after.tops[1] ?? 0) - (before.tops[1] ?? 0);
-        expect(Math.abs(moved - grew), `${link}: moved`).toBeLessThanOrEqual(1);
-        expect(after.tops, `${link}: positions`).toEqual([
-          before.tops[0],
-          ...before.tops.slice(1).map((offset) => offset + moved),
-        ]);
-        expect(after.items, `${link}: answers`).toEqual(
-          before.items.map((offset) => offset + moved),
-        );
+        // Everything below the band moves by the band's growth and no more.
+        // Layout offsets are whole pixels and the growth is not, so each
+        // may round either way.
+        expect(after.tops[0], `${link}: band`).toBe(before.tops[0]);
+        const below = [
+          ...before.tops
+            .slice(1)
+            .map((offset, index) => [offset, after.tops[index + 1] ?? NaN]),
+          ...before.items.map((offset, index) => [
+            offset,
+            after.items[index] ?? NaN,
+          ]),
+        ];
+        expect(below.length, `${link}: compared`).toBeGreaterThan(5);
+        for (const [was, is] of below) {
+          expect(
+            Math.abs((is ?? NaN) - (was ?? NaN) - grew),
+            `${link}: ${was} moved to ${is}, the band grew ${grew}`,
+          ).toBeLessThanOrEqual(1);
+        }
       }
     });
   });
