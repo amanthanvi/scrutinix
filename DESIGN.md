@@ -104,65 +104,65 @@ colors:
   dark-cell-track: "oklch(0.25 0.011 264)"
 typography:
   display:
-    fontFamily: "Geist, sans-serif"
+    fontFamily: "system-ui, sans-serif"
     fontSize: "2.75rem"
     fontWeight: 600
     lineHeight: 1.06
     letterSpacing: "-0.032em"
   headline:
-    fontFamily: "Geist, sans-serif"
+    fontFamily: "system-ui, sans-serif"
     fontSize: "2.125rem"
     fontWeight: 600
     lineHeight: 1.1
     letterSpacing: "-0.028em"
   verdict:
-    fontFamily: "Geist, sans-serif"
+    fontFamily: "system-ui, sans-serif"
     fontSize: "3.25rem"
     fontWeight: 600
     lineHeight: 1
     letterSpacing: "-0.036em"
   verdict-sm:
-    fontFamily: "Geist, sans-serif"
+    fontFamily: "system-ui, sans-serif"
     fontSize: "2.5rem"
     fontWeight: 600
     lineHeight: 1
     letterSpacing: "-0.032em"
   score:
-    fontFamily: "Geist, sans-serif"
+    fontFamily: "system-ui, sans-serif"
     fontSize: "2rem"
     fontWeight: 500
     lineHeight: 1
     letterSpacing: "-0.02em"
     fontFeature: '"tnum"'
   imperative:
-    fontFamily: "Geist, sans-serif"
+    fontFamily: "system-ui, sans-serif"
     fontSize: "1.3125rem"
     fontWeight: 500
     lineHeight: "1.75rem"
     letterSpacing: "-0.012em"
   title:
-    fontFamily: "Geist, sans-serif"
+    fontFamily: "system-ui, sans-serif"
     fontSize: "1.25rem"
     fontWeight: 600
     lineHeight: "1.75rem"
     letterSpacing: "-0.012em"
   lead:
-    fontFamily: "Geist, sans-serif"
+    fontFamily: "system-ui, sans-serif"
     fontSize: "1.0625rem"
     fontWeight: 400
     lineHeight: "1.625rem"
   body:
-    fontFamily: "Geist, sans-serif"
+    fontFamily: "system-ui, sans-serif"
     fontSize: "0.9375rem"
     fontWeight: 400
     lineHeight: "1.5rem"
   meta:
-    fontFamily: "Geist, sans-serif"
+    fontFamily: "system-ui, sans-serif"
     fontSize: "0.8125rem"
     fontWeight: 500
     lineHeight: "1.25rem"
   caption:
-    fontFamily: "Geist, sans-serif"
+    fontFamily: "system-ui, sans-serif"
     fontSize: "0.75rem"
     fontWeight: 400
     lineHeight: "1rem"
@@ -393,9 +393,9 @@ Each verdict owns four tokens: a graphic hue (`<v>`, 3:1 on the ground), a text 
 
 ## Typography
 
-**Display Font:** Geist Sans (self-hosted through the `geist` package, `--font-geist-sans`)
+**Display Font:** `--font-display`, defaulting to the system `--font-sans` stack (P29.4; identity layer may replace this hook).
 **Body Font:** Geist Sans
-**Label/Mono Font:** Geist Mono (`--font-geist-mono`)
+**Label/Mono Font:** system `--font-mono` stack (`ui-monospace`, SFMono-Regular, Menlo, Consolas).
 
 **Character:** One neo-grotesque family does everything a word does; its mono sibling does everything a measurement does. The pairing reads as a precise instrument, not a terminal.
 
