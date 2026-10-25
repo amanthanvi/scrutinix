@@ -1,6 +1,7 @@
 import { isIP } from "node:net";
 import { domainToUnicode } from "node:url";
 
+import { IMPERSONATED_BRANDS } from "@/lib/domain/impersonated-brands";
 import {
   getRegistrableLabel,
   getRegistrableDomain,
@@ -16,56 +17,7 @@ export interface UrlStructureRisk {
 const SCRIPT_INDICATORS = [".sh", ".bash", ".py", ".pl", ".ps1"] as const;
 
 /**
- * Frequently-impersonated brands for typosquat comparison. Only names with
- * 5+ characters participate in edit-distance matching (shorter ones create
- * false positives); all participate in exact-label checks.
- */
-const IMPERSONATED_BRANDS = [
-  "adobe",
-  "airbnb",
-  "amazon",
-  "americanexpress",
-  "apple",
-  "bankofamerica",
-  "barclays",
-  "binance",
-  "bitwarden",
-  "blockchain",
-  "booking",
-  "chase",
-  "citibank",
-  "coinbase",
-  "discord",
-  "dropbox",
-  "facebook",
-  "fedex",
-  "github",
-  "gmail",
-  "google",
-  "hsbc",
-  "icloud",
-  "instagram",
-  "linkedin",
-  "metamask",
-  "microsoft",
-  "netflix",
-  "office365",
-  "outlook",
-  "paypal",
-  "roblox",
-  "santander",
-  "spotify",
-  "steam",
-  "telegram",
-  "twitter",
-  "walmart",
-  "wellsfargo",
-  "whatsapp",
-  "yahoo",
-] as const;
-
-/**
- * Known registrable domains controlled by the brands above. Exemptions must
+ * Known registrable domains controlled by the IMPERSONATED_BRANDS. Exemptions must
  * match the full PSL-aware registrable domain: a matching label on another TLD
  * or private hosting suffix is still an impersonation signal.
  */

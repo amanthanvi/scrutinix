@@ -103,7 +103,21 @@ KV_REST_API_URL=
 KV_REST_API_TOKEN=
 OPENPHISH_FEED_URL=https://openphish.com/feed.txt
 NEXT_PUBLIC_APP_URL=https://www.scrutinix.net
+SHARE_SIGNING_SECRET=
+SHARE_SIGNING_SECRET_PREVIOUS=
 ```
+
+`SHARE_SIGNING_SECRET` is the HMAC key that signs Share links, so a link is
+shown as a Scrutinix result only when its signature verifies; unsigned,
+tampered, and expired links (older than 72 hours) open a neutral "Check this
+shared link yourself" view. It must be at least 32 characters (shorter values
+are ignored with a warning). Generate one with `openssl rand -base64 48`, and
+set it in the Vercel **Production** environment only, then redeploy: any
+deployment holding the key can mint links production accepts as verified.
+Leave it unset locally and in Preview; shared links then open neutral.
+`SHARE_SIGNING_SECRET_PREVIOUS` verifies, but never signs, during key
+rotation; keep the retired key there for at least 72 hours. See
+`.env.example` for the annotated block.
 
 The `URLHAUS_AUTH_KEY` also authenticates ThreatFox (both are abuse.ch
 services). `SPAMHAUS_DQS_KEY` is a free Spamhaus Data Query Service key;
@@ -151,7 +165,9 @@ npm run lighthouse
   helpers
 - Complete, non-partial results may be cached for 15 minutes; partial, error,
   and aborted scans are never reused.
-- `components/scrutinix/`: branded analyzer UI and client runtime islands
+- `components/scrutinix/`: the analyzer UI: verdict band, link anatomy, the
+  eight-cell signal strip, evidence rows, history, and client runtime islands
+- `app/og/result/`: per-result share images for `?shared=` links
 - `hooks/`: NDJSON stream readers and IndexedDB-backed history
 - `tests/`: unit, integration, accessibility, keyboard, and E2E smoke coverage
 

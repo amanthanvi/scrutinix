@@ -2,6 +2,7 @@ import { createErrorAnalysisResult } from "@/lib/domain/analysis-result";
 import { runAnalysis, SCAN_BUDGET_MS } from "@/lib/server/analyze";
 import { createApiError } from "@/lib/server/api-error";
 import { parseScanRequest } from "@/lib/server/scan-request";
+import { withResultShare } from "@/lib/server/share-signing";
 import { createNdjsonResponse } from "@/lib/server/stream";
 
 export const runtime = "nodejs";
@@ -46,15 +47,15 @@ export async function POST(request: Request) {
             url: target.normalizedUrl,
           });
 
-          let result;
+          let analysed;
           try {
-            result = await runAnalysis(target, {
+            analysed = await runAnalysis(target, {
               scanId,
               startedAt,
               signal,
             });
           } catch (error) {
-            result = createErrorAnalysisResult({
+            analysed = createErrorAnalysisResult({
               url: target.normalizedUrl,
               scanId,
               startedAt,
@@ -65,6 +66,8 @@ export async function POST(request: Request) {
             });
           }
 
+          // The server-issued (signed) share link travels with the result.
+          const result = withResultShare(analysed);
           writer.send({
             type: "url_complete",
             index,

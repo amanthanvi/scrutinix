@@ -190,7 +190,7 @@ describe("plain findings for checks that couldn't run", () => {
     const redirect = signals.redirectChain.data!;
 
     expect(getSignalSummary("ssl", ssl)).toBe(
-      "The site didn't accept a secure connection.",
+      "We couldn't check the site's security certificate.",
     );
     expect(getSignalSummary("dns", dns)).toBe(
       "This address doesn't point to any server.",

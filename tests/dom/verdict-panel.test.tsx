@@ -3,7 +3,9 @@ import { describe, expect, it } from "vitest";
 
 import {
   VERDICT_HEADING_ID,
-  VerdictPanel,
+  VerdictBand,
+  VerdictDetails,
+  formatSnapshotTime,
 } from "@/components/scrutinix/verdict-panel";
 import { createErrorAnalysisResult } from "@/lib/domain/analysis-result";
 import {
@@ -63,19 +65,25 @@ function buildResult(
   };
 }
 
-function renderPanel(result: AnalysisResult) {
+function renderPanel(
+  result: AnalysisResult,
+  props: { driverRows?: number; impersonates?: string | null } = {},
+) {
   return render(
-    <VerdictPanel
-      result={result}
-      isStreaming={false}
-      streamUrl=""
-      sharedSnapshot={null}
-      completedSignals={8}
-    />,
+    <>
+      <VerdictBand
+        result={result}
+        isStreaming={false}
+        sharedSnapshot={null}
+        completedSignals={8}
+        {...props}
+      />
+      <VerdictDetails result={result} />
+    </>,
   );
 }
 
-describe("VerdictPanel", () => {
+describe("VerdictBand", () => {
   it("puts the instruction under the verdict and explains the score in place", () => {
     renderPanel(
       buildResult("malicious", {
@@ -93,8 +101,15 @@ describe("VerdictPanel", () => {
     });
     expect(heading.id).toBe(VERDICT_HEADING_ID);
     expect(heading.getAttribute("tabindex")).toBe("-1");
-    expect(heading.nextElementSibling?.textContent).toContain("73/100");
-    expect(screen.getByText("Don't open this link.")).toBeTruthy();
+    // The instruction sits directly under the verdict word.
+    expect(heading.nextElementSibling?.textContent).toBe(
+      "Don't open this link.",
+    );
+    // One colour encoding: the band is tinted, the word stays ink.
+    expect(heading.className).toContain("text-[var(--sx-text)]");
+    expect(heading.closest("section")?.getAttribute("style")).toContain(
+      "var(--sx-malicious-surface)",
+    );
     expect(
       screen.getByRole("meter", { name: "Threat score" }).textContent,
     ).toBe("73/100");
@@ -243,17 +258,16 @@ describe("VerdictPanel", () => {
 
     for (const name of ["What to do", "Caveats", "Why high confidence"]) {
       const heading = screen.getByRole("heading", { level: 3, name });
-      expect(heading.className).toContain("text-[0.8125rem]");
+      expect(heading.className).toContain("text-meta");
       expect(heading.className).toContain("font-semibold");
     }
   });
 
   it("gives a shared snapshot the same instruction line", () => {
     const { rerender } = render(
-      <VerdictPanel
+      <VerdictBand
         result={null}
         isStreaming={false}
-        streamUrl=""
         sharedSnapshot={{
           verdict: "malicious",
           url: "https://malicious.scrutinix.test/",
@@ -272,10 +286,9 @@ describe("VerdictPanel", () => {
     expect(screen.getByText("Don't open this link.")).toBeTruthy();
 
     rerender(
-      <VerdictPanel
+      <VerdictBand
         result={null}
         isStreaming={false}
-        streamUrl=""
         sharedSnapshot={{
           verdict: "safe",
           url: "https://example.com/",
@@ -288,5 +301,156 @@ describe("VerdictPanel", () => {
       screen.getByText("Probably safe — still check who sent it."),
     ).toBeTruthy();
     expect(screen.queryByRole("meter")).toBeNull();
+  });
+
+  it("dates a shared snapshot with its year, in UTC", () => {
+    // A check from another year must not read as this year's.
+    expect(formatSnapshotTime("2025-12-31T23:30:00.000Z")).toBe(
+      "Dec 31, 2025, 11:30 PM UTC",
+    );
+    render(
+      <VerdictBand
+        result={null}
+        isStreaming={false}
+        sharedSnapshot={{
+          verdict: "malicious",
+          url: "https://malicious.scrutinix.test/",
+          summary: "",
+          capturedAt: "2026-10-06T09:00:00.000Z",
+        }}
+      />,
+    );
+    expect(screen.getByText("Oct 6, 2026, 09:00 AM UTC").tagName).toBe("TIME");
+  });
+
+  it("says an expired shared result is too old, not unverified", () => {
+    const { rerender } = render(
+      <VerdictBand
+        result={null}
+        isStreaming={false}
+        sharedSnapshot={null}
+        unverifiedShare
+        expiredShare
+      />,
+    );
+    expect(screen.getByLabelText("Shared result, expired")).toBeTruthy();
+    expect(
+      screen.getByText(
+        "This shared result is more than 3 days old, so we're not showing it.",
+      ),
+    ).toBeTruthy();
+    expect(screen.queryByText(/can't confirm/)).toBeNull();
+
+    rerender(
+      <VerdictBand
+        result={null}
+        isStreaming={false}
+        sharedSnapshot={null}
+        unverifiedShare
+      />,
+    );
+    expect(screen.getByLabelText("Shared link, not verified")).toBeTruthy();
+    expect(screen.queryByText(/more than 3 days old/)).toBeNull();
+  });
+
+  it("drops the because line when Summary already shows the driver row", () => {
+    const result = buildResult("malicious", {
+      score: 73,
+      hasPositiveEvidence: true,
+      summary: "7 VirusTotal engines flagged this link.",
+    });
+    const { unmount } = renderPanel(result, { driverRows: 0 });
+    expect(
+      screen.getByText("7 VirusTotal engines flagged this link."),
+    ).toBeTruthy();
+    unmount();
+
+    renderPanel(result, { driverRows: 1 });
+    expect(
+      screen.queryByText("7 VirusTotal engines flagged this link."),
+    ).toBeNull();
+  });
+
+  it("hedges a Safe verdict for a look-alike link without touching the score", () => {
+    renderPanel(buildResult("safe", { score: 3, confidenceLabel: "high" }), {
+      impersonates: "paypal.com",
+    });
+    const heading = screen.getByRole("heading", { level: 2, name: "safe" });
+    const band = heading.closest("section");
+    expect(
+      screen.getByText("Don't sign in or enter details here."),
+    ).toBeTruthy();
+    // The neutral surface: the one colour encoding never reassures.
+    expect(band?.getAttribute("style")).toContain("var(--sx-unknown-surface)");
+    expect(band?.getAttribute("style")).not.toContain("--sx-safe-surface");
+    expect(screen.queryByText(/High confidence/)).toBeNull();
+    expect(
+      screen.getByText("No check flagged it, but the name is misleading."),
+    ).toBeTruthy();
+    // The owner fact belongs to the anatomy line, not the band.
+    expect(band?.textContent).not.toMatch(/isn't really|paypal\.com/);
+    expect(
+      screen.getByRole("meter", { name: "Threat score" }).textContent,
+    ).toBe("3/100");
+  });
+
+  it("states no confidence on a failed scan", () => {
+    const result = createErrorAnalysisResult({
+      url: "https://example.com/",
+      scanId: "error-scan",
+      startedAt: "2026-08-02T12:00:00.000Z",
+      message: "Scan failed.",
+    });
+    render(
+      <VerdictBand
+        result={{ ...result, threatInfo: null }}
+        isStreaming={false}
+        sharedSnapshot={null}
+        completedSignals={8}
+      />,
+    );
+    expect(
+      screen.getByRole("heading", { level: 2, name: "error" }),
+    ).toBeTruthy();
+    expect(screen.queryByText(/confidence/i)).toBeNull();
+    expect(
+      screen.queryByRole("link", { name: "How scoring works" }),
+    ).toBeNull();
+  });
+
+  it("sets the score numeral in sans so a zero never reads as a slashed zero", () => {
+    renderPanel(buildResult("safe", { score: 0 }));
+    const meter = screen.getByRole("meter", { name: "Threat score" });
+    expect(meter.className).toContain("font-sans");
+    expect(meter.className).toContain("tabular-nums");
+    expect(meter.className).not.toMatch(/(^|\s)font-mono(\s|$)/);
+  });
+
+  it("keeps the heading node, and its focus, from Checking to the verdict", () => {
+    const { rerender } = render(
+      <VerdictBand
+        result={null}
+        isStreaming
+        sharedSnapshot={null}
+        completedSignals={3}
+      />,
+    );
+    const checking = screen.getByRole("heading", { level: 2 });
+    expect(checking.textContent).toBe("Checking");
+    expect(screen.getByText("3 of 8 checks finished")).toBeTruthy();
+    checking.focus();
+
+    rerender(
+      <VerdictBand
+        result={buildResult("malicious", { score: 73 })}
+        isStreaming={false}
+        sharedSnapshot={null}
+        completedSignals={8}
+      />,
+    );
+    const verdict = screen.getByRole("heading", { level: 2 });
+    expect(verdict).toBe(checking);
+    expect(verdict.textContent).toBe("malicious");
+    expect(document.activeElement).toBe(verdict);
   });
 });
