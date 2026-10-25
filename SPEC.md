@@ -360,6 +360,9 @@ Implementation note: every stream ends with one terminal event (`scan_complete`/
 
 ### 4.5 Performance targets
 
+- **Initial page budget:** `npm run check:bundle` audits a fresh browser against the production `/` build through network idle (including hydration imports). `package.json#bundleBudget` gates the sum of per-script gzip bytes at 234,000 bytes and requested font bytes at 0. The <200 KB gzip goal remains; P29.4 measured 223,410 bytes after trimming (234,674 before). Raw JS and each requested script are reported separately. Run after build with Playwright Chromium installed; CI also accepts `CHROME_PATH`.
+- **Typography:** system sans for text and score, system monospace for data; no page web fonts. `--font-display` defaults to the sans stack for the later identity layer. Bundled Geist remains server-only for OG cards.
+
 - **First signal:** < 3 seconds (SSL, DNS, redirect chain are fast self-computed signals)
 - **Full result:** < 30 seconds (VT polling is the bottleneck; other signals stream in earlier)
 - **Cached result:** < 500ms

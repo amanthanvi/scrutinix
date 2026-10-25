@@ -79,7 +79,10 @@ function exportedRow(): string {
 describe("batch CSV export while the link parser settles", () => {
   it("says the look-alike column wasn't checked when the parser can't load", async () => {
     const { unmount } = renderForm();
-    fireEvent.click(screen.getByRole("button", { name: "Export batch CSV" }));
+    // Batch loads on demand: wait for its controls.
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Export batch CSV" }),
+    );
 
     await waitFor(() => expect(download).toHaveBeenCalledTimes(1), {
       timeout: 3_000,
@@ -95,7 +98,10 @@ describe("batch CSV export while the link parser settles", () => {
     parser.fail = false;
     parser.hold();
     const { unmount } = renderForm();
-    fireEvent.click(screen.getByRole("button", { name: "Export batch CSV" }));
+    // Batch loads on demand: wait for its controls.
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Export batch CSV" }),
+    );
 
     // Nothing is written while the address parser is still on its way.
     await new Promise((resolve) => setTimeout(resolve, 50));

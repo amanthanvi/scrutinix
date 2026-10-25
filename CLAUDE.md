@@ -37,7 +37,7 @@ npm run icons                      # Regenerate favicons/app icons from lib/bran
 
 ```
 app/
-  layout.tsx              # Root layout (ThemeProvider + Sonner; system sans/mono, no page web fonts)
+  layout.tsx              # Root layout (ThemeProvider + lazy Sonner; system sans/mono, no page web fonts)
   page.tsx                # Single-column home: header, headline, ScanForm, ResultsSection, history; ?shared= metadata
   scrutinix.css           # CSS-only motion/utility layer (sx-* classes)
   globals.css             # Tailwind v4 + semantic --sx-* theme tokens
@@ -55,7 +55,8 @@ components/
     app-header.tsx        # Header: eight-square mark + wordmark, About/Privacy nav, theme toggle
     app-footer.tsx        # One-line footer
     scan-form.tsx         # Single/Batch tabs + inputs (id="scan-console")
-    input-panels.tsx      # URL input + Paste + Analyze; batch textarea and exports
+    input-panels.tsx      # URL input + Paste + Analyze
+    batch-input.tsx       # Batch textarea, Start batch, and exports (loaded on demand)
     input-anatomy.tsx     # The typed link taken apart before a scan (captions) + "Expecting a particular site?"
     results-section.tsx   # Band → anatomy → strip → Summary questions / Full rows → details → actions; focus + live region
     verdict-panel.tsx     # VerdictBand (Checking/result/snapshot, one element tree) + VerdictDetails
@@ -70,6 +71,7 @@ components/
     history-panel.tsx     # Search, clear/undo, export, entry list (draws nothing when empty)
     public-page-shell.tsx # Shared 46rem shell for /about and /privacy
     error-boundary.tsx    # Class-based error boundary
+    retryable-chunk.tsx   # next/dynamic loader: a failed optional chunk (Batch) says so in place, with Try again
   shared/
     scrutinix-types.ts    # Verdict/severity presentation helpers ("clear" = found nothing)
     signal-utils.ts       # Signal findings, summaries + detail entries
@@ -338,3 +340,7 @@ the committed e2e key (`scripts/run-e2e.mjs`; `env.ts` ignores it unless
 `SCRUTINIX_TEST_FIXTURES=1`, and ignores every other key when fixtures are
 on). Rotate the production key if it was ever set for Preview/Development
 or pulled with `vercel env pull`.
+
+### P29.4 speed
+
+The page requests no web fonts; `--font-display` defaults to `--font-sans`. Batch input and results load on demand; history storage hydrates eagerly, but its panel loads only for entries or Undo. Sonner mounts on the first notification and waits for its subscription before publishing. `npm run check:bundle` audits actual first-load browser requests after build; budgets live in `package.json`. CI runs it with provisioned Chromium.

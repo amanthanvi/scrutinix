@@ -37,5 +37,8 @@ jobs:
         run: |
           node -e "process.stdout.write('CHROME_PATH=' + require('playwright').chromium.executablePath() + '\n')" >> "$GITHUB_ENV"
 
+      - name: First-load bundle budget
+        run: npm run check:bundle
+
       - name: Lighthouse
         run: npm run lighthouse

@@ -1,10 +1,14 @@
 "use client";
 
+import { useEffect } from "react";
+import { toasterReady } from "@/components/ui/lazy-toaster";
 import { Toaster } from "sonner";
+export { toast } from "sonner";
 import { useTheme } from "next-themes";
 
-export function AppToaster() {
+export default function AppToaster() {
   const { resolvedTheme } = useTheme();
+  useEffect(toasterReady, []);
 
   return (
     <Toaster

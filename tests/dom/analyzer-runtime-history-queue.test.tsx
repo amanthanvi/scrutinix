@@ -108,3 +108,7 @@ describe("analyzer runtime history queue", () => {
     expect(screen.getByTestId("queue-size").textContent).toBe("3");
   });
 });
+
+vi.mock("@/components/ui/lazy-toaster", () => ({
+  getToast: async () => (await import("sonner")).toast,
+}));

@@ -1132,3 +1132,7 @@ function visibleText(root: Element): string {
   walk(root);
   return parts.join(" ");
 }
+
+vi.mock("@/components/ui/lazy-toaster", () => ({
+  getToast: async () => (await import("sonner")).toast,
+}));

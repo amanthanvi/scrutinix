@@ -44,7 +44,8 @@
     "check:trace": "node ./scripts/check-function-trace.mjs",
     "check:contrast": "node ./scripts/check-contrast.mjs",
     "icons": "node --no-warnings ./scripts/generate-icons.mjs",
-    "lighthouse": "node ./scripts/run-lighthouse.mjs"
+    "lighthouse": "node ./scripts/run-lighthouse.mjs",
+    "check:bundle": "node ./scripts/check-bundle-budget.mjs"
   },
   "dependencies": {
     "@huggingface/transformers": "^4.3.1",
@@ -113,5 +114,9 @@
     "sharp": "0.35.5",
     "source-map-js": "1.2.2",
     "ws": "8.21.1"
+  },
+  "bundleBudget": {
+    "jsGzipBytes": 234000,
+    "fontBytes": 0
   }
 }

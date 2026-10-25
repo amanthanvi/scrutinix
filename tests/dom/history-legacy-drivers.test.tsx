@@ -99,3 +99,7 @@ describe("history saved before scoredSignals", () => {
     expect(questions.textContent).toContain("1 hidden frame");
   });
 });
+
+vi.mock("@/components/ui/lazy-toaster", () => ({
+  getToast: async () => (await import("sonner")).toast,
+}));
