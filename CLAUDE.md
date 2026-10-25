@@ -70,6 +70,7 @@ components/
     history-panel.tsx     # Search, clear/undo, export, entry list (draws nothing when empty)
     public-page-shell.tsx # Shared 46rem shell for /about and /privacy
     error-boundary.tsx    # Class-based error boundary
+    retryable-chunk.tsx   # next/dynamic loader: a failed optional chunk (Batch) says so in place, with Try again
   shared/
     scrutinix-types.ts    # Verdict/severity presentation helpers ("clear" = found nothing)
     signal-utils.ts       # Signal findings, summaries + detail entries

@@ -6,6 +6,7 @@ import { getToast } from "@/components/ui/lazy-toaster";
 
 import { useAnalyzerRuntime } from "@/components/scrutinix/analyzer-runtime";
 import { LinkAnatomyView } from "@/components/scrutinix/link-anatomy";
+import { retryableChunk } from "@/components/scrutinix/retryable-chunk";
 import { SignalRow } from "@/components/scrutinix/signal-row";
 import {
   SignalStrip,
@@ -44,19 +45,23 @@ import {
 import { getVerdictAnnouncement } from "@/lib/domain/verdict-guidance";
 import { cn } from "@/lib/utils";
 
-const BatchTable = dynamic(
+// Opened with the Batch tab, like Batch's input: a failed chunk stays here
+// rather than hiding the scan form.
+const loadBatchTable = retryableChunk(
   () =>
     import("@/components/scrutinix/batch-table").then(
       (module) => module.BatchTable,
     ),
-  {
-    loading: () => (
-      <p className="text-meta text-[var(--sx-text-soft)]">
-        Loading batch results…
-      </p>
-    ),
-  },
+  "Batch results didn't load. Check your connection and try again.",
 );
+
+const BatchTable = dynamic(() => loadBatchTable(), {
+  loading: () => (
+    <p className="text-meta text-[var(--sx-text-soft)]">
+      Loading batch results…
+    </p>
+  ),
+});
 
 function RuntimeSignalRow<N extends SignalName>({
   evidenceTime,

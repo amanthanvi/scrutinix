@@ -8,6 +8,7 @@ import {
   useAnalyzerRuntime,
 } from "@/components/scrutinix/analyzer-runtime";
 import { InputAnatomy } from "@/components/scrutinix/input-anatomy";
+import { retryableChunk } from "@/components/scrutinix/retryable-chunk";
 import { SingleInput } from "@/components/scrutinix/input-panels";
 import { loadLinkParser } from "@/hooks/use-link-anatomy";
 import { Textarea } from "@/components/ui/textarea";
@@ -20,36 +21,40 @@ import {
 } from "@/lib/client/export";
 import { displayUrlOf, normalizeUrlInput } from "@/lib/domain/url";
 
-const BatchInput = dynamic(
+// A failed chunk stays inside the Batch panel: Single and any result on
+// screen keep working.
+const loadBatchInput = retryableChunk(
   () =>
     import("@/components/scrutinix/batch-input").then(
       (module) => module.BatchInput,
     ),
-  {
-    loading: () => (
-      <div aria-busy="true" className="flex flex-col gap-3">
-        <Textarea
-          rows={5}
-          aria-hidden="true"
-          tabIndex={-1}
-          disabled
-          className="text-body invisible resize-y font-mono"
-        />
-        <p aria-hidden="true" className="text-meta invisible">
-          One link per line, up to 10. Cmd/Ctrl+Enter starts the batch.
-        </p>
-        <div
-          aria-hidden="true"
-          className="invisible flex flex-wrap items-center gap-2"
-        >
-          <Button tabIndex={-1} disabled className="h-11 px-5 text-sm">
-            Start batch
-          </Button>
-        </div>
-      </div>
-    ),
-  },
+  "Batch didn't load. Check your connection and try again.",
 );
+
+const BatchInput = dynamic(() => loadBatchInput(), {
+  loading: () => (
+    <div aria-busy="true" className="flex flex-col gap-3">
+      <Textarea
+        rows={5}
+        aria-hidden="true"
+        tabIndex={-1}
+        disabled
+        className="text-body invisible resize-y font-mono"
+      />
+      <p aria-hidden="true" className="text-meta invisible">
+        One link per line, up to 10. Cmd/Ctrl+Enter starts the batch.
+      </p>
+      <div
+        aria-hidden="true"
+        className="invisible flex flex-wrap items-center gap-2"
+      >
+        <Button tabIndex={-1} disabled className="h-11 px-5 text-sm">
+          Start batch
+        </Button>
+      </div>
+    </div>
+  ),
+});
 
 function StreamError({ message }: { message: string }) {
   return (
