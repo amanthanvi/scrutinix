@@ -328,7 +328,13 @@ export function clearEvidenceFiles(dir = evidenceDir) {
       continue;
     }
     if (!stat.isFile() && !stat.isSymbolicLink()) continue;
-    unlinkSync(file);
+    // Gone since the lstat is the end state this wants, not a failure.
+    try {
+      unlinkSync(file);
+    } catch (error) {
+      if (error?.code === "ENOENT") continue;
+      throw error;
+    }
     removed += 1;
   }
   return removed;
