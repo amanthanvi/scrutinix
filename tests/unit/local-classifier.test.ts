@@ -115,6 +115,22 @@ describe("classifyUrlLocally (bundled model)", () => {
     expect(finding.label).toBe("malicious");
   });
 
+  it("reads a lure written to look like an ID", async () => {
+    // Left out as an ID, this lure reached the model as the bare site,
+    // which reads normal; kept, it reads phishing (about 1.5 past the bar
+    // when this was written, against at most 0.32 between architectures).
+    expect(
+      (await classifyUrlLocally(scanned("https://shop-example.com/"))).label,
+    ).toBe("benign");
+    expect(
+      (
+        await classifyUrlLocally(
+          scanned("https://shop-example.com/PayPalSecureLogin"),
+        )
+      ).label,
+    ).toBe("malicious");
+  });
+
   it(`flags no more than ${PATTERN_MODEL_EVALUATION.targetPer100} in 100 of a held-out sample of ordinary links`, async () => {
     const flagged: string[] = [];
     for (const url of ORDINARY_LINKS) {
@@ -193,6 +209,68 @@ describe("modelWritings", () => {
         "https://example.com/account/confirm/A1B2C3D4-0000-4000-8000-00000000BEEF",
       )[1],
     ).toBe("example.com/account/confirm/");
+  });
+
+  it("keeps an ID-like run that spells a brand or lure word", () => {
+    for (const url of [
+      // Camel case, digits between words, a brand and "ID", digits for
+      // letters: each is ID-like, and each spells a brand or lure word.
+      "https://shop-example.com/PayPalSecureLogin",
+      "https://shop-example.com/paypal2verify",
+      "https://shop-example.com/AppleIDVerify",
+      "https://shop-example.com/P4yP4lL0g1n",
+      "https://shop-example.com/x/MyAccountUpdate9",
+    ]) {
+      expect(modelWritings(url)[0]).toBe(url);
+    }
+  });
+
+  it("still leaves out IDs that spell nothing", () => {
+    expect(modelWritings(scanned("https://youtu.be/jNQXAC9IVRw"))[1]).toBe(
+      "youtu.be/",
+    );
+    expect(
+      modelWritings(
+        scanned(
+          "https://docs.google.com/document/d/b4bta4LN15qPczmYHzQ2rcoJdkec5zn8KiKGXRpNZfqD/edit",
+        ),
+      )[1],
+    ).toBe("docs.google.com/document/d//edit");
+    // The meeting number is a number, which stays; the passcode is an ID
+    // in the query, which the model never reads.
+    expect(
+      modelWritings(
+        scanned(
+          "https://zoom.us/j/45777122070?pwd=kbbjn7nYAb10oqt8gN6XYdm8eTvKwUBz",
+        ),
+      )[1],
+    ).toBe("zoom.us/j/45777122070");
+    // Microsoft's documented tenant link: the UUID goes whole.
+    expect(
+      modelWritings(
+        scanned(
+          "https://login.microsoftonline.com/72f988bf-86f1-41af-91ab-2d7cd011db47/oauth2/v2.0/authorize?client_id=6731de76-14a6-49ae-97bc-6eba6914391e&response_type=code&redirect_uri=http%3A%2F%2Flocalhost%2Fmyapp%2F&response_mode=query&scope=https%3A%2F%2Fgraph.microsoft.com%2Fmail.read&state=12345",
+        ),
+      )[1],
+    ).toBe("login.microsoftonline.com//oauth2/v2.0/authorize");
+  });
+
+  it("reads a fragment route as path, and only a route", () => {
+    expect(modelWritings("https://shop-example.com/#/signin")).toEqual([
+      "https://shop-example.com/signin",
+      "shop-example.com/signin",
+    ]);
+    expect(
+      modelWritings("https://shop-example.com/app/#!/PayPal2Login?next=x")[1],
+    ).toBe("shop-example.com/app/PayPal2Login");
+    expect(modelWritings("https://shop-example.com/faq#returns")[1]).toBe(
+      "shop-example.com/faq",
+    );
+    // A scan never carries the fragment: normalizeUrlInput drops it
+    // before any check, so in a scan neither member sees "#/signin".
+    expect(scanned("https://shop-example.com/#/signin")).toBe(
+      "https://shop-example.com/",
+    );
   });
 
   it("keeps words, numbers, and a word with a number on one end", () => {

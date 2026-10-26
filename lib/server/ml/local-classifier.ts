@@ -1,5 +1,7 @@
 import path from "node:path";
 
+import { IMPERSONATED_BRANDS } from "@/lib/domain/impersonated-brands";
+import { HIGH_RISK_KEYWORDS } from "@/lib/domain/lure-words";
 import { PublicError } from "@/lib/domain/public-error";
 import type { ClassificationFinding } from "@/lib/domain/types";
 import { withTimeout } from "@/lib/server/http";
@@ -91,13 +93,68 @@ function isIdLike(token: string): boolean {
   );
 }
 
+/**
+ * What an ID-like run is kept for: a listed brand, or a lure word of five
+ * letters or more (shorter ones turn up inside random ids). The lure words
+ * are the structure checks' own, plus the sign-in and account words the
+ * model's training links tie most to phishing (in their paths: confirm
+ * 96%, signin 94%, billing 92%, account 83%, suspend 76%, against 47% of
+ * all its links).
+ */
+const KEPT_WORDS: readonly string[] = [
+  ...IMPERSONATED_BRANDS,
+  ...HIGH_RISK_KEYWORDS.filter((word) => /^[a-z]{5,}$/.test(word)),
+  "signin",
+  "account",
+  "confirm",
+  "billing",
+  "suspend",
+];
+
+/** Digits that stand in for letters ("P4yPa1" spells paypal). */
+const LETTER_DIGITS: Record<string, string> = {
+  "0": "o",
+  "3": "e",
+  "4": "a",
+  "5": "s",
+  "7": "t",
+};
+
+/**
+ * Whether a run spells a brand or lure word, in any case, with digits
+ * between its letters ("paypal2verify"), or with digits for letters
+ * ("L0g1n"): a phishing path written to look like an ID still reaches the
+ * model.
+ */
+function spellsKeptWord(token: string): boolean {
+  const lower = token.toLowerCase();
+  const asLetters = (one: string) =>
+    lower.replace(/\d/g, (digit) =>
+      digit === "1" ? one : (LETTER_DIGITS[digit] ?? digit),
+    );
+  const readings = [
+    lower,
+    lower.replace(/\d+/g, ""),
+    asLetters("l"),
+    asLetters("i"),
+  ];
+  return KEPT_WORDS.some((word) =>
+    readings.some((reading) => reading.includes(word)),
+  );
+}
+
 /** A UUID, removed whole: split on "-" its pieces read as stray fragments. */
 const UUID = /[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}/gi;
 
 /**
- * The two writings of a normalized link the model reads: its host and path
- * (no query or fragment) with UUIDs and ID-like runs left out of the path,
- * once as written and once without its scheme and a leading "www.".
+ * The two writings of a link the model reads: its host and path, once as
+ * written and once without its scheme and a leading "www.". The query is
+ * left out. A fragment is left out unless it is a route ("#/signin",
+ * "#!/login"), which reads as the path it names; scans never carry a
+ * fragment (normalizeUrlInput drops it before any check), so in a scan
+ * this applies only if that changes. In the path, UUIDs are left out
+ * whole, and so are ID-like runs, unless they spell a brand or lure word
+ * (`spellsKeptWord`).
  *
  * Why: the model's training links were mostly written without a scheme,
  * and its phishing examples came from feeds full of bare "https://site/"
@@ -105,20 +162,26 @@ const UUID = /[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}/gi;
  * (YouTube, Zoom, Google Docs, every link shortener), as phishing. Its
  * benign examples almost never carry a long query (over 100 characters:
  * 91% phishing; "redirect" in it: 93%), so it reads every OAuth sign-in
- * link as phishing. The structure checks still read the whole link. Every
- * link gets the same two writings, whatever it is.
+ * link as phishing. Without the kept words, a phisher could hide a lure
+ * from the model by writing it as an ID ("/PayPalSecureLogin",
+ * "/paypal2verify"). The structure checks still read the whole link,
+ * query included. Every link gets the same two writings, whatever it is.
  */
 export function modelWritings(url: string): [string, string] {
-  const pathStart = url.indexOf("/", url.indexOf("//") + 2);
+  const route = /^[^#]*#!?(\/[^?#]*)/.exec(url)?.[1];
+  const page = url.replace(/[?#].*$/, "");
+  const link = route ? page.replace(/\/$/, "") + route : page;
+  const pathStart = link.indexOf("/", link.indexOf("//") + 2);
   const written =
     pathStart === -1
-      ? url.replace(/[?#].*$/, "")
-      : url.slice(0, pathStart) +
-        url
+      ? link
+      : link.slice(0, pathStart) +
+        link
           .slice(pathStart)
-          .replace(/[?#].*$/, "")
           .replace(UUID, "")
-          .replace(/[A-Za-z0-9]+/g, (token) => (isIdLike(token) ? "" : token));
+          .replace(/[A-Za-z0-9]+/g, (token) =>
+            isIdLike(token) && !spellsKeptWord(token) ? "" : token,
+          );
   return [written, written.replace(/^https?:\/\//, "").replace(/^www\./, "")];
 }
 

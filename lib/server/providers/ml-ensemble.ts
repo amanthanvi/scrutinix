@@ -1,5 +1,6 @@
 import { isIP } from "node:net";
 
+import { HIGH_RISK_KEYWORDS } from "@/lib/domain/lure-words";
 import { classifyConsensus } from "@/lib/domain/ml-consensus";
 import type { ClassificationFinding, MLSignalData } from "@/lib/domain/types";
 import { getUrlStructureRisk } from "@/lib/domain/url-structure-risk";
@@ -8,21 +9,6 @@ import { redactForLogs } from "@/lib/server/client-error";
 import { logWarn } from "@/lib/server/logger";
 import { classifyUrlLocally } from "@/lib/server/ml/local-classifier";
 import { getErrorMessage } from "@/lib/server/signal-error";
-
-const HIGH_RISK_KEYWORDS = [
-  "login",
-  "verify",
-  "secure",
-  "wallet",
-  "reset",
-  "invoice",
-  "update",
-  "banking",
-  "mfa",
-  "gift-card",
-  "airdrop",
-  "auth",
-];
 
 const EXECUTABLE_INDICATORS = [
   "x86_64",
@@ -115,6 +101,10 @@ function buildLexicalModel(url: string): ClassificationFinding {
     reasons.push("The hostname has an unusual number of subdomains.");
   }
 
+  // The query counts: the link pattern model never reads it. A brand name
+  // in the query is not a term: tried on the model's evaluation corpus, it
+  // added points to Amazon's own sign-in links (openid.return_to=...amazon)
+  // and gave no phishing link points it didn't already have.
   const keywordMatches = HIGH_RISK_KEYWORDS.filter((keyword) =>
     combinedText.includes(keyword),
   );
