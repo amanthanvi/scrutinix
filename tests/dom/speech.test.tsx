@@ -210,10 +210,20 @@ describe("the result's live region", () => {
     await waitFor(() => expect(liveRegion().textContent).toMatch(said));
 
     // It sits before the band: a reader moving through the page must not
-    // meet the result twice.
-    act(() => {
-      vi.advanceTimersByTime(ANNOUNCEMENT_MS);
-    });
+    // meet the result twice. Once the link's parts are on screen nothing
+    // sets the message again; until then, on a slow runner, the parser
+    // landing late can (CI saw it), and each setting is cleared in turn.
+    await waitFor(() =>
+      expect(document.body.textContent).toContain("Registered domain"),
+    );
+    for (let round = 0; round < 3 && liveRegion().textContent; round += 1) {
+      act(() => {
+        vi.advanceTimersByTime(ANNOUNCEMENT_MS);
+      });
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+    }
     expect(liveRegion().textContent).toBe("");
     expect(screen.getByLabelText(/^scan result: malicious$/i)).toBeTruthy();
 
