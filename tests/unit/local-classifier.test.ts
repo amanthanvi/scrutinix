@@ -316,6 +316,15 @@ describe("modelWritings", () => {
         "shop-example.com/",
       );
     }
+    // The known limit that rule leaves (AGENTS.md): "r3537x" spells reset
+    // and stays, but one inserted digit ("r35037x") hides it, since only
+    // the r is written as itself. Changing it needs the evaluation rerun.
+    expect(modelWritings("https://shop-example.com/r3537x")[1]).toBe(
+      "shop-example.com/r3537x",
+    );
+    expect(modelWritings("https://shop-example.com/r35037x")[1]).toBe(
+      "shop-example.com/",
+    );
   });
 
   it("reads a long run of look-alike digits in one pass", () => {

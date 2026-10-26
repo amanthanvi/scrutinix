@@ -153,8 +153,8 @@ tests/
   (details rows, consensus notes, verdict reasons). The model reads only
   the host and path (no query; no fragment, which scans drop anyway,
   unless a `#/` route; UUIDs and IDs left out, but an ID-like run that
-  spells a listed brand or lure word stays, so a listed lure can't hide
-  as an ID), with and without scheme and `www.`, and flags only past
+  spells a listed brand or lure word stays, so most listed lures can't
+  hide as an ID; a mostly-digit spelling with inserted digits can), with and without scheme and `www.`, and flags only past
   `PATTERN_MODEL_BAR`, set by an offline evaluation to 2% of ordinary
   links, sign-in and account links included
   (`lib/server/ml/model/README.md`). Its own score is a

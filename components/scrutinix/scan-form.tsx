@@ -105,7 +105,9 @@ export function ScanForm() {
   // untouched: once the visitor edits it, scans, or switches to Batch, an
   // arrival not yet said never is, and one already said is taken back.
   const arrival = useLinkAnatomy(prefill);
-  const arrivalSaid = useRef(false);
+  // What was said, exactly: a parser that recovers later changes
+  // `arrivalMessage`, but only the words said can be taken back.
+  const arrivalSaid = useRef<string | null>(null);
   const filledIn = prefill
     ? `Link filled in: ${new URL(prefill).hostname}.`
     : "";
@@ -119,18 +121,18 @@ export function ScanForm() {
     : "";
   const arrivalMessage = `${filledIn}${owner} ${PRESS_ANALYZE}`;
   useEffect(() => {
-    if (!filledIn || arrivalSaid.current) return;
+    if (!filledIn || arrivalSaid.current !== null) return;
     if (!arrivalWaits) {
-      arrivalSaid.current = true;
+      arrivalSaid.current = "";
       return;
     }
     if (arrival.status === "pending") return;
-    arrivalSaid.current = true;
+    arrivalSaid.current = arrivalMessage;
     announce(arrivalMessage);
   }, [filledIn, arrivalWaits, arrival.status, arrivalMessage]);
   useEffect(() => {
-    if (filledIn && !arrivalWaits) retract(arrivalMessage);
-  }, [filledIn, arrivalWaits, arrivalMessage]);
+    if (!arrivalWaits && arrivalSaid.current) retract(arrivalSaid.current);
+  }, [arrivalWaits]);
 
   // The link in the field, taken apart before a scan: only while it is a
   // valid web link that isn't already the one on screen.
