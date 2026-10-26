@@ -1,7 +1,7 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
-import { MoonStar, SunMedium } from "lucide-react";
+import { MoonStar, SunMedium } from "@/components/ui/icons";
 import { useTheme } from "next-themes";
 
 import { Button } from "@/components/ui/button";
