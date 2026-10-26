@@ -172,8 +172,9 @@ tests/
   lands a keyed `.sx-band-rule` draws over the neutral track (240ms,
   `--sx-ease-expo`) and the word rises 4px; both are drawn in place under
   reduced motion. The registered domain sits in the serif under the verdict
-  word (`registeredDomain`, with `holdDomain` keeping its height while the
-  parser loads); it only names the site, and the anatomy's
+  word (`registeredDomain`; while the parser loads, `holdDomain` is the
+  link's host, whose room the site's line keeps for the whole scan); it
+  only names the site, and the anatomy's
   `ownershipSentence` stays the one place the owner sentence is said. A
   scan's band (`room`: Checking, the address check, the verdict) is one
   height whatever lands: `BandRoom` draws the band's own layout twice

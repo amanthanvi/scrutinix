@@ -159,7 +159,7 @@ function Band({
    */
   aside?: ReactNode;
   imperative: ReactNode;
-  room?: BandOutcomes;
+  room?: Room;
   children?: ReactNode;
 }) {
   return (
@@ -175,16 +175,13 @@ function Band({
         {/* First, so a selection from the word to the last line never
             crosses it. */}
         {room ? (
-          <BandRoom
-            domain={domain ?? (holdDomain ? " " : null)}
-            outcomes={room}
-          />
+          <BandRoom domain={room.domain} outcomes={room.outcomes} />
         ) : null}
         <div className="sx-band-head">
           <div className="sx-slot sx-band-word">
             {room ? (
               <StandIns
-                texts={wordsOf(room)}
+                texts={wordsOf(room.outcomes)}
                 className="sx-band-heading font-serif font-semibold"
               />
             ) : null}
@@ -199,7 +196,15 @@ function Band({
               {heading}
             </h2>
           </div>
-          {domain ? (
+          {room?.domain ? (
+            // The site's line holds what it held when the scan started (the
+            // whole host while the link parser loaded, which the registered
+            // domain never outgrows), so the site arriving moves nothing.
+            <div className="sx-slot">
+              <StandIns texts={[room.domain]} className="sx-band-domain" />
+              {domain ? <p className="sx-band-domain">{domain}</p> : null}
+            </div>
+          ) : domain ? (
             <p className="sx-band-domain">{domain}</p>
           ) : holdDomain ? (
             <p aria-hidden="true" className="sx-band-domain invisible">
@@ -475,7 +480,7 @@ function heldBand({
   aside?: ReactNode;
   domain: string | null;
   holdDomain: boolean;
-  room: BandOutcomes;
+  room: Room;
 }) {
   return (
     <Band
@@ -523,28 +528,45 @@ function InkButton({
 const CHECKING = "checking";
 
 /**
- * Which verdicts a scan's band holds room for. It starts from what the
- * link's address check knows when a scan starts (or a stored result
- * opens): once the check is ready, a link that spells out no other site
- * can't land as Look-alike or Unconfirmed, so their longer words and notes
- * hold no room. Until the next such start it only ever widens, so a check
- * that settles mid-scan, or after the verdict lands, never shrinks the
- * band under the reader.
+ * What a scan's band holds room for: the verdicts that can still land, and
+ * the site's line (the registered domain, or the link's whole host while
+ * the parser that finds the domain loads).
  */
-function useRoom(phase: string | null, known: BandOutcomes): BandOutcomes {
+interface Room {
+  outcomes: BandOutcomes;
+  domain: string | null;
+}
+
+/**
+ * The room a scan's band holds. It starts from what the link's address
+ * check knows when a scan starts (or a stored result opens): once the check
+ * is ready, a link that spells out no other site can't land as Look-alike
+ * or Unconfirmed, so their longer words and notes hold no room, and the
+ * site's line holds the registered domain itself. Until the next such start
+ * it only ever widens: a check that settles mid-scan, or after the verdict
+ * lands, never shrinks the band under the reader, and a site's line that
+ * started as the whole host keeps that room when the shorter domain
+ * arrives.
+ */
+function useRoom(phase: string | null, known: Room): Room {
   const [held, setHeld] = useState({ phase, room: known });
   const fresh =
     held.phase !== phase && (phase === CHECKING || held.phase !== CHECKING);
-  const room = fresh
+  const room: Room = fresh
     ? known
     : {
-        lookAlike: held.room.lookAlike || known.lookAlike,
-        unconfirmed: held.room.unconfirmed || known.unconfirmed,
+        outcomes: {
+          lookAlike: held.room.outcomes.lookAlike || known.outcomes.lookAlike,
+          unconfirmed:
+            held.room.outcomes.unconfirmed || known.outcomes.unconfirmed,
+        },
+        domain: held.room.domain ?? known.domain,
       };
   if (
     held.phase !== phase ||
-    held.room.lookAlike !== room.lookAlike ||
-    held.room.unconfirmed !== room.unconfirmed
+    held.room.outcomes.lookAlike !== room.outcomes.lookAlike ||
+    held.room.outcomes.unconfirmed !== room.outcomes.unconfirmed ||
+    held.room.domain !== room.domain
   ) {
     setHeld({ phase, room });
   }
@@ -580,8 +602,12 @@ interface VerdictBandProps {
    * loads): named in the serif under the heading.
    */
   registeredDomain?: string | null;
-  /** A link is on screen, so hold the domain line's height until it loads. */
-  holdDomain?: boolean;
+  /**
+   * The link's host while the parser that finds its registered domain
+   * loads (null once it has, or with no link on screen): the domain line
+   * holds its room until the domain arrives.
+   */
+  holdDomain?: string | null;
   /**
    * The questions or rows below state the evidence, so the "because" line
    * yields to them.
@@ -610,17 +636,23 @@ export function VerdictBand({
   impersonates = null,
   addressCheck = "ready",
   registeredDomain = null,
-  holdDomain = false,
+  holdDomain = null,
   evidenceShown = false,
   onRunSharedScan,
   onCancelScan,
   onRetry,
 }: VerdictBandProps) {
-  const domainProps = { domain: registeredDomain, holdDomain };
+  const domainProps = {
+    domain: registeredDomain,
+    holdDomain: holdDomain !== null,
+  };
   const checking = isStreaming && !result;
   const room = useRoom(checking ? CHECKING : (result?.id ?? null), {
-    lookAlike: impersonates !== null || addressCheck === "pending",
-    unconfirmed: addressCheck !== "ready",
+    outcomes: {
+      lookAlike: impersonates !== null || addressCheck === "pending",
+      unconfirmed: addressCheck !== "ready",
+    },
+    domain: registeredDomain ?? holdDomain,
   });
 
   if (checking) {

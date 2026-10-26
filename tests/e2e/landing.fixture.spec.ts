@@ -5,6 +5,7 @@ import {
   holdScanStream,
   releaseScanLines,
   submitSingleScan,
+  test as textSizeTest,
 } from "./helpers";
 
 /**
@@ -132,7 +133,9 @@ function layout(page: Page) {
       // What the band says first: the word, the site, the instruction.
       said: [
         heading,
-        band.querySelector(":scope > .sx-band-body > .sx-band-head > p"),
+        band.querySelector(
+          ":scope > .sx-band-body > .sx-band-head p.sx-band-domain",
+        ),
         band.querySelector(":scope > .sx-band-body > .sx-band-imperative"),
       ].map((node) => (node ? top(node) : null)),
       tops: marks.map(top),
@@ -268,6 +271,46 @@ test.describe("on a phone", () => {
     expect((await layout(page)).band).toBe(before.band);
   });
 
+  test("a long registered domain the parser finds late moves nothing in the band", async ({
+    page,
+  }) => {
+    // While the parser loads, the site's line holds the link's whole host,
+    // which the registered domain never outgrows.
+    const link = `https://${"a".repeat(63)}.com/`;
+    let releaseParser = () => {};
+    const parserHeld = new Promise<void>((resolve) => {
+      releaseParser = resolve;
+    });
+    await routeParser(page, async () => {
+      await parserHeld;
+      return "go";
+    });
+    await holdScanStream(page);
+    await gotoApp(page);
+    await page.evaluate(() => document.fonts.ready);
+    await submitSingleScan(page, link);
+    await releaseScanLines(page, 8);
+    await expectChecksLanded(page);
+    await releaseScanLines(page, 1);
+    await expect(
+      page.getByLabel("Checking the link's address", { exact: true }),
+    ).toBeVisible();
+    const held = await layout(page);
+
+    releaseParser();
+    await expect(
+      page.getByLabel("Scan result: Safe", { exact: true }),
+    ).toBeVisible();
+    const after = await layout(page);
+    expect(after.band).toBe(held.band);
+    // The word and the instruction (the site's line had nothing to say yet).
+    expect([after.said[0], after.said[2]]).toEqual([
+      held.said[0],
+      held.said[2],
+    ]);
+    expect(after.tops[0]).toBe(held.tops[0]);
+  });
+
   test("an Unconfirmed verdict lands without moving anything", async ({
     page,
   }) => {
@@ -288,8 +331,12 @@ test.describe("on a phone", () => {
     await page.getByRole("button", { name: /analyze url/i }).click();
     await releaseScanLines(page, 8);
     await expectChecksLanded(page);
-    // The address check has failed: no domain line is held for it.
-    await expect(page.locator(".sx-band-domain")).toHaveCount(0);
+    // The address check has failed: the band names no site. (If the check
+    // was still retrying when the scan started, the site's line keeps the
+    // host's room it held then, so the band never shrinks under the reader.)
+    await expect(
+      page.locator(".sx-band-head p.sx-band-domain:not([data-stand-in])"),
+    ).toHaveCount(0);
     const before = await layout(page);
 
     await markLanding(page);
@@ -304,6 +351,42 @@ test.describe("on a phone", () => {
     expect(shifts.sum, `moved ${shifts.moved.join(", ")}`).toBe(0);
   });
 });
+
+/**
+ * At a larger default text size the Evidence switch wraps under its
+ * heading. An Error result draws no switch but holds its place, so nothing
+ * above its rows moves when it lands.
+ */
+for (const standard of [24, 32]) {
+  textSizeTest(
+    `an Error result moves nothing at ${standard}px text (375px)`,
+    async ({ pageAtDefaultTextSize }) => {
+      const page = await pageAtDefaultTextSize(standard, {
+        viewport: { width: 375, height: 812 },
+      });
+      await recordLayoutShifts(page);
+      await holdScanStream(page);
+      await gotoApp(page);
+      await page.evaluate(() => document.fonts.ready);
+      await submitSingleScan(page, "https://error.scrutinix.test/");
+      await releaseScanLines(page, 8);
+      await expectChecksLanded(page);
+      const before = await layout(page);
+
+      await markLanding(page);
+      await releaseScanLines(page, 1);
+      await expect(
+        page.getByLabel("Scan result: Error", { exact: true }),
+      ).toBeVisible();
+      const shifts = await landingShifts(page);
+      const after = await layout(page);
+      expect(after.band).toBe(before.band);
+      expect(after.said).toEqual(before.said);
+      expect(after.tops).toEqual(before.tops);
+      expect(shifts.sum, `moved ${shifts.moved.join(", ")}`).toBe(0);
+    },
+  );
+}
 
 /**
  * A coverage caveat is the one thing a landing still adds. Which checks

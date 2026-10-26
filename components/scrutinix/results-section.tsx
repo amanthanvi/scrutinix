@@ -30,7 +30,7 @@ import {
   warmLinkParser,
 } from "@/hooks/use-link-anatomy";
 import { downloadTextFile } from "@/lib/client/export";
-import { registrableDomainOf } from "@/lib/domain/link-anatomy";
+import { hostOf, registrableDomainOf } from "@/lib/domain/link-anatomy";
 import {
   signalNames,
   type AnalysisResult,
@@ -348,7 +348,11 @@ export function ResultsSection() {
             impersonates={impersonates}
             addressCheck={addressCheck}
             registeredDomain={anatomy?.registeredDomain ?? null}
-            holdDomain={linkUrl !== null && addressCheck === "pending"}
+            holdDomain={
+              linkUrl !== null && addressCheck === "pending"
+                ? hostOf(linkUrl)
+                : null
+            }
             evidenceShown={hasSignalActivity}
             onCancelScan={() => {
               // Cancel unmounts with its band: hand focus back to the input.
@@ -406,8 +410,9 @@ export function ResultsSection() {
               aria-labelledby="sx-evidence-heading"
               className="mt-10 flex flex-col sm:mt-14"
             >
-              {/* min-h-11 holds the switch's height, so the rule stays put
-                  when a result without a Summary draws no switch. */}
+              {/* A result without a Summary (an Error) draws no switch, but
+                  holds its place: at a larger text size the switch wraps
+                  under the heading, so the strip would move otherwise. */}
               <div className="flex min-h-11 flex-wrap items-end justify-between gap-x-4 border-b border-[var(--sx-text)]">
                 <h3
                   id="sx-evidence-heading"
@@ -449,7 +454,19 @@ export function ResultsSection() {
                     {/* Name stays "Summary Full …": visible text first (WCAG 2.5.3). */}
                     <span className="sr-only">{" signal list"}</span>
                   </button>
-                ) : null}
+                ) : (
+                  <span
+                    aria-hidden="true"
+                    className="text-body invisible -mb-px inline-flex min-h-11 items-stretch gap-6 font-medium"
+                  >
+                    <span className="inline-flex min-w-11 border-b-2">
+                      Summary
+                    </span>
+                    <span className="inline-flex min-w-11 border-b-2">
+                      Full
+                    </span>
+                  </span>
+                )}
               </div>
 
               {/* The strip heads the evidence as its index: each numbered

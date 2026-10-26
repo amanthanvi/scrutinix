@@ -72,7 +72,7 @@ function renderPanel(
     evidenceShown?: boolean;
     impersonates?: string | null;
     registeredDomain?: string | null;
-    holdDomain?: boolean;
+    holdDomain?: string | null;
   } = {},
 ) {
   return render(
@@ -100,20 +100,50 @@ describe("VerdictBand", () => {
     });
     const band = screen.getByRole("region", { name: "Scan result: Malicious" });
     const heading = screen.getByRole("heading", { level: 2 });
-    // The word's slot, then the domain.
-    const domain = heading.parentElement?.nextElementSibling as HTMLElement;
-    expect(domain.textContent).toBe("secure-login.xyz");
-    expect(domain.className).toContain("sx-band-domain");
+    // The word's slot, then the site's slot holding the domain.
+    const site = heading.parentElement?.nextElementSibling as HTMLElement;
+    const domain = site.querySelector("p.sx-band-domain");
+    expect(domain?.textContent).toBe("secure-login.xyz");
     // The owner sentence belongs to the link anatomy, said once there.
     expect(band.textContent).not.toMatch(/belongs to/);
   });
 
-  it("holds the domain line's height while the link parser loads", () => {
-    renderPanel(buildResult("safe", { score: 4 }), { holdDomain: true });
-    const placeholder = screen.getByRole("heading", { level: 2 }).parentElement
+  it("holds the site's line for the link's whole host while the link parser loads", () => {
+    renderPanel(buildResult("safe", { score: 4 }), {
+      holdDomain: "accounts.example.co.uk",
+    });
+    const site = screen.getByRole("heading", { level: 2 }).parentElement
       ?.nextElementSibling as HTMLElement;
-    expect(placeholder.getAttribute("aria-hidden")).toBe("true");
-    expect(placeholder.className).toContain("invisible");
+    const standIn = site.querySelector("[data-stand-in]");
+    expect(standIn?.getAttribute("data-stand-in")).toBe(
+      "accounts.example.co.uk",
+    );
+    expect(standIn?.getAttribute("aria-hidden")).toBe("true");
+    expect(site.querySelector("p.sx-band-domain")).toBeNull();
+  });
+
+  it("keeps the host's room when the shorter registered domain arrives", () => {
+    const result = buildResult("safe", { score: 4 });
+    const { rerender } = renderPanel(result, {
+      holdDomain: "a-very-long-subdomain.accounts.example.co.uk",
+    });
+    rerender(
+      <VerdictBand
+        result={result}
+        isStreaming={false}
+        sharedSnapshot={null}
+        completedSignals={8}
+        registeredDomain="example.co.uk"
+      />,
+    );
+    const site = screen.getByRole("heading", { level: 2 }).parentElement
+      ?.nextElementSibling as HTMLElement;
+    expect(
+      site.querySelector("[data-stand-in]")?.getAttribute("data-stand-in"),
+    ).toBe("a-very-long-subdomain.accounts.example.co.uk");
+    expect(site.querySelector("p.sx-band-domain")?.textContent).toBe(
+      "example.co.uk",
+    );
   });
 
   it("draws a verdict rule keyed to the result, over the band's track", () => {
