@@ -21,7 +21,7 @@ The verdict band, the threat-score meter, the numbered eight-cell strip, Summary
   - `other`: `What did the other checks find?`
 - full: switch `Summary Full signal list` (`aria-checked="true"` on Full), list `Signals`, eight `li[data-signal]` rows labelled `<Label>: <finding>`; a row with evidence is a disclosure of label and value pairs
 - error: an Error result has one view, its eight rows, and no switch (there is nothing to answer the questions with, so no control offers Summary); its rows hold no evidence, so a strip cell focuses its row without opening anything and the toolbar's description is `Each check moves to its row below.`; the chosen view comes back for the next result
-- details: `How we reached this verdict` (closed): `What we found`, `What to do`, `Caveats`, `Why <level> confidence`, then `<n>/8 checks · <ms> ms · finished <time>` (plus `· cached`), and `Reference: <scan id>` once for a failed or partial scan
+- details: `How we reached this verdict` (closed): `What we found`, `What to do`, `Caveats`, `Why <level> confidence`, then `<n>/8 checks · <ms> ms · finished <time>`, or for a cache hit `<n>/8 checks · checked <time the evidence was gathered> · cached` (no duration), and `Reference: <scan id>` once for a failed or partial scan
 
 ## How to get to it (user POV)
 

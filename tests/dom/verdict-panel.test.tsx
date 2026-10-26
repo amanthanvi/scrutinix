@@ -827,6 +827,49 @@ describe("VerdictDetails reference", () => {
 });
 
 describe("VerdictDetails wording", () => {
+  it("dates a cache hit by when its evidence was checked, not this request", () => {
+    const result = buildResult("safe", {
+      reasons: ["Nothing flagged."],
+      hasPositiveEvidence: true,
+    });
+    result.metadata = {
+      ...result.metadata,
+      cacheHit: true,
+      checkedAt: "2026-08-02T11:45:00.000Z",
+      durationMs: 1,
+    };
+    const local = (iso: string) =>
+      new Date(iso).toLocaleString("en-US", {
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+
+    render(<VerdictDetails result={result} />);
+
+    expect(
+      screen.getByText(
+        `8/8 checks · checked ${local("2026-08-02T11:45:00.000Z")} · cached`,
+      ),
+    ).toBeTruthy();
+    expect(screen.queryByText(/finished|1 ms/)).toBeNull();
+  });
+
+  it("dates a fresh scan by when it finished", () => {
+    render(
+      <VerdictDetails
+        result={buildResult("safe", {
+          reasons: ["Nothing flagged."],
+          hasPositiveEvidence: true,
+        })}
+      />,
+    );
+
+    expect(screen.getByText(/^8\/8 checks · 1000 ms · finished /)).toBeTruthy();
+    expect(screen.queryByText(/cached|checked /)).toBeNull();
+  });
+
   it("says how many checks failed, so 8/8 never reads as eight answers", () => {
     const signals = Object.fromEntries(
       Object.entries(settledSignals()).map(([name, signal]) => [
