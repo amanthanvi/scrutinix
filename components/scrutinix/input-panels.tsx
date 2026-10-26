@@ -1,6 +1,6 @@
 "use client";
 
-import { ClipboardPaste, CornerDownLeft } from "lucide-react";
+import { ClipboardPaste, CornerDownLeft } from "@/components/ui/icons";
 import { useRef, useSyncExternalStore } from "react";
 import { getToast } from "@/components/ui/lazy-toaster";
 

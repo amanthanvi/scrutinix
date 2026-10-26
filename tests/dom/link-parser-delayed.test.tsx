@@ -17,8 +17,8 @@ import {
   storedResult,
 } from "@/tests/dom/helpers/parser-states";
 
-// The browser's lazy tldts import, held until the test releases it: a slow
-// network or a cold chunk.
+// The browser's lazy parser chunk (tldts and `lib/client/link-parser.ts`),
+// held until the test releases it: a slow network or a cold chunk.
 const parser = vi.hoisted(() => {
   let release = () => {};
   const gate = new Promise<void>((resolve) => {
@@ -26,7 +26,7 @@ const parser = vi.hoisted(() => {
   });
   return { calls: 0, gate, release: () => release() };
 });
-vi.mock("tldts", async (importOriginal) => {
+vi.mock("@/lib/client/link-parser", async (importOriginal) => {
   parser.calls += 1;
   await parser.gate;
   return importOriginal();

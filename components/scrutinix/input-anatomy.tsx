@@ -6,7 +6,6 @@ import { LinkAnatomyView } from "@/components/scrutinix/link-anatomy";
 import { announce } from "@/components/ui/announcer";
 import { Input } from "@/components/ui/input";
 import { getLoadedLinkParser, useLinkAnatomy } from "@/hooks/use-link-anatomy";
-import { compareExpectedSite } from "@/lib/domain/expected-site";
 import type { LinkAnatomy } from "@/lib/domain/link-anatomy";
 import { cn } from "@/lib/utils";
 
@@ -63,9 +62,11 @@ function ExpectedSite({ anatomy }: { anatomy: LinkAnatomy }) {
   useEffect(() => {
     if (open) fieldRef.current?.focus();
   }, [open]);
-  const parse = getLoadedLinkParser();
+  const parser = getLoadedLinkParser();
   const comparison =
-    open && parse ? compareExpectedSite(parse, anatomy, expected) : null;
+    open && parser
+      ? parser.compareExpectedSite(parser.parse, anatomy, expected)
+      : null;
   // The answer shows as you type; it is spoken once typing pauses, on
   // Enter, or on leaving the field, not for every partial name
   // ("paypal.c", "paypal.co", …), and not twice in a row.

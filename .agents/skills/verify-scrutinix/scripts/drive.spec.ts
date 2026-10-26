@@ -805,12 +805,13 @@ test("error and critical verdicts", async ({ page }) => {
 test("an address check that fails to load reads Unconfirmed", async ({
   page,
 }) => {
-  // Fail the lazily loaded link parser (tldts and its Public Suffix List).
+  // Fail the lazily loaded link parser (tldts and its Public Suffix List,
+  // found by one of its entries, kitakyushu.jp).
   let parserRequests = 0;
   await page.route("**/_next/static/chunks/**/*.js", async (route) => {
     const response = await route.fetch();
     const body = await response.text();
-    if (body.includes("getPublicSuffix")) {
+    if (body.includes("kitakyushu")) {
       parserRequests += 1;
       await route.abort("failed");
       return;

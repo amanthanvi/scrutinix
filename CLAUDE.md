@@ -58,7 +58,7 @@ app/
 proxy.ts                  # Rate limiting (scan tier for /api/analyze, image tier for /og/result) + CSP nonces
 
 components/
-  ui/                     # Minimal primitives: button, input, textarea, tabs, sonner
+  ui/                     # Minimal primitives: button, input, textarea, tabs, sonner; icons.tsx (the page's four Lucide icons, inline)
   theme-provider.tsx      # next-themes wrapper (system default)
   theme-toggle.tsx        # Mount-safe light/dark toggle in the header
   scrutinix/
@@ -93,7 +93,7 @@ hooks/
   use-scan-stream.ts      # NDJSON consumer for one scan
   use-batch-stream.ts     # NDJSON consumer for batch scans
   use-scan-history.ts     # IndexedDB history with search
-  use-link-anatomy.ts     # Lazy tldts load (preloadLinkParser) + memoized anatomy and ready flag
+  use-link-anatomy.ts     # Lazy parser chunk (preloadLinkParser, getLoadedLinkParser) + memoized anatomy and ready flag
 
 lib/
   brand-mark.ts           # Mark geometry: header, OG cards, scripts/generate-icons.mjs
@@ -120,7 +120,8 @@ lib/
     share-metadata.ts     # ?shared= verify + validate → SharedView, page metadata, image cap
     share-signing.ts      # HMAC sign/verify for share links; attaches result.share to streamed results
     rate-limit.ts         # Upstash/in-memory limiter with "scan" and "image" tiers
-  client/                 # NDJSON parser, export utilities
+  client/                 # NDJSON parser, downloads (export.ts), export formats (export-formats.ts: Batch/history only)
+    link-parser.ts        # The lazy parser chunk: tldts parse + link anatomy + expected-site (nothing eager imports these)
   config/                 # Environment validation
 
 scripts/
@@ -299,7 +300,11 @@ tests/
   the roving keys follow the layout (`stripColumns`): Left/Right always step
   in order; Up/Down step in order on phones and move a row from 40rem.
 - **Link anatomy**: `lib/domain/link-anatomy.ts` is isomorphic (tldts passed
-  in). Every contiguous run of 2+ subdomain labels is tested; a two-letter
+  in). In the browser it ships only in the lazy parser chunk
+  (`lib/client/link-parser.ts`, reached through `getLoadedLinkParser()` or
+  `loadLinkParser()`); `hostOf` and `redirectDestination`, which the page
+  needs before that chunk, live in `url.ts`.
+  Every contiguous run of 2+ subdomain labels is tested; a two-letter
   country-code run counts only for a listed brand (`amazon.de`), so
   regional/tenant hosts (`acme.us.auth0.com`) never read as look-alikes.
   Look-alikes change presentation only; the stored verdict and score never
@@ -459,7 +464,7 @@ tests/
 ## Stack
 
 - Node 24 LTS, Next.js 16, React 19, TypeScript 5.9 (strict + noUncheckedIndexedAccess)
-- Tailwind CSS v4, Newsreader (self-hosted display serif) + system sans/mono (bundled Geist only for server OG cards), Radix, Lucide, Zod 4, idb, sonner,
+- Tailwind CSS v4, Newsreader (self-hosted display serif) + system sans/mono (bundled Geist only for server OG cards), Radix, Lucide (shadcn's icon library; the page draws its four inline), Zod 4, idb, sonner,
   next-themes, local `@huggingface/transformers`
 - ESLint 10 with direct Next.js, React, hooks, TypeScript, and JSX accessibility plugins
 - Vitest, MSW, fake-indexeddb, Playwright, axe-core, Lighthouse

@@ -14,8 +14,9 @@ import {
 
 /**
  * Results for the link-parser state tests. Built by hand, not with the
- * verdict engine: the engine imports tldts statically, and these files mock
- * tldts to hold or fail the browser's lazy import.
+ * verdict engine: the engine imports tldts and the anatomy code statically,
+ * and these files hold or fail the browser's lazy parser chunk
+ * (`@/lib/client/link-parser`).
  */
 export function storedResult(
   verdict: Extract<Verdict, "safe" | "malicious">,

@@ -57,7 +57,7 @@ await expect(page.getByText("Fixture CA")).toBeVisible();
 
 `Fixture CA` is fixture TLS data rendered in the disclosure. That string is the side effect that the signal payload reached the screen.
 
-`Unconfirmed` is driven by failing the parser's chunk, a real network failure: route `**/_next/static/chunks/**/*.js`, fetch each, and abort the one whose body contains `getPublicSuffix`.
+`Unconfirmed` is driven by failing the parser's chunk, a real network failure: route `**/_next/static/chunks/**/*.js`, fetch each, and abort the one whose body contains `kitakyushu` (a Public Suffix List entry; tldts' unused export names are tree-shaken away).
 
 Screenshots: `verdict-malicious.png`, `verdict-unknown.png`, `verdict-feed.png`, `verdict-critical.png`, `verdict-error.png`, `verdict-look-alike.png`, `verdict-unconfirmed.png`, `single-safe.png`.
 

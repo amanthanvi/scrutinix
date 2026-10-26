@@ -4,10 +4,9 @@ import { Fragment, useState, type ReactNode } from "react";
 
 import { countOf, formatAge } from "@/lib/domain/copy";
 import type { LinkAnatomy } from "@/lib/domain/link-anatomy";
-import { redirectDestination } from "@/lib/domain/link-anatomy";
 import { YOUNG_DOMAIN_DAYS } from "@/lib/domain/signal-severity";
 import type { SignalName, SignalResults } from "@/lib/domain/types";
-import { formatDisplayUrl } from "@/lib/domain/url";
+import { formatDisplayUrl, redirectDestination } from "@/lib/domain/url";
 import { ownershipSentence } from "@/lib/domain/verdict-guidance";
 import { cn } from "@/lib/utils";
 
