@@ -8,6 +8,8 @@ import {
   type ReactNode,
 } from "react";
 
+import { announce } from "@/components/ui/announcer";
+
 type NoticeOptions = {
   description?: ReactNode;
   action?: { label: ReactNode; onClick: () => void };
@@ -38,6 +40,23 @@ const listeners = new Set<() => void>();
 let ready: Promise<void> | undefined;
 let markReady: (() => void) | undefined;
 
+/**
+ * A notification is spoken by the page's own status region (`announce`):
+ * its title and a plain-text description, once. Sonner's region is muted
+ * (`components/ui/sonner.tsx`), since VoiceOver ignored it and TalkBack
+ * read it twice.
+ */
+function spoken(show: (title: ReactNode, options?: NoticeOptions) => unknown) {
+  return (title: ReactNode, options?: NoticeOptions) => {
+    announce(
+      [title, options?.description]
+        .filter((part) => typeof part === "string")
+        .join(" "),
+    );
+    return show(title, options);
+  };
+}
+
 // Wait for Sonner's subscription before publishing the first notification.
 export async function getToast() {
   ready ??= new Promise<void>((resolve) => {
@@ -47,7 +66,10 @@ export async function getToast() {
   listeners.forEach((listener) => listener());
   const { toast } = await load();
   if (!mounted) await ready;
-  return toast;
+  return Object.assign(spoken(toast), {
+    success: spoken(toast.success),
+    error: spoken(toast.error),
+  });
 }
 
 export function toasterReady() {
@@ -91,9 +113,10 @@ function FallbackToaster() {
   );
   useEffect(toasterReady, []);
   if (!notice) return null;
+  // Spoken by the status region, like every notification.
   return (
     <div
-      role="alert"
+      data-notice=""
       className="text-meta fixed inset-x-4 bottom-4 z-50 mx-auto max-w-md rounded-md border border-[var(--sx-control)] bg-[var(--sx-surface)] p-4 text-[var(--sx-text)] shadow-[0_6px_20px_-8px_rgb(0_0_0/0.25)]"
     >
       <p className="font-medium">{notice.title}</p>
