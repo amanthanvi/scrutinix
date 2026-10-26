@@ -61,6 +61,15 @@ describe("the card's font measurements", () => {
     },
   );
 
+  it("measures every word of the look-alike sentence, not a guess", () => {
+    const prose = ownershipSentence("owner.example", "brand.example")
+      .replace("owner.example", "")
+      .replace("brand.example", "");
+    for (const char of prose) {
+      expect(FACES.serif.chars, char).toContain(char);
+    }
+  });
+
   it("never measures a character it has no width for as narrower than it draws", () => {
     for (const face of ["display", "serif"] as const) {
       const font = readTtfMetrics(path.join(process.cwd(), FONT_FILES[face]));
