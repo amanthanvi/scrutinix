@@ -33,6 +33,7 @@ import type {
 } from "@/lib/domain/types";
 import { signalLabels, signalNames } from "@/lib/domain/types";
 import { threatScoreToVerdict } from "@/lib/domain/score-bands";
+import { evidenceTimeOf } from "@/lib/domain/verdict-basis";
 import { NOTHING_FLAGGED_SUMMARY } from "@/lib/domain/verdict-guidance";
 
 export { hasConfirmedReputationHit } from "@/lib/domain/reputation";
@@ -111,9 +112,10 @@ export function scoredFindings(
  */
 export function getScoredSignals(
   signals: SignalResults,
+  asOf: number = Date.now(),
 ): ReadonlySet<SignalName> {
   return new Set(
-    collectContributions(signals)
+    collectContributions(signals, asOf)
       .filter((item) => item.score > 0)
       .map((item) => item.signal),
   );
@@ -141,16 +143,25 @@ export function getScoredFindings(
  * existed, so Summary shows the checks that drove its verdict instead of
  * guessing from row severity. Only the missing list is derived: the stored
  * verdict, score, and copy stay as saved, and an explicit list (even an
- * empty one) is kept.
+ * empty one) is kept. Judged as of the entry's check time
+ * (`evidenceTimeOf`), as its verdict was: a certificate days old then is
+ * not weeks old now.
  */
 export function withScoredSignals<
-  T extends Pick<AnalysisResult, "signals" | "threatInfo">,
+  T extends Pick<AnalysisResult, "signals" | "threatInfo"> & {
+    metadata?: Partial<
+      Pick<AnalysisResult["metadata"], "checkedAt" | "completedAt">
+    > | null;
+  },
 >(result: T): T {
   if (!result.threatInfo || result.threatInfo.scoredSignals !== undefined) {
     return result;
   }
 
-  const scored = getScoredSignals(result.signals);
+  const scored = getScoredSignals(
+    result.signals,
+    evidenceTimeOf(result.metadata ?? {}) ?? Date.now(),
+  );
   return {
     ...result,
     threatInfo: {

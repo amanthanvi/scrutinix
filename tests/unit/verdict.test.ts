@@ -2087,6 +2087,30 @@ describe("withScoredSignals (history saved before scoredSignals)", () => {
     expect(entry.threatInfo?.summary).toBe(legacy.threatInfo?.summary);
   });
 
+  it("judges the entry as of its own check time, not when it is reopened", () => {
+    // Checked 2026-09-01: a 2-day-old certificate on a 10-day-old domain
+    // (the fresh-setup rule). Reopened weeks later, the certificate would
+    // be weeks old and the rule would no longer hold.
+    const signals = cleanSignals();
+    withDomainAge(signals, 10);
+    if (signals.ssl.data) {
+      signals.ssl.data.validFrom = "2026-08-30T00:00:00.000Z";
+    }
+    const entry = withScoredSignals(legacyHistoryEntry(signals));
+
+    expect(entry.threatInfo?.scoredSignals).toContain("ssl");
+    expect(
+      getScoredSignals(signals, Date.parse("2026-09-01T00:00:01.000Z")).has(
+        "ssl",
+      ),
+    ).toBe(true);
+    expect(
+      getScoredSignals(signals, Date.parse("2026-10-01T00:00:00.000Z")).has(
+        "ssl",
+      ),
+    ).toBe(false);
+  });
+
   it("keeps an explicit empty list and results without threat info", () => {
     const safe = cleanSignals();
     const { verdict, threatInfo } = buildThreatAssessment(safe);
