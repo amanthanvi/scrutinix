@@ -325,6 +325,15 @@ score band. No score or verdict changes.
 - [x] Two engine fixes the review found: a multi-code Spamhaus answer reads as its strongest listing (phishing over spam), and a relative redirect on a plain-HTTP hop counts as staying on HTTP (10), like an absolute one.
 - [x] Whole-stack review: the HTTP-redirect sign counts only a redirect status (301, 302, 303, 307, 308), so a 200 that carries a Location (absolute or relative) never scores; the predicate (`lib/domain/redirects.ts`) is shared with the Summary, which now explains a relative redirect that stays on plain HTTP (the scorer-coverage walk covers both).
 
+### P30 Proof before merge (2026-10-26, cleanup step 3 of 3)
+
+- [x] Read the lessons from `docs/agents/feedback-census.md` (#82) and `docs/agents/dependabot-proof-audit.md` (#83): Dependabot merges landed with no Proof citing the head SHA and a passing Verify job.
+- [x] Auto-merge: repo auto-merge is off and no workflow merges, so no auto-merge path exists or was added; `fleet-merge-gate` (Audit, Verify, strict, squash only) is the merge gate.
+- [x] `Proof` workflow (`.github/workflows/proof.yml`, `scripts/check-pr-proof.mjs`, `tests/unit/check-pr-proof.test.ts`) fails a pull request until its body has a Proof section quoting the current head SHA in full; it re-runs on body edits without cancelling CI. Dependabot is not exempt; the merging agent appends the Proof.
+- [x] The verify skill's "How to report" states the Proof contract: head SHA, Audit and Verify job URLs, Greptile status, evidence or `INCONCLUSIVE`, posted before merge.
+- [ ] Owner: add `Proof` to `fleet-merge-gate`'s required checks once it has run green on a few pull requests.
+- [ ] Owner (suggested): a `CODEOWNERS` entry for `.github/workflows/proof.yml` and `scripts/check-pr-proof.mjs`, with code-owner review in the ruleset. Under `pull_request` a PR runs its own copy of the guard, so it could edit the guard to pass itself.
+
 ### P24 Resolve September dependency maintenance
 
 - [x] Merge the green minor-and-patch dependency group, including the Next.js `16.3.3` security update.
