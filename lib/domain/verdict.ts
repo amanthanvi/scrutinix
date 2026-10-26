@@ -1,4 +1,7 @@
-import { describeCertificateProblem } from "@/lib/domain/certificate";
+import {
+  describeCertificateProblem,
+  otherSiteCertificateNote,
+} from "@/lib/domain/certificate";
 import { capitalize, countOf, formatAge, formatList } from "@/lib/domain/copy";
 import { getLimitedChecks } from "@/lib/domain/coverage";
 import {
@@ -557,7 +560,7 @@ function scoreSsl(signals: SignalResults, asOf: number): ScoredItem[] {
       contributions.push({
         score: 12,
         category: "TLS",
-        reason: `A security certificate issued ${formatAge(certAgeDays)} ago on a domain registered ${formatAge(domainAgeDays)} ago matches a common phishing setup.`,
+        reason: `A certificate issued ${formatAge(certAgeDays)} ago on a domain registered ${formatAge(domainAgeDays)} ago matches a common phishing setup.`,
         quality: "medium",
         subject: {
           text: "a brand-new certificate on a brand-new domain",
@@ -807,10 +810,13 @@ function buildLimitations(signals: SignalResults, asOf: number) {
         signal.data.validationState === "warning" &&
         Array.isArray(data.observations)
       ) {
+        // Whose certificate it is isn't something the check missed.
+        const site = "otherSite" in signal.data ? signal.data.otherSite : null;
+        const whose = site ? otherSiteCertificateNote(site) : null;
         limitations.push(
-          ...data.observations.map(
-            (item) => `${formatSignalName(signalName)}: ${item}`,
-          ),
+          ...data.observations
+            .filter((item) => item !== whose)
+            .map((item) => `${formatSignalName(signalName)}: ${item}`),
         );
       }
 

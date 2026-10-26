@@ -9,7 +9,7 @@
 - points: section `Points for each finding`, three tables captioned `Lists of known bad links`, `Checks of the link itself`, and `What lowers the score`, each with columns `Finding` and `Points` and notes under it
 - rules: section `The rules`, a definition list of the engine's rules
 - confidence: High and Moderate thresholds, the limits on confidence, and the disclosure `How the figure adds up` (a table with columns `For` and `Percentage points`)
-- cells: `Reading the eight cells`, the strip's order, when the threat feeds' cell reads `Flagged the link` (a convicting or high-confidence listing) rather than `Found a warning sign` (other links on the site, or a weaker listing), the certificate's `Didn't apply` for a plain-HTTP link that never reaches HTTPS, and a legend of each state's shape
+- cells: `Reading the eight cells`, the strip's order, when the threat feeds' cell reads `Flagged the link` (a convicting or high-confidence listing) rather than `Found a warning sign` (other links on the site, or a weaker listing), the certificate's `Didn't apply` for a plain-HTTP link that never reaches HTTPS and whose site offers no HTTPS a browser would use instead, and a legend of each state's shape
 - ownership: `Which site a link belongs to`, the registered domain explained with `paypal.com.secure-login.xyz`
 - using-the-scanner: Summary's five questions, Full's eight rows, Batch, and history, with links to `/#scan-console` and `/privacy`
 - name: `The name`, with the pronunciation `Scrutinix (SCROO-tih-nix)`

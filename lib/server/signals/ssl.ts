@@ -1,7 +1,10 @@
 import tls from "node:tls";
 import { isIP } from "node:net";
 
-import { describeCertificateProblem } from "@/lib/domain/certificate";
+import {
+  describeCertificateProblem,
+  otherSiteCertificateNote,
+} from "@/lib/domain/certificate";
 import { getRegistrableDomain } from "@/lib/domain/registrable-domain";
 import type { RedirectData, SSLData } from "@/lib/domain/types";
 import { bareHostname } from "@/lib/domain/url";
@@ -15,7 +18,15 @@ import {
 } from "@/lib/server/public-network-target";
 
 export type TlsProbeTarget =
-  | { hostname: string; port: number }
+  | {
+      hostname: string;
+      port: number;
+      /**
+       * The chain stayed on plain HTTP: the link's own host on 443, where
+       * browsers that try HTTPS first go before falling back to HTTP.
+       */
+      offered?: true;
+    }
   /** The chain answered and never reached HTTPS: no certificate in its path. */
   | { skip: "no-https" }
   /** The chain answered, then stopped before it reached HTTPS. */
@@ -27,14 +38,18 @@ export type TlsProbeTarget =
  * An https: link: its own host and port. An http: link: the first HTTPS
  * address its redirect chain reached, the certificate a visitor's browser
  * checks there (http://github.com moves to https://github.com/). A chain
- * that answered and never reached HTTPS has none; one that answered and
- * then stopped short never showed which certificate comes next, so neither
- * reads the link's own TLS port, which isn't in the visitor's path. Only a
- * chain that never answered (or is unknown) falls back to the link's own
- * host on the port it names, else 443: a site that answers only over TLS
- * still counts as answering. Never port 80 for a plain link: a web server
- * there answers a TLS hello with plain HTTP (ERR_SSL_WRONG_VERSION_NUMBER),
- * which says nothing about the site.
+ * that answered and stayed on HTTP still has the link's own host on 443 in
+ * the visitor's path when the link names no port: browsers that try HTTPS
+ * first (Chrome's HTTPS-Upgrades, on by default) ask there and fall back
+ * to HTTP when that fails (`offered`, read by `runSslSignal`). A link that
+ * names its port stays on it, so it has no certificate in its path. A
+ * chain that answered and then stopped short never showed which
+ * certificate comes next, so it reads none. Only a chain that never
+ * answered (or is unknown) falls back to the link's own host on the port
+ * it names, else 443: a site that answers only over TLS still counts as
+ * answering. Never port 80 for a plain link: a web server there answers a
+ * TLS hello with plain HTTP (ERR_SSL_WRONG_VERSION_NUMBER), which says
+ * nothing about the site.
  *
  * WHATWG URL leaves port as "" when absent and otherwise guarantees an
  * in-range numeric string, so only emptiness means "use the default": an
@@ -53,7 +68,9 @@ export function getTlsProbeTarget(
       return endpointOf(firstHttps);
     }
     if (chain.reachable) {
-      return { skip: "no-https" };
+      return target.port === ""
+        ? { ...endpointOf(target), offered: true }
+        : { skip: "no-https" };
     }
     if (chain.hops.length > 0) {
       return { skip: "chain-stopped" };
@@ -81,6 +98,11 @@ function parseUrl(value: string): URL | null {
 /** Aggregate budget across every probed address. */
 const SSL_SIGNAL_BUDGET_MS = 12_000;
 const SSL_PROBE_TIMEOUT_MS = 8_000;
+/**
+ * A plain-HTTP link's own 443 (`offered`): Chrome gives an HTTPS upgrade
+ * 3 seconds before it falls back to HTTP, so the probe waits no longer.
+ */
+const OFFERED_PROBE_BUDGET_MS = 3_000;
 
 /**
  * `redirects` is the scan's own redirect-chain run (shared, so the link is
@@ -112,21 +134,46 @@ export async function runSslSignal(
     url,
     signal,
     scanId,
+    probeTarget.offered ? OFFERED_PROBE_BUDGET_MS : SSL_SIGNAL_BUDGET_MS,
   );
-  // The certificate of the site an http:// link moves to: say so, and let
-  // nothing pair its age with the link's own domain (`otherSite`).
+  if (probeTarget.offered) {
+    // Only a certificate a browser accepts can keep it on HTTPS. Anything
+    // else (refused, no TLS, a certificate error, no answer in time) and
+    // it falls back to plain HTTP: no certificate in the path, and no
+    // lost coverage either. A certificate error there isn't scored: the
+    // visitor never meets it.
+    return result.available &&
+      (result.validationState === "trusted" ||
+        result.validationState === "warning")
+      ? {
+          ...result,
+          observations: [
+            "This link stays on plain HTTP; this is the certificate its site presents over HTTPS.",
+            ...result.observations,
+          ],
+        }
+      : createNoHttpsSslData();
+  }
+  // The certificate of the site an http:// link moves to: say whose it is,
+  // and let nothing pair its age with the link's own domain (`otherSite`).
   const linkSite = getRegistrableDomain(bareHostname(url));
   const probedSite = getRegistrableDomain(probeTarget.hostname);
-  return !result.available || probedSite === linkSite
-    ? result
-    : {
-        ...result,
-        otherSite: probedSite,
-        observations: [
-          `This is the certificate of ${probedSite}, where the link moves to HTTPS.`,
-          ...result.observations,
-        ],
-      };
+  if (!result.available || probedSite === linkSite) {
+    return result;
+  }
+  const problem = describeCertificateProblem({
+    ...result,
+    otherSite: probedSite,
+  });
+  return {
+    ...result,
+    ...(problem ? { problem } : {}),
+    otherSite: probedSite,
+    observations: [
+      otherSiteCertificateNote(probedSite),
+      ...result.observations,
+    ],
+  };
 }
 
 async function probeEndpoint(
@@ -135,8 +182,9 @@ async function probeEndpoint(
   url: string,
   signal: AbortSignal | undefined,
   scanId: string | undefined,
+  budgetMs: number,
 ): Promise<SSLData> {
-  const deadline = Date.now() + SSL_SIGNAL_BUDGET_MS;
+  const deadline = Date.now() + budgetMs;
   const publicTarget = await assertPublicNetworkTarget(hostname, {
     signal,
     timeoutMs: Math.max(0, deadline - Date.now()),
@@ -334,9 +382,10 @@ function buildSslObservations(
 }
 
 /**
- * A plain-HTTP link whose redirects never reach HTTPS: there is no
- * certificate in its path. An answer, not lost coverage: the cell reads
- * "didn't apply", and the result stays complete and cacheable.
+ * A plain-HTTP link whose redirects never reach HTTPS, and whose own host
+ * offers no certificate a browser accepts on 443 (or that names its port):
+ * there is no certificate in its path. An answer, not lost coverage: the
+ * cell reads "didn't apply", and the result stays complete and cacheable.
  */
 function createNoHttpsSslData(): SSLData {
   return {

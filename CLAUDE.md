@@ -269,8 +269,11 @@ tests/
   cell is flagged only for a listing `feedMatchWeight` rates high (the one
   the confidence math counts as the feeds flagging it); a listing of other
   links on the site is a warning sign. A plain-HTTP link whose redirects
-  never reach HTTPS has no certificate (`ssl.noHttps`): its cell didn't
-  apply, it counts as skipped in confidence, and it is not partial. The live
+  never reach HTTPS has its own host's 443 read, as browsers that try
+  HTTPS first do (a link naming its port is not); only a certificate a
+  browser accepts there is stated, else it has none (`ssl.noHttps`): its
+  cell didn't apply, it counts as skipped in confidence, and it is not
+  partial. The live
   strip heads Evidence as its index: cells numbered 1-8 (`cellNumber`, in
   `signalNames` order, `aria-hidden` tags), and each question's "From" line
   (`QuestionSources`) cites the same numbers while assistive technology

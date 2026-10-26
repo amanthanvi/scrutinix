@@ -93,16 +93,25 @@ describe("getTlsProbeTarget", () => {
     ).toEqual({ hostname: "hop.example", port: 443 });
   });
 
-  it("has no certificate to read when the chain stays on plain HTTP", () => {
-    expect(
-      getTlsProbeTarget(
-        "http://plain.example/",
-        chain({
-          finalUrl: "http://plain.example/",
-          hops: [{ url: "http://plain.example/", status: 200 }],
-        }),
-      ),
-    ).toEqual({ skip: "no-https" });
+  it("asks the host's own 443 when the chain stays on plain HTTP, as browsers that try HTTPS first do", () => {
+    const plain = chain({
+      finalUrl: "http://plain.example/",
+      hops: [{ url: "http://plain.example/", status: 200 }],
+    });
+    expect(getTlsProbeTarget("http://plain.example/", plain)).toEqual({
+      hostname: "plain.example",
+      port: 443,
+      offered: true,
+    });
+    // ":80" is the default port, so it names none.
+    expect(getTlsProbeTarget("http://plain.example:80/", plain)).toMatchObject({
+      port: 443,
+      offered: true,
+    });
+    // A link that names its own port stays on it: no certificate to read.
+    expect(getTlsProbeTarget("http://plain.example:8080/", plain)).toEqual({
+      skip: "no-https",
+    });
   });
 
   it("never reads the link's own TLS port once its chain answered on HTTP and stopped", () => {
@@ -184,6 +193,34 @@ function failingSocket(code: string) {
       }),
       destroy: vi.fn(),
       end: vi.fn(),
+    };
+    return socket as unknown as tls.TLSSocket;
+  };
+}
+
+/** A socket that completes the handshake and presents a certificate. */
+function certificateSocket({
+  authorizationError,
+}: { authorizationError?: string } = {}) {
+  return () => {
+    const socket = {
+      authorizationError,
+      setTimeout: vi.fn(),
+      once: vi.fn((event: string, handler: () => void) => {
+        if (event === "secureConnect") queueMicrotask(handler);
+        return socket;
+      }),
+      getPeerCertificate: () => ({
+        valid_from: "Jan  1 00:00:00 2026 GMT",
+        valid_to: authorizationError
+          ? "Jan  1 00:00:00 2026 GMT"
+          : "Jan  1 00:00:00 2099 GMT",
+        issuer: { CN: "Example CA" },
+        subject: { CN: "example" },
+      }),
+      getProtocol: () => "TLSv1.3",
+      end: vi.fn(),
+      destroy: vi.fn(),
     };
     return socket as unknown as tls.TLSSocket;
   };
@@ -320,30 +357,91 @@ describe("runSslSignal", () => {
     );
   });
 
-  it("says a plain-HTTP link that stays on HTTP has no certificate, without probing", async () => {
-    const connectSpy = vi.spyOn(tls, "connect");
-    const redirects = vi.fn(async () =>
+  it("says a plain-HTTP link that stays on HTTP has no certificate when its site offers none", async () => {
+    const stays = vi.fn(async () =>
       chain({
         finalUrl: "http://93.184.215.14/",
         hops: [{ url: "http://93.184.215.14/", status: 200 }],
       }),
     );
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    // Nothing on 443, no TLS there, an unexpected failure, or a
+    // certificate a browser rejects: browsers fall back to plain HTTP, so
+    // none of them is lost coverage.
+    for (const answer of [
+      failingSocket("ECONNREFUSED"),
+      failingSocket("ERR_SSL_WRONG_VERSION_NUMBER"),
+      failingSocket("ERR_SOMETHING_ODD"),
+      certificateSocket({ authorizationError: "CERT_HAS_EXPIRED" }),
+    ]) {
+      const connectSpy = vi.spyOn(tls, "connect").mockImplementation(answer);
+      const result = await runSslSignal(
+        "http://93.184.215.14/",
+        undefined,
+        "scan-http",
+        stays,
+      );
+
+      expect(connectSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ host: "93.184.215.14", port: 443 }),
+      );
+      expect(result).toMatchObject({ available: false, noHttps: true });
+      expect(result.probeFailed).toBeUndefined();
+      expect(result.problem).toBeUndefined();
+      expect(result.observations).toEqual([
+        "This link never moves to HTTPS, so there's no certificate to check.",
+      ]);
+      connectSpy.mockRestore();
+    }
+    expect(stays).toHaveBeenCalledTimes(4);
+    errorSpy.mockRestore();
+
+    // A link that names its port: nothing to ask.
+    const connectSpy = vi.spyOn(tls, "connect");
+    const named = await runSslSignal(
+      "http://93.184.215.14:8080/",
+      undefined,
+      undefined,
+      async () =>
+        chain({
+          finalUrl: "http://93.184.215.14:8080/",
+          hops: [{ url: "http://93.184.215.14:8080/", status: 200 }],
+        }),
+    );
+    expect(connectSpy).not.toHaveBeenCalled();
+    expect(named).toMatchObject({ available: false, noHttps: true });
+  });
+
+  it("reads the certificate a plain-HTTP link's site offers on 443", async () => {
+    const connectSpy = vi
+      .spyOn(tls, "connect")
+      .mockImplementation(certificateSocket());
 
     const result = await runSslSignal(
       "http://93.184.215.14/",
       undefined,
-      "scan-http",
-      redirects,
+      undefined,
+      async () =>
+        chain({
+          finalUrl: "http://93.184.215.14/",
+          hops: [{ url: "http://93.184.215.14/", status: 200 }],
+        }),
     );
 
-    expect(redirects).toHaveBeenCalledTimes(1);
-    expect(connectSpy).not.toHaveBeenCalled();
-    // An answer, not lost coverage: never partial.
-    expect(result).toMatchObject({ available: false, noHttps: true });
-    expect(result.probeFailed).toBeUndefined();
-    expect(result.observations).toEqual([
-      "This link never moves to HTTPS, so there's no certificate to check.",
-    ]);
+    expect(connectSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ host: "93.184.215.14", port: 443 }),
+    );
+    // The link's own host: its certificate, paired with its domain age.
+    expect(result).toMatchObject({
+      available: true,
+      validationState: "trusted",
+    });
+    expect(result.noHttps).toBeUndefined();
+    expect(result.otherSite).toBeUndefined();
+    expect(result.observations[0]).toBe(
+      "This link stays on plain HTTP; this is the certificate its site presents over HTTPS.",
+    );
   });
 
   it("probes where a plain-HTTP link's chain reaches HTTPS", async () => {
@@ -419,6 +517,22 @@ describe("runSslSignal", () => {
     expect(result.observations[0]).toBe(
       "This is the certificate of 93.184.215.15, where the link moves to HTTPS.",
     );
+
+    // A problem with it is named as that site's.
+    connectSpy.mockImplementation(
+      certificateSocket({ authorizationError: "CERT_HAS_EXPIRED" }),
+    );
+    const expired = await runSslSignal(
+      "http://93.184.215.14/",
+      undefined,
+      undefined,
+      upgrade,
+    );
+    expect(expired).toMatchObject({
+      otherSite: "93.184.215.15",
+      validationState: "invalid",
+      problem: "The certificate at 93.184.215.15 has expired.",
+    });
 
     // No certificate read: nothing to attribute.
     connectSpy.mockImplementation(failingSocket("ECONNREFUSED"));

@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { describeCertificateProblem } from "@/lib/domain/certificate";
+import {
+  describeCertificateProblem,
+  otherSiteCertificateNote,
+} from "@/lib/domain/certificate";
 import type { SSLData } from "@/lib/domain/types";
 import { getSummaryQuestions } from "@/lib/domain/summary-questions";
 import { buildThreatAssessment } from "@/lib/domain/verdict";
@@ -132,5 +135,57 @@ describe("describeCertificateProblem", () => {
     }).find((question) => question.id === "https");
     expect(https?.answer).toContain(sentence);
     expect(https?.answer).not.toMatch(/CERT_/);
+
+    // Read where an http:// link moves to another site: named as that
+    // site's in the reason and the answer, and the note naming it is no
+    // limitation.
+    signals.ssl.data.otherSite = "landing.example";
+    const landing =
+      "The certificate at landing.example expired about 11 years ago.";
+    expect(
+      buildThreatAssessment(signals, checkedAt).threatInfo?.reasons,
+    ).toContain(landing);
+    signals.redirectChain.data = {
+      ...signals.redirectChain.data!,
+      finalUrl: "https://landing.example/",
+    };
+    expect(
+      getSummaryQuestions({
+        url: "http://short.example/",
+        signals,
+        now: checkedAt,
+      }).find((question) => question.id === "https")?.answer,
+    ).toContain(landing);
+  });
+
+  it("names the other site whose certificate it is", () => {
+    expect(
+      describeCertificateProblem(
+        facts({
+          authorizationError: "ERR_TLS_CERT_ALTNAME_INVALID",
+          otherSite: "landing.example",
+        }),
+      ),
+    ).toBe(
+      "The certificate at landing.example was issued for a different name.",
+    );
+  });
+
+  it("keeps the note naming another site's certificate out of the limitations", async () => {
+    const signals = await fixtureSignals("example.com");
+    signals.ssl.data = {
+      ...signals.ssl.data!,
+      validationState: "warning",
+      authorizationError: "UNABLE_TO_GET_ISSUER_CERT_LOCALLY",
+      otherSite: "landing.example",
+      observations: [
+        otherSiteCertificateNote("landing.example"),
+        "The certificate chain could not be fully verified from the scanning runtime.",
+      ],
+    };
+
+    expect(buildThreatAssessment(signals).threatInfo?.limitations).toEqual([
+      "TLS Certificate: The certificate chain could not be fully verified from the scanning runtime.",
+    ]);
   });
 });

@@ -817,16 +817,21 @@ function answerHttps({ url, signals, now }: Context): Answer {
   if (startsOnPlainHttp(url)) {
     // Plain HTTP that moves to HTTPS: only the first request is exposed.
     if (!redirect?.finalUrl.toLowerCase().startsWith("https://")) {
-      // A chain that stays on HTTP has no certificate (`noHttps`). One that
-      // never answered leaves the probe on the host's own TLS port, and a
-      // certificate read there is scored, so it is stated.
+      // A certificate read here is stated: one where the chain passed
+      // through HTTPS; one the site offers on 443 while the chain stays on
+      // HTTP (browsers that try HTTPS first meet it; else `noHttps`); or,
+      // for a chain that never answered, one on the host's own TLS port.
       const certificate =
         signals.ssl.status === "success" && signals.ssl.data?.available
           ? answerCertificate(signals, now)
           : null;
       return {
         answer: sentences([
-          "No. This link doesn't use HTTPS, so the connection isn't encrypted.",
+          redirect?.hops.some((hop) => /^https:/i.test(hop.url))
+            ? "No. This link passes through HTTPS but ends on plain HTTP, so the page isn't encrypted."
+            : certificate && redirect?.reachable && signals.ssl.data?.authorized
+              ? "No. This link stays on plain HTTP, though its site also answers over HTTPS."
+              : "No. This link doesn't use HTTPS, so the connection isn't encrypted.",
           certificate?.state ?? null,
           certificate?.issued ?? null,
         ]),
@@ -892,10 +897,17 @@ function answerCertificate(
     domainAge !== null &&
     domainAge < NEW_DOMAIN_DAYS;
 
+  // A certificate read where an http:// link moves to another site is
+  // named as that site's.
+  const whose = data.otherSite
+    ? `the certificate at ${data.otherSite}`
+    : "the site's certificate";
   switch (data.validationState) {
     case "trusted":
       return {
-        state: "The site has a valid certificate.",
+        state: data.otherSite
+          ? `${capitalize(whose)} is valid.`
+          : "The site has a valid certificate.",
         issued,
         why: freshOnNewDomain
           ? FRESH_SETUP
@@ -903,7 +915,7 @@ function answerCertificate(
       };
     case "warning":
       return {
-        state: "We couldn't fully verify the site's certificate.",
+        state: `We couldn't fully verify ${whose}.`,
         issued,
         why: freshOnNewDomain ? FRESH_SETUP : ONLY_THE_CONNECTION,
       };
@@ -913,8 +925,8 @@ function answerCertificate(
         // else the probe's own sentence (results from before it have none).
         state:
           Date.parse(data.validTo ?? "") < now
-            ? `The site's certificate expired ${formatElapsed(now - Date.parse(data.validTo ?? ""))} ago.`
-            : (data.problem ?? "The site's certificate isn't trusted."),
+            ? `${capitalize(whose)} expired ${formatElapsed(now - Date.parse(data.validTo ?? ""))} ago.`
+            : (data.problem ?? `${capitalize(whose)} isn't trusted.`),
         issued,
         why: "With a certificate error, even the connection may not be private.",
       };

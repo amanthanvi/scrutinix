@@ -266,7 +266,8 @@ export default function AboutPage() {
           high-confidence Spamhaus DBL or SURBL listing; a listing of other
           links on the same site, or a weaker listing, reads Found a warning
           sign. The certificate&apos;s cell reads Didn&apos;t apply for a
-          plain-HTTP link that never moves to HTTPS.
+          plain-HTTP link that never moves to HTTPS and whose site offers no
+          HTTPS a browser would use instead.
         </p>
         <ul
           className={`${PROSE_MEASURE} grid gap-x-6 gap-y-2.5 sm:grid-cols-2`}
