@@ -331,12 +331,16 @@ for (const viewport of VIEWPORTS) {
   });
 }
 
-/** The lazily loaded link parser's chunk: tldts and its Public Suffix List. */
+/**
+ * The lazily loaded link parser's chunk: tldts and its Public Suffix List,
+ * found by one of the list's entries (kitakyushu.jp). tldts' export names
+ * are minified away now that only `parse` is imported.
+ */
 async function routeParser(page: Page, onParser: () => Promise<"go" | "fail">) {
   await page.route("**/_next/static/chunks/**/*.js", async (route) => {
     const response = await route.fetch();
     const body = await response.text();
-    if (body.includes("getPublicSuffix") && (await onParser()) === "fail") {
+    if (body.includes("kitakyushu") && (await onParser()) === "fail") {
       await route.abort("failed");
       return;
     }
