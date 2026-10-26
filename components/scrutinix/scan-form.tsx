@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { useEffect, useRef } from "react";
-import { announce } from "@/components/ui/announcer";
+import { announce, retract } from "@/components/ui/announcer";
 
 import {
   type Tab,
@@ -90,33 +90,51 @@ export function ScanForm() {
     if (prefill) document.getElementById("sx-analyze")?.focus();
   }, [prefill]);
 
-  // And it is said once, with the site the link really belongs to when it
-  // spells out another, so the arrival doesn't depend on focus: TalkBack
-  // said only "Analyze URL, button", and VoiceOver's own reading of a new
-  // page moves focus away from Analyze.
-  const arrival = useLinkAnatomy(prefill);
-  const arrivalSaid = useRef(false);
-  const filledIn = prefill
-    ? `Link filled in: ${new URL(prefill).hostname}.`
-    : "";
-  useEffect(() => {
-    if (!prefill || arrivalSaid.current || arrival.status === "pending") return;
-    arrivalSaid.current = true;
-    const owner = arrival.anatomy?.impersonates
-      ? ` ${ownershipSentence(arrival.anatomy.registeredDomain, arrival.anatomy.impersonates)}`
-      : "";
-    announce(`${filledIn}${owner} ${PRESS_ANALYZE}`);
-  }, [prefill, arrival, filledIn]);
-
-  // The link in the field, taken apart before a scan: only while it is a
-  // valid web link that isn't already the one on screen (a result, a
-  // running scan, or a shared link), whose own anatomy shows below.
-  const typed = normalizeUrlInput(singleUrl);
+  // The link on screen already (a result, a running scan, or a shared
+  // link), whose own anatomy shows below.
   const shownUrl =
     active?.url ??
     (scan.state.isStreaming ? scan.state.url : null) ??
     shared?.url ??
     null;
+
+  // And it is said once, with the site the link really belongs to when it
+  // spells out another, so the arrival doesn't depend on focus: TalkBack
+  // said only "Analyze URL, button", and VoiceOver's own reading of a new
+  // page moves focus away from Analyze. Only while the link still waits
+  // untouched: once the visitor edits it, scans, or switches to Batch, an
+  // arrival not yet said never is, and one already said is taken back.
+  const arrival = useLinkAnatomy(prefill);
+  const arrivalSaid = useRef(false);
+  const filledIn = prefill
+    ? `Link filled in: ${new URL(prefill).hostname}.`
+    : "";
+  const arrivalWaits =
+    filledIn !== "" &&
+    activeTab === "single" &&
+    singleUrl === prefill &&
+    !shownUrl;
+  const owner = arrival.anatomy?.impersonates
+    ? ` ${ownershipSentence(arrival.anatomy.registeredDomain, arrival.anatomy.impersonates)}`
+    : "";
+  const arrivalMessage = `${filledIn}${owner} ${PRESS_ANALYZE}`;
+  useEffect(() => {
+    if (!filledIn || arrivalSaid.current) return;
+    if (!arrivalWaits) {
+      arrivalSaid.current = true;
+      return;
+    }
+    if (arrival.status === "pending") return;
+    arrivalSaid.current = true;
+    announce(arrivalMessage);
+  }, [filledIn, arrivalWaits, arrival.status, arrivalMessage]);
+  useEffect(() => {
+    if (filledIn && !arrivalWaits) retract(arrivalMessage);
+  }, [filledIn, arrivalWaits, arrivalMessage]);
+
+  // The link in the field, taken apart before a scan: only while it is a
+  // valid web link that isn't already the one on screen.
+  const typed = normalizeUrlInput(singleUrl);
   // Shown with its fragment ("#/login"), which the scan itself never sees,
   // so a fragment alone doesn't make it a different link.
   const pasteUrl =
@@ -132,10 +150,7 @@ export function ScanForm() {
           panel: TalkBack reads a focusable panel's text with its name, so
           there it was said twice. The owner sentence follows in the link's
           anatomy, after the field. */}
-      {filledIn &&
-      activeTab === "single" &&
-      singleUrl === prefill &&
-      !shownUrl ? (
+      {arrivalWaits ? (
         <p className="sr-only">{`${filledIn} ${PRESS_ANALYZE}`}</p>
       ) : null}
       {/* Manual activation: arrows move focus, Enter or Space switches.

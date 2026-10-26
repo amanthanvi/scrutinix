@@ -238,6 +238,20 @@ describe("a link handed to the page (?url=, or the share target's redirect to it
     expect(within(scanConsole).queryByText(/^Link filled in:/)).toBeNull();
   });
 
+  it("never announces an arrival the visitor has already replaced", async () => {
+    stubScan(LINK);
+    renderApp({
+      prefill: resolvePrefill("https://paypal.com.secure-login.xyz/verify"),
+    });
+    // Replaced before the address check reports back (or before the
+    // queued message is spoken): nothing about the old link is said.
+    fireEvent.change(urlInput(), { target: { value: "https://example.com/" } });
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 600)));
+    expect(screen.getByRole("status").textContent).not.toMatch(
+      /Link filled in/,
+    );
+  });
+
   it("says a link that imitates nothing was filled in, without an owner sentence", async () => {
     stubScan(LINK);
     renderApp({ prefill: LINK });
