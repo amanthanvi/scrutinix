@@ -23,7 +23,7 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 
 /** Shown when URLhaus returns `no_results` so SAFE is not read as “verified clean.” */
 export const URLHAUS_NO_LISTING_OBSERVATION =
-  "URLhaus has no listing for this exact URL. Feed hits use the full malicious URL string from a listing, not hub pages such as urlhaus.abuse.ch/browse/.";
+  "URLhaus has no listing for this exact URL.";
 
 export async function runThreatFeedsProvider(
   url: string,

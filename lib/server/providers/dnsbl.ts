@@ -83,7 +83,7 @@ const ZONE_DEFINITIONS: Array<
           "lists this domain as a botnet command-and-control domain",
           "high",
         ],
-        ["127.0.1.2", "lists this domain as a spam domain", "medium"],
+        ["127.0.1.2", "lists this domain as a low-reputation domain", "medium"],
       ];
       for (const [code, detail, confidence] of known) {
         if (codes.includes(code)) {

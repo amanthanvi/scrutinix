@@ -298,7 +298,7 @@ const SCENARIOS: Record<string, Scenario[]> = {
     {
       add: feed({
         feed: "spamhaus-dbl",
-        detail: "lists this domain as a spam domain",
+        detail: "lists this domain as a low-reputation domain",
       }),
       points: 25,
     },

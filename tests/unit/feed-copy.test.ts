@@ -66,7 +66,7 @@ const CURRENT_DETAILS: FeedMatch[] = [
     "host",
   ),
   match("threatfox", `lists this link as ${threatIndicatorPhrase(null, null)}`),
-  match("spamhaus-dbl", "lists this domain as a spam domain", "host"),
+  match("spamhaus-dbl", "lists this domain as a low-reputation domain", "host"),
   match("spamhaus-dbl", "lists this domain as a phishing domain", "host"),
   match("spamhaus-dbl", "lists this domain as a malware domain", "host"),
   match(

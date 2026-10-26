@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { PublicError } from "@/lib/domain/public-error";
 import { SignalSkipError } from "@/lib/server/signal-error";
+import packageJson from "@/package.json";
 import { runWhoisSignal } from "@/lib/server/signals/whois";
 
 describe("runWhoisSignal", () => {
@@ -67,7 +68,9 @@ describe("runWhoisSignal", () => {
     await runWhoisSignal("https://example.com");
 
     const headers = new Headers(fetchMock.mock.calls[0]?.[1]?.headers);
-    expect(headers.get("user-agent")).toMatch(/^scrutinix\//);
+    // The release's own version: 4.0.0 still sent "scrutinix/3.0".
+    expect(headers.get("user-agent")).toBe(`scrutinix/${packageJson.version}`);
+    expect(packageJson.version).toMatch(/^\d+\.\d+\.\d+/);
   });
 
   it("looks up the registered domain, keeping private-suffix tenants distinct", async () => {

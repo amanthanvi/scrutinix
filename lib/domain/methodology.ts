@@ -115,7 +115,7 @@ export const SCORING_TABLES: readonly ScoringTable[] = [
       },
       {
         id: "dbl-spam",
-        finding: "Spamhaus DBL lists the domain for spam only",
+        finding: "Spamhaus DBL lists the domain only as low-reputation",
         points: "25",
       },
       {
