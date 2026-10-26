@@ -1539,6 +1539,29 @@ describe("verdict copy", () => {
       "An invalid certificate makes this link look risky, and the link pattern model flagged it.",
     );
 
+    // A stronger source leads, but the certificate (28) still outweighs
+    // the link pattern model (about 11), so it isn't dropped while the
+    // weaker source is named.
+    signals.googleSafeBrowsing = {
+      status: "success",
+      error: null,
+      durationMs: 5,
+      data: {
+        checkedAt: "2026-10-25T00:00:00.000Z",
+        matches: [
+          {
+            threatType: "MALWARE",
+            platformType: "ANY_PLATFORM",
+            threatEntryType: "URL",
+          },
+        ],
+      },
+    };
+    const listed = buildThreatAssessment(signals).threatInfo;
+    expect(listed?.summary).toBe(
+      "Google Safe Browsing and the link pattern model flagged this link, and an invalid certificate makes it look risky too.",
+    );
+
     // A source that outweighs the signs still leads alone, by everything
     // it added: 1 malicious (12) and 2 suspicious (8) engines outweigh a
     // 15-point domain age.

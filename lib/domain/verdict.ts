@@ -1155,36 +1155,34 @@ function buildSummary(
     return "The scan failed before enough checks finished.";
   }
 
-  // Sources lead, but a sign that outweighs every source is named first:
-  // the line never names only the weaker evidence ("The link pattern model
-  // flagged this link." over a 28-point invalid certificate).
+  // The line never names weaker evidence while it drops stronger: a sign
+  // is named beside the sources when it outweighs the weakest source named
+  // ("The link pattern model flagged this link." over a 28-point invalid
+  // certificate), and whichever kind is strongest leads.
   const ranked = summarySubjects(contributions);
   const sources = ranked
     .filter((subject) => subject.kind === "source")
     .slice(0, SUMMARY_SUBJECT_LIMIT);
-  const strongestSource = sources[0]?.score ?? 0;
+  const weakestSource = sources.at(-1)?.score ?? 0;
   const signs = ranked
     .filter(
-      (subject) =>
-        subject.kind === "sign" &&
-        (sources.length === 0 || subject.score > strongestSource),
+      (subject) => subject.kind === "sign" && subject.score > weakestSource,
     )
     .slice(0, SUMMARY_SUBJECT_LIMIT);
   const named = (subjects: readonly { text: string }[]) =>
     formatList(subjects.map((subject) => subject.text));
-  const signsClause =
-    signs.length > 0
-      ? `${capitalize(named(signs))} ${signs.length === 1 ? "makes" : "make"} this link look risky`
-      : null;
+  const signsMake = `${named(signs)} ${signs.length === 1 ? "makes" : "make"}`;
 
-  if (signsClause && sources.length > 0) {
-    return `${signsClause}, and ${named(sources)} flagged it.`;
+  if (signs.length > 0 && sources.length > 0) {
+    return ranked[0]?.kind === "sign"
+      ? `${capitalize(signsMake)} this link look risky, and ${named(sources)} flagged it.`
+      : `${capitalize(named(sources))} flagged this link, and ${signsMake} it look risky too.`;
   }
   if (sources.length > 0) {
     return `${capitalize(named(sources))} flagged this link.`;
   }
-  if (signsClause) {
-    return `${signsClause}.`;
+  if (signs.length > 0) {
+    return `${capitalize(signsMake)} this link look risky.`;
   }
 
   return reasons[0] ?? "Several checks found warning signs.";
