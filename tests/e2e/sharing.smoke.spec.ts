@@ -175,9 +175,9 @@ test("a share with no link says so in one quiet line and scans nothing @smoke", 
   const input = await urlField(page);
   await expect(input).toHaveValue("");
 
-  // One line under the form, for the eye; spoken once, politely, from the
-  // status region (the visible line is hidden from assistive technology).
-  const line = page.locator("p[aria-hidden='true']", { hasText: note });
+  // One line under the form, in reading order too; spoken once, politely,
+  // from the page's status region.
+  const line = page.locator("p:not([role='status'])", { hasText: note });
   await expect(line).toBeVisible();
   await expect(page.getByRole("status").filter({ hasText: note })).toHaveText(
     note,

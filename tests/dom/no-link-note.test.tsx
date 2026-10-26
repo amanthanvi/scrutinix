@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AnalyzerRuntimeProvider } from "@/components/scrutinix/analyzer-runtime";
 import { NoLinkNote } from "@/components/scrutinix/no-link-note";
+import { announce, Announcer } from "@/components/ui/announcer";
 import { ResultsSection } from "@/components/scrutinix/results-section";
 import { ScanForm } from "@/components/scrutinix/scan-form";
 import { NO_LINK_NOTE } from "@/lib/domain/share-launch";
@@ -85,6 +86,7 @@ function renderArrival() {
       <ScanForm />
       <NoLinkNote note={NO_LINK_NOTE} />
       <ResultsSection />
+      <Announcer />
     </AnalyzerRuntimeProvider>,
   );
 }
@@ -95,10 +97,10 @@ function urlInput() {
   });
 }
 
-/** The visible line (hidden from assistive technology), if drawn. */
+/** The visible line (in reading order too), if drawn. */
 function visibleNote() {
   return (
-    [...document.querySelectorAll("p[aria-hidden='true']")].find(
+    [...document.querySelectorAll("p:not([role='status'])")].find(
       (node) => node.textContent === NO_LINK_NOTE,
     ) ?? null
   );
@@ -114,6 +116,8 @@ function noteStatus() {
 
 beforeEach(() => {
   window.history.replaceState(null, "", "/?nolink=1");
+  // The page's status region is one per page; start each test with it empty.
+  announce("");
 });
 
 afterEach(() => {

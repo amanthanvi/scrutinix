@@ -15,6 +15,8 @@ import { useSyncExternalStore } from "react";
 export const ANNOUNCEMENT_MS = 7_000;
 
 let message = "";
+/** The last text asked for, said or about to be. */
+let latest = "";
 let timer: ReturnType<typeof setTimeout> | undefined;
 const listeners = new Set<() => void>();
 
@@ -30,12 +32,18 @@ function show(text: string) {
 export function announce(text: string) {
   clearTimeout(timer);
   show("");
+  latest = text;
   if (text) {
     timer = setTimeout(() => {
       show(text);
       timer = setTimeout(show, ANNOUNCEMENT_MS, "");
     }, 100);
   }
+}
+
+/** Take back `text` (it no longer holds) unless something else replaced it. */
+export function retract(text: string) {
+  if (latest === text) announce("");
 }
 
 function subscribe(listener: () => void) {

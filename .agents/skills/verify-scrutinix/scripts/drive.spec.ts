@@ -928,7 +928,7 @@ test("sharing to Scrutinix fills in the link and waits for Analyze", async ({
   expect(new URL(page.url()).search).toBe("?nolink=1");
   await waitForHydration(page);
   await expect(input).toHaveValue("");
-  const noLinkLine = page.locator("p[aria-hidden='true']", { hasText: note });
+  const noLinkLine = page.locator("p:not([role='status'])", { hasText: note });
   await expect(noLinkLine).toBeVisible();
   await expect(page.getByRole("status").filter({ hasText: note })).toHaveText(
     note,
