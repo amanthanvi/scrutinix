@@ -114,6 +114,9 @@ export function getSignalSummary(
     case "ssl": {
       const d = data as SSLData;
       // Fixed plain sentences; the provider's own wording stays in Notes.
+      if (d.noHttps) {
+        return "This link never moves to HTTPS, so there's no certificate to check.";
+      }
       if (!d.available) {
         // Unavailable covers DNS failures and timeouts too: say what we
         // know (no answer), never that the site refused encryption.
@@ -336,6 +339,10 @@ export function getSignalDetailEntries(
     }
     case "ssl": {
       const d = data as SSLData;
+      // No certificate in the link's path: nothing to list beyond the row.
+      if (d.noHttps) {
+        return [];
+      }
       const entries: DetailEntry[] = [
         {
           label: "Validation",

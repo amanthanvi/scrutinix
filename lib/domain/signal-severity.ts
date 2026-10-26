@@ -109,7 +109,10 @@ function getBaseSeverity(
     const d = data as {
       available: boolean;
       validationState: string;
+      noHttps?: boolean;
     };
+    // A plain-HTTP link that never reaches HTTPS has no certificate.
+    if (d.noHttps) return "skipped";
     if (!d.available) return "neutral";
     if (d.validationState === "warning") return "neutral";
     if (d.validationState === "invalid" || d.validationState === "untrusted") {

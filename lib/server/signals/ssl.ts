@@ -1,7 +1,7 @@
 import tls from "node:tls";
 import { isIP } from "node:net";
 
-import type { SSLData } from "@/lib/domain/types";
+import type { RedirectData, SSLData } from "@/lib/domain/types";
 import { bareHostname } from "@/lib/domain/url";
 import {
   checkFailureMessage,
@@ -12,33 +12,83 @@ import {
   selectPublicProbeAddresses,
 } from "@/lib/server/public-network-target";
 
-/** Resolves host/port for the TLS probe (exported for unit tests). */
-export function getTlsProbeTarget(url: string): {
-  hostname: string;
-  port: number;
-} {
+/**
+ * Where the TLS probe reads a certificate (exported for unit tests).
+ *
+ * An https: link: its own host and port. An http: link: the first HTTPS
+ * address its redirect chain reached, the certificate a visitor's browser
+ * checks there (http://github.com moves to https://github.com/). A chain
+ * that answered and never reached HTTPS has no certificate to read, so
+ * null. When the chain is unknown or never answered, the link's own host
+ * on the port the link names, else 443: a site that answers only over TLS
+ * still counts as answering. Never port 80 for a plain link: a web server
+ * there answers a TLS hello with plain HTTP (ERR_SSL_WRONG_VERSION_NUMBER),
+ * which says nothing about the site.
+ *
+ * WHATWG URL leaves port as "" when absent and otherwise guarantees an
+ * in-range numeric string, so only emptiness means "use the default": an
+ * explicit :0 stays 0, the endpoint the redirect probe uses.
+ */
+export function getTlsProbeTarget(
+  url: string,
+  chain?: RedirectData | null,
+): { hostname: string; port: number } | null {
   const target = new URL(url);
-  const hostname = bareHostname(target);
-  const defaultPort = target.protocol === "https:" ? 443 : 80;
-  // WHATWG URL leaves port as "" when absent and otherwise guarantees an
-  // in-range numeric string, so only emptiness signals "use the default" -
-  // an explicit :0 must stay 0 to keep the TLS probe on the same endpoint
-  // as the redirect probe.
-  const port = target.port === "" ? defaultPort : Number(target.port);
+  if (target.protocol === "http:" && chain) {
+    const firstHttps = [...chain.hops.map((hop) => hop.url), chain.finalUrl]
+      .map(parseUrl)
+      .find((candidate) => candidate?.protocol === "https:");
+    if (firstHttps) {
+      return endpointOf(firstHttps);
+    }
+    if (chain.reachable) {
+      return null;
+    }
+  }
 
-  return { hostname, port };
+  return endpointOf(target);
+}
+
+function endpointOf(target: URL) {
+  return {
+    hostname: bareHostname(target),
+    port: target.port === "" ? 443 : Number(target.port),
+  };
+}
+
+function parseUrl(value: string): URL | null {
+  try {
+    return new URL(value);
+  } catch {
+    return null;
+  }
 }
 
 /** Aggregate budget across every probed address. */
 const SSL_SIGNAL_BUDGET_MS = 12_000;
 const SSL_PROBE_TIMEOUT_MS = 8_000;
 
+/**
+ * `redirects` is the scan's own redirect-chain run (shared, so the link is
+ * opened once): a plain-HTTP link's certificate is read where the chain
+ * first reaches HTTPS.
+ */
 export async function runSslSignal(
   url: string,
   signal?: AbortSignal,
   scanId?: string,
+  redirects?: () => Promise<RedirectData>,
 ): Promise<SSLData> {
-  const { hostname, port } = getTlsProbeTarget(url);
+  const chain =
+    redirects && new URL(url).protocol === "http:"
+      ? await redirects().catch(() => null)
+      : null;
+  const probeTarget = getTlsProbeTarget(url, chain);
+  if (!probeTarget) {
+    return createNoHttpsSslData();
+  }
+
+  const { hostname, port } = probeTarget;
   const deadline = Date.now() + SSL_SIGNAL_BUDGET_MS;
   const publicTarget = await assertPublicNetworkTarget(hostname, {
     signal,
@@ -231,6 +281,20 @@ function buildSslObservations(
   return observations;
 }
 
+/**
+ * A plain-HTTP link whose redirects never reach HTTPS: there is no
+ * certificate in its path. An answer, not lost coverage: the cell reads
+ * "didn't apply", and the result stays complete and cacheable.
+ */
+function createNoHttpsSslData(): SSLData {
+  return {
+    ...createUnavailableSslData(
+      "This link never moves to HTTPS, so there's no certificate to check.",
+    ),
+    noHttps: true,
+  };
+}
+
 function createUnavailableSslData(
   message: string,
   { probeFailed = false }: { probeFailed?: boolean } = {},
@@ -298,6 +362,12 @@ const TLS_FAILURE_SUMMARIES: Record<string, (port: number) => string> = {
   ECONNRESET: () =>
     "The TLS connection was reset before the handshake completed.",
   ETIMEDOUT: () => "The TLS probe timed out before the host responded.",
+  // Plain HTTP (or another protocol) on the port: the host answered, just
+  // not with TLS. A finding about the endpoint, not a probe failure.
+  ERR_SSL_WRONG_VERSION_NUMBER: (port) =>
+    `The host answered on port ${port} without TLS.`,
+  ERR_SSL_PACKET_LENGTH_TOO_LONG: (port) =>
+    `The host answered on port ${port} without TLS.`,
 };
 
 type ProbeFailureLog = Pick<CheckFailureOptions, "correlationId" | "redact">;

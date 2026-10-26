@@ -116,6 +116,53 @@ function markUnreachable(signals: SignalResults) {
   };
 }
 
+describe("a plain-HTTP link with no certificate in its path", () => {
+  it("counts the certificate check as one that didn't apply, never as lost coverage", async () => {
+    const signals = await fixtureSignals("example.com");
+    signals.ssl = {
+      status: "success",
+      error: null,
+      durationMs: 3,
+      data: {
+        protocol: null,
+        available: false,
+        validationState: "unavailable",
+        authorized: false,
+        authorizationError: null,
+        issuer: null,
+        subject: null,
+        validFrom: null,
+        validTo: null,
+        daysRemaining: null,
+        selfSigned: false,
+        fingerprint256: null,
+        noHttps: true,
+        observations: [
+          "This link never moves to HTTPS, so there's no certificate to check.",
+        ],
+      },
+    };
+    const skipped = structuredClone(signals);
+    skipped.ssl = {
+      status: "skipped",
+      error: "Not applicable.",
+      data: null,
+      durationMs: 3,
+    };
+
+    const { verdict, threatInfo } = buildThreatAssessment(signals);
+    // /about's arithmetic: the cell says "didn't apply", so it adds what a
+    // check that didn't apply adds.
+    expect(threatInfo?.confidence).toBe(
+      buildThreatAssessment(skipped).threatInfo?.confidence,
+    );
+    expect(verdict).toBe("safe");
+    expect(threatInfo?.limitations).toEqual([]);
+    expect(threatInfo?.confidenceReasons.join(" ")).not.toMatch(/TLS/);
+    expect(getCoverageCaveat({ verdict, signals })).toBeNull();
+  });
+});
+
 describe("buildThreatAssessment", () => {
   it("returns error when every signal fails", () => {
     const signals = createPendingSignalResults();

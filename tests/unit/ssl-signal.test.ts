@@ -2,6 +2,7 @@ import { lookup } from "node:dns/promises";
 import tls from "node:tls";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import type { RedirectData } from "@/lib/domain/types";
 import { getTlsProbeTarget, runSslSignal } from "@/lib/server/signals/ssl";
 
 vi.mock("node:dns/promises", () => ({
@@ -12,11 +13,10 @@ const lookupMock = vi.mocked(lookup);
 
 describe("getTlsProbeTarget", () => {
   it("uses explicit https port when present", () => {
-    const { hostname, port } = getTlsProbeTarget(
-      "https://15.58.86.110:38376/bin.sh",
-    );
-    expect(hostname).toBe("15.58.86.110");
-    expect(port).toBe(38376);
+    expect(getTlsProbeTarget("https://15.58.86.110:38376/bin.sh")).toEqual({
+      hostname: "15.58.86.110",
+      port: 38376,
+    });
   });
 
   it("reads an IPv6 literal without its URL brackets", () => {
@@ -27,22 +27,138 @@ describe("getTlsProbeTarget", () => {
   });
 
   it("defaults https to 443 when port omitted", () => {
-    const { port } = getTlsProbeTarget("https://example.com/path");
-    expect(port).toBe(443);
+    expect(getTlsProbeTarget("https://example.com/path")?.port).toBe(443);
   });
 
-  it("defaults http to 80 when port omitted", () => {
-    const { port } = getTlsProbeTarget("http://example.com/path");
-    expect(port).toBe(80);
+  it("reads a plain-HTTP link's own host on 443, never port 80", () => {
+    // Port 80 answers a TLS hello with plain HTTP, which says nothing.
+    expect(getTlsProbeTarget("http://example.com/path")).toEqual({
+      hostname: "example.com",
+      port: 443,
+    });
   });
 
   it("preserves an explicit port 0 instead of the scheme default", () => {
     // The redirect probe targets the URL's literal port; substituting 80/443
     // here would let one scan mix evidence from two different endpoints.
-    expect(getTlsProbeTarget("http://example.test:0/start").port).toBe(0);
-    expect(getTlsProbeTarget("https://example.test:0/start").port).toBe(0);
+    expect(getTlsProbeTarget("http://example.test:0/start")?.port).toBe(0);
+    expect(getTlsProbeTarget("https://example.test:0/start")?.port).toBe(0);
+  });
+
+  it("reads a plain-HTTP link's certificate where its chain reaches HTTPS", () => {
+    expect(
+      getTlsProbeTarget(
+        "http://github.com/",
+        chain({
+          finalUrl: "https://github.com/",
+          hops: [
+            {
+              url: "http://github.com/",
+              status: 301,
+              location: "https://github.com/",
+            },
+            { url: "https://github.com/", status: 200 },
+          ],
+        }),
+      ),
+    ).toEqual({ hostname: "github.com", port: 443 });
+    // The first HTTPS address, not the last: the certificate the browser
+    // meets on the way.
+    expect(
+      getTlsProbeTarget(
+        "http://short.example/x",
+        chain({
+          finalUrl: "https://landing.example:8443/end",
+          hops: [
+            {
+              url: "http://short.example/x",
+              status: 302,
+              location: "https://hop.example/y",
+            },
+            {
+              url: "https://hop.example/y",
+              status: 302,
+              location: "https://landing.example:8443/end",
+            },
+            { url: "https://landing.example:8443/end", status: 200 },
+          ],
+        }),
+      ),
+    ).toEqual({ hostname: "hop.example", port: 443 });
+  });
+
+  it("has no certificate to read when the chain stays on plain HTTP", () => {
+    expect(
+      getTlsProbeTarget(
+        "http://plain.example/",
+        chain({
+          finalUrl: "http://plain.example/",
+          hops: [{ url: "http://plain.example/", status: 200 }],
+        }),
+      ),
+    ).toBeNull();
+  });
+
+  it("falls back to the link's own TLS port when the chain never answered", () => {
+    const silent = chain({
+      reachable: false,
+      terminalStatus: null,
+      finalUrl: "http://down.example/",
+      hops: [],
+    });
+    expect(getTlsProbeTarget("http://down.example/", silent)).toEqual({
+      hostname: "down.example",
+      port: 443,
+    });
+    expect(getTlsProbeTarget("http://down.example:8080/", silent)).toEqual({
+      hostname: "down.example",
+      port: 8080,
+    });
+  });
+
+  it("ignores the chain for an https link", () => {
+    expect(
+      getTlsProbeTarget(
+        "https://short.example/",
+        chain({ finalUrl: "https://landing.example/" }),
+      ),
+    ).toEqual({ hostname: "short.example", port: 443 });
   });
 });
+
+function chain(overrides: Partial<RedirectData>): RedirectData {
+  return {
+    finalUrl: "",
+    totalHops: 0,
+    httpsUpgraded: false,
+    reachable: true,
+    terminalStatus: 200,
+    terminalError: null,
+    hops: [],
+    observations: [],
+    ...overrides,
+  };
+}
+
+function failingSocket(code: string) {
+  return () => {
+    const socket = {
+      setTimeout: vi.fn(),
+      once: vi.fn((event: string, handler: (err?: Error) => void) => {
+        if (event === "error") {
+          queueMicrotask(() => {
+            const err = new Error(code) as Error & { code?: string };
+            err.code = code;
+            handler(err);
+          });
+        }
+      }),
+      destroy: vi.fn(),
+      end: vi.fn(),
+    };
+    return socket as unknown as tls.TLSSocket;
+  };
+}
 
 describe("runSslSignal", () => {
   afterEach(() => {
@@ -173,6 +289,76 @@ describe("runSslSignal", () => {
     expect(result.observations.join("\n")).toContain(
       "The TLS probe failed unexpectedly.",
     );
+  });
+
+  it("says a plain-HTTP link that stays on HTTP has no certificate, without probing", async () => {
+    const connectSpy = vi.spyOn(tls, "connect");
+    const redirects = vi.fn(async () =>
+      chain({
+        finalUrl: "http://93.184.215.14/",
+        hops: [{ url: "http://93.184.215.14/", status: 200 }],
+      }),
+    );
+
+    const result = await runSslSignal(
+      "http://93.184.215.14/",
+      undefined,
+      "scan-http",
+      redirects,
+    );
+
+    expect(redirects).toHaveBeenCalledTimes(1);
+    expect(connectSpy).not.toHaveBeenCalled();
+    // An answer, not lost coverage: never partial.
+    expect(result).toMatchObject({ available: false, noHttps: true });
+    expect(result.probeFailed).toBeUndefined();
+    expect(result.observations).toEqual([
+      "This link never moves to HTTPS, so there's no certificate to check.",
+    ]);
+  });
+
+  it("probes where a plain-HTTP link's chain reaches HTTPS", async () => {
+    const connectSpy = vi
+      .spyOn(tls, "connect")
+      .mockImplementation(failingSocket("ECONNREFUSED"));
+
+    await runSslSignal(
+      "http://93.184.215.14/",
+      undefined,
+      undefined,
+      async () =>
+        chain({
+          finalUrl: "https://93.184.215.15/",
+          hops: [
+            {
+              url: "http://93.184.215.14/",
+              status: 301,
+              location: "https://93.184.215.15/",
+            },
+            { url: "https://93.184.215.15/", status: 200 },
+          ],
+        }),
+    );
+
+    expect(connectSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ host: "93.184.215.15", port: 443 }),
+    );
+  });
+
+  it("reads a plain-HTTP answer on a TLS port as a finding, not a failure", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.spyOn(tls, "connect").mockImplementation(
+      failingSocket("ERR_SSL_WRONG_VERSION_NUMBER"),
+    );
+
+    const result = await runSslSignal("https://93.184.215.14:8080/");
+
+    expect(result.available).toBe(false);
+    expect(result.probeFailed).toBeUndefined();
+    expect(result.observations).toEqual([
+      "The host answered on port 8080 without TLS.",
+    ]);
+    expect(errorSpy).not.toHaveBeenCalled();
   });
 
   it("blocks private literal IPs before opening a TLS socket", async () => {

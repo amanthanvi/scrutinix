@@ -6,6 +6,7 @@ import {
   createPendingSignalResults,
   signalNames,
   type AnalysisResult,
+  type RedirectData,
   type SignalName,
   type SignalPayloadMap,
   type SignalResult,
@@ -117,6 +118,11 @@ export async function runAnalysis(
   }
 
   const signals: SignalResults = createPendingSignalResults();
+  // One redirect-chain run per scan: the TLS check of a plain-HTTP link
+  // reads the certificate where this chain first reaches HTTPS.
+  let redirectRun: Promise<RedirectData> | undefined;
+  const redirects = () =>
+    (redirectRun ??= runRedirectSignal(normalizedUrl, signal, scanId));
   // E2E fixture mode (SCRUTINIX_TEST_FIXTURES=1) swaps the real providers
   // for deterministic offline data; see lib/server/test-fixtures.ts.
   const providers: SignalProviderTable = getFixtureSignalProviders(target) ?? {
@@ -125,10 +131,10 @@ export async function runAnalysis(
     googleSafeBrowsing: () =>
       runGoogleSafeBrowsingProvider(normalizedUrl, signal),
     threatFeeds: () => runThreatFeedsProvider(normalizedUrl, signal, scanId),
-    ssl: () => runSslSignal(normalizedUrl, signal, scanId),
+    ssl: () => runSslSignal(normalizedUrl, signal, scanId, redirects),
     whois: () => runWhoisSignal(normalizedUrl, signal),
     dns: () => runDnsSignal(normalizedUrl, signal),
-    redirectChain: () => runRedirectSignal(normalizedUrl, signal, scanId),
+    redirectChain: redirects,
   };
   const task = <Name extends SignalName>(
     name: Name,

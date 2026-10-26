@@ -817,8 +817,9 @@ function answerHttps({ url, signals, now }: Context): Answer {
   if (startsOnPlainHttp(url)) {
     // Plain HTTP that moves to HTTPS: only the first request is exposed.
     if (!redirect?.finalUrl.toLowerCase().startsWith("https://")) {
-      // A plain-HTTP link to a TLS port can still present a certificate,
-      // and the engine scores it, so it is stated when one was read.
+      // A chain that stays on HTTP has no certificate (`noHttps`). One that
+      // never answered leaves the probe on the host's own TLS port, and a
+      // certificate read there is scored, so it is stated.
       const certificate =
         signals.ssl.status === "success" && signals.ssl.data?.available
           ? answerCertificate(signals, now)

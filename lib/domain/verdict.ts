@@ -175,9 +175,13 @@ export function buildThreatAssessment(
     (signal) => signal.status === "success",
   ).length;
   const dataRichSignals = countDataRichSignals(signals);
-  const skippedSignals = statuses.filter(
-    (signal) => signal.status === "skipped",
-  ).length;
+  // A plain-HTTP link that never reaches HTTPS has no certificate: the
+  // check ran, but it counts as one that didn't apply, as its cell says.
+  const noCertificate =
+    signals.ssl.status === "success" && signals.ssl.data?.noHttps ? 1 : 0;
+  const skippedSignals =
+    statuses.filter((signal) => signal.status === "skipped").length +
+    noCertificate;
   const failedSignals = statuses.filter(
     (signal) => signal.status === "error",
   ).length;
@@ -217,7 +221,7 @@ export function buildThreatAssessment(
     signals,
     verdict,
     contributions,
-    successfulSignals,
+    successfulSignals: successfulSignals - noCertificate,
     dataRichSignals,
     skippedSignals,
     failedSignals,

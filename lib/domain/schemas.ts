@@ -228,6 +228,12 @@ export const sslDataSchema = z.object({
    * so it shows its reference and is never cached.
    */
   probeFailed: z.boolean().optional().catch(undefined),
+  /**
+   * A plain-HTTP link whose redirects never reach HTTPS: no certificate is
+   * in its path. An answer, not lost coverage; the cell reads "didn't
+   * apply".
+   */
+  noHttps: z.boolean().optional().catch(undefined),
 });
 
 export type SSLData = z.infer<typeof sslDataSchema>;

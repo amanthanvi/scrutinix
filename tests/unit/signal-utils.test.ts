@@ -639,6 +639,32 @@ describe("signal severity", () => {
       Object.values(severityColor).map((color) => color.dot),
     ).not.toContain("var(--sx-safe)");
   });
+
+  it("says the certificate check didn't apply to a link that never reaches HTTPS", () => {
+    const ssl = buildSsl({
+      available: false,
+      validationState: "unavailable",
+      authorized: false,
+      issuer: null,
+      subject: null,
+      validFrom: null,
+      validTo: null,
+      daysRemaining: null,
+      fingerprint256: null,
+      noHttps: true,
+      observations: [
+        "This link never moves to HTTPS, so there's no certificate to check.",
+      ],
+    });
+
+    // Not "gave a partial answer": nothing was lost.
+    expect(getSignalSeverity("success", ssl, "ssl")).toBe("skipped");
+    expect(getSignalSummary("ssl", ssl)).toBe(
+      "This link never moves to HTTPS, so there's no certificate to check.",
+    );
+    // No certificate fields to list, so the row has no disclosure.
+    expect(getSignalDetailEntries("ssl", ssl)).toEqual([]);
+  });
 });
 
 describe("plain findings for checks that couldn't run", () => {
