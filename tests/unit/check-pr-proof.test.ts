@@ -79,6 +79,8 @@ describe("PR Proof guard", () => {
   it("treats comment markers inside a fence as literal text", () => {
     const body = `\`\`\`html\n<!-- example\n\`\`\`\n\n### Proof\n\nHead ${HEAD}\n`;
     expect(check(body).ok).toBe(true);
+    const infoString = `~~~html <!-- example\nexample -->\n~~~\n\n### Proof\n\nHead ${HEAD}\n`;
+    expect(check(infoString).ok).toBe(true);
   });
 
   it("passes when any of several Proof sections quotes the head", () => {

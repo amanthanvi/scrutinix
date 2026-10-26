@@ -68,14 +68,18 @@ export function proofSections(body) {
       continue;
     }
 
+    const fenceMatch = inComment ? null : FENCE_OPEN.exec(raw);
+    if (fenceMatch) {
+      fence = fenceMatch[1];
+      if (open) open.lines.push(raw);
+      continue;
+    }
+
     const visible = withoutComments(raw, inComment);
     inComment = visible.inComment;
     const line = visible.text;
 
-    const fenceMatch = FENCE_OPEN.exec(line);
-    if (fenceMatch) fence = fenceMatch[1];
-
-    const heading = fenceMatch ? null : headingOf(line);
+    const heading = headingOf(line);
     if (heading) {
       if (open && heading.level <= open.level) {
         sections.push(open.lines.join("\n"));
