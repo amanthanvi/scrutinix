@@ -13,6 +13,7 @@ import {
   type FeedMatch,
 } from "@/lib/domain/feed-copy";
 import { PRIVATE_ADDRESSES_OMITTED } from "@/lib/domain/blocked-address";
+import { describeCertificateProblem } from "@/lib/domain/certificate";
 import { hostOf } from "@/lib/domain/link-anatomy";
 import { redirectsOverHttp } from "@/lib/domain/redirects";
 import {
@@ -907,7 +908,11 @@ function answerCertificate(
       };
     default:
       return {
-        state: "The site's certificate isn't trusted.",
+        // Why, in plain words: "The site's certificate expired about 11
+        // years ago.", never "isn't trusted" alone.
+        state:
+          describeCertificateProblem(data, now) ??
+          "The site's certificate isn't trusted.",
         issued,
         why: "With a certificate error, even the connection may not be private.",
       };

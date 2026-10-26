@@ -1,3 +1,4 @@
+import { describeCertificateProblem } from "@/lib/domain/certificate";
 import { capitalize, countOf, formatAge, formatList } from "@/lib/domain/copy";
 import { getLimitedChecks } from "@/lib/domain/coverage";
 import {
@@ -497,13 +498,15 @@ function scoreSsl(signals: SignalResults, asOf: number): ScoredItem[] {
 
   const contributions: ScoredItem[] = [];
 
+  // Worded from the stored facts, never the raw verification code, so a
+  // cached or older result reads the same plain sentence.
+  const problem = describeCertificateProblem(signal.data, asOf);
+
   if (signal.data.validationState === "invalid") {
     contributions.push({
       score: 28,
       category: "TLS",
-      reason:
-        signal.data.observations?.[0] ??
-        "The site's security certificate isn't trusted.",
+      reason: problem ?? "The site's certificate isn't trusted.",
       quality: "low",
       subject: { text: "an invalid certificate", kind: "sign", group: "tls" },
     });
@@ -513,7 +516,7 @@ function scoreSsl(signals: SignalResults, asOf: number): ScoredItem[] {
     contributions.push({
       score: 26,
       category: "TLS",
-      reason: "The site uses an untrusted or self-signed security certificate.",
+      reason: problem ?? "The site's certificate isn't trusted.",
       quality: "low",
       subject: { text: "an untrusted certificate", kind: "sign", group: "tls" },
     });

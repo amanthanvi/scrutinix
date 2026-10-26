@@ -1,3 +1,4 @@
+import { describeCertificateProblem } from "@/lib/domain/certificate";
 import {
   capitalize,
   countOf,
@@ -131,7 +132,10 @@ export function getSignalSummary(
         return "We couldn't fully verify the site's security certificate.";
       }
 
-      return "The site's security certificate isn't trusted.";
+      return (
+        describeCertificateProblem(d) ??
+        "The site's security certificate isn't trusted."
+      );
     }
     case "whois": {
       const d = data as WhoisData;

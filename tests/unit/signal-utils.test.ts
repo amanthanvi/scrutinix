@@ -765,8 +765,14 @@ describe("plain findings for checks that couldn't run", () => {
     });
 
     const states = [
-      ["invalid", "The site's security certificate isn't trusted."],
-      ["untrusted", "The site's security certificate isn't trusted."],
+      [
+        "invalid",
+        "The site's certificate comes from an issuer browsers don't trust.",
+      ],
+      [
+        "untrusted",
+        "The site's certificate comes from an issuer browsers don't trust.",
+      ],
       ["warning", "We couldn't fully verify the site's security certificate."],
       ["trusted", "The site's security certificate is valid."],
     ] as const;
@@ -781,6 +787,15 @@ describe("plain findings for checks that couldn't run", () => {
         }),
       ).toBe(sentence);
     }
+    // No code to go on: still a plain sentence.
+    expect(
+      getSignalSummary("ssl", {
+        ...ssl,
+        available: true,
+        validationState: "invalid",
+        authorizationError: "SOME_FUTURE_CODE",
+      }),
+    ).toBe("The site's certificate isn't trusted.");
 
     expect(
       getSignalSummary("dns", {

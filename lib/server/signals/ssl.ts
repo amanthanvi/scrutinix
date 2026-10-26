@@ -1,6 +1,7 @@
 import tls from "node:tls";
 import { isIP } from "node:net";
 
+import { describeCertificateProblem } from "@/lib/domain/certificate";
 import type { RedirectData, SSLData } from "@/lib/domain/types";
 import { bareHostname } from "@/lib/domain/url";
 import {
@@ -211,26 +212,25 @@ function runSslProbe(
         subjectCommonName,
       );
 
-      resolve({
-        protocol: socket.getProtocol() ?? "unknown",
-        available: true,
+      const facts = {
         validationState,
-        authorized:
-          validationState === "trusted" || validationState === "warning",
         authorizationError,
-        issuer: issuerCommonName,
-        subject: subjectCommonName,
-        validFrom,
         validTo,
         daysRemaining,
         selfSigned:
           issuerCommonName !== null && issuerCommonName === subjectCommonName,
+      };
+      resolve({
+        ...facts,
+        protocol: socket.getProtocol() ?? "unknown",
+        available: true,
+        authorized:
+          validationState === "trusted" || validationState === "warning",
+        issuer: issuerCommonName,
+        subject: subjectCommonName,
+        validFrom,
         fingerprint256: certificate.fingerprint256 ?? null,
-        observations: buildSslObservations(
-          validationState,
-          authorizationError,
-          daysRemaining,
-        ),
+        observations: buildSslObservations(facts),
       });
     });
 
@@ -255,27 +255,24 @@ function runSslProbe(
   });
 }
 
+/** Plain sentences only: the raw verification code stays in `authorizationError`. */
 function buildSslObservations(
-  validationState: SSLData["validationState"],
-  authorizationError: string | null,
-  daysRemaining: number | null,
+  facts: Parameters<typeof describeCertificateProblem>[0],
 ) {
   const observations: string[] = [];
 
-  if (validationState === "warning" && authorizationError) {
+  if (facts.validationState === "warning" && facts.authorizationError) {
     observations.push(
       "The certificate chain could not be fully verified from the scanning runtime.",
     );
   }
 
-  if (validationState === "invalid" && authorizationError) {
-    observations.push(`TLS validation failed: ${authorizationError}.`);
-  }
-
-  if (daysRemaining !== null && daysRemaining < 0) {
-    observations.push("The TLS certificate is expired.");
-  } else if (daysRemaining !== null && daysRemaining < 14) {
-    observations.push("The TLS certificate expires within the next 14 days.");
+  // Covers an expired certificate too ("The site's certificate has expired.").
+  const problem = describeCertificateProblem(facts);
+  if (problem) {
+    observations.push(problem);
+  } else if (facts.daysRemaining !== null && facts.daysRemaining < 14) {
+    observations.push("The certificate expires within the next 14 days.");
   }
 
   return observations;

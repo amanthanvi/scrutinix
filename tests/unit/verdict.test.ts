@@ -524,11 +524,22 @@ describe("buildThreatAssessment", () => {
       },
     };
 
-    const result = buildThreatAssessment(signals);
+    // Checked 30 days after the certificate lapsed.
+    const result = buildThreatAssessment(
+      signals,
+      Date.parse("2025-03-02T00:00:00.000Z"),
+    );
 
     expect(result.verdict).toBe("suspicious");
     expect(result.threatInfo?.score).toBeGreaterThanOrEqual(25);
-    expect(result.threatInfo?.reasons.join(" ")).toMatch(/CERT_HAS_EXPIRED/);
+    // Plain words from the stored facts, even when the stored observation
+    // is an older release's raw code.
+    expect(result.threatInfo?.reasons).toContain(
+      "The site's certificate expired 30 days ago.",
+    );
+    expect(result.threatInfo?.reasons.join(" ")).not.toMatch(
+      /CERT_|TLS validation/,
+    );
   });
 
   it("treats a strong malicious ML verdict as suspicious even without reputation hits", () => {
