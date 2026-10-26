@@ -70,6 +70,17 @@ describe("PR Proof guard", () => {
     expect(check(`### Proof\n<!-- note -->\nHead ${HEAD}`).ok).toBe(true);
   });
 
+  it("does not close a fence on a marker followed by text", () => {
+    const body = `\`\`\`markdown\n\`\`\`example\n### Proof\n${HEAD}\n\`\`\`\n`;
+    expect(proofSections(body)).toEqual([]);
+    expect(check(body).ok).toBe(false);
+  });
+
+  it("treats comment markers inside a fence as literal text", () => {
+    const body = `\`\`\`html\n<!-- example\n\`\`\`\n\n### Proof\n\nHead ${HEAD}\n`;
+    expect(check(body).ok).toBe(true);
+  });
+
   it("passes when any of several Proof sections quotes the head", () => {
     const body = `### Proof\n${OLDER}\n\n### Proof (rebased)\n${HEAD}\n`;
     expect(check(body).ok).toBe(true);

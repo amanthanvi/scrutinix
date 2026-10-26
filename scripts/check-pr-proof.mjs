@@ -14,7 +14,8 @@ import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 
 const FULL_SHA = /^[0-9a-f]{40}$/i;
-const FENCE = /^ {0,3}(`{3,}|~{3,})/;
+const FENCE_OPEN = /^ {0,3}(`{3,}|~{3,})/;
+const FENCE_CLOSE = /^ {0,3}(`{3,}|~{3,})[ \t]*$/;
 const HEADING = /^ {0,3}(#{1,6})(?:[ \t]+(.*?))?[ \t#]*$/;
 
 function headingOf(line) {
@@ -23,25 +24,58 @@ function headingOf(line) {
   return { level: match[1].length, text: match[2] ?? "" };
 }
 
-/** Every Proof section in a Markdown body: from its ATX heading to the next heading at the same level or above. Headings inside code fences don't count, and nothing inside an HTML comment does: it doesn't render, and an unclosed one hides the rest of the body. */
+function closesFence(line, fence) {
+  const match = FENCE_CLOSE.exec(line);
+  return (
+    match !== null &&
+    match[1][0] === fence[0] &&
+    match[1].length >= fence.length
+  );
+}
+
+/** The visible part of a line outside code fences, given whether an HTML comment is already open. */
+function withoutComments(line, inComment) {
+  let text = "";
+  let rest = line;
+  for (;;) {
+    if (inComment) {
+      const end = rest.indexOf("-->");
+      if (end === -1) return { text, inComment: true };
+      rest = rest.slice(end + 3);
+      inComment = false;
+    } else {
+      const start = rest.indexOf("<!--");
+      if (start === -1) return { text: text + rest, inComment: false };
+      text += rest.slice(0, start);
+      rest = rest.slice(start + 4);
+      inComment = true;
+    }
+  }
+}
+
+/** Every Proof section in a Markdown body: from its ATX heading to the next heading at the same level or above. Headings inside code fences don't count, and nothing inside an HTML comment does: it doesn't render, and an unclosed one hides the rest of the body. Inside a fence, comment markers are literal text. */
 export function proofSections(body) {
-  const visible = String(body ?? "").replace(/<!--[\s\S]*?(?:-->|$)/g, "");
-  const lines = visible.split(/\r?\n/);
+  const lines = String(body ?? "").split(/\r?\n/);
   const sections = [];
   let fence = null;
+  let inComment = false;
   let open = null;
 
-  for (const line of lines) {
-    const fenceMatch = FENCE.exec(line);
-    if (fenceMatch) {
-      const marker = fenceMatch[1];
-      if (fence === null) fence = marker;
-      else if (marker[0] === fence[0] && marker.length >= fence.length) {
-        fence = null;
-      }
+  for (const raw of lines) {
+    if (fence !== null) {
+      if (closesFence(raw, fence)) fence = null;
+      if (open) open.lines.push(raw);
+      continue;
     }
 
-    const heading = fence === null && !fenceMatch ? headingOf(line) : null;
+    const visible = withoutComments(raw, inComment);
+    inComment = visible.inComment;
+    const line = visible.text;
+
+    const fenceMatch = FENCE_OPEN.exec(line);
+    if (fenceMatch) fence = fenceMatch[1];
+
+    const heading = fenceMatch ? null : headingOf(line);
     if (heading) {
       if (open && heading.level <= open.level) {
         sections.push(open.lines.join("\n"));
