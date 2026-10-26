@@ -96,7 +96,8 @@ hooks/
 lib/
   brand-mark.ts           # Mark geometry: header, OG cards, scripts/generate-icons.mjs
   domain/                 # Zod schemas, URL validation, verdict logic
-    verdict-guidance.ts   # Imperative line, showScore, announcement, coverage caveat
+    verdict-guidance.ts   # Imperative line, showScore, announcement, coverage caveat; getSharedGuidance
+    verdict-basis.ts      # The four facts the imperative is worded from (signed into shares)
     summary-questions.ts  # Summary's five questions: fixed mapping, answers, why clauses, disagreements
     feed-copy.ts          # Feed display names, feed-match + Google threat-type wording
     reputation.ts         # Client-safe reputation thresholds + hasConfirmedReputationHit
@@ -212,7 +213,10 @@ tests/
   not raised. Ages of what was seen, in Summary and Full rows alike, count
   from the result's check time (`evidenceTimeOf`: `checkedAt`, else
   `completedAt`; the stream's start while scanning), never from when it is
-  reopened; certificate expiry counts from now. A plain
+  reopened; certificate expiry counts from now. The same clock judges a
+  VirusTotal analysis current: `buildThreatAssessment(signals, asOf)` (a
+  cache hit passes the original check time), the coverage caveat, the
+  verdict basis's "known threat", and Summary's reported/DNS whys. A plain
   HTTP link that moves to HTTPS says so and still gives the certificate. A
   name with no public address says so ("We found no address", or "only
   private or reserved addresses"), never "points nowhere". A question is pending
@@ -227,10 +231,14 @@ tests/
   which is `aria-hidden` and `select-none`. The
   owner and look-alike are stated by the anatomy, never by a question; the
   anatomy's own facts (certificate, young domain, "Ends at") step aside
-  once the evidence below states them. Legacy records, Error results (all
-  eight rows in Summary), and shared snapshots get no questions. Full keeps
-  the eight rows. A strip cell focuses its question in Summary and opens
-  its row in Full. The PSL lookup is passed in (`registeredDomainOf`);
+  once the evidence below states them. Legacy records, Error results, and
+  shared snapshots get no questions. An Error result has one view, its
+  eight rows, so it draws no Summary/Full switch (a switch must never claim
+  a view that isn't shown); the stored choice carries to the next result.
+  Full keeps the eight rows. A strip cell focuses its question in Summary
+  and its row in Full or on an Error result, opening the row when it has
+  evidence (an Error's rows have none, so its strip hint says "Each check
+  moves to its row below."). The PSL lookup is passed in (`registeredDomainOf`);
   without it a different host is named but never called "a different
   site".
 - **Eight-cell strip**: severities from `lib/domain/signal-signature.ts` in
@@ -292,7 +300,20 @@ tests/
   payload. The browser never decodes the payload; it receives a
   `SharedView` whose `snapshot` is null unless verified. A signed Safe
   look-alike's preview leads with "Look-alike of <brand>", never "Safe"
-  (`shareHeadline`). The signed check time is `metadata.checkedAt`, which a
+  (`shareHeadline`). The payload signs `basis` too: the four facts the
+  instruction is worded from (`getVerdictBasis`,
+  `lib/domain/verdict-basis.ts`: confidence label, nothing scored, partial
+  coverage, a confirmed reputation hit), never the wording, so
+  `getSharedGuidance` gives the band, metadata, and card the instruction
+  the sender's band showed ("Looks safe to open.", "… it's a known
+  threat."; `tests/unit/share-parity.test.ts` checks every verdict). A
+  payload signed before it (or with a malformed basis), including a
+  history entry saved before it and shared again, keeps the hedged forms.
+  One deliberate difference: a sender whose link parser failed saw
+  "Unconfirmed"; the recipient gets the server's own anatomy instead. The
+  shared band drops a summary that only repeats its instruction
+  (`shouldShowSharedSummary`: "No check flagged this link." under "Looks
+  safe to open."). The signed check time is `metadata.checkedAt`, which a
   cache hit keeps from the original scan. Spaces in `?shared=` are restored
   to "+" before verifying (`normalizeSharedPayload`). Share with no `sig`
   copies the link with a distinct "isn't verified" toast. A signed result

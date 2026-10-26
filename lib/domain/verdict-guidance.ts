@@ -1,8 +1,13 @@
 import { capitalize } from "@/lib/domain/copy";
 import { describeLimitedChecks, getLimitedChecks } from "@/lib/domain/coverage";
-import type { AnalysisResult, Verdict } from "@/lib/domain/types";
-import { hasConfirmedReputationHit } from "@/lib/domain/reputation";
+import type {
+  AnalysisResult,
+  SharedSnapshot,
+  Verdict,
+  VerdictBasis,
+} from "@/lib/domain/types";
 import { isLegacySignalRecord } from "@/lib/domain/signal-signature";
+import { evidenceTimeOf, getVerdictBasis } from "@/lib/domain/verdict-basis";
 
 /**
  * Pure presentation logic for a finished verdict: the one-line instruction,
@@ -12,7 +17,11 @@ import { isLegacySignalRecord } from "@/lib/domain/signal-signature";
  */
 
 type GuidanceInput = Pick<AnalysisResult, "verdict" | "threatInfo"> & {
-  metadata?: Pick<AnalysisResult["metadata"], "partialFailure"> | null;
+  /** `checkedAt`/`completedAt` date the evidence (`getVerdictBasis`). */
+  metadata?:
+    | (Pick<AnalysisResult["metadata"], "partialFailure"> &
+        Partial<Pick<AnalysisResult["metadata"], "checkedAt" | "completedAt">>)
+    | null;
   /** Optional: shared snapshots and legacy records carry no signals. */
   signals?: AnalysisResult["signals"] | null;
   /** When present, the announcement names the host it is about. */
@@ -43,7 +52,21 @@ type GuidanceInput = Pick<AnalysisResult, "verdict" | "threatInfo"> & {
    * with no anatomy line (the live region) append the ownership sentence.
    */
   registeredDomain?: string | null;
+  /**
+   * A verified shared snapshot's signed basis (`SharedSnapshot.basis`),
+   * standing in for the threatInfo, metadata, and signals a snapshot
+   * doesn't carry. Absent for a result: its basis is read from the result
+   * itself (`getVerdictBasis`), so the two word the instruction the same.
+   */
+  basis?: VerdictBasis | null;
 };
+
+/** The facts the instruction is worded from (`getVerdictBasis`). */
+function basisOf(
+  result: Pick<GuidanceInput, "threatInfo" | "metadata" | "signals" | "basis">,
+): VerdictBasis {
+  return result.basis ?? getVerdictBasis(result);
+}
 
 const VERDICTS: readonly Verdict[] = [
   "safe",
@@ -150,10 +173,12 @@ export function shareHeadline(
  * Whether we may say no check flagged the link: only when the verdict
  * engine scored nothing against it. A Safe verdict can still carry minor
  * findings (one VirusTotal engine, a few structure points), and a shared
- * snapshot carries no evidence to say either way.
+ * snapshot without a basis carries no evidence to say either way.
  */
-function nothingFlagged(result: Pick<GuidanceInput, "threatInfo">): boolean {
-  return Boolean(result.threatInfo && !result.threatInfo.hasPositiveEvidence);
+function nothingFlagged(
+  result: Pick<GuidanceInput, "threatInfo" | "basis">,
+): boolean {
+  return basisOf(result).clean;
 }
 
 /**
@@ -166,7 +191,7 @@ function nothingFlagged(result: Pick<GuidanceInput, "threatInfo">): boolean {
 export function getUnderlyingVerdictNote(
   result: Pick<
     GuidanceInput,
-    "verdict" | "impersonates" | "addressUnchecked" | "threatInfo"
+    "verdict" | "impersonates" | "addressUnchecked" | "threatInfo" | "basis"
   >,
 ): string | null {
   if (!isLookAlikeSafe(result) && !isUncheckedSafe(result)) {
@@ -196,18 +221,15 @@ export function ownershipSentence(
 /**
  * A Safe verdict we cannot fully stand behind: confidence below high, a
  * check that failed or only partly finished, or one with minor warning
- * signs.
+ * signs (or a shared snapshot with no basis to say otherwise).
  */
 export function isProvisionalSafe(result: GuidanceInput): boolean {
   if (result.verdict !== "safe") {
     return false;
   }
 
-  return (
-    result.threatInfo?.confidenceLabel !== "high" ||
-    Boolean(result.threatInfo?.hasPositiveEvidence) ||
-    Boolean(result.metadata?.partialFailure)
-  );
+  const basis = basisOf(result);
+  return basis.confidence !== "high" || !basis.clean || basis.partial;
 }
 
 export function getVerdictGuidance(result: GuidanceInput): VerdictGuidance {
@@ -228,10 +250,9 @@ function getInstruction(
       // Critical can come from local heuristics alone; "known threat" is
       // only true when a reputation source confirmed it.
       return {
-        imperative:
-          result.signals && hasConfirmedReputationHit(result.signals)
-            ? "Don't open this link — it's a known threat."
-            : "Don't open this link.",
+        imperative: basisOf(result).confirmed
+          ? "Don't open this link — it's a known threat."
+          : "Don't open this link.",
         showScore: true,
       };
     case "malicious":
@@ -281,6 +302,27 @@ function getInstruction(
     default:
       return { imperative: "The scan failed — try again.", showScore: false };
   }
+}
+
+/**
+ * The guidance for a verified shared snapshot: its verdict and the basis
+ * the server signed with it, plus the look-alike from Scrutinix's own
+ * anatomy of the link. The shared band, the page's metadata, and the share
+ * card all take their instruction from here, so a recipient reads what the
+ * sender's band said. A snapshot signed before the basis existed keeps the
+ * hedged forms ("Probably safe — still check who sent it.", a plain
+ * "Don't open this link."). Call it only with a verified snapshot.
+ */
+export function getSharedGuidance(
+  snapshot: Pick<SharedSnapshot, "verdict" | "basis">,
+  impersonates: string | null,
+): VerdictGuidance {
+  return getVerdictGuidance({
+    verdict: snapshot.verdict,
+    threatInfo: null,
+    basis: snapshot.basis ?? null,
+    impersonates,
+  });
 }
 
 /** Why an "Unconfirmed" Safe carries no score or confidence on its band. */
@@ -408,6 +450,36 @@ export function shouldShowVerdictSummary(
 }
 
 /**
+ * A Safe result's summary when the engine scored nothing and every check
+ * finished in full (`buildSummary` in `lib/domain/verdict.ts`).
+ */
+export const NOTHING_FLAGGED_SUMMARY = "No check flagged this link.";
+
+/**
+ * Whether a verified shared band prints the snapshot's summary. With no
+ * evidence beneath it, it is the one sentence a recipient gets on why, so
+ * it shows, except where it only repeats the instruction: under "Looks
+ * safe to open.", "No check flagged this link." says it again, and the
+ * sender's band left it out too (`shouldShowVerdictSummary`). "…, but some
+ * checks were limited." adds something, so it stays.
+ */
+export function shouldShowSharedSummary(
+  snapshot: Pick<SharedSnapshot, "verdict" | "summary" | "basis">,
+  impersonates: string | null,
+): boolean {
+  if (!snapshot.summary) return false;
+  const saysLooksSafe =
+    snapshot.verdict === "safe" &&
+    !impersonates &&
+    !isProvisionalSafe({
+      verdict: snapshot.verdict,
+      threatInfo: null,
+      basis: snapshot.basis ?? null,
+    });
+  return !(saysLooksSafe && snapshot.summary === NOTHING_FLAGGED_SUMMARY);
+}
+
+/**
  * One sentence naming the checks that limited coverage, e.g. "VirusTotal
  * didn't finish; TLS Certificate couldn't be fully verified." Built from
  * the same `getLimitedChecks` list the verdict summary's "some checks were
@@ -416,22 +488,24 @@ export function shouldShowVerdictSummary(
  * records get no caveat either: their checks finished but were never
  * stored (the sanitizer fills each as a "missing" error), and the legacy
  * notice beside the result says exactly that. A stale
- * VirusTotal analysis is aged at the scan's completion time, so a reopened
- * result says what its verdict was built on.
+ * VirusTotal analysis is aged at the result's check time (`evidenceTimeOf`),
+ * the clock its verdict, basis, and Summary use, so a reopened result says
+ * what its verdict was built on.
  */
 export function getCoverageCaveat(
   result: Pick<AnalysisResult, "verdict" | "signals"> & {
-    metadata?: Pick<AnalysisResult["metadata"], "completedAt"> | null;
+    metadata?: Partial<
+      Pick<AnalysisResult["metadata"], "checkedAt" | "completedAt">
+    > | null;
   },
 ): string | null {
   if (result.verdict === "error" || isLegacySignalRecord(result.signals)) {
     return null;
   }
 
-  const completedAt = Date.parse(result.metadata?.completedAt ?? "");
   const checks = getLimitedChecks(
     result.signals,
-    Number.isNaN(completedAt) ? Date.now() : completedAt,
+    evidenceTimeOf(result.metadata ?? {}) ?? Date.now(),
   ).filter(
     // Unknown's summary already says the site didn't respond.
     (check) => !(result.verdict === "unknown" && check.kind === "unreachable"),

@@ -1299,6 +1299,70 @@ describe("buildThreatAssessment", () => {
     expect(result.verdict).toBe("suspicious");
     expect(result.threatInfo?.reasons.join(" ")).toMatch(/phishing setup/);
   });
+
+  it("judges every age as of the evidence time it is given", () => {
+    // A cache hit re-derives the verdict at the original check time, so
+    // it reads exactly as the scan it repeats.
+    const DAY = 24 * 60 * 60 * 1000;
+    const checkedAt = Date.parse("2026-10-06T09:00:00.000Z");
+    const signals = createPendingSignalResults();
+    withVirusTotal(signals, {
+      harmless: 40,
+      undetected: 20,
+      lastAnalysisDate: new Date(checkedAt - 29 * DAY).toISOString(),
+    });
+    signals.whois = {
+      status: "success",
+      error: null,
+      durationMs: 12,
+      data: {
+        subjectType: "domain",
+        available: true,
+        registrar: "Example Registrar",
+        registeredAt: new Date(checkedAt - 10 * DAY).toISOString(),
+        updatedAt: null,
+        expiresAt: null,
+        ageDays: 10,
+        country: null,
+        handle: null,
+        rdapUrl: "https://rdap.example.com/domain/new.example",
+        observations: [],
+      },
+    };
+    signals.ssl = {
+      status: "success",
+      error: null,
+      durationMs: 12,
+      data: {
+        protocol: "TLSv1.3",
+        available: true,
+        validationState: "trusted",
+        authorized: true,
+        authorizationError: null,
+        issuer: "Example CA",
+        subject: "new.example",
+        validFrom: new Date(checkedAt - 2 * DAY).toISOString(),
+        validTo: new Date(checkedAt + 88 * DAY).toISOString(),
+        daysRemaining: 88,
+        selfSigned: false,
+        fingerprint256: "abc",
+        observations: [],
+      },
+    };
+
+    const asChecked = buildThreatAssessment(signals, checkedAt);
+    expect(asChecked.threatInfo?.reasons.join(" ")).toMatch(/phishing setup/);
+    expect(asChecked.threatInfo?.limitations.join(" ")).not.toMatch(
+      /VirusTotal analysis from/,
+    );
+    // The same evidence judged 6 days later: the analysis has gone stale
+    // and the certificate (8 days old) is no longer brand-new.
+    const later = buildThreatAssessment(signals, checkedAt + 6 * DAY);
+    expect(later.threatInfo?.reasons.join(" ")).not.toMatch(/phishing setup/);
+    expect(later.threatInfo?.limitations.join(" ")).toMatch(
+      /VirusTotal analysis from 35 days ago/,
+    );
+  });
 });
 
 describe("verdict copy", () => {

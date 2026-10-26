@@ -20,11 +20,16 @@ import {
   isProvisionalSafe,
   ownershipSentence,
   shareHeadline,
+  NOTHING_FLAGGED_SUMMARY,
+  shouldShowSharedSummary,
   shouldShowVerdictSummary,
   verdictWord,
 } from "@/lib/domain/verdict-guidance";
 import { buildThreatAssessment } from "@/lib/domain/verdict";
-import { fixtureSignals } from "@/tests/fixtures/scenario-signals";
+import {
+  fixtureSignals,
+  heuristicCriticalSignals,
+} from "@/tests/fixtures/scenario-signals";
 
 function completeSignals(): SignalResults {
   const signals = createPendingSignalResults();
@@ -283,6 +288,17 @@ describe("getCoverageCaveat", () => {
     } finally {
       vi.useRealTimers();
     }
+    // A cache hit served later keeps the original check time: the
+    // analysis is aged at `checkedAt`, as the verdict and its basis are.
+    const cacheHit = buildResult("safe", {
+      signals: withAnalysisDate(daysBefore(29)),
+    });
+    cacheHit.metadata = {
+      ...cacheHit.metadata,
+      checkedAt: cacheHit.metadata.completedAt,
+      completedAt: new Date(completedAt + 2 * 86_400_000).toISOString(),
+    };
+    expect(getCoverageCaveat(cacheHit)).toBeNull();
   });
 
   it("stays silent for Error, whose verdict line already says it failed", () => {
@@ -293,44 +309,6 @@ describe("getCoverageCaveat", () => {
     ).toBeNull();
   });
 });
-
-/** Critical from local heuristics alone: no reputation source objected. */
-async function heuristicCriticalSignals(): Promise<SignalResults> {
-  const signals = await fixtureSignals("example.com");
-  const ml = signals.mlEnsemble.data;
-  if (ml) {
-    ml.consensusLabel = "malicious";
-    ml.consensusScore = 0.98;
-    ml.reasons = ["The link imitates a bank sign-in page."];
-  }
-  if (signals.whois.data) signals.whois.data.ageDays = 3;
-  if (signals.ssl.data) {
-    signals.ssl.data.validationState = "invalid";
-    signals.ssl.data.validFrom = new Date(
-      Date.now() - 86_400_000,
-    ).toISOString();
-  }
-  if (signals.dns.data) {
-    signals.dns.data.anomalies = [
-      "The hostname uses punycode, which can hide a look-alike name.",
-      "No mail records exist for a domain that asks for logins.",
-    ];
-  }
-  if (signals.redirectChain.data) {
-    signals.redirectChain.data.content = {
-      title: "Sign in",
-      crossOriginFormHosts: ["collect.example"],
-      crossOriginPasswordFormHosts: ["collect.example"],
-      passwordInputCount: 1,
-      iframeCount: 0,
-      hiddenIframeCount: 0,
-      obfuscationHints: ["eval", "atob"],
-      metaRefreshTarget: null,
-    };
-  }
-  if (signals.virusTotal.data) signals.virusTotal.data.harmless = 10;
-  return signals;
-}
 
 function resultFrom(signals: SignalResults): AnalysisResult {
   const { verdict, threatInfo } = buildThreatAssessment(signals);
@@ -479,6 +457,49 @@ describe("shouldShowVerdictSummary", () => {
     expect(result.verdict).toBe("safe");
     expect(result.threatInfo?.summary).toBe("No check flagged this link.");
     expect(shouldShowVerdictSummary(result)).toBe(false);
+  });
+});
+
+describe("shouldShowSharedSummary", () => {
+  const clean = {
+    confidence: "high",
+    clean: true,
+    partial: false,
+    confirmed: false,
+  } as const;
+
+  it("drops only the clean summary under an unhedged Safe", async () => {
+    // The engine's own clean summary is the one it drops.
+    const result = resultFrom(await fixtureSignals("example.com"));
+    expect(result.threatInfo?.summary).toBe(NOTHING_FLAGGED_SUMMARY);
+    const safe = {
+      verdict: "safe" as const,
+      summary: NOTHING_FLAGGED_SUMMARY,
+      basis: clean,
+    };
+    expect(shouldShowSharedSummary(safe, null)).toBe(false);
+    // Anything the instruction doesn't already say stays.
+    expect(shouldShowSharedSummary(safe, "paypal.com")).toBe(true);
+    expect(
+      shouldShowSharedSummary(
+        {
+          ...safe,
+          summary: "No check flagged this link, but some checks were limited.",
+        },
+        null,
+      ),
+    ).toBe(true);
+    for (const basis of [
+      undefined,
+      { ...clean, confidence: "moderate" as const },
+      { ...clean, partial: true },
+    ]) {
+      expect(shouldShowSharedSummary({ ...safe, basis }, null)).toBe(true);
+    }
+    expect(shouldShowSharedSummary({ ...safe, verdict: "unknown" }, null)).toBe(
+      true,
+    );
+    expect(shouldShowSharedSummary({ ...safe, summary: "" }, null)).toBe(false);
   });
 });
 

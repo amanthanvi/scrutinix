@@ -86,9 +86,11 @@ interface SignalStripProps {
   streaming: boolean;
   /**
    * What a cell leads to: the Summary question that cites the check, or
-   * the check's evidence row (Full).
+   * the check's evidence row (Full). An Error result's rows hold no
+   * evidence ("This check could not be completed."), so a cell only moves
+   * to its row: `"status-row"`.
    */
-  leadsTo?: "question" | "row";
+  leadsTo?: "question" | "row" | "status-row";
   /** Move focus to the question or row for this signal. */
   onActivate: (name: SignalName) => void;
 }
@@ -156,7 +158,9 @@ export function SignalStrip({
       <span id="sx-strip-hint" className="sr-only">
         {leadsTo === "question"
           ? "Each check moves to the question it answers below."
-          : "Each check opens its evidence below."}
+          : leadsTo === "status-row"
+            ? "Each check moves to its row below."
+            : "Each check opens its evidence below."}
       </span>
       {signalNames.map((name, index) => {
         const severity = signature[index] ?? "pending";

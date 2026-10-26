@@ -342,6 +342,64 @@ describe("VerdictBand", () => {
     expect(screen.queryByRole("meter")).toBeNull();
   });
 
+  it("leaves out a shared summary that only repeats the instruction, as the sender's band did", () => {
+    const clean = {
+      confidence: "high",
+      clean: true,
+      partial: false,
+      confirmed: false,
+    } as const;
+    const safe = {
+      verdict: "safe" as const,
+      url: "https://example.com/",
+      summary: "No check flagged this link.",
+      capturedAt: "2026-10-06T00:00:00.000Z",
+    };
+    const { rerender } = render(
+      <VerdictBand
+        result={null}
+        isStreaming={false}
+        sharedSnapshot={{ ...safe, basis: clean }}
+      />,
+    );
+    expect(screen.getByText("Looks safe to open.")).toBeTruthy();
+    expect(screen.queryByText("No check flagged this link.")).toBeNull();
+
+    // A summary that adds something still shows under the same instruction.
+    const limited = "No check flagged this link, but some checks were limited.";
+    rerender(
+      <VerdictBand
+        result={null}
+        isStreaming={false}
+        sharedSnapshot={{ ...safe, summary: limited, basis: clean }}
+      />,
+    );
+    expect(screen.getByText("Looks safe to open.")).toBeTruthy();
+    expect(screen.getByText(limited)).toBeTruthy();
+
+    // Under the hedge (signed before the basis) and on a look-alike, the
+    // summary says what the instruction doesn't.
+    rerender(
+      <VerdictBand result={null} isStreaming={false} sharedSnapshot={safe} />,
+    );
+    expect(
+      screen.getByText("Probably safe — still check who sent it."),
+    ).toBeTruthy();
+    expect(screen.getByText("No check flagged this link.")).toBeTruthy();
+    rerender(
+      <VerdictBand
+        result={null}
+        isStreaming={false}
+        sharedSnapshot={{ ...safe, basis: clean }}
+        impersonates="paypal.com"
+      />,
+    );
+    expect(
+      screen.getByText("Don't sign in or enter details here."),
+    ).toBeTruthy();
+    expect(screen.getByText("No check flagged this link.")).toBeTruthy();
+  });
+
   it("dates a shared snapshot with its year, in UTC", () => {
     // A check from another year must not read as this year's.
     expect(formatSnapshotTime("2025-12-31T23:30:00.000Z")).toBe(

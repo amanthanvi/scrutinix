@@ -279,11 +279,12 @@ export function ResultsSection() {
     (scan.state.isStreaming ||
       signalNames.some((name) => signals[name].status !== "pending"));
   // Summary answers five questions. A failed scan has nothing to answer
-  // with, so it keeps its eight rows; Full always shows the rows.
-  const showQuestions =
-    hasSignalActivity &&
-    viewMode === "summary" &&
-    !(active?.verdict === "error");
+  // with, so it has one view, its eight rows, and no Summary/Full switch:
+  // the switch never claims a view that isn't shown. The person's choice
+  // is kept for the next result.
+  const hasSummary = active?.verdict !== "error";
+  const shownView = hasSummary ? viewMode : "full";
+  const showQuestions = hasSignalActivity && shownView === "summary";
   // One clock for every relative age, in Summary and Full: a finished
   // result's own check time, or the server's start time while a scan
   // streams, so ages don't jump when the verdict lands.
@@ -404,56 +405,63 @@ export function ResultsSection() {
               aria-labelledby="sx-evidence-heading"
               className="mt-10 flex flex-col sm:mt-14"
             >
-              <div className="flex flex-wrap items-end justify-between gap-x-4 border-b border-[var(--sx-text)]">
+              {/* min-h-11 holds the switch's height, so the rule stays put
+                  when a result without a Summary draws no switch. */}
+              <div className="flex min-h-11 flex-wrap items-end justify-between gap-x-4 border-b border-[var(--sx-text)]">
                 <h3
                   id="sx-evidence-heading"
                   className="sx-section-title pb-3 sm:pb-3.5"
                 >
                   Evidence
                 </h3>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={viewMode === "full"}
-                  onClick={() =>
-                    setViewMode(viewMode === "summary" ? "full" : "summary")
-                  }
-                  className="text-body -mb-px inline-flex min-h-11 items-stretch gap-6 font-medium"
-                >
-                  {(
-                    [
-                      ["summary", "Summary"],
-                      ["full", "Full"],
-                    ] as const
-                  ).map(([mode, label]) => (
-                    <Fragment key={mode}>
-                      {mode === "full" ? " " : null}
-                      <span
-                        data-selected={viewMode === mode}
-                        className={cn(
-                          "sx-segment inline-flex min-w-11 items-center justify-center border-b-2 transition-colors",
-                          viewMode === mode
-                            ? "border-[var(--sx-text)] text-[var(--sx-text)]"
-                            : "border-transparent text-[var(--sx-text-soft)] hover:text-[var(--sx-text)]",
-                        )}
-                      >
-                        {label}
-                      </span>
-                    </Fragment>
-                  ))}
-                  {/* Name stays "Summary Full …": visible text first (WCAG 2.5.3). */}
-                  <span className="sr-only">{" signal list"}</span>
-                </button>
+                {hasSummary ? (
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={viewMode === "full"}
+                    onClick={() =>
+                      setViewMode(viewMode === "summary" ? "full" : "summary")
+                    }
+                    className="text-body -mb-px inline-flex min-h-11 items-stretch gap-6 font-medium"
+                  >
+                    {(
+                      [
+                        ["summary", "Summary"],
+                        ["full", "Full"],
+                      ] as const
+                    ).map(([mode, label]) => (
+                      <Fragment key={mode}>
+                        {mode === "full" ? " " : null}
+                        <span
+                          data-selected={viewMode === mode}
+                          className={cn(
+                            "sx-segment inline-flex min-w-11 items-center justify-center border-b-2 transition-colors",
+                            viewMode === mode
+                              ? "border-[var(--sx-text)] text-[var(--sx-text)]"
+                              : "border-transparent text-[var(--sx-text-soft)] hover:text-[var(--sx-text)]",
+                          )}
+                        >
+                          {label}
+                        </span>
+                      </Fragment>
+                    ))}
+                    {/* Name stays "Summary Full …": visible text first (WCAG 2.5.3). */}
+                    <span className="sr-only">{" signal list"}</span>
+                  </button>
+                ) : null}
               </div>
 
               {/* The strip heads the evidence as its index: each numbered
-                  cell leads to the question citing it (or its row in Full). */}
+                  cell leads to the question citing it (or its row in Full,
+                  and on an Error result, whose rows hold no evidence). */}
               <div className="sx-strip-index">
                 <SignalStrip
                   signals={signals}
                   scored={scored}
                   streaming={scan.state.isStreaming && !active}
-                  leadsTo={questions ? "question" : "row"}
+                  leadsTo={
+                    questions ? "question" : hasSummary ? "row" : "status-row"
+                  }
                   onActivate={activateSignal}
                 />
                 {active ? (

@@ -32,6 +32,7 @@ import type {
 } from "@/lib/domain/types";
 import { signalLabels, signalNames } from "@/lib/domain/types";
 import { threatScoreToVerdict } from "@/lib/domain/score-bands";
+import { NOTHING_FLAGGED_SUMMARY } from "@/lib/domain/verdict-guidance";
 
 export { hasConfirmedReputationHit } from "@/lib/domain/reputation";
 
@@ -55,9 +56,12 @@ interface Contribution {
 /** What a scorer returns; `collectContributions` tags it with its signal. */
 type ScoredItem = Omit<Contribution, "signal">;
 
-/** One scorer per signal, so every contribution knows its source check. */
+/**
+ * One scorer per signal, so every contribution knows its source check.
+ * `asOf` is when the evidence was gathered; only ages read it.
+ */
 const SCORERS: ReadonlyArray<
-  readonly [SignalName, (signals: SignalResults) => ScoredItem[]]
+  readonly [SignalName, (signals: SignalResults, asOf: number) => ScoredItem[]]
 > = [
   ["virusTotal", scoreVirusTotal],
   ["googleSafeBrowsing", scoreGoogleSafeBrowsing],
@@ -69,9 +73,12 @@ const SCORERS: ReadonlyArray<
   ["whois", scoreWhois],
 ];
 
-function collectContributions(signals: SignalResults): Contribution[] {
+function collectContributions(
+  signals: SignalResults,
+  asOf: number = Date.now(),
+): Contribution[] {
   return SCORERS.flatMap(([signal, score]) =>
-    score(signals).map((item) => ({ ...item, signal })),
+    score(signals, asOf).map((item) => ({ ...item, signal })),
   );
 }
 
@@ -152,8 +159,16 @@ export function withScoredSignals<
   };
 }
 
+/**
+ * The verdict and its threat info. `asOf` is when the evidence was
+ * gathered (default now): a cache hit passes the original scan's check
+ * time, so a VirusTotal analysis or a certificate is as old as it was then,
+ * and the verdict matches the band's basis, caveat, and Summary
+ * (`evidenceTimeOf`).
+ */
 export function buildThreatAssessment(
   signals: SignalResults,
+  asOf: number = Date.now(),
 ): Pick<AnalysisResult, "verdict" | "threatInfo"> {
   const statuses = Object.values(signals);
   const successfulSignals = statuses.filter(
@@ -174,9 +189,9 @@ export function buildThreatAssessment(
     };
   }
 
-  const contributions = collectContributions(signals);
+  const contributions = collectContributions(signals, asOf);
 
-  applyExculpatoryEvidence(signals, contributions);
+  applyExculpatoryEvidence(signals, contributions, asOf);
 
   const score = clamp(
     contributions.reduce((total, item) => total + item.score, 0),
@@ -193,11 +208,11 @@ export function buildThreatAssessment(
       : bandedVerdict;
   const reasons = [...new Set(contributions.map((item) => item.reason))];
   const categories = [...new Set(contributions.map((item) => item.category))];
-  const limitations = buildLimitations(signals);
+  const limitations = buildLimitations(signals, asOf);
   // The "some checks were limited" claim and the coverage caveat come from
   // this one list; `limitations` keeps the detailed strings for Details and
   // the confidence math.
-  const limitedCoverage = getLimitedChecks(signals).length > 0;
+  const limitedCoverage = getLimitedChecks(signals, asOf).length > 0;
   const confidence = calculateConfidence({
     signals,
     verdict,
@@ -207,6 +222,7 @@ export function buildThreatAssessment(
     skippedSignals,
     failedSignals,
     limitations,
+    asOf,
   });
 
   const confidenceLabel = scoreToConfidenceLabel(confidence);
@@ -223,7 +239,7 @@ export function buildThreatAssessment(
     score,
     summary: buildSummary(verdict, contributions, reasons, limitedCoverage),
     categories,
-    reasons: reasons.length ? reasons : ["No check flagged this link."],
+    reasons: reasons.length ? reasons : [NOTHING_FLAGGED_SUMMARY],
     recommendations: buildRecommendations(verdict, {
       limitedCoverage,
       // Same rule as the "Probably safe" imperative, so the first "What
@@ -268,6 +284,7 @@ function isUnreachable(signals: SignalResults): boolean {
 function applyExculpatoryEvidence(
   signals: SignalResults,
   contributions: Contribution[],
+  asOf: number,
 ) {
   const maxPositive = contributions.reduce(
     (max, item) => Math.max(max, item.score),
@@ -278,7 +295,7 @@ function applyExculpatoryEvidence(
   }
 
   const vt = signals.virusTotal;
-  const vtAgeDays = vtAnalysisAgeDays(signals);
+  const vtAgeDays = vtAnalysisAgeDays(signals, asOf);
   if (
     vt.status === "success" &&
     vt.data &&
@@ -468,7 +485,7 @@ function scoreMlEnsemble(signals: SignalResults): ScoredItem[] {
   return contributions;
 }
 
-function scoreSsl(signals: SignalResults): ScoredItem[] {
+function scoreSsl(signals: SignalResults, asOf: number): ScoredItem[] {
   const signal = signals.ssl;
   if (signal.status !== "success" || !signal.data) {
     return [];
@@ -510,7 +527,7 @@ function scoreSsl(signals: SignalResults): ScoredItem[] {
     const issuedAt = new Date(validFrom).getTime();
     const certAgeDays = Number.isNaN(issuedAt)
       ? null
-      : Math.floor((Date.now() - issuedAt) / (1000 * 60 * 60 * 24));
+      : Math.floor((asOf - issuedAt) / (1000 * 60 * 60 * 24));
     if (
       certAgeDays !== null &&
       certAgeDays >= 0 &&
@@ -733,7 +750,7 @@ function scoreWhois(signals: SignalResults): ScoredItem[] {
   return contributions;
 }
 
-function buildLimitations(signals: SignalResults) {
+function buildLimitations(signals: SignalResults, asOf: number) {
   const limitations: string[] = [];
 
   for (const signalName of signalNames) {
@@ -804,7 +821,7 @@ function buildLimitations(signals: SignalResults) {
     }
   }
 
-  const vtAgeDays = vtAnalysisAgeDays(signals);
+  const vtAgeDays = vtAnalysisAgeDays(signals, asOf);
   if (vtAgeDays !== null && vtAgeDays > VT_STALE_ANALYSIS_DAYS) {
     limitations.push(
       `${formatSignalName("virusTotal")}: The verdict draws on a VirusTotal analysis from ${countOf(vtAgeDays, "day")} ago.`,
@@ -880,6 +897,7 @@ function calculateConfidence({
   skippedSignals,
   failedSignals,
   limitations,
+  asOf,
 }: {
   signals: SignalResults;
   verdict: Verdict;
@@ -889,6 +907,7 @@ function calculateConfidence({
   skippedSignals: number;
   failedSignals: number;
   limitations: string[];
+  asOf: number;
 }) {
   const cleanHighConfidenceSources = countCleanHighConfidenceSources(signals);
   const positiveHighConfidenceSources =
@@ -956,7 +975,7 @@ function calculateConfidence({
     );
   }
 
-  const vtAgeDays = vtAnalysisAgeDays(signals);
+  const vtAgeDays = vtAnalysisAgeDays(signals, asOf);
   if (
     effectiveVerdict === "safe" &&
     vtAgeDays !== null &&
@@ -1055,7 +1074,7 @@ function buildSummary(
 
     return limitedCoverage
       ? "No check flagged this link, but some checks were limited."
-      : "No check flagged this link.";
+      : NOTHING_FLAGGED_SUMMARY;
   }
 
   if (verdict === "error") {

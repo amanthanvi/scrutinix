@@ -16,7 +16,10 @@ import { ResultsSection } from "@/components/scrutinix/results-section";
 import { ScanForm } from "@/components/scrutinix/scan-form";
 import { VERDICT_HEADING_ID } from "@/components/scrutinix/verdict-panel";
 import { sanitizeHistoryEntry } from "@/lib/domain/runtime-safety";
-import { encodeSharedSnapshot } from "@/lib/domain/signal-signature";
+import {
+  buildSharedSnapshot,
+  encodeSharedSnapshot,
+} from "@/lib/domain/signal-signature";
 import { buildThreatAssessment } from "@/lib/domain/verdict";
 import { resetEnvForTests } from "@/lib/config/env";
 import type { SharedView } from "@/lib/domain/signal-signature";
@@ -116,11 +119,17 @@ function scanNdjson(result: AnalysisResult) {
     .join("\n")}\n`;
 }
 
-function OpenStored({ result }: { result: AnalysisResult }) {
+function OpenStored({
+  result,
+  label = "open stored",
+}: {
+  result: AnalysisResult;
+  label?: string;
+}) {
   const { openStoredResult } = useAnalyzerRuntime();
   return (
     <button type="button" onClick={() => openStoredResult(result)}>
-      open stored
+      {label}
     </button>
   );
 }
@@ -1041,6 +1050,63 @@ describe("shared links and their signature", () => {
     });
     expect(screen.getByLabelText(/^scan result: malicious$/i)).toBeTruthy();
   });
+
+  it.each([
+    ["critical.scrutinix.test", "Don't open this link — it's a known threat."],
+    ["example.com", "Looks safe to open."],
+  ])(
+    "gives the recipient of %s the instruction the sender's band showed",
+    async (host, imperative) => {
+      const result = resultFrom(
+        host,
+        await fixtureSignals(host),
+        `https://${host}/login`,
+      );
+      const instruction = (band: HTMLElement) =>
+        band.querySelector(".sx-band-imperative")?.textContent;
+
+      // The sender's own band.
+      const sender = renderApp(<OpenStored result={result} />);
+      fireEvent.click(screen.getByRole("button", { name: "open stored" }));
+      await waitFor(() =>
+        expect(instruction(screen.getByLabelText(/^scan result: /i))).toBe(
+          imperative,
+        ),
+      );
+      sender.unmount();
+
+      // The share the server issues for it, opened by the recipient.
+      renderApp(undefined, {
+        payload: encodeSharedSnapshot(buildSharedSnapshot(result)),
+      });
+      const band = screen.getByLabelText(/^scan result: /i);
+      expect(band.textContent).toMatch(/Verified Scrutinix result/);
+      expect(instruction(band)).toBe(imperative);
+    },
+  );
+
+  it("keeps a snapshot signed before the basis existed hedged", () => {
+    for (const [verdict, hedged] of [
+      ["critical", "Don't open this link."],
+      ["safe", "Probably safe — still check who sent it."],
+    ] as const) {
+      const { unmount } = renderApp(undefined, {
+        payload: encodeSharedSnapshot({
+          verdict,
+          url: "https://example.com/login",
+          summary: "",
+          capturedAt: "2026-10-06T09:00:00.000Z",
+          signature: Array(8).fill("clear"),
+        }),
+      });
+      const band = screen.getByLabelText(/^scan result: /i);
+      expect(
+        band.querySelector(".sx-band-imperative")?.textContent,
+        verdict,
+      ).toBe(hedged);
+      unmount();
+    }
+  });
 });
 
 describe("ResultsSection focus and states", () => {
@@ -1145,6 +1211,70 @@ describe("ResultsSection focus and states", () => {
     expect(
       screen.getByRole("list", { name: "Signals" }).querySelectorAll("li"),
     ).toHaveLength(8);
+  });
+
+  it("draws no Summary/Full switch for an Error result and keeps the choice for the next", async () => {
+    const signals = createPendingSignalResults();
+    for (const name of signalNames) {
+      signals[name] = {
+        status: "error",
+        data: null,
+        error: "The provider timed out.",
+        durationMs: 0,
+      };
+    }
+    const failed = resultFrom("all-failed", signals, "https://down.example/");
+    expect(failed.verdict).toBe("error");
+    const safe = resultFrom("safe", cleanSignals(), "https://example.com/");
+    expect(safe.verdict).toBe("safe");
+    renderApp(
+      <>
+        <OpenStored result={failed} label="open error" />
+        <OpenStored result={safe} label="open safe" />
+      </>,
+    );
+    const viewSwitch = () =>
+      screen.queryByRole("switch", { name: /^Summary Full/ });
+
+    // One view, so no control: nothing claims Summary while rows show.
+    fireEvent.click(screen.getByRole("button", { name: "open error" }));
+    await screen.findByRole("heading", { level: 2, name: "Error" });
+    expect(viewSwitch()).toBeNull();
+    expect(screen.queryByRole("list", { name: "Questions" })).toBeNull();
+    expect(
+      screen.getByRole("list", { name: "Signals" }).querySelectorAll("li"),
+    ).toHaveLength(8);
+    // The strip leads to the rows it shows, and a cell focuses its row.
+    // They hold no evidence, so the hint promises a move, not an opening.
+    expect(document.getElementById("sx-strip-hint")?.textContent).toBe(
+      "Each check moves to its row below.",
+    );
+    const strip = screen.getByRole("toolbar", { name: "Checks" });
+    fireEvent.click(within(strip).getByRole("button", { name: /^Redirects:/ }));
+    await waitFor(() => {
+      expect(document.activeElement).toBe(
+        screen.getByLabelText(/^Redirect Chain:/, { selector: "li" }),
+      );
+    });
+
+    // The stored choice (Summary) is untouched for the next result.
+    fireEvent.click(screen.getByRole("button", { name: "open safe" }));
+    await screen.findByRole("list", { name: "Questions" });
+    expect(viewSwitch()?.getAttribute("aria-checked")).toBe("false");
+    expect(document.getElementById("sx-strip-hint")?.textContent).toBe(
+      "Each check moves to the question it answers below.",
+    );
+
+    // Full, then an Error, then back: Full is still the choice.
+    fireEvent.click(viewSwitch()!);
+    expect(viewSwitch()?.getAttribute("aria-checked")).toBe("true");
+    fireEvent.click(screen.getByRole("button", { name: "open error" }));
+    await screen.findByRole("heading", { level: 2, name: "Error" });
+    expect(viewSwitch()).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "open safe" }));
+    await screen.findByRole("list", { name: "Signals" });
+    expect(viewSwitch()?.getAttribute("aria-checked")).toBe("true");
+    expect(screen.queryByRole("list", { name: "Questions" })).toBeNull();
   });
 });
 

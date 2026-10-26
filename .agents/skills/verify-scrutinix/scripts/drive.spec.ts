@@ -446,10 +446,8 @@ test("single scan share and rescan", async ({ page }) => {
   await expect(
     sharedVerdict.getByText(/^Verified Scrutinix result · checked/),
   ).toBeVisible();
-  // A snapshot carries no score, so the instruction takes its hedged form.
-  await expect(
-    sharedVerdict.getByText("Probably safe — still check who sent it."),
-  ).toBeVisible();
+  // The instruction the sender's band showed, worded from the signed basis.
+  await expect(sharedVerdict.getByText("Looks safe to open.")).toBeVisible();
   await expect(
     sharedVerdict.getByRole("button", { name: "Run a fresh scan" }),
   ).toBeVisible();
@@ -726,7 +724,8 @@ test("link taken apart on paste, then a look-alike", async ({ page }) => {
 test("error and critical verdicts", async ({ page }) => {
   await gotoApp(page);
   // Every check fails: Error, no score, the eight rows instead of the
-  // questions, and the scan's reference stated once in the details.
+  // questions (and no Summary/Full switch: there is one view), and the
+  // scan's reference stated once in the details.
   const error = await scanSingle(
     page,
     "https://error.scrutinix.test/",
@@ -735,6 +734,7 @@ test("error and critical verdicts", async ({ page }) => {
   await expect(error.getByText("The scan failed — try again.")).toBeVisible();
   await expect(error.getByRole("meter")).toHaveCount(0);
   await expect(page.getByRole("list", { name: "Questions" })).toHaveCount(0);
+  await expect(page.getByRole("switch")).toHaveCount(0);
   await expect(
     page.getByRole("list", { name: "Signals" }).getByRole("listitem"),
   ).toHaveCount(8);
