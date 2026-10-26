@@ -114,21 +114,25 @@ export function getSignalSummary(
     case "ssl": {
       const d = data as SSLData;
       // Fixed plain sentences; the provider's own wording stays in Notes.
+      if (d.noHttps) {
+        return "This link never moves to HTTPS, so there's no certificate to check.";
+      }
       if (!d.available) {
         // Unavailable covers DNS failures and timeouts too: say what we
         // know (no answer), never that the site refused encryption.
-        return "We couldn't check the site's security certificate.";
+        return "We couldn't check the site's certificate.";
       }
 
       if (d.validationState === "trusted") {
-        return "The site's security certificate is valid.";
+        return "The site's certificate is valid.";
       }
 
       if (d.validationState === "warning") {
-        return "We couldn't fully verify the site's security certificate.";
+        return "We couldn't fully verify the site's certificate.";
       }
 
-      return "The site's security certificate isn't trusted.";
+      // The probe's plain words (`problem`); older results have none.
+      return d.problem ?? "The site's certificate isn't trusted.";
     }
     case "whois": {
       const d = data as WhoisData;
@@ -146,8 +150,9 @@ export function getSignalSummary(
         return "This link uses a raw IP address instead of a domain name.";
       }
 
+      // The name may not exist, or the lookup got no answer: Notes say which.
       if ((d.addresses?.length ?? 0) === 0 && (d.cnames?.length ?? 0) === 0) {
-        return "This address doesn't point to any server.";
+        return "We found no address for this name.";
       }
 
       return `${countOf(d.addresses?.length ?? 0, "address", "addresses")}, ${countOf(d.mx?.length ?? 0, "mail record")}.`;
@@ -285,10 +290,12 @@ export function getSignalDetailEntries(
         },
       ];
       if (d.transformerModel) {
-        // The model's score is its confidence in the label it chose.
+        // No percentage: the model's score is its distance from the bar
+        // it must clear (lib/server/ml/local-classifier.ts), not a
+        // calibrated certainty.
         entries.push({
           label: "Model reading",
-          value: `${plainModelLabel(d.transformerModel.label)} · ${Math.round((d.transformerModel.score ?? 0) * 100)}% sure`,
+          value: plainModelLabel(d.transformerModel.label),
         });
       }
       if (d.reasons?.length) {
@@ -336,6 +343,10 @@ export function getSignalDetailEntries(
     }
     case "ssl": {
       const d = data as SSLData;
+      // No certificate in the link's path: nothing to list beyond the row.
+      if (d.noHttps) {
+        return [];
+      }
       const entries: DetailEntry[] = [
         {
           label: "Validation",

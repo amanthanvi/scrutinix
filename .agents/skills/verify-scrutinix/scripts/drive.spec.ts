@@ -49,11 +49,32 @@ function scrollsSideways(page: Page) {
   );
 }
 
-/** The result's polite live region (the expected-site answer is another). */
+/** The result's polite live region. */
 function liveRegion(page: Page) {
   return page
     .getByRole("region", { name: "Results", exact: true })
     .locator("p[aria-live='polite']");
+}
+
+/**
+ * The page's status region: notifications, a link arriving from outside,
+ * and the expected-site answer are said here (toasts are muted).
+ */
+function statusRegion(page: Page) {
+  return page.locator("p[role='status']");
+}
+
+/** A notification as drawn (the status region holds the same words). */
+function toast(page: Page) {
+  return page.locator("[data-sonner-toast], [data-notice]");
+}
+
+/**
+ * The look-alike's owner sentence, drawn once and spoken once (the spoken
+ * copy is its own string, so getByText finds the sentence twice).
+ */
+function ownerSentence(scope: Page | ReturnType<Page["getByRole"]>) {
+  return scope.locator("p.sx-owner");
 }
 
 async function ogImagePath(page: Page): Promise<string> {
@@ -73,6 +94,9 @@ test("site chrome and theme", async ({ page }) => {
       name: "Is this link what it says it is?",
     }),
   ).toBeVisible();
+  await expect(page).toHaveTitle(
+    "Scrutinix — Is this link what it says it is?",
+  );
   // The empty history region exists but draws nothing.
   const history = page.getByRole("region", { name: "Scan history" });
   await expect(history).toBeAttached();
@@ -101,6 +125,11 @@ test("site chrome and theme", async ({ page }) => {
   await expect(page.getByRole("tab", { name: "Single" })).toBeFocused();
   await page.keyboard.press("ArrowRight");
   await expect(page.getByRole("tab", { name: "Batch" })).toBeFocused();
+  // Focus alone never switches the mode: Enter or Space (or a click) does.
+  await expect(page.getByRole("tab", { name: "Single" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
 
   const before = await toggle.getAttribute("aria-label");
   await toggle.click();
@@ -401,8 +430,9 @@ test("single scan share and rescan", async ({ page }) => {
   await saveDownload(jsonDownload, "scan.json");
   expect(readEvidence("scan.json")).toContain("https://example.com/");
   await expect(
-    page.getByText("Downloaded scan.json", { exact: true }),
+    toast(page).getByText("Downloaded scan.json", { exact: true }),
   ).toBeVisible();
+  await expect(statusRegion(page)).toHaveText("Downloaded scan.json.");
 
   // Re-scan asks the server again (an earlier smoke run may already have
   // cached example.com, so "cached" alone would not prove it ran).
@@ -424,10 +454,13 @@ test("single scan share and rescan", async ({ page }) => {
 
   // Share copies a link signed with the published e2e key launch sets.
   await page.getByRole("button", { name: "Share" }).click();
-  await expect(page.getByText("Link copied to clipboard")).toBeVisible();
+  await expect(toast(page).getByText("Link copied to clipboard")).toBeVisible();
   await expect(
-    page.getByText("It shows this result for 3 days after the check."),
+    toast(page).getByText("It shows this result for 3 days after the check."),
   ).toBeVisible();
+  await expect(statusRegion(page)).toHaveText(
+    "Link copied to clipboard. It shows this result for 3 days after the check.",
+  );
   const copied = await page.evaluate(() => navigator.clipboard.readText());
   const link = new URL(copied);
   expect(link.searchParams.get("shared")).toBeTruthy();
@@ -443,10 +476,8 @@ test("single scan share and rescan", async ({ page }) => {
   await expect(
     sharedVerdict.getByText(/^Verified Scrutinix result · checked/),
   ).toBeVisible();
-  // A snapshot carries no score, so the instruction takes its hedged form.
-  await expect(
-    sharedVerdict.getByText("Probably safe — still check who sent it."),
-  ).toBeVisible();
+  // The instruction the sender's band showed, worded from the signed basis.
+  await expect(sharedVerdict.getByText("Looks safe to open.")).toBeVisible();
   await expect(
     sharedVerdict.getByRole("button", { name: "Run a fresh scan" }),
   ).toBeVisible();
@@ -674,7 +705,10 @@ test("link taken apart on paste, then a look-alike", async ({ page }) => {
     "No. The link only spells out paypal.com.",
   );
   // The owner is stated once, by the anatomy, not again by the answer.
-  await expect(pasted.getByText(LOOK_ALIKE_OWNER)).toHaveCount(1);
+  await expect(ownerSentence(pasted)).toHaveCount(1);
+  await expect(statusRegion(page)).toHaveText(
+    "No. The link only spells out paypal.com.",
+  );
   await expected.fill("secure-login.xyz");
   await expect(pasted).toContainText("Matches secure-login.xyz.");
   await expected.fill("PayPal");
@@ -704,7 +738,8 @@ test("link taken apart on paste, then a look-alike", async ({ page }) => {
   ).toBeVisible();
   await expect(verdict.getByRole("meter")).toHaveCount(0);
   await expect(verdict.getByText(/High confidence/)).toHaveCount(0);
-  await expect(page.getByText(LOOK_ALIKE_OWNER, { exact: true })).toBeVisible();
+  await expect(ownerSentence(page)).toContainText(LOOK_ALIKE_OWNER);
+  await expect(ownerSentence(page)).toBeVisible();
   await page.getByText("How we reached this verdict", { exact: true }).click();
   await expect(
     page.getByText(
@@ -723,7 +758,8 @@ test("link taken apart on paste, then a look-alike", async ({ page }) => {
 test("error and critical verdicts", async ({ page }) => {
   await gotoApp(page);
   // Every check fails: Error, no score, the eight rows instead of the
-  // questions, and the scan's reference stated once in the details.
+  // questions (and no Summary/Full switch: there is one view), and the
+  // scan's reference stated once in the details.
   const error = await scanSingle(
     page,
     "https://error.scrutinix.test/",
@@ -731,7 +767,10 @@ test("error and critical verdicts", async ({ page }) => {
   );
   await expect(error.getByText("The scan failed — try again.")).toBeVisible();
   await expect(error.getByRole("meter")).toHaveCount(0);
+  // The score's place offers what the instruction says.
+  await expect(error.getByRole("button", { name: "Try again" })).toBeVisible();
   await expect(page.getByRole("list", { name: "Questions" })).toHaveCount(0);
+  await expect(page.getByRole("switch")).toHaveCount(0);
   await expect(
     page.getByRole("list", { name: "Signals" }).getByRole("listitem"),
   ).toHaveCount(8);
@@ -788,12 +827,13 @@ test("a long destination host stays on the page", async ({ page }) => {
 test("an address check that fails to load reads Unconfirmed", async ({
   page,
 }) => {
-  // Fail the lazily loaded link parser (tldts and its Public Suffix List).
+  // Fail the lazily loaded link parser (tldts and its Public Suffix List,
+  // found by one of its entries, kitakyushu.jp).
   let parserRequests = 0;
   await page.route("**/_next/static/chunks/**/*.js", async (route) => {
     const response = await route.fetch();
     const body = await response.text();
-    if (body.includes("getPublicSuffix")) {
+    if (body.includes("kitakyushu")) {
       parserRequests += 1;
       await route.abort("failed");
       return;
@@ -846,11 +886,16 @@ test("sharing to Scrutinix fills in the link and waits for Analyze", async ({
   );
   await waitForHydration(page);
   await expect(input).toHaveValue(link);
+  // Chromium keeps focus on Analyze; Safari with VoiceOver's page read
+  // moves it, so the arrival is also said once by the status region.
   await expect(analyze).toBeFocused();
   await expect(input).not.toBeFocused();
   await expect(
     page.getByRole("region", { name: "The link, taken apart" }),
   ).toContainText("scrutinix.test");
+  await expect(statusRegion(page)).toHaveText(
+    "Link filled in: malicious.scrutinix.test. Press Analyze to check it.",
+  );
   await page.waitForTimeout(QUIET_WINDOW_MS);
   expect(scans).toEqual([]);
   await expect(page.getByRole("region", { name: /scan result/i })).toHaveCount(
@@ -895,6 +940,33 @@ test("sharing to Scrutinix fills in the link and waits for Analyze", async ({
   await expect(page).not.toHaveURL(/[?&]url=/);
   await page.waitForTimeout(QUIET_WINDOW_MS);
   expect(scans).toHaveLength(1);
+
+  // A share with no link: home with only the flag, one quiet line under
+  // the form, the same sentence in a status region, and nothing scanned.
+  const note = "We didn't find a link to check in what you shared.";
+  await launchFromShareSheet(page, {
+    title: "Dinner plans",
+    text: "Call me when you get home.",
+  });
+  expect(new URL(page.url()).search).toBe("?nolink=1");
+  await waitForHydration(page);
+  await expect(input).toHaveValue("");
+  const noLinkLine = page.locator("p:not([role='status'])", { hasText: note });
+  await expect(noLinkLine).toBeVisible();
+  await expect(page.getByRole("status").filter({ hasText: note })).toHaveText(
+    note,
+  );
+  await expect(page.getByRole("alert").filter({ hasText: note })).toHaveCount(
+    0,
+  );
+  await page.waitForTimeout(QUIET_WINDOW_MS);
+  expect(scans).toHaveLength(1);
+  await capture(page, "share-target-no-link.png");
+  await fillSingle(page, "example.com");
+  await expect(noLinkLine).toHaveCount(0);
+  await expect(page.getByRole("status").filter({ hasText: note })).toHaveCount(
+    0,
+  );
 
   // Opened by hand, /share has nothing to receive and goes home.
   const opened = await page.request.get("/share", { maxRedirects: 0 });

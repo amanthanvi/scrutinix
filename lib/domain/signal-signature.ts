@@ -11,6 +11,7 @@ import {
   type SignalSignature,
 } from "@/lib/domain/schemas";
 import { getSignalSeverity, type Severity } from "@/lib/domain/signal-severity";
+import { getVerdictBasis } from "@/lib/domain/verdict-basis";
 
 /**
  * The eight-cell strip's data: one severity per signal in fixed
@@ -80,7 +81,11 @@ export function getResultSignature(
   );
 }
 
-/** What a Share link embeds: a point-in-time snapshot, never the payloads. */
+/**
+ * What a Share link embeds: a point-in-time snapshot, never the payloads.
+ * `basis` is the four facts the instruction is worded from, so a verified
+ * share reads the instruction the sender's band showed.
+ */
 export function buildSharedSnapshot(
   result: AnalysisResult,
   // When the evidence was gathered: a cache hit keeps its original time.
@@ -94,6 +99,7 @@ export function buildSharedSnapshot(
     summary: (result.threatInfo?.summary ?? "").slice(0, 600),
     capturedAt,
     signature: getResultSignature(result) ?? undefined,
+    basis: getVerdictBasis(result),
   };
 }
 

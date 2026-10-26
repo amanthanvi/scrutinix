@@ -1,6 +1,6 @@
 "use client";
 
-import { ClipboardPaste, CornerDownLeft } from "lucide-react";
+import { ClipboardPaste, CornerDownLeft } from "@/components/ui/icons";
 import { useRef, useSyncExternalStore } from "react";
 import { getToast } from "@/components/ui/lazy-toaster";
 
@@ -57,10 +57,8 @@ export function SingleInput({
 
   return (
     <div className="flex flex-col gap-3">
-      <label htmlFor="sx-url-input" className="sr-only">
-        URL to analyze
-      </label>
-
+      {/* Named by aria-label alone: a hidden <label> was a reading stop
+          of its own, then the field said the same words. */}
       <div className="sx-input-row flex flex-col gap-2.5 sm:flex-row">
         <div className="relative min-w-0 flex-1">
           <Input
@@ -124,7 +122,18 @@ export function SingleInput({
           variant={showingResult && !streaming ? "outline" : "primary"}
           className="h-[3.25rem] shrink-0 px-7 sm:h-14 sm:min-w-36"
         >
-          Analyze
+          {/* The label is semibold on ink and medium on outline; it holds
+              the semibold width in both and starts at the same place, so
+              neither the label, the button, nor the field beside it moves
+              when a verdict lands. */}
+          <span className="sx-slot text-left">
+            <span>Analyze</span>
+            <span
+              aria-hidden="true"
+              data-stand-in="Analyze"
+              className="sx-stand-in font-semibold"
+            />
+          </span>
           <CornerDownLeft aria-hidden="true" className="opacity-70" />
         </Button>
       </div>

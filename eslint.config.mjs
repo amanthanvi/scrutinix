@@ -62,6 +62,13 @@ const config = [
       "react-x/no-array-index-key": "off",
       "react-x/no-context-provider": "off",
       "react-x/no-use-context": "off",
+      // Safari drops list semantics from a list styled `list-style: none`
+      // (VoiceOver reads "group", with no count), so those lists say
+      // role="list" outright.
+      "jsx-a11y-x/no-redundant-roles": [
+        "error",
+        { nav: ["navigation"], ul: ["list"] },
+      ],
     },
   },
   {

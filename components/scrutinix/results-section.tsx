@@ -23,6 +23,7 @@ import {
   VerdictDetails,
 } from "@/components/scrutinix/verdict-panel";
 import { SIGNAL_COUNT } from "@/components/shared/scrutinix-types";
+import { ANNOUNCEMENT_MS } from "@/components/ui/announcer";
 import { Button } from "@/components/ui/button";
 import {
   getLoadedLinkParser,
@@ -30,17 +31,15 @@ import {
   warmLinkParser,
 } from "@/hooks/use-link-anatomy";
 import { downloadTextFile } from "@/lib/client/export";
-import { registrableDomainOf } from "@/lib/domain/link-anatomy";
 import {
   signalNames,
   type AnalysisResult,
   type SignalName,
   type SignalResults,
 } from "@/lib/domain/types";
-import { capitalize } from "@/lib/domain/copy";
+import { capitalize, countOf } from "@/lib/domain/copy";
 import type { Severity } from "@/lib/domain/signal-severity";
 import {
-  getSignalSignature,
   isLegacySignalRecord,
   severityWords,
 } from "@/lib/domain/signal-signature";
@@ -49,6 +48,7 @@ import {
   getSummaryQuestions,
   questionCiting,
 } from "@/lib/domain/summary-questions";
+import { hostOf } from "@/lib/domain/url";
 import { getVerdictAnnouncement } from "@/lib/domain/verdict-guidance";
 import { cn } from "@/lib/utils";
 
@@ -279,11 +279,12 @@ export function ResultsSection() {
     (scan.state.isStreaming ||
       signalNames.some((name) => signals[name].status !== "pending"));
   // Summary answers five questions. A failed scan has nothing to answer
-  // with, so it keeps its eight rows; Full always shows the rows.
-  const showQuestions =
-    hasSignalActivity &&
-    viewMode === "summary" &&
-    !(active?.verdict === "error");
+  // with, so it has one view, its eight rows, and no Summary/Full switch:
+  // the switch never claims a view that isn't shown. The person's choice
+  // is kept for the next result.
+  const hasSummary = active?.verdict !== "error";
+  const shownView = hasSummary ? viewMode : "full";
+  const showQuestions = hasSignalActivity && shownView === "summary";
   // One clock for every relative age, in Summary and Full: a finished
   // result's own check time, or the server's start time while a scan
   // streams, so ages don't jump when the verdict lands.
@@ -292,15 +293,15 @@ export function ResultsSection() {
     : scan.state.isStreaming && scan.state.startedAt
       ? evidenceTimeOf({ checkedAt: scan.state.startedAt })
       : undefined;
-  const parse = getLoadedLinkParser();
+  const parser = getLoadedLinkParser();
   const questions =
     showQuestions && linkUrl
       ? getSummaryQuestions({
           url: linkUrl,
           signals,
           now: evidenceTime,
-          registeredDomainOf: parse
-            ? (host) => registrableDomainOf(parse, host)
+          registeredDomainOf: parser
+            ? (host) => parser.registrableDomainOf(parser.parse, host)
             : null,
         })
       : null;
@@ -318,7 +319,6 @@ export function ResultsSection() {
                 activeTab,
                 active,
                 scanStreaming: scan.state.isStreaming,
-                done,
                 batchStreaming: batch.state.isStreaming,
                 batchDone: batch.state.results.length,
                 batchTotal: batch.state.items.length,
@@ -348,7 +348,11 @@ export function ResultsSection() {
             impersonates={impersonates}
             addressCheck={addressCheck}
             registeredDomain={anatomy?.registeredDomain ?? null}
-            holdDomain={linkUrl !== null && addressCheck === "pending"}
+            holdDomain={
+              linkUrl !== null && addressCheck === "pending"
+                ? hostOf(linkUrl)
+                : null
+            }
             evidenceShown={hasSignalActivity}
             onCancelScan={() => {
               // Cancel unmounts with its band: hand focus back to the input.
@@ -356,6 +360,7 @@ export function ResultsSection() {
               scan.cancelScan();
               document.getElementById("sx-url-input")?.focus();
             }}
+            onRetry={active ? () => rescanFromBand(active.url) : undefined}
             onRunSharedScan={
               shared
                 ? () => {
@@ -376,10 +381,10 @@ export function ResultsSection() {
               <LinkAnatomyView
                 url={linkUrl}
                 anatomy={anatomy}
-                captions
                 signals={showShared ? null : signals}
                 // The questions and rows state every check's facts, so the
-                // anatomy keeps them only while a scan streams.
+                // anatomy draws none of them, nor holds their room while a
+                // scan streams: nothing under the band collapses as it lands.
                 visibleSignals={hasSignalActivity ? signalNames : []}
                 streaming={scan.state.isStreaming && !active}
               />
@@ -404,61 +409,79 @@ export function ResultsSection() {
               aria-labelledby="sx-evidence-heading"
               className="mt-10 flex flex-col sm:mt-14"
             >
-              <div className="flex flex-wrap items-end justify-between gap-x-4 border-b border-[var(--sx-text)]">
+              {/* A result without a Summary (an Error) draws no switch, but
+                  holds its place: at a larger text size the switch wraps
+                  under the heading, so the strip would move otherwise. */}
+              <div className="flex min-h-11 flex-wrap items-end justify-between gap-x-4 border-b border-[var(--sx-text)]">
                 <h3
                   id="sx-evidence-heading"
                   className="sx-section-title pb-3 sm:pb-3.5"
                 >
                   Evidence
                 </h3>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={viewMode === "full"}
-                  onClick={() =>
-                    setViewMode(viewMode === "summary" ? "full" : "summary")
-                  }
-                  className="text-body -mb-px inline-flex min-h-11 items-stretch gap-6 font-medium"
-                >
-                  {(
-                    [
-                      ["summary", "Summary"],
-                      ["full", "Full"],
-                    ] as const
-                  ).map(([mode, label]) => (
-                    <Fragment key={mode}>
-                      {mode === "full" ? " " : null}
-                      <span
-                        data-selected={viewMode === mode}
-                        className={cn(
-                          "sx-segment inline-flex min-w-11 items-center justify-center border-b-2 transition-colors",
-                          viewMode === mode
-                            ? "border-[var(--sx-text)] text-[var(--sx-text)]"
-                            : "border-transparent text-[var(--sx-text-soft)] hover:text-[var(--sx-text)]",
-                        )}
-                      >
-                        {label}
-                      </span>
-                    </Fragment>
-                  ))}
-                  {/* Name stays "Summary Full …": visible text first (WCAG 2.5.3). */}
-                  <span className="sr-only">{" signal list"}</span>
-                </button>
+                {hasSummary ? (
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={viewMode === "full"}
+                    onClick={() =>
+                      setViewMode(viewMode === "summary" ? "full" : "summary")
+                    }
+                    className="text-body -mb-px inline-flex min-h-11 items-stretch gap-6 font-medium"
+                  >
+                    {(
+                      [
+                        ["summary", "Summary"],
+                        ["full", "Full"],
+                      ] as const
+                    ).map(([mode, label]) => (
+                      <Fragment key={mode}>
+                        {mode === "full" ? " " : null}
+                        <span
+                          data-selected={viewMode === mode}
+                          className={cn(
+                            "sx-segment inline-flex min-w-11 items-center justify-center border-b-2 transition-colors",
+                            viewMode === mode
+                              ? "border-[var(--sx-text)] text-[var(--sx-text)]"
+                              : "border-transparent text-[var(--sx-text-soft)] hover:text-[var(--sx-text)]",
+                          )}
+                        >
+                          {label}
+                        </span>
+                      </Fragment>
+                    ))}
+                    {/* Name stays "Summary Full …": visible text first (WCAG 2.5.3). */}
+                    <span className="sr-only">{" signal list"}</span>
+                  </button>
+                ) : (
+                  <span
+                    aria-hidden="true"
+                    className="text-body invisible -mb-px inline-flex min-h-11 items-stretch gap-6 font-medium"
+                  >
+                    <span className="inline-flex min-w-11 border-b-2">
+                      Summary
+                    </span>
+                    <span className="inline-flex min-w-11 border-b-2">
+                      Full
+                    </span>
+                  </span>
+                )}
               </div>
 
               {/* The strip heads the evidence as its index: each numbered
-                  cell leads to the question citing it (or its row in Full). */}
+                  cell leads to the question citing it (or its row in Full,
+                  and on an Error result, whose rows hold no evidence). */}
               <div className="sx-strip-index">
                 <SignalStrip
                   signals={signals}
                   scored={scored}
                   streaming={scan.state.isStreaming && !active}
-                  leadsTo={questions ? "question" : "row"}
+                  leadsTo={
+                    questions ? "question" : hasSummary ? "row" : "status-row"
+                  }
                   onActivate={activateSignal}
                 />
-                {active ? (
-                  <StripLegend signals={signals} scored={scored} />
-                ) : null}
+                <StripLegend />
               </div>
 
               {questions ? (
@@ -466,6 +489,7 @@ export function ResultsSection() {
               ) : (
                 <ul
                   ref={signalListRef}
+                  role="list"
                   aria-label="Signals"
                   className="divide-y divide-[var(--sx-border)] border-b border-[var(--sx-border)]"
                 >
@@ -544,45 +568,61 @@ const LEGEND_ORDER: readonly Severity[] = [
 ];
 
 /**
- * A key to the strip's shapes: only the states it actually draws, in the
- * words its names and titles use. For the eye (each cell already states
- * its own answer), so hidden from assistive technology.
+ * A key to the strip's shapes: every state a settled strip can draw, in
+ * the words its names and titles use. The whole key, from the scan's
+ * start: it explains the cells as they fill and never grows, shrinks, or
+ * appears as checks or the verdict land, so the evidence below it never
+ * moves. For the eye (each cell already states its own answer), so hidden
+ * from assistive technology.
  */
-function StripLegend({
-  signals,
-  scored,
-}: {
-  signals: SignalResults;
-  scored: ReadonlySet<SignalName>;
-}) {
-  const present = new Set(getSignalSignature(signals, scored));
-  const states = LEGEND_ORDER.filter((severity) => present.has(severity));
-  return states.length > 0 ? (
+function StripLegend() {
+  return (
     <p aria-hidden="true" className="sx-legend">
-      {states.map((severity) => (
+      {LEGEND_ORDER.map((severity) => (
         <span key={severity}>
           <SignalCell severity={severity} settled />
           {capitalize(severityWords[severity])}
         </span>
       ))}
     </p>
-  ) : null;
+  );
 }
 
+/**
+ * The polite live region. It stays mounted (a region inserted with its
+ * message is announced unreliably) and holds each message only long enough
+ * to be spoken: it sits before the band, so a reader moving through the
+ * page would otherwise hear the result twice. A message that comes back
+ * (the same result reopened, after a blank) is shown, and spoken, again.
+ */
 function LiveStatus({ text }: { text: string }) {
+  const [spoken, setSpoken] = useState({ text, cleared: false });
+  if (spoken.text !== text) setSpoken({ text, cleared: false });
+  const cleared = spoken.text === text && spoken.cleared;
+  useEffect(() => {
+    if (!text || cleared) return;
+    const timer = window.setTimeout(
+      () => setSpoken({ text, cleared: true }),
+      ANNOUNCEMENT_MS,
+    );
+    return () => window.clearTimeout(timer);
+  }, [text, cleared]);
   return (
     <p className="sr-only" aria-live="polite">
-      {text}
+      {cleared ? "" : text}
     </p>
   );
 }
 
-/** Polite live-region text: progress while streaming, the shown verdict after. */
+/**
+ * Polite live-region text: that the scan (or batch) started, then the
+ * shown verdict (or how the batch ended). Progress in between is the
+ * band's visible count, not a message per finished check.
+ */
 function getLiveStatus({
   activeTab,
   active,
   scanStreaming,
-  done,
   batchStreaming,
   batchDone,
   batchTotal,
@@ -593,7 +633,6 @@ function getLiveStatus({
   activeTab: "single" | "batch";
   active: AnalysisResult | null;
   scanStreaming: boolean;
-  done: number;
   batchStreaming: boolean;
   batchDone: number;
   batchTotal: number;
@@ -602,9 +641,7 @@ function getLiveStatus({
   registeredDomain: string | null;
 }): string {
   if (activeTab === "batch") {
-    if (batchStreaming) {
-      return `${batchDone} of ${batchTotal} links scanned.`;
-    }
+    if (batchStreaming) return `Checking ${countOf(batchTotal, "link")}.`;
     if (batchTotal === 0) return "";
     // Error, rate limit, or cancel: nothing completed the rest.
     return batchDone < batchTotal
@@ -615,7 +652,7 @@ function getLiveStatus({
   // A displayed result outranks progress, matching the verdict band: an
   // opened saved result is announced even while a scan streams behind it.
   if (scanStreaming && !active) {
-    return `${done} of ${SIGNAL_COUNT} checks finished.`;
+    return `Checking the link: ${SIGNAL_COUNT} checks running.`;
   }
 
   return active

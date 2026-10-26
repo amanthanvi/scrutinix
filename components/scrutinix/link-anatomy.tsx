@@ -1,13 +1,12 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { Fragment, useState, type ReactNode } from "react";
 
-import { formatAge } from "@/lib/domain/copy";
+import { countOf, formatAge } from "@/lib/domain/copy";
 import type { LinkAnatomy } from "@/lib/domain/link-anatomy";
-import { redirectDestination } from "@/lib/domain/link-anatomy";
 import { YOUNG_DOMAIN_DAYS } from "@/lib/domain/signal-severity";
 import type { SignalName, SignalResults } from "@/lib/domain/types";
-import { formatDisplayUrl } from "@/lib/domain/url";
+import { formatDisplayUrl, redirectDestination } from "@/lib/domain/url";
 import { ownershipSentence } from "@/lib/domain/verdict-guidance";
 import { cn } from "@/lib/utils";
 
@@ -69,7 +68,11 @@ const LINK_SIZE = {
 /**
  * "This link belongs to secure-login.xyz, not paypal.com." built from the
  * shared `ownershipSentence`, set in the serif with the two domains in
- * mono and the owner emphasised.
+ * mono and the owner emphasised. Each domain is its own inline box (kept
+ * whole where it fits), which screen readers would read as four stops
+ * ("This link belongs to", "secure-login.xyz,", "not", "paypal.com."), so
+ * they hear the sentence as one string and the styled one is for the eye.
+ * The spoken copy can't be selected, so a copy gives the sentence once.
  */
 function OwnershipSentence({
   registeredDomain,
@@ -86,22 +89,41 @@ function OwnershipSentence({
   const ownerTrail = leadingPunctuation(between);
   const brandTrail = leadingPunctuation(end);
   return (
-    <>
-      {sentence.slice(0, ownerAt)}
-      <WholeDomain
-        domain={registeredDomain}
-        className="font-mono text-[0.86em] font-bold"
-        trail={ownerTrail}
-      />
-      {between.slice(ownerTrail.length)}
-      <WholeDomain
-        domain={impersonates}
-        className="font-mono text-[0.86em]"
-        trail={brandTrail}
-      />
-      {end.slice(brandTrail.length)}
-    </>
+    <p className="sx-owner">
+      <span className="sr-only select-none">{sentence}</span>
+      <span aria-hidden="true">
+        {sentence.slice(0, ownerAt)}
+        <WholeDomain
+          domain={registeredDomain}
+          className="font-mono text-[0.86em] font-bold"
+          trail={ownerTrail}
+        />
+        {between.slice(ownerTrail.length)}
+        <WholeDomain
+          domain={impersonates}
+          className="font-mono text-[0.86em]"
+          trail={brandTrail}
+        />
+        {end.slice(brandTrail.length)}
+      </span>
+    </p>
   );
+}
+
+/**
+ * A path that wraps between its segments before it breaks inside one (the
+ * part wraps anywhere only when a segment alone is wider than the line):
+ * a line may end after the "/" (or run of them) that follows a name, so
+ * "/verify////…" never splits as "/verif" and "y////", and the leading
+ * "/" never stands alone.
+ */
+function breakablePath(path: string): ReactNode {
+  return path.split(/(?<=[^/]\/+)(?=[^/])/).map((segment, index) => (
+    <Fragment key={index}>
+      {index > 0 ? <wbr /> : null}
+      {segment}
+    </Fragment>
+  ));
 }
 
 /**
@@ -113,16 +135,23 @@ function OwnershipSentence({
  * mono directly beneath the link: a certificate problem by `https://`, a
  * young domain by the registered domain, and where the link ends when
  * that is another host. Only facts that matter show (no "valid
- * certificate" next to a Malicious verdict), and a fact whose evidence row
- * is already on screen is not repeated.
+ * certificate" next to a Malicious verdict), and a fact whose evidence is
+ * already on screen (`visibleSignals`) is not repeated, nor is its slot
+ * held while the scan runs: the result page's Evidence states all eight
+ * checks, so there it draws no facts at all, and nothing collapses under
+ * the band when the verdict lands.
  *
- * While a scan streams, the fact slots are fixed so nothing above the
- * strip moves: each reads "Checking…" until its check lands, and empty
- * slots collapse only when the scan ends, in the same frame as the verdict.
+ * A fact that could still show (its evidence isn't on screen) holds its
+ * slot while a scan streams, reading "Checking…" until its check lands;
+ * empty slots collapse when the scan ends.
  *
  * `anatomy` is null until the Public Suffix List has loaded (a shared link
  * gets it from the server); the mono URL shows meanwhile, never a naive
  * split.
+ *
+ * No `title` on the link: Chrome on Android reads a title as the line's
+ * whole text, so TalkBack spoke the bare URL and never the part names.
+ * "Show full link" shows the rest of a long one.
  */
 export function LinkAnatomyView({
   url,
@@ -131,7 +160,6 @@ export function LinkAnatomyView({
   visibleSignals = [],
   streaming = false,
   id = "sx-link-anatomy",
-  captions = false,
   size = "result",
 }: {
   url: string;
@@ -143,11 +171,6 @@ export function LinkAnatomyView({
   streaming?: boolean;
   /** Element id of the link line (the form's own breakdown needs its own). */
   id?: string;
-  /**
-   * Name each part of the link beneath it ("A label anyone can add",
-   * "Registered domain", "A page on that domain"): the link taken apart.
-   */
-  captions?: boolean;
   /** The result's link at reading size, or the form's a step down. */
   size?: keyof typeof LINK_SIZE;
 }) {
@@ -161,7 +184,7 @@ export function LinkAnatomyView({
 
   return (
     <div className="flex flex-col gap-4">
-      {anatomy && captions ? (
+      {anatomy ? (
         <CaptionedLink
           id={id}
           anatomy={anatomy}
@@ -171,43 +194,12 @@ export function LinkAnatomyView({
       ) : (
         <p
           id={id}
-          title={anatomy?.href ?? url}
           className={cn(
             LINK_SIZE[size],
             "font-mono break-words text-[var(--sx-text-soft)]",
           )}
         >
-          {anatomy ? (
-            <>
-              <span>{anatomy.scheme}://</span>
-              {anatomy.userinfo ? (
-                // Browsers ignore a login name when choosing the site; show it
-                // struck through so the line stays faithful to what was pasted.
-                <span className="break-all text-[var(--sx-text-soft)] line-through">
-                  <span className="sr-only">ignored login name </span>
-                  {anatomy.userinfo}@
-                </span>
-              ) : null}
-              {anatomy.subdomain ? (
-                <span className="break-all text-[var(--sx-text-muted)]">
-                  {anatomy.subdomain}.
-                </span>
-              ) : null}
-              {/* The owner never splits mid-name unless it cannot fit. */}
-              <WholeDomain
-                domain={anatomy.registeredDomain}
-                className="font-bold text-[var(--sx-text)]"
-              />
-              {anatomy.port ? <span>{anatomy.port}</span> : null}
-              {anatomy.path ? (
-                <span className="break-all">
-                  {expanded ? anatomy.path : shorten(anatomy.path)}
-                </span>
-              ) : null}
-            </>
-          ) : (
-            <span className="break-all text-[var(--sx-text-muted)]">{url}</span>
-          )}
+          <span className="break-all text-[var(--sx-text-muted)]">{url}</span>
         </p>
       )}
 
@@ -224,12 +216,10 @@ export function LinkAnatomyView({
       ) : null}
 
       {anatomy?.impersonates ? (
-        <p className="sx-owner">
-          <OwnershipSentence
-            registeredDomain={anatomy.registeredDomain}
-            impersonates={anatomy.impersonates}
-          />
-        </p>
+        <OwnershipSentence
+          registeredDomain={anatomy.registeredDomain}
+          impersonates={anatomy.impersonates}
+        />
       ) : null}
 
       {facts.length > 0 ? (
@@ -282,10 +272,11 @@ function CaptionedLink({
   path: string;
   className?: string;
 }) {
+  const userinfo = `${anatomy.userinfo}@`;
+  const subdomain = `${anatomy.subdomain}.`;
   return (
     <p
       id={id}
-      title={anatomy.href}
       className={cn(
         "sx-anat",
         hasShortMiddlePart(anatomy, path) && "sx-anat-stacked",
@@ -294,20 +285,24 @@ function CaptionedLink({
     >
       {/* Phones stack the named parts; the bare scheme steps out of sight
           there (the certificate fact below still speaks for it). */}
-      <span className="max-sm:sr-only">{anatomy.scheme}://</span>
+      <span className="max-sm:sr-only">{`${anatomy.scheme}://`}</span>
       {anatomy.userinfo ? (
-        <LinkPart caption="Ignored by browsers">
-          <span className="break-all line-through">{anatomy.userinfo}@</span>
+        <LinkPart caption="Ignored by browsers" spoken={userinfo}>
+          <span className="break-all line-through">{userinfo}</span>
         </LinkPart>
       ) : null}
       {anatomy.subdomain ? (
-        <LinkPart caption="A label anyone can add">
+        <LinkPart caption="A label anyone can add" spoken={subdomain}>
           <span className="break-all text-[var(--sx-text-muted)]">
-            {anatomy.subdomain}.
+            {subdomain}
           </span>
         </LinkPart>
       ) : null}
-      <LinkPart caption="Registered domain" owner>
+      <LinkPart
+        caption="Registered domain"
+        spoken={anatomy.registeredDomain}
+        owner
+      >
         <WholeDomain
           domain={anatomy.registeredDomain}
           className="font-bold text-[var(--sx-text)]"
@@ -315,8 +310,8 @@ function CaptionedLink({
       </LinkPart>
       {anatomy.port ? <span>{anatomy.port}</span> : null}
       {path ? (
-        <LinkPart caption="A page on that domain">
-          <span className="break-all">{path}</span>
+        <LinkPart caption="A page on that domain" spoken={path}>
+          <span className="wrap-anywhere">{breakablePath(path)}</span>
         </LinkPart>
       ) : null}
     </p>
@@ -342,21 +337,32 @@ function hasShortMiddlePart(anatomy: LinkAnatomy, path: string): boolean {
 /**
  * One named part: its text over a hairline bracket carrying the caption
  * (heavy for the registered domain). The caption never widens its part,
- * so the link stays one continuous line of text.
+ * so the link stays one continuous line of text. Screen readers hear the
+ * part as one string after its name (`spoken`): the drawn text is split
+ * into boxes (a domain kept whole, a path's break points) that would read
+ * as separate stops. The spoken copy can't be selected, so a copy gives
+ * the link as drawn. It opens with a comma and a no-break space: TalkBack
+ * reads the line as one string and ran the parts together ("…safe.Registered
+ * domain: scrutinix.testA page…"), and an ordinary space at the edge of
+ * the `sr-only` box is dropped.
  */
 function LinkPart({
   caption,
+  spoken,
   owner = false,
   children,
 }: {
   caption: string;
+  spoken: string;
   owner?: boolean;
   children: ReactNode;
 }) {
   return (
     <span className={cn("sx-anat-part", owner && "sx-anat-owner")}>
-      <span className="sr-only">{caption}: </span>
-      <span className="sx-anat-text">{children}</span>
+      <span className="sr-only select-none">{`,\u00a0${caption}: ${spoken}`}</span>
+      <span aria-hidden="true" className="sx-anat-text">
+        {children}
+      </span>
       <span aria-hidden="true" className="sx-anat-caption">
         {caption}
       </span>
@@ -388,14 +394,14 @@ function getAnatomyFacts(
   streaming: boolean,
 ): AnatomyFact[] {
   const facts: AnatomyFact[] = [];
-  // While streaming, Summary's rows change as checks land: ignore them so
-  // the slots stay fixed; the dedupe applies once the result is settled.
-  const shown = (name: SignalName) =>
-    !streaming && visibleSignals.includes(name);
+  // Evidence on screen states the fact, so it neither shows here nor holds
+  // a slot while the scan runs (a held slot would collapse under the band
+  // when the verdict lands).
+  const shown = (name: SignalName) => visibleSignals.includes(name);
 
   const ssl = signals.ssl;
   const sslValue = schemeFact(anatomy, signals);
-  if (streaming || (sslValue && !shown("ssl"))) {
+  if (!shown("ssl") && (streaming || sslValue)) {
     facts.push({
       key: "scheme",
       term: `${anatomy.scheme}://`,
@@ -412,7 +418,7 @@ function getAnatomyFacts(
         ? whois.data.ageDays
         : null;
     const young = ageDays !== null && ageDays < YOUNG_DOMAIN_DAYS;
-    if (streaming || (young && !shown("whois"))) {
+    if (!shown("whois") && (streaming || young)) {
       facts.push({
         key: "domain",
         term: anatomy.registeredDomain,
@@ -439,7 +445,7 @@ function getAnatomyFacts(
       anchor: "label",
       value: <span className="font-mono">{destination}</span>,
     });
-  } else if (streaming) {
+  } else if (streaming && !shown("redirectChain")) {
     // Sized but empty: most links end where they start.
     facts.push({
       key: "destination",
@@ -509,7 +515,6 @@ export function LinkAnatomyCompact({
   const longOwner = anatomy.registeredDomain.length > LONG_DOMAIN;
   return (
     <span
-      title={anatomy.href}
       className={cn(
         "text-meta flex min-w-0 items-baseline font-mono",
         className,
@@ -518,41 +523,74 @@ export function LinkAnatomyCompact({
       {/* Flex parts would read as separate words ("malicious. scrutinix.test
           /login"): assistive tech gets the link as one string instead. */}
       <span className="sr-only">
-        {formatDisplayUrl(url)}
+        {spokenLink(formatDisplayUrl(url))}
         {anatomy.impersonates
           ? `, belongs to ${anatomy.registeredDomain}, not ${anatomy.impersonates}`
           : ""}
       </span>
-      {anatomy.subdomain ? (
+      {/* The full link on hover, where the row truncates it; hidden from
+          assistive technology, which hears the string above. Each drawn
+          part hides itself too: WebKit ignores aria-hidden on this
+          `display: contents` wrapper, and Safari read the drawn link after
+          the spoken one. */}
+      <span aria-hidden="true" title={anatomy.href} className="contents">
+        {anatomy.subdomain ? (
+          <span
+            dir="rtl"
+            aria-hidden="true"
+            data-part="subdomain"
+            className="min-w-0 shrink truncate text-[var(--sx-text-soft)]"
+          >
+            <bdi dir="ltr">{anatomy.subdomain}.</bdi>
+          </span>
+        ) : null}
         <span
-          dir="rtl"
           aria-hidden="true"
-          data-part="subdomain"
-          className="min-w-0 shrink truncate text-[var(--sx-text-soft)]"
+          data-part="owner"
+          className={cn(
+            "font-semibold whitespace-nowrap text-[var(--sx-text)]",
+            longOwner ? "min-w-0 shrink-[0.01] truncate" : "shrink-0",
+          )}
         >
-          <bdi dir="ltr">{anatomy.subdomain}.</bdi>
+          {anatomy.registeredDomain}
+          {anatomy.port}
         </span>
-      ) : null}
-      <span
-        aria-hidden="true"
-        data-part="owner"
-        className={cn(
-          "font-semibold whitespace-nowrap text-[var(--sx-text)]",
-          longOwner ? "min-w-0 shrink-[0.01] truncate" : "shrink-0",
-        )}
-      >
-        {anatomy.registeredDomain}
-        {anatomy.port}
+        {anatomy.path ? (
+          <span
+            aria-hidden="true"
+            data-part="path"
+            className="min-w-0 shrink-[100] truncate text-[var(--sx-text-soft)]"
+          >
+            {anatomy.path}
+          </span>
+        ) : null}
       </span>
-      {anatomy.path ? (
-        <span
-          aria-hidden="true"
-          data-part="path"
-          className="min-w-0 shrink-[100] truncate text-[var(--sx-text-soft)]"
-        >
-          {anatomy.path}
-        </span>
-      ) : null}
     </span>
   );
+}
+
+/** Path characters a row speaks before it says how many more there are. */
+const SPOKEN_PATH = 40;
+
+/** Four or more of one symbol in a row ("////"): a reader says each one. */
+const SYMBOL_RUN = /([^\p{L}\p{N}])\1{3,}/gu;
+
+/**
+ * A row's link as spoken: a path up to 48 characters exactly as it is;
+ * a longer one as its first 40 characters, any run of one symbol in them
+ * said once, then how much is left ("…/verify/, and 1471 more
+ * characters"). So a very long link costs seconds of speech (TalkBack
+ * spent 13 s on 40 characters that were mostly slashes). The host is
+ * always said exactly.
+ */
+export function spokenLink(display: string): string {
+  const pathAt = display.indexOf("/");
+  if (pathAt < 0 || display.length - pathAt <= PATH_LIMIT) return display;
+  const shown = pathAt + SPOKEN_PATH;
+  return `${display.slice(0, pathAt)}${display
+    .slice(pathAt, shown)
+    .replace(
+      SYMBOL_RUN,
+      "$1",
+    )}, and ${countOf(display.length - shown, "more character")}`;
 }

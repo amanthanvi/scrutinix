@@ -16,7 +16,10 @@ import { ResultsSection } from "@/components/scrutinix/results-section";
 import { ScanForm } from "@/components/scrutinix/scan-form";
 import { VERDICT_HEADING_ID } from "@/components/scrutinix/verdict-panel";
 import { sanitizeHistoryEntry } from "@/lib/domain/runtime-safety";
-import { encodeSharedSnapshot } from "@/lib/domain/signal-signature";
+import {
+  buildSharedSnapshot,
+  encodeSharedSnapshot,
+} from "@/lib/domain/signal-signature";
 import { buildThreatAssessment } from "@/lib/domain/verdict";
 import { resetEnvForTests } from "@/lib/config/env";
 import type { SharedView } from "@/lib/domain/signal-signature";
@@ -28,6 +31,7 @@ import {
   type AnalysisResult,
   type SignalResults,
 } from "@/lib/domain/types";
+import { spokenTextNodes, visibleText } from "@/tests/dom/helpers/speech";
 import { cleanSignals } from "@/tests/fixtures/lure-signals";
 import { fixtureSignals } from "@/tests/fixtures/scenario-signals";
 
@@ -116,11 +120,17 @@ function scanNdjson(result: AnalysisResult) {
     .join("\n")}\n`;
 }
 
-function OpenStored({ result }: { result: AnalysisResult }) {
+function OpenStored({
+  result,
+  label = "open stored",
+}: {
+  result: AnalysisResult;
+  label?: string;
+}) {
   const { openStoredResult } = useAnalyzerRuntime();
   return (
     <button type="button" onClick={() => openStoredResult(result)}>
-      open stored
+      {label}
     </button>
   );
 }
@@ -190,14 +200,14 @@ const lookalikeShare = encodeSharedSnapshot({
 });
 
 /**
- * The link as written, without the anatomy's captions (hidden from
- * assistive technology) or their spoken names (screen-reader only).
+ * The link as drawn, without the anatomy's captions or the spoken copy of
+ * each part (screen-reader only).
  */
 function linkText(element: Element | null): string | null {
   if (!element) return null;
   const copy = element.cloneNode(true) as Element;
   copy
-    .querySelectorAll('[aria-hidden="true"], .sr-only')
+    .querySelectorAll(".sx-anat-caption, .sr-only")
     .forEach((node) => node.remove());
   return copy.textContent;
 }
@@ -238,12 +248,16 @@ describe("shared snapshot first paint", () => {
       (node) =>
         node.id !== "sx-link-anatomy" &&
         !node.closest(".sr-only, [aria-live]") &&
-        /paypal\.com/.test(node.textContent ?? ""),
+        /paypal\.com/.test(visibleText(node)),
     );
     expect(sentences).toHaveLength(1);
-    expect(sentences[0]?.textContent).toBe(
+    expect(visibleText(sentences[0]!)).toBe(
       "This link belongs to secure-login.xyz, not paypal.com.",
     );
+    // Heard once too, as one string.
+    expect(spokenTextNodes(sentences[0]!)).toEqual([
+      "This link belongs to secure-login.xyz, not paypal.com.",
+    ]);
   });
 });
 
@@ -477,7 +491,7 @@ describe("ResultsSection", () => {
         fireEvent.click(screen.getByRole("button", { name: "Analyze URL" }));
       });
       await waitFor(() => {
-        expect(region.textContent).toBe("0 of 8 checks finished.");
+        expect(region.textContent).toBe("Checking the link: 8 checks running.");
       });
 
       fireEvent.click(screen.getByRole("button", { name: "open stored" }));
@@ -744,7 +758,7 @@ describe("ResultsSection", () => {
       fireEvent.click(screen.getByRole("button", { name: "open stored" }));
       await screen.findByRole("heading", { level: 2, name: "Malicious" });
 
-      const visible = visibleText(container);
+      const visible = seenText(container);
       expect(visible.match(pattern)?.length, `${host}: ${fact}`).toBe(1);
       unmount();
     }
@@ -789,8 +803,7 @@ describe("ResultsSection", () => {
     expect(document.activeElement).toBe(cells[7]);
 
     // Summary: a cell moves focus to the question that cites its check.
-    expect(strip.getAttribute("aria-describedby")).toBe("sx-strip-hint");
-    expect(document.getElementById("sx-strip-hint")?.textContent).toBe(
+    expect(stripHint(strip)).toBe(
       "Each check moves to the question it answers below.",
     );
     const dnsCell = cells.find(
@@ -818,9 +831,7 @@ describe("ResultsSection", () => {
 
     // Full: the same cell opens the check's row and focuses it.
     fireEvent.click(screen.getByRole("switch", { name: /^Summary Full/ }));
-    expect(document.getElementById("sx-strip-hint")?.textContent).toBe(
-      "Each check opens its evidence below.",
-    );
+    expect(stripHint(strip)).toBe("Each check opens its evidence below.");
     fireEvent.click(dnsCell);
     await waitFor(() => {
       const row = screen.getByLabelText(/^DNS Profile:/);
@@ -1041,6 +1052,63 @@ describe("shared links and their signature", () => {
     });
     expect(screen.getByLabelText(/^scan result: malicious$/i)).toBeTruthy();
   });
+
+  it.each([
+    ["critical.scrutinix.test", "Don't open this link — it's a known threat."],
+    ["example.com", "Looks safe to open."],
+  ])(
+    "gives the recipient of %s the instruction the sender's band showed",
+    async (host, imperative) => {
+      const result = resultFrom(
+        host,
+        await fixtureSignals(host),
+        `https://${host}/login`,
+      );
+      const instruction = (band: HTMLElement) =>
+        band.querySelector(".sx-band-imperative:not(.sx-slot)")?.textContent;
+
+      // The sender's own band.
+      const sender = renderApp(<OpenStored result={result} />);
+      fireEvent.click(screen.getByRole("button", { name: "open stored" }));
+      await waitFor(() =>
+        expect(instruction(screen.getByLabelText(/^scan result: /i))).toBe(
+          imperative,
+        ),
+      );
+      sender.unmount();
+
+      // The share the server issues for it, opened by the recipient.
+      renderApp(undefined, {
+        payload: encodeSharedSnapshot(buildSharedSnapshot(result)),
+      });
+      const band = screen.getByLabelText(/^scan result: /i);
+      expect(band.textContent).toMatch(/Verified Scrutinix result/);
+      expect(instruction(band)).toBe(imperative);
+    },
+  );
+
+  it("keeps a snapshot signed before the basis existed hedged", () => {
+    for (const [verdict, hedged] of [
+      ["critical", "Don't open this link."],
+      ["safe", "Probably safe — still check who sent it."],
+    ] as const) {
+      const { unmount } = renderApp(undefined, {
+        payload: encodeSharedSnapshot({
+          verdict,
+          url: "https://example.com/login",
+          summary: "",
+          capturedAt: "2026-10-06T09:00:00.000Z",
+          signature: Array(8).fill("clear"),
+        }),
+      });
+      const band = screen.getByLabelText(/^scan result: /i);
+      expect(
+        band.querySelector(".sx-band-imperative:not(.sx-slot)")?.textContent,
+        verdict,
+      ).toBe(hedged);
+      unmount();
+    }
+  });
 });
 
 describe("ResultsSection focus and states", () => {
@@ -1146,10 +1214,97 @@ describe("ResultsSection focus and states", () => {
       screen.getByRole("list", { name: "Signals" }).querySelectorAll("li"),
     ).toHaveLength(8);
   });
+
+  it("draws no Summary/Full switch for an Error result and keeps the choice for the next", async () => {
+    const signals = createPendingSignalResults();
+    for (const name of signalNames) {
+      signals[name] = {
+        status: "error",
+        data: null,
+        error: "The provider timed out.",
+        durationMs: 0,
+      };
+    }
+    const failed = resultFrom("all-failed", signals, "https://down.example/");
+    expect(failed.verdict).toBe("error");
+    const safe = resultFrom("safe", cleanSignals(), "https://example.com/");
+    expect(safe.verdict).toBe("safe");
+    renderApp(
+      <>
+        <OpenStored result={failed} label="open error" />
+        <OpenStored result={safe} label="open safe" />
+      </>,
+    );
+    const viewSwitch = () =>
+      screen.queryByRole("switch", { name: /^Summary Full/ });
+
+    // One view, so no control: nothing claims Summary while rows show.
+    fireEvent.click(screen.getByRole("button", { name: "open error" }));
+    await screen.findByRole("heading", { level: 2, name: "Error" });
+    expect(viewSwitch()).toBeNull();
+    expect(screen.queryByRole("list", { name: "Questions" })).toBeNull();
+    expect(
+      screen.getByRole("list", { name: "Signals" }).querySelectorAll("li"),
+    ).toHaveLength(8);
+    // The strip leads to the rows it shows, and a cell focuses its row.
+    // They hold no evidence, so the hint promises a move, not an opening.
+    const strip = screen.getByRole("toolbar", { name: "Checks" });
+    expect(stripHint(strip)).toBe("Each check moves to its row below.");
+    fireEvent.click(within(strip).getByRole("button", { name: /^Redirects:/ }));
+    await waitFor(() => {
+      expect(document.activeElement).toBe(
+        document.querySelector('li[data-signal="redirectChain"]'),
+      );
+    });
+    // A row with no evidence is a plain item read as one line, not a
+    // named group whose name and contents both speak.
+    const row = document.activeElement!;
+    expect(row.hasAttribute("aria-label")).toBe(false);
+    expect(spokenTextNodes(row)).toEqual([
+      "Redirect Chain: The provider timed out.",
+    ]);
+
+    // The stored choice (Summary) is untouched for the next result.
+    fireEvent.click(screen.getByRole("button", { name: "open safe" }));
+    await screen.findByRole("list", { name: "Questions" });
+    expect(viewSwitch()?.getAttribute("aria-checked")).toBe("false");
+    expect(stripHint(screen.getByRole("toolbar", { name: "Checks" }))).toBe(
+      "Each check moves to the question it answers below.",
+    );
+
+    // Full, then an Error, then back: Full is still the choice.
+    fireEvent.click(viewSwitch()!);
+    expect(viewSwitch()?.getAttribute("aria-checked")).toBe("true");
+    fireEvent.click(screen.getByRole("button", { name: "open error" }));
+    await screen.findByRole("heading", { level: 2, name: "Error" });
+    expect(viewSwitch()).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "open safe" }));
+    await screen.findByRole("list", { name: "Signals" });
+    expect(viewSwitch()?.getAttribute("aria-checked")).toBe("true");
+    expect(screen.queryByRole("list", { name: "Questions" })).toBeNull();
+  });
 });
 
+/**
+ * The strip's description: one hint per mode, each with its own id (Safari
+ * kept a hint's first words when its text changed), hidden and outside the
+ * toolbar, which holds only the eight cells.
+ */
+function stripHint(strip: HTMLElement): string | null {
+  const id = strip.getAttribute("aria-describedby") ?? "";
+  expect(id).toMatch(/^sx-strip-hint-/);
+  const hint = document.getElementById(id);
+  expect(hint?.hidden).toBe(true);
+  expect(strip.contains(hint)).toBe(false);
+  expect(Array.from(strip.children).map((cell) => cell.tagName)).toEqual(
+    Array(8).fill("BUTTON"),
+  );
+  expect(document.querySelectorAll('[id^="sx-strip-hint"]')).toHaveLength(1);
+  return hint?.textContent ?? null;
+}
+
 /** Text a sighted user sees: closed <details> show only their <summary>. */
-function visibleText(root: Element): string {
+function seenText(root: Element): string {
   const parts: string[] = [];
   const walk = (node: Node) => {
     if (node.nodeType === Node.TEXT_NODE) {

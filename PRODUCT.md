@@ -76,8 +76,10 @@ Honesty is the mechanism a neighboring scanner cannot truthfully copy:
 ## Brand Commitments
 
 - Name: **Scrutinix**. Home headline: "Is this link what it says it is?"
-  Tagline in use on the OG card and page title: "Check a link before you
-  click."
+  It is also the product's line everywhere else: the page title, the site's
+  own link previews (a verified shared result previews its result instead),
+  the web manifest, and the default share card. There is no separate
+  tagline.
 - Voice: plain, direct, calm; tells the person what to do. No fear-mongering,
   no hype, no security jargon where a plain word exists.
 - Out of bounds (user-confirmed across redesigns): casefile / dossier / stamp

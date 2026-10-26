@@ -261,9 +261,16 @@ export default function AboutPage() {
           question that cites it; in Full, its row. Each kind of answer has its
           own shape as well as its colour. A cell that found nothing is a thin
           gray dash, never green: green is kept for a Safe verdict, so a quiet
-          check never reads as an endorsement.
+          check never reads as an endorsement. The threat feeds&apos; cell reads
+          Flagged the link only for a listing strong enough to convict, or a
+          high-confidence Spamhaus DBL or SURBL listing; a listing of other
+          links on the same site, or a weaker listing, reads Found a warning
+          sign. The certificate&apos;s cell reads Didn&apos;t apply for a
+          plain-HTTP link that never moves to HTTPS and whose site offers no
+          HTTPS a browser would use instead.
         </p>
         <ul
+          role="list"
           className={`${PROSE_MEASURE} grid gap-x-6 gap-y-2.5 sm:grid-cols-2`}
         >
           {cellLegend.map((item) => (

@@ -1,0 +1,8 @@
+# Proof guard. A pull_request run uses the copy of these files on the
+# branch, so a change here is a change to the merge gate. Patterns are
+# anchored at the repository root. Last match wins; the CODEOWNERS line is last so
+# a broader rule above it cannot drop its owner.
+/.github/workflows/proof.yml @amanthanvi
+/scripts/check-pr-proof.mjs @amanthanvi
+/tests/unit/check-pr-proof.test.ts @amanthanvi
+/.github/CODEOWNERS @amanthanvi

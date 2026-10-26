@@ -1,11 +1,16 @@
 import { isIP } from "node:net";
+import { domainToUnicode } from "node:url";
 
 import { PublicError } from "@/lib/domain/public-error";
 import { getRegistrableDomain } from "@/lib/domain/registrable-domain";
 import { isSharedPlatformHost } from "@/lib/domain/shared-platforms";
 import type { WhoisData } from "@/lib/domain/types";
 import { bareHostname } from "@/lib/domain/url";
-import { fetchWithTimeout, SCRUTINIX_USER_AGENT } from "@/lib/server/http";
+import {
+  fetchWithTimeout,
+  SCRUTINIX_USER_AGENT,
+  withTimeout,
+} from "@/lib/server/http";
 import { SignalSkipError } from "@/lib/server/signal-error";
 
 /* RdapEvent interface removed — RDAP fields are now validated at runtime via asRecord(). */
@@ -58,11 +63,23 @@ export async function runWhoisSignal(
     8_000,
   );
 
-  // 404/422 are real answers ("no registration record"), reported as an
-  // unavailable-but-successful lookup. Network failures and server errors
-  // propagate as signal errors instead of being laundered into success -
-  // otherwise a degraded result gets cached and partialFailure stays false.
+  // 404/422 are real answers, reported as an unavailable-but-successful
+  // lookup. Network failures and server errors propagate as signal errors
+  // instead of being laundered into success - otherwise a degraded result
+  // gets cached and partialFailure stays false.
   if (response.status === 404 || response.status === 422) {
+    // rdap.org redirects to the registry for every TLD with an RDAP
+    // service. A 404 it answers itself, unredirected, means the TLD has
+    // none (.be): that is not the domain lacking a record.
+    if (!response.redirected && (await isMissingRdapService(response))) {
+      // As people write it: .xn--p1ai is .рф.
+      const tld = domainToUnicode(domain.split(".").at(-1) ?? domain);
+      return createUnavailableWhoisData(
+        rdapUrl,
+        `The .${tld} registry doesn't publish registration data over RDAP, so we couldn't look this domain up.`,
+        { prefixed: false },
+      );
+    }
     return createUnavailableWhoisData(
       rdapUrl,
       "The registry has no RDAP record for this domain.",
@@ -138,9 +155,28 @@ export async function runWhoisSignal(
   };
 }
 
+/**
+ * rdap.org's own answer for a TLD with no RDAP service. `fetchWithTimeout`
+ * stops timing once headers arrive, so the body read has its own bound; a
+ * body that stalls, errors, or isn't that answer leaves the 404 what its
+ * status says, no record.
+ */
+async function isMissingRdapService(response: Response): Promise<boolean> {
+  try {
+    const title = asRecord(
+      await withTimeout(response.json(), 2_000, "RDAP error body"),
+    )?.title;
+    return typeof title === "string" && /no rdap service/i.test(title);
+  } catch {
+    void response.body?.cancel().catch(() => {});
+    return false;
+  }
+}
+
 function createUnavailableWhoisData(
   rdapUrl: string,
   reason: string,
+  { prefixed = true }: { prefixed?: boolean } = {},
 ): WhoisData {
   return {
     subjectType: "domain",
@@ -154,7 +190,9 @@ function createUnavailableWhoisData(
     handle: null,
     rdapUrl,
     observations: [
-      `Registration data was unavailable for this scan. ${reason}`,
+      prefixed
+        ? `Registration data was unavailable for this scan. ${reason}`
+        : reason,
     ],
   };
 }

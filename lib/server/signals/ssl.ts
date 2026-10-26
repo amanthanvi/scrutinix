@@ -1,7 +1,12 @@
 import tls from "node:tls";
 import { isIP } from "node:net";
 
-import type { SSLData } from "@/lib/domain/types";
+import {
+  describeCertificateProblem,
+  otherSiteCertificateNote,
+} from "@/lib/domain/certificate";
+import { getRegistrableDomain } from "@/lib/domain/registrable-domain";
+import type { RedirectData, SSLData } from "@/lib/domain/types";
 import { bareHostname } from "@/lib/domain/url";
 import {
   checkFailureMessage,
@@ -12,34 +17,174 @@ import {
   selectPublicProbeAddresses,
 } from "@/lib/server/public-network-target";
 
-/** Resolves host/port for the TLS probe (exported for unit tests). */
-export function getTlsProbeTarget(url: string): {
-  hostname: string;
-  port: number;
-} {
-  const target = new URL(url);
-  const hostname = bareHostname(target);
-  const defaultPort = target.protocol === "https:" ? 443 : 80;
-  // WHATWG URL leaves port as "" when absent and otherwise guarantees an
-  // in-range numeric string, so only emptiness signals "use the default" -
-  // an explicit :0 must stay 0 to keep the TLS probe on the same endpoint
-  // as the redirect probe.
-  const port = target.port === "" ? defaultPort : Number(target.port);
+export type TlsProbeTarget =
+  | {
+      hostname: string;
+      port: number;
+      /**
+       * The chain stayed on plain HTTP: the link's own host on 443, where
+       * browsers that try HTTPS first go before falling back to HTTP.
+       */
+      offered?: true;
+    }
+  /** The chain answered and never reached HTTPS: no certificate in its path. */
+  | { skip: "no-https" }
+  /** The chain answered, then stopped before it reached HTTPS. */
+  | { skip: "chain-stopped" };
 
-  return { hostname, port };
+/**
+ * Where the TLS probe reads a certificate (exported for unit tests).
+ *
+ * An https: link: its own host and port. An http: link: the first HTTPS
+ * address its redirect chain reached, the certificate a visitor's browser
+ * checks there (http://github.com moves to https://github.com/). A chain
+ * that answered and stayed on HTTP still has the link's own host on 443 in
+ * the visitor's path when the link names no port: browsers that try HTTPS
+ * first (Chrome's HTTPS-Upgrades, on by default) ask there and fall back
+ * to HTTP when that fails (`offered`, read by `runSslSignal`). A link that
+ * names its port stays on it, so it has no certificate in its path. A
+ * chain that answered and then stopped short never showed which
+ * certificate comes next, so it reads none. Only a chain that never
+ * answered (or is unknown) falls back to the link's own host on the port
+ * it names, else 443: a site that answers only over TLS still counts as
+ * answering. Never port 80 for a plain link: a web server there answers a
+ * TLS hello with plain HTTP (ERR_SSL_WRONG_VERSION_NUMBER), which says
+ * nothing about the site.
+ *
+ * WHATWG URL leaves port as "" when absent and otherwise guarantees an
+ * in-range numeric string, so only emptiness means "use the default": an
+ * explicit :0 stays 0, the endpoint the redirect probe uses.
+ */
+export function getTlsProbeTarget(
+  url: string,
+  chain?: RedirectData | null,
+): TlsProbeTarget {
+  const target = new URL(url);
+  if (target.protocol === "http:" && chain) {
+    const firstHttps = [...chain.hops.map((hop) => hop.url), chain.finalUrl]
+      .map(parseUrl)
+      .find((candidate) => candidate?.protocol === "https:");
+    if (firstHttps) {
+      return endpointOf(firstHttps);
+    }
+    if (chain.reachable) {
+      return target.port === ""
+        ? { ...endpointOf(target), offered: true }
+        : { skip: "no-https" };
+    }
+    if (chain.hops.length > 0) {
+      return { skip: "chain-stopped" };
+    }
+  }
+
+  return endpointOf(target);
+}
+
+function endpointOf(target: URL) {
+  return {
+    hostname: bareHostname(target),
+    port: target.port === "" ? 443 : Number(target.port),
+  };
+}
+
+function parseUrl(value: string): URL | null {
+  try {
+    return new URL(value);
+  } catch {
+    return null;
+  }
 }
 
 /** Aggregate budget across every probed address. */
 const SSL_SIGNAL_BUDGET_MS = 12_000;
 const SSL_PROBE_TIMEOUT_MS = 8_000;
+/**
+ * A plain-HTTP link's own 443 (`offered`): Chrome gives an HTTPS upgrade
+ * 3 seconds before it falls back to HTTP, so the probe waits no longer.
+ */
+const OFFERED_PROBE_BUDGET_MS = 3_000;
 
+/**
+ * `redirects` is the scan's own redirect-chain run (shared, so the link is
+ * opened once): a plain-HTTP link's certificate is read where the chain
+ * first reaches HTTPS.
+ */
 export async function runSslSignal(
   url: string,
   signal?: AbortSignal,
   scanId?: string,
+  redirects?: () => Promise<RedirectData>,
 ): Promise<SSLData> {
-  const { hostname, port } = getTlsProbeTarget(url);
-  const deadline = Date.now() + SSL_SIGNAL_BUDGET_MS;
+  const chain =
+    redirects && new URL(url).protocol === "http:"
+      ? await redirects().catch(() => null)
+      : null;
+  const probeTarget = getTlsProbeTarget(url, chain);
+  if ("skip" in probeTarget) {
+    return probeTarget.skip === "no-https"
+      ? createNoHttpsSslData()
+      : createUnavailableSslData(
+          "The redirects stopped before reaching HTTPS, so there was no certificate to read.",
+        );
+  }
+
+  const result = await probeEndpoint(
+    probeTarget.hostname,
+    probeTarget.port,
+    url,
+    signal,
+    scanId,
+    probeTarget.offered ? OFFERED_PROBE_BUDGET_MS : SSL_SIGNAL_BUDGET_MS,
+  );
+  if (probeTarget.offered) {
+    // Only a certificate a browser accepts can keep it on HTTPS. Anything
+    // else (refused, no TLS, a certificate error, no answer in time) and
+    // it falls back to plain HTTP: no certificate in the path, and no
+    // lost coverage either. A certificate error there isn't scored: the
+    // visitor never meets it.
+    return result.available &&
+      (result.validationState === "trusted" ||
+        result.validationState === "warning")
+      ? {
+          ...result,
+          observations: [
+            "This link stays on plain HTTP; this is the certificate its site presents over HTTPS.",
+            ...result.observations,
+          ],
+        }
+      : createNoHttpsSslData();
+  }
+  // The certificate of the site an http:// link moves to: say whose it is,
+  // and let nothing pair its age with the link's own domain (`otherSite`).
+  const linkSite = getRegistrableDomain(bareHostname(url));
+  const probedSite = getRegistrableDomain(probeTarget.hostname);
+  if (!result.available || probedSite === linkSite) {
+    return result;
+  }
+  const problem = describeCertificateProblem({
+    ...result,
+    otherSite: probedSite,
+  });
+  return {
+    ...result,
+    ...(problem ? { problem } : {}),
+    otherSite: probedSite,
+    observations: [
+      otherSiteCertificateNote(probedSite),
+      ...result.observations,
+    ],
+  };
+}
+
+async function probeEndpoint(
+  hostname: string,
+  port: number,
+  url: string,
+  signal: AbortSignal | undefined,
+  scanId: string | undefined,
+  budgetMs: number,
+): Promise<SSLData> {
+  const deadline = Date.now() + budgetMs;
   const publicTarget = await assertPublicNetworkTarget(hostname, {
     signal,
     timeoutMs: Math.max(0, deadline - Date.now()),
@@ -161,26 +306,29 @@ function runSslProbe(
         subjectCommonName,
       );
 
-      resolve({
-        protocol: socket.getProtocol() ?? "unknown",
-        available: true,
+      const facts = {
         validationState,
-        authorized:
-          validationState === "trusted" || validationState === "warning",
         authorizationError,
-        issuer: issuerCommonName,
-        subject: subjectCommonName,
-        validFrom,
         validTo,
         daysRemaining,
         selfSigned:
           issuerCommonName !== null && issuerCommonName === subjectCommonName,
+      };
+      // Plain words for the row and Summary; the code stays in
+      // `authorizationError` and never reaches a sentence.
+      const problem = describeCertificateProblem(facts);
+      resolve({
+        ...facts,
+        ...(problem ? { problem } : {}),
+        protocol: socket.getProtocol() ?? "unknown",
+        available: true,
+        authorized:
+          validationState === "trusted" || validationState === "warning",
+        issuer: issuerCommonName,
+        subject: subjectCommonName,
+        validFrom,
         fingerprint256: certificate.fingerprint256 ?? null,
-        observations: buildSslObservations(
-          validationState,
-          authorizationError,
-          daysRemaining,
-        ),
+        observations: buildSslObservations(facts, problem),
       });
     });
 
@@ -205,30 +353,47 @@ function runSslProbe(
   });
 }
 
+/**
+ * Notes beside the certificate fields. Plain sentences only; a problem
+ * (expired included) is the row's own finding (`problem`), not repeated.
+ */
 function buildSslObservations(
-  validationState: SSLData["validationState"],
-  authorizationError: string | null,
-  daysRemaining: number | null,
+  facts: Parameters<typeof describeCertificateProblem>[0],
+  problem: string | null,
 ) {
   const observations: string[] = [];
 
-  if (validationState === "warning" && authorizationError) {
+  if (facts.validationState === "warning" && facts.authorizationError) {
     observations.push(
       "The certificate chain could not be fully verified from the scanning runtime.",
     );
   }
 
-  if (validationState === "invalid" && authorizationError) {
-    observations.push(`TLS validation failed: ${authorizationError}.`);
-  }
-
-  if (daysRemaining !== null && daysRemaining < 0) {
-    observations.push("The TLS certificate is expired.");
-  } else if (daysRemaining !== null && daysRemaining < 14) {
-    observations.push("The TLS certificate expires within the next 14 days.");
+  if (
+    !problem &&
+    facts.daysRemaining !== null &&
+    facts.daysRemaining >= 0 &&
+    facts.daysRemaining < 14
+  ) {
+    observations.push("The certificate expires within the next 14 days.");
   }
 
   return observations;
+}
+
+/**
+ * A plain-HTTP link whose redirects never reach HTTPS, and whose own host
+ * offers no certificate a browser accepts on 443 (or that names its port):
+ * there is no certificate in its path. An answer, not lost coverage: the
+ * cell reads "didn't apply", and the result stays complete and cacheable.
+ */
+function createNoHttpsSslData(): SSLData {
+  return {
+    ...createUnavailableSslData(
+      "This link never moves to HTTPS, so there's no certificate to check.",
+    ),
+    noHttps: true,
+  };
 }
 
 function createUnavailableSslData(
@@ -298,6 +463,12 @@ const TLS_FAILURE_SUMMARIES: Record<string, (port: number) => string> = {
   ECONNRESET: () =>
     "The TLS connection was reset before the handshake completed.",
   ETIMEDOUT: () => "The TLS probe timed out before the host responded.",
+  // Plain HTTP (or another protocol) on the port: the host answered, just
+  // not with TLS. A finding about the endpoint, not a probe failure.
+  ERR_SSL_WRONG_VERSION_NUMBER: (port) =>
+    `The host answered on port ${port} without TLS.`,
+  ERR_SSL_PACKET_LENGTH_TOO_LONG: (port) =>
+    `The host answered on port ${port} without TLS.`,
 };
 
 type ProbeFailureLog = Pick<CheckFailureOptions, "correlationId" | "redact">;

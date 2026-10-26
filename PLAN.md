@@ -20,8 +20,8 @@ state plus the landed analysis-hardening and review-remediation work.
 
 ## Current Snapshot
 
-- Date: 2026-10-24 (release 4.0.0)
-- Execution status: `P21-P28 complete; P29 distinctiveness stack (layers 0-7: public errors, honesty, evidence and Summary questions, anatomy on paste, speed, sharing, editorial identity, open methodology) merged and released as 4.0.0, with the verification skill (#64)`
+- Date: 2026-10-26 (release 4.1.0)
+- Execution status: `P21-P29 complete (4.0.0); P30 known limits closed and released as 4.1.0: real screen-reader, Android share-sheet, iPhone Shortcut, live-provider, and Firefox/WebKit testing, and every finding fixed`
 - Platform:
   - Next.js `16.4.2`
   - React `19.3.x`
@@ -315,6 +315,17 @@ score band. No score or verdict changes.
 - [x] Verified: format, lint, typecheck clean; unit 49 files / 601, integration 4 / 55, DOM 15 / 93, e2e 46 passed (`E2E_PORT=3133`, axe in both themes), production build, `check:bundle`, `check:contrast` (172), Lighthouse above. Every surface looked at in light and dark at 1440 and 375 (plus 640/768/1024/1280 for the band and anatomy): home empty, pasted, streaming, Safe, Look-alike, Malicious, Critical, feed hit, Unknown, Error, Full, cell focus, shared verified/unverified/expired, batch, history, /about, /privacy, OG cards. Public prose measured at 64–75 characters per line.
 - [ ] Owner: decide whether flagged strip cells keep the Malicious red (P09, the existing ramp) or go ink (P11; one panel judge and the critique preferred it).
 
+### P30 Close 4.0.0's known limits (2026-10-26, release 4.1.0)
+
+- [x] Tested what 4.0.0 had not: a locally built WebAPK from Chromium's own `shell_apk` taking real Android share-sheet shares into production; TalkBack (built from Google's open-source repo, speech from logcat) and VoiceOver in Safari (speech from its caption panel); live production scans of each provider's designated test resources; the README's iPhone Shortcut on an iOS 26.5 simulator; the whole e2e suite in Firefox and WebKit on macOS and Linux.
+- [x] Speech: manual Single/Batch activation, one spoken string per anatomy part and for the owner sentence, a root `role="status"` announcer for toasts, arrivals, the expected-site answer (2 s pause, Enter, blur), and history Clear/Undo; the results live region announces start and result only and empties after 7 s; no `title` beside an `aria-label`; per-mode strip hints outside the toolbar; `role="list"` on unstyled lists; shortened spoken history links. Re-verified with both screen readers.
+- [x] Landing stability: the band holds the room of every verdict that can still land (`BandRoom`, `bandSays`), the site's line holds the link's host while the parser loads, an Error result holds its missing switch's place, and the strip key is drawn whole from the scan's start; `tests/e2e/landing.fixture.spec.ts` checks every frame in every engine (Chromium's layout-shift record too). A coverage caveat is the one documented exception.
+- [x] Shares sign a verdict `basis` (confidence, clean, partial, confirmed) so a verified recipient reads the sender's instruction; one evidence clock (`buildThreatAssessment(signals, asOf)`, cache hits judged at the original `checkedAt`).
+- [x] Providers: http:// links check the site's 443 as browsers' HTTPS-Upgrades do (not partial, cacheable); host-only feed listings are caution, not flagged; plain certificate, RDAP, and DNS wording; dual-stack address counts per family; the summary names a stronger sign over a weaker source.
+- [x] Link pattern model: host and path only, UUIDs and IDs removed (kept when they spell a brand or lure word), bar 6.44 calibrated on popular, short, sign-in, and account links; ensemble points on held-out ordinary links 33.6% -> 1.5%, OpenPhish 80% -> 35% (`PATTERN_MODEL_EVALUATION` on /about).
+- [x] The headline replaces the old tagline in metadata, manifest, and the default card; share cards fit long domains; a share with no link says so (`/?nolink=1`); README Shortcut steps match iOS 26.
+- [x] First-load JS 233,567 B (budget 234,000) after splitting export formats and the anatomy into on-demand chunks and inlining four icons.
+
 ### P29.7 Open methodology (2026-10-24, layer 7 of the distinctiveness stack)
 
 - [x] `/about` prints the scoring method in full: every finding's points (lists, checks of the link itself, discounts), the bands, what convicts on its own (a single finding worth 55+), what can't erase a hit (both discounts off at any single finding worth 45+; the domain-age discount off on any list hit), Unknown, Look-alike, and the confidence cut-offs and caps.
@@ -324,6 +335,16 @@ score band. No score or verdict changes.
 - [x] Second review round: confidence copy states that a partial threat-feed answer is thin only when it found nothing and that a set-aside shared-platform listing earns no clean-feed credit; the rules text moved into `methodology.ts` and prints the engine's thresholds; thresholds are digits and each row's numbers are checked in order; each confidence step is checked against its own policy field. The reviewer's four escaping mutations now fail the test.
 - [x] Two engine fixes the review found: a multi-code Spamhaus answer reads as its strongest listing (phishing over spam), and a relative redirect on a plain-HTTP hop counts as staying on HTTP (10), like an absolute one.
 - [x] Whole-stack review: the HTTP-redirect sign counts only a redirect status (301, 302, 303, 307, 308), so a 200 that carries a Location (absolute or relative) never scores; the predicate (`lib/domain/redirects.ts`) is shared with the Summary, which now explains a relative redirect that stays on plain HTTP (the scorer-coverage walk covers both).
+
+### P30 Proof before merge (2026-10-26, cleanup step 3 of 3)
+
+- [x] Read the lessons from `docs/agents/feedback-census.md` (#82) and `docs/agents/dependabot-proof-audit.md` (#83): Dependabot merges landed with no Proof citing the head SHA and a passing Verify job.
+- [x] Auto-merge: repo auto-merge is off and no workflow merges, so no auto-merge path exists or was added; `fleet-merge-gate` (Audit, Verify, strict, squash only) is the merge gate.
+- [x] `Proof` workflow (`.github/workflows/proof.yml`, `scripts/check-pr-proof.mjs`, `tests/unit/check-pr-proof.test.ts`) fails a pull request until its body has a Proof section quoting the current head SHA in full; it re-runs on body edits without cancelling CI. Dependabot is not exempt; the merging agent appends the Proof.
+- [x] The verify skill's "How to report" states the Proof contract: head SHA, Audit and Verify job URLs, Greptile status, evidence or `INCONCLUSIVE`, posted before merge.
+- [ ] Owner: add `Proof` to `fleet-merge-gate`'s required checks once it has run green on a few pull requests.
+- [x] `CODEOWNERS` now covers the Proof guard: `@amanthanvi` owns `.github/workflows/proof.yml`, `scripts/check-pr-proof.mjs`, `tests/unit/check-pr-proof.test.ts`, and `.github/CODEOWNERS`. Under `pull_request` a PR runs its own copy of the guard, so it could edit the guard to pass itself.
+- [ ] Code-owner review is being turned on in the `fleet-merge-gate` ruleset (done separately by Aman's steward, not in this PR). Every fleet PR is authored as amanthanvi and GitHub ignores an author's own approval, so with code-owner review required, a PR touching the guard files needs Aman to merge it through his admin bypass. That's intended.
 
 ### P24 Resolve September dependency maintenance
 

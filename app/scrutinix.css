@@ -82,11 +82,29 @@
   --sx-hatch-period: 6.5px;
 }
 
+/*
+ * Found nothing and a partial answer are smaller marks, each its own box
+ * (`::after`, laid out, so it snaps to whole pixels), drawn only in its
+ * state. The full-cell fill (`::before`) keeps one size in every state and
+ * stays empty under them, so when the verdict lands and a check it scored
+ * turns from a dash to a hatch, the dash goes and the fill shows: no box
+ * moves.
+ */
+.sx-cell[data-severity="clear"]::before,
+.sx-cell[data-severity="neutral"]::before {
+  background: transparent;
+  transform: scaleX(1);
+  transition: none;
+}
+
 /* Found nothing: a short centred dash, never a block. */
-.sx-cell[data-severity="clear"]::before {
+.sx-cell[data-severity="clear"]::after {
+  content: "";
+  position: absolute;
   inset: calc(50% - max(1px, 6%)) 24%;
   border-radius: 1px;
   background: var(--sx-cell-clear);
+  transform-origin: left center;
   transform: scaleX(1);
 }
 
@@ -95,12 +113,27 @@
  * the centre, so left-anchored length stays reserved for arrival fills
  * and a settled cell never reads as a check stuck halfway.
  */
-.sx-cell[data-severity="neutral"]::before {
+.sx-cell[data-severity="neutral"]::after {
+  content: "";
+  position: absolute;
   inset: 20% 30%;
   border-radius: 1px;
   background: var(--sx-cell-limited);
   transform-origin: center;
   transform: scaleX(1);
+}
+
+/* A check landing while the scan runs: its mark grows in, as a fill does.
+   A strip drawn already settled shows it at once. */
+.sx-cell-live[data-severity="clear"]::after,
+.sx-cell-live[data-severity="neutral"]::after {
+  animation: sx-mark 260ms var(--sx-ease);
+}
+
+@keyframes sx-mark {
+  from {
+    transform: scaleX(0);
+  }
 }
 
 .sx-cell[data-severity="error"] {
@@ -153,6 +186,11 @@
 
   .sx-cell[data-severity="clear"]::before,
   .sx-cell[data-severity="neutral"]::before {
+    background: transparent;
+  }
+
+  .sx-cell[data-severity="clear"]::after,
+  .sx-cell[data-severity="neutral"]::after {
     background: CanvasText;
   }
 
@@ -529,14 +567,104 @@ main:has(#sx-verdict-heading) > .sx-hero-form {
   container-type: inline-size;
 }
 
+/*
+ * The band's grid. Phones: the word and domain; the instruction; the aside
+ * (the score's place: the score, Cancel while checking, or a failed scan's
+ * Try again) on its own row; then the band's last block (caveat and
+ * confidence line) at its foot. From 48rem the aside takes a column beside
+ * the word, domain, and instruction, and the last block spans the band; a
+ * band with nothing there (`.sx-band-across`) gives its word and
+ * instruction the band's width.
+ *
+ * A scan's band holds room (`.sx-band-room`): the same layout drawn twice
+ * more, invisibly, over the whole band and sharing its columns (subgrid),
+ * filled with the longest of everything the band can still say. Checking
+ * and every verdict it can land as are therefore one height and nothing
+ * moves when a verdict lands. The last row is the only flexible one, so
+ * the room a verdict doesn't use opens there, at the band's foot: the
+ * word, the site, the instruction, and the score's place stay together at
+ * the top.
+ */
 .sx-band-body {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem 2.5rem;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto auto auto 1fr;
 }
 
-.sx-band-body > div:first-child {
+.sx-band-head {
+  grid-area: 1 / 1;
   min-width: 0;
+}
+
+.sx-band-imperative {
+  grid-area: 2 / 1;
+}
+
+.sx-band-aside {
+  grid-area: 3 / 1;
+  align-self: start;
+  justify-self: start;
+  margin-top: 1rem;
+}
+
+.sx-band-tail {
+  grid-area: 4 / 1;
+  align-self: end;
+  min-width: 0;
+}
+
+.sx-band-room {
+  display: grid;
+  grid-template-columns: subgrid;
+  grid-row: 1 / -1;
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+
+/* A slot: everything in it shares one cell, so it is as tall as its
+   tallest child, shown or stand-in. */
+.sx-slot {
+  display: grid;
+  align-items: start;
+}
+
+.sx-slot > * {
+  grid-area: 1 / 1;
+  min-width: 0;
+}
+
+/*
+ * The word's slot. On a scan's band it holds the tallest word the band can
+ * show, since a larger text size on a narrow phone can wrap one word and
+ * not another; a shorter word sits at the slot's foot, on the site, so the
+ * site and the instruction stay put when the verdict replaces "Checking".
+ * From 48rem every word fits its line, and a word that would sit across
+ * the band would wrap in the column beside the score, so there the slot
+ * holds only the word shown.
+ */
+.sx-band-word > h2 {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+
+@media (min-width: 48rem) {
+  .sx-band-word > [data-stand-in] {
+    display: none;
+  }
+}
+
+/* Holds the room its text takes; drawn as generated content, so it is
+   never text to select, find, or hear. */
+.sx-stand-in {
+  visibility: hidden;
+  pointer-events: none;
+  user-select: none;
+}
+
+[data-stand-in]::before {
+  content: attr(data-stand-in);
 }
 
 /*
@@ -598,7 +726,6 @@ main:has(#sx-verdict-heading) > .sx-hero-form {
 
 .sx-score {
   display: flex;
-  flex-shrink: 0;
   flex-wrap: wrap;
   align-items: baseline;
   gap: 0.25rem 0.75rem;
@@ -607,7 +734,7 @@ main:has(#sx-verdict-heading) > .sx-hero-form {
   color: var(--sx-band-ink);
 }
 
-.sx-score [role="meter"] {
+.sx-score-value {
   font-size: 2.5rem;
   font-weight: 600;
   line-height: 1;
@@ -616,7 +743,7 @@ main:has(#sx-verdict-heading) > .sx-hero-form {
   color: var(--sx-text);
 }
 
-.sx-score [role="meter"] > span {
+.sx-score-value > span {
   margin-left: 0.25rem;
   font-size: 1.375rem;
   font-weight: 400;
@@ -651,7 +778,7 @@ main:has(#sx-verdict-heading) > .sx-hero-form {
     line-height: var(--text-body--line-height);
   }
 
-  .sx-score [role="meter"] {
+  .sx-score-value {
     font-size: var(--text-score);
   }
 }
@@ -667,13 +794,31 @@ main:has(#sx-verdict-heading) > .sx-hero-form {
   }
 }
 
-/* The score takes its own column only once the longest word
-   ("Suspicious") and a three-digit score both fit. */
+/* The score takes its own column only once the longest word beside it
+   ("Suspicious") and a three-digit score both fit. A band with nothing in
+   the score's place (Unknown, Look-alike, Unconfirmed, a shared link)
+   gives its word and instruction the whole width, which the word's size
+   (16.4cqi) is measured against. */
 @media (min-width: 48rem) {
   .sx-band-body {
-    flex-direction: row;
-    align-items: flex-start;
-    justify-content: space-between;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: auto auto 1fr;
+    column-gap: 2.5rem;
+  }
+
+  .sx-band-aside {
+    grid-area: 1 / 2 / 3 / 3;
+    justify-self: end;
+    margin-top: 0;
+  }
+
+  .sx-band-across > .sx-band-head,
+  .sx-band-across > .sx-band-imperative {
+    grid-column: 1 / -1;
+  }
+
+  .sx-band-tail {
+    grid-area: 3 / 1 / 4 / -1;
   }
 
   .sx-score {
@@ -1312,7 +1457,8 @@ main:has(#sx-verdict-heading) > .sx-hero-form {
   }
 
   .sx-live,
-  .sx-cell-live[data-severity="pending"] {
+  .sx-cell-live[data-severity="pending"],
+  .sx-cell::after {
     animation: none;
   }
 

@@ -6,12 +6,23 @@ import { Toaster } from "sonner";
 export { toast } from "sonner";
 import { useTheme } from "next-themes";
 
+/**
+ * Sonner's region announces each toast as it is added; the page's own
+ * status region already says it (`getToast`), so this one is muted rather
+ * than spoken twice. React leaves the attribute alone afterwards: Sonner
+ * renders the same value every time.
+ */
+function muteLiveRegion(region: HTMLElement | null) {
+  region?.removeAttribute("aria-live");
+}
+
 export default function AppToaster() {
   const { resolvedTheme } = useTheme();
   useEffect(toasterReady, []);
 
   return (
     <Toaster
+      ref={muteLiveRegion}
       theme={resolvedTheme === "light" ? "light" : "dark"}
       position="bottom-center"
       richColors

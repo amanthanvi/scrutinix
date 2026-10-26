@@ -18,7 +18,11 @@ import { bareHostname } from "@/lib/domain/url";
 import { withTimeout } from "@/lib/server/http";
 import { lookupHostingNetwork } from "@/lib/server/providers/team-cymru";
 
-/** Public addresses at which a hostname's address records count as unusual. */
+/**
+ * Public addresses of one family (IPv4 or IPv6) at which a hostname's
+ * address records count as unusual. Per family: a dual-stack name doubles
+ * its count without being unusual (youtu.be answers 4 A and 4 AAAA).
+ */
 export const MANY_ADDRESS_RECORDS = 6;
 
 /**
@@ -75,11 +79,17 @@ export async function runDnsSignal(
       ...(ipv4Addresses.status === "fulfilled" ? ipv4Addresses.value : []),
       ...(ipv6Addresses.status === "fulfilled" ? ipv6Addresses.value : []),
     ]);
-    return { addressList, ...partitionAddresses(addressList) };
+    return {
+      addressList,
+      ...partitionAddresses(addressList),
+      lookupErrors: [ipv4Addresses, ipv6Addresses].map((lookup) =>
+        lookup.status === "rejected" ? errorCodeOf(lookup.reason) : null,
+      ),
+    };
   });
 
   const [
-    { addressList, publicAddresses, blockedCount },
+    { addressList, publicAddresses, blockedCount, lookupErrors },
     hosting,
     [cnames, mxRecords, nameservers, txtRecords],
   ] = await Promise.all([
@@ -114,16 +124,18 @@ export async function runDnsSignal(
     anomalies.push("The hostname uses punycode encoding.");
   }
 
-  if (publicAddresses.length >= MANY_ADDRESS_RECORDS) {
+  const ipv4Count = publicAddresses.filter((ip) => isIP(ip) === 4).length;
+  if (
+    Math.max(ipv4Count, publicAddresses.length - ipv4Count) >=
+    MANY_ADDRESS_RECORDS
+  ) {
     anomalies.push(
       "The hostname resolves to an unusually high number of address records.",
     );
   }
 
   if (addressList.length === 0 && cnameList.length === 0) {
-    observations.push(
-      "No A, AAAA, or CNAME records were returned for the hostname.",
-    );
+    observations.push(describeMissingAddresses(lookupErrors));
   }
 
   if (blockedCount > 0) {
@@ -142,6 +154,33 @@ export async function runDnsSignal(
     observations,
     ...(hosting ? { hosting } : {}),
   };
+}
+
+/** Resolver answers that mean the name has no address, not a failed lookup. */
+const NO_ADDRESS_CODES = new Set(["ENODATA", "ENOTFOUND"]);
+
+/**
+ * Why a name has no address, from the A and AAAA lookups' error codes:
+ * NXDOMAIN (the name doesn't exist), NODATA (it exists without address
+ * records), or a lookup that got no answer (SERVFAIL, a timeout, a refused
+ * query), which says nothing about the name.
+ */
+function describeMissingAddresses(codes: readonly (string | null)[]): string {
+  if (codes.includes("ENOTFOUND")) {
+    return "The hostname doesn't exist in DNS.";
+  }
+  if (codes.every((code) => code === null || NO_ADDRESS_CODES.has(code))) {
+    return "No A, AAAA, or CNAME records were returned for the hostname.";
+  }
+  return "The DNS lookup failed or timed out, so we couldn't find the hostname's addresses.";
+}
+
+function errorCodeOf(reason: unknown): string {
+  return reason instanceof Error &&
+    "code" in reason &&
+    typeof reason.code === "string"
+    ? reason.code
+    : "UNKNOWN";
 }
 
 function partitionAddresses(addresses: string[]) {

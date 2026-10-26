@@ -5,15 +5,15 @@ Completed scans saved in IndexedDB on this device. Search, export, clear, and un
 ## Sub-features
 
 - empty: no rows yet; the region exists and draws nothing
-- list: one row per link (a re-scan replaces the earlier entry): the mini strip, the verdict word (`Look-alike` or `Unconfirmed` where the band says so, `—` while the address check loads), the link with its registered domain in bold, and the time. Click a row to open that result: focus moves to its verdict heading and the live region announces it
+- list: one row per link (a re-scan replaces the earlier entry): the mini strip, the verdict word (`Look-alike` or `Unconfirmed` where the band says so, `—` while the address check loads), the link with its registered domain in bold, and the time you scanned it (`savedAt`, even for a cache hit, whose evidence can be up to 15 minutes older: the opened result's details line says `checked <time> · cached`). Click a row to open that result: focus moves to its verdict heading and the live region announces it. The row's name is `<word> <link>[, belongs to <owner>, not <site>], scanned <time>`; a link whose path runs past 48 characters is spoken as its host and first 40 path characters, any run of four or more of one symbol in them said once, then `, and <n> more characters` (`…/verify/, and 1471 more characters` for `/verify`, 1,500 slashes, `step`). The full link shows on hover, from an `aria-hidden` title; the drawn subdomain, owner, and path are each `aria-hidden` too, since Safari ignores it on the `display: contents` wrapper and read the link twice
 - filter: searchbox `Filter scan history`, visible after more than 3 saved scans
 - export: CSV and JSON of the visible rows
-- clear-undo: confirm, then undo in the same session
+- clear-undo: confirm, then undo in the same session. Each removes the button pressed, so focus moves to the one that reverses it (`Undo clear history`, then `Clear all history`), and the status region (`p[role='status']`) says `History was cleared. Undo restores the previous list.` or `History restored.`
 - legacy: `malicious-url-detector-v2` migrates into `scrutinix-v2` and the old database is removed; an entry saved before per-check results were kept opens with a plain note instead of a strip
 
 ## How to get to it (user POV)
 
-History is the region under the scanner on `/`. With no scans it draws nothing. After a scan, the URL appears in the list under `History` with its count (`History (1 scan)` to a screen reader). Scanning the same link again keeps one row. After four scans, a filter box named `Filter scan history` appears. Clear asks for a second click (`Confirm clear`). `Undo clear` restores the list. Export downloads `scan-history.csv` or `scan-history.json`.
+History is the region under the scanner on `/`. With no scans it draws nothing. After a scan, the URL appears in the list under `History` with its count (the heading's name is `History (1 scan)`, set by `aria-label`). Scanning the same link again keeps one row. After four scans, a filter box named `Filter scan history` appears. Clear asks for a second click (`Confirm clear`). `Undo clear` restores the list. Export downloads `scan-history.csv` or `scan-history.json`.
 
 ## Driving it with Playwright
 
@@ -48,7 +48,7 @@ Screenshots: `history-legacy.png`, `history-filtered.png`, `history-cleared.png`
 - Clear is two clicks. The first only arms confirm for a few seconds. Click `Confirm clear all history` before that timer.
 - Undo lasts until the page reloads or a new result is saved: a scan or a batch result after a clear drops the undo. The drive undoes right after confirming.
 - Export while a filter is active downloads the filtered rows and the button name becomes `Export filtered history CSV`. The drive exports with an empty filter.
-- Row buttons have no separate aria-label. Their accessible name is the verdict word, the link, and the time together. Match rows with `getByRole("button", { name: /host/ })`: plain text matches also hit the compact link anatomy.
+- Row buttons have no separate aria-label. Their accessible name is the verdict word, the link, and `, scanned <time>` together. Match rows with `getByRole("button", { name: /host/ })`: plain text matches also hit the compact link anatomy.
 - On a narrow row the subdomain is cut from its left so the registered domain (`[data-part="owner"]`) is never cut.
 - A legacy entry draws empty glyph slots and the note, never eight "failed" cells. A real scan whose eight checks all failed still draws its eight cells.
 - History writes are async. Poll IndexedDB instead of reading it once on the next line.

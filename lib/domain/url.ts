@@ -154,3 +154,29 @@ export function bareHostname(url: string | URL): string {
 export function isPrivateHostname(hostname: string) {
   return isBlockedHostname(hostname);
 }
+
+/**
+ * Hostname of a URL, lowercased; null when it does not parse. Here rather
+ * than in `link-anatomy.ts`, which the browser loads only with the link
+ * parser: the page needs a host before the parser arrives.
+ */
+export function hostOf(url: string): string | null {
+  try {
+    return new URL(url).hostname.toLowerCase().replace(/\.$/, "") || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Where the link actually ends, when that is a different host from the one
+ * it names: the final redirect host. Null when it ends where it started.
+ */
+export function redirectDestination(
+  scannedUrl: string,
+  finalUrl: string | null | undefined,
+): string | null {
+  const start = hostOf(scannedUrl);
+  const end = finalUrl ? hostOf(finalUrl) : null;
+  return start && end && start !== end ? end : null;
+}

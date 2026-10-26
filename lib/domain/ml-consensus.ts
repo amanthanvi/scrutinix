@@ -7,10 +7,12 @@ import type { ClassificationFinding } from "@/lib/domain/types";
  * panel's rows (`components/shared/signal-utils.ts`) and the verdict
  * reasons (`lib/domain/verdict.ts`): "link pattern model" and "structure
  * checks", never "transformer" or "lexical heuristics". The transformer
- * carries more weight, but benign
- * transformer calls never suppress strong structural evidence from the
- * lexical side - phishing URLs frequently look "clean" to a text model
- * while tripping structural checks.
+ * carries more weight, but no transformer reading suppresses strong
+ * structural evidence from the lexical side - phishing URLs frequently look
+ * "clean" to a text model while tripping structural checks - and a
+ * transformer flag never scores below the structure checks alone (its
+ * score is its distance from its bar, so a flag just past the bar is
+ * small).
  */
 export function classifyConsensus(
   transformer: ClassificationFinding | null,
@@ -24,21 +26,21 @@ export function classifyConsensus(
     transformer.score * labelRiskWeight(transformer.label) * 0.7 +
     lexical.score * labelRiskWeight(lexical.label) * 0.3;
 
-  let effectiveRisk = combinedRisk;
-  if (transformer.label === "benign" && lexical.label !== "benign") {
-    if (lexical.label === "malicious") {
-      effectiveRisk = Math.max(
-        combinedRisk,
-        Math.min(0.95, lexical.score * 0.97),
-      );
-    } else {
-      effectiveRisk = Math.max(combinedRisk, lexical.score * 0.78);
-    }
-  }
+  const structureFloor =
+    lexical.label === "malicious"
+      ? Math.min(0.95, lexical.score * 0.97)
+      : lexical.label === "risky"
+        ? lexical.score * 0.78
+        : 0;
+  const effectiveRisk = Math.max(combinedRisk, structureFloor);
 
+  // When only the structure checks flag the link, they set the label, so
+  // their reasons lead (the verdict states the first one).
+  const structureLed =
+    transformer.label === "benign" && lexical.label !== "benign";
   const disagreementNote =
     transformer.label !== lexical.label
-      ? transformer.label === "benign" && lexical.label !== "benign"
+      ? structureLed
         ? [
             "The link pattern model read this link as normal, but its structure looked risky, so the risk was raised to match the structure.",
           ]
@@ -59,11 +61,11 @@ export function classifyConsensus(
           : "benign",
     score: Number(effectiveRisk.toFixed(2)),
     reasons: [
-      ...new Set([
-        ...transformer.reasons,
-        ...lexical.reasons,
-        ...disagreementNote,
-      ]),
+      ...new Set(
+        structureLed
+          ? [...lexical.reasons, ...disagreementNote, ...transformer.reasons]
+          : [...transformer.reasons, ...lexical.reasons, ...disagreementNote],
+      ),
     ],
     model: "ensemble",
   } satisfies ClassificationFinding;

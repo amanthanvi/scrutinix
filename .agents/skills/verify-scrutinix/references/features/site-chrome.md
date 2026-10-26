@@ -6,8 +6,10 @@ The frame around every page: skip link, wordmark, About and Privacy, theme contr
 
 - skip-link: first Tab stop is `Skip to content`, targeting `#main-content`
 - header: wordmark, navigation `Primary` (About, Privacy, the theme button)
-- keyboard: Tab order is Skip to content, About, Privacy, the theme button, then tab `Single`; the arrow keys move between `Single` and `Batch`
+- keyboard: Tab order is Skip to content, About, Privacy, the theme button, then tab `Single`; the arrow keys move focus between `Single` and `Batch` without switching (Enter or Space switches)
+- status: an empty `p[role='status']` (`components/ui/announcer.tsx`) is in every page from the first paint; notifications, a link arriving through `?url=`, the expected-site answer, and history Clear/Undo are said there once and cleared a few seconds later
 - headline: the home `<h1>` is `Is this link what it says it is?`, in the Newsreader display serif
+- previews: the headline is the site's line everywhere it is stated. The title (and `og:title`, `twitter:title`) is `Scrutinix — Is this link what it says it is?` on `/` and on a shared link that isn't verified or has expired; `og:description` and `twitter:description` are `Eight separate checks, one plain verdict.`; `og:image` and `twitter:image` are the same `/opengraph-image?<hash>` URL, the default card with the headline in two lines (`Is this link` / `what it says it is?`), and `og:image:alt` and `twitter:image:alt` are `Scrutinix: Is this link what it says it is?` followed by the card's supporting line; the `public/site.webmanifest` description is `Is this link what it says it is? Eight separate checks, one plain verdict.` `/about` and `/privacy` have their own titles and the same `og:` and `twitter:` lines, card, and alt text. A verified shared result previews its result instead (share-and-rescan).
 - footer: the wordmark, navigation `Footer` with About, Privacy, and Source, and `Free and open source. No account needed.`
 - not-found: unknown paths render the framework 404
 
@@ -20,6 +22,7 @@ Open `/`. The wordmark on the home page is text, not a link. On `/about` and `/p
 `npm run verify:drive` test `site chrome and theme`, plus the navigation in `about and privacy`.
 
 - `page.getByRole("heading", { level: 1, name: "Is this link what it says it is?" })`
+- `expect(page).toHaveTitle("Scrutinix — Is this link what it says it is?")`; the e2e test `every preview of the site states the home headline` (`tests/e2e/app.smoke.spec.ts`) checks the `og:`/`twitter:` tags on `/`, `/about`, and `/privacy`, the card's lines, and the manifest against the `<h1>`; `tests/unit/og-default-card.test.ts` checks the card draws those lines and that its alt text reads the card
 - `page.getByRole("link", { name: "Skip to content" })` after one Tab, then About and Privacy in `page.getByRole("navigation", { name: "Primary" })`, the theme button, and `page.getByRole("tab", { name: "Single" })`; ArrowRight focuses tab `Batch`
 - `page.getByRole("navigation", { name: "Footer" })` has links `About`, `Privacy`, and `Source`
 - The empty `Scan history` region is attached and draws nothing
@@ -30,7 +33,7 @@ Screenshots: `chrome-theme.png`, `not-found.png`.
 
 ## Gotchas
 
-- The theme button's accessible name is `Toggle theme` until the client has mounted, then `Switch to light theme` or `Switch to dark theme`. Wait for the settled name before clicking. `gotoApp` (and `waitForHydration`) in `scripts/support.ts` do this.
+- The theme button's accessible name is `Toggle theme` until the client has mounted, then `Switch to light theme` or `Switch to dark theme`. Wait for the settled name before clicking. `gotoApp` (and `waitForHydration`) in `scripts/support.ts` do this. Its tooltip is a `title` on an `aria-hidden` layer over the button: a `title` on the button itself was read again after its name.
 - As soon as the band is on the page (the `Checking` band included), the home `<h1>` is visually hidden (it stays in the outline) and the lead sentence under it goes, so the verdict owns the first view. Assert the headline before a scan, not after.
 - A shared result link (`/?shared=…`) has no visible headline: its `<h1>` is the visually hidden `A link shared with you`, and the form sits under the h2 `Check another link`.
 - Next.js dev adds a small dev-tools badge. Click by role, not by coordinates.

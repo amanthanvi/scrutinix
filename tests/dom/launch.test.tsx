@@ -4,12 +4,14 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AnalyzerRuntimeProvider } from "@/components/scrutinix/analyzer-runtime";
 import { ResultsSection } from "@/components/scrutinix/results-section";
 import { ScanForm } from "@/components/scrutinix/scan-form";
+import { announce, Announcer } from "@/components/ui/announcer";
 import { resolvePrefill } from "@/lib/domain/share-launch";
 import {
   encodeSharedSnapshot,
@@ -92,6 +94,7 @@ function renderApp({
     <AnalyzerRuntimeProvider prefill={prefill} shared={shared}>
       <ScanForm />
       <ResultsSection />
+      <Announcer />
     </AnalyzerRuntimeProvider>,
   );
 }
@@ -128,6 +131,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+  announce("");
 });
 
 describe("a link handed to the page (?url=, or the share target's redirect to it)", () => {
@@ -180,6 +184,82 @@ describe("a link handed to the page (?url=, or the share target's redirect to it
       view.unmount();
     }
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("says once that a link was filled in, and whose it really is", async () => {
+    stubScan(LINK);
+    const lookAlike = "https://paypal.com.secure-login.xyz/verify";
+    renderApp({ prefill: resolvePrefill(lookAlike) });
+    const status = screen.getByRole("status");
+    // Not by moving focus to the field (the phone keyboard would cover the
+    // link): a polite message, once the address check knows the owner.
+    await waitFor(() =>
+      expect(status.textContent).toBe(
+        "Link filled in: paypal.com.secure-login.xyz. This link belongs to secure-login.xyz, not paypal.com. Press Analyze to check it.",
+      ),
+    );
+    expect(document.activeElement).toBe(analyzeButton());
+  });
+
+  it("puts the arrival in reading order, before the field, until the link is edited or scanned", async () => {
+    const fetchMock = stubScan(LINK);
+    renderApp({ prefill: LINK });
+    const scanConsole = screen.getByRole("region", { name: "Scan console" });
+    // VoiceOver's own reading of a new page talked over the announcement
+    // in Safari, so a reader meets the arrival on the way to the field.
+    const note = within(scanConsole).getByText(
+      "Link filled in: parcel-help.example. Press Analyze to check it.",
+    );
+    expect(note.className).toContain("sr-only");
+    expect(
+      note.compareDocumentPosition(urlInput()) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    // Outside the tab panel: TalkBack reads a focusable panel's text with
+    // its name, then each stop, so inside it the note was said twice.
+    expect(note.closest("[role='tabpanel']")).toBeNull();
+
+    // Scanned: the result is on screen, so the note goes.
+    await act(async () => {
+      fireEvent.click(analyzeButton());
+    });
+    await waitFor(() =>
+      expect(screen.getByLabelText(/^scan result: /i)).toBeDefined(),
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(within(scanConsole).queryByText(/^Link filled in:/)).toBeNull();
+  });
+
+  it("drops the arrival note once the link is edited", () => {
+    renderApp({ prefill: LINK });
+    const scanConsole = screen.getByRole("region", { name: "Scan console" });
+    expect(within(scanConsole).getByText(/^Link filled in:/)).toBeTruthy();
+    fireEvent.change(urlInput(), { target: { value: `${LINK}/more` } });
+    expect(within(scanConsole).queryByText(/^Link filled in:/)).toBeNull();
+  });
+
+  it("never announces an arrival the visitor has already replaced", async () => {
+    stubScan(LINK);
+    renderApp({
+      prefill: resolvePrefill("https://paypal.com.secure-login.xyz/verify"),
+    });
+    // Replaced before the address check reports back (or before the
+    // queued message is spoken): nothing about the old link is said.
+    fireEvent.change(urlInput(), { target: { value: "https://example.com/" } });
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 600)));
+    expect(screen.getByRole("status").textContent).not.toMatch(
+      /Link filled in/,
+    );
+  });
+
+  it("says a link that imitates nothing was filled in, without an owner sentence", async () => {
+    stubScan(LINK);
+    renderApp({ prefill: LINK });
+    await waitFor(() =>
+      expect(screen.getByRole("status").textContent).toBe(
+        "Link filled in: parcel-help.example. Press Analyze to check it.",
+      ),
+    );
   });
 
   it("leaves an empty field alone when there is nothing to fill in", async () => {

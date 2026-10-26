@@ -63,20 +63,26 @@ use the bookmarklet below.
 
 **iPhone and iPad (Shortcuts):** iOS has no web share target, so a Shortcut
 you build once opens Scrutinix with the link filled in; tap **Analyze** to
-check it.
+check it. These steps match iOS 26:
 
-1. Open **Shortcuts**, tap **+**, and name the shortcut **Check with
-   Scrutinix**.
-2. Tap the **ⓘ** (Details) button, turn on **Show in Share Sheet**, and set
-   the share-sheet types to **URLs**, **Safari web pages**, and **Text**.
-   Under **If there's no input**, choose **Get Clipboard**.
-3. Add **Get URLs from Input** (input: **Shortcut Input**). It finds links
-   inside shared text too.
-4. Add **Get Item from List** → **First Item**.
-5. Add **URL Encode** → **Encode** the **Item from List**.
-6. Add **URL** and type `https://www.scrutinix.net/?url=`, then insert the
-   **URL Encoded Text** variable right after the `=`.
-7. Add **Open URLs** (input: **URL**).
+1. Open **Shortcuts** and tap **+**. Add **Get URLs from Input**, then tap
+   **Input** → **Select Variable** → **Shortcut Input**. It finds links inside
+   shared text too.
+2. Tap **ⓘ** (Details, in the bar at the bottom) and turn on **Show in Share
+   Sheet**. Back in the editor, tap the types in **Receive … from Share
+   Sheet**, tap **Clear**, and turn on **Text**, **Safari Web Pages**, and
+   **URLs**. Set **If there's no input** to **Get Clipboard**.
+3. Add **Get Item from List** (it reads **Get First Item from URLs**).
+4. Add **URL Encode** (it encodes the **Item from List**).
+5. Add **URL**, type `https://www.scrutinix.net/?url=`, then tap **URL Encoded
+   Text** above the keyboard to insert it right after the `=`.
+6. Add **Open URLs**.
+7. Tap the title at the top → **Rename**, name it **Check with Scrutinix**, and
+   tap **‹** to save.
+
+To use it, share a link or a message from any app and choose **Check with
+Scrutinix** (in Safari: **Share** → **View More**). With nothing shared, run it
+from Shortcuts to check the link on your clipboard.
 
 **Bookmarklet (any desktop browser):** save this as a bookmark's URL to open
 the page you're on in Scrutinix, ready to check:
@@ -187,7 +193,9 @@ npm run lighthouse
 Pull requests and pushes to `main` run the full CI chain, including fixture-backed
 Playwright checks and Lighthouse with blocking Performance `>= 0.90` and
 Accessibility `>= 0.95` thresholds. CI installs Chromium explicitly and shares
-its executable path with both browser tools.
+its executable path with both browser tools. `npm run test:e2e` runs the
+Playwright suite in Chromium; `npm run test:e2e:engines` runs it in Chromium,
+Firefox, and WebKit, and CI runs the Firefox and WebKit legs as their own jobs.
 
 Additional repo maintenance checks:
 

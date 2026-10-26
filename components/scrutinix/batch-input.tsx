@@ -2,7 +2,12 @@
 
 import { useMemo } from "react";
 import { Button } from "@/components/ui/button";
+import { getToast } from "@/components/ui/lazy-toaster";
 import { Textarea } from "@/components/ui/textarea";
+import { loadLinkParser } from "@/hooks/use-link-anatomy";
+import { downloadTextFile } from "@/lib/client/export";
+import { resultsToCsv, resultsToJson } from "@/lib/client/export-formats";
+import type { AnalysisResult } from "@/lib/domain/types";
 
 interface BatchInputProps {
   value: string;
@@ -11,9 +16,8 @@ interface BatchInputProps {
   streaming: boolean;
   onSubmit: () => void;
   onCancel: () => void;
-  hasResults: boolean;
-  onCsv: () => void;
-  onJson: () => void;
+  /** The batch's finished results, which its export buttons save. */
+  results: AnalysisResult[];
 }
 
 export function BatchInput({
@@ -23,9 +27,7 @@ export function BatchInput({
   streaming,
   onSubmit,
   onCancel,
-  hasResults,
-  onCsv,
-  onJson,
+  results,
 }: BatchInputProps) {
   const urlCount = useMemo(
     () =>
@@ -35,13 +37,21 @@ export function BatchInput({
         .filter(Boolean).length,
     [value],
   );
+  const hasResults = results.length > 0;
+
+  // The export formats load with this panel, not the page.
+  const onCsv = async () => {
+    const parser = await loadLinkParser();
+    downloadTextFile("batch.csv", resultsToCsv(results, parser));
+    (await getToast()).success("Downloaded batch.csv");
+  };
+  const onJson = async () => {
+    downloadTextFile("batch.json", resultsToJson(results), "application/json");
+    (await getToast()).success("Downloaded batch.json");
+  };
 
   return (
     <div className="flex flex-col gap-3">
-      <label htmlFor="sx-batch-input" className="sr-only">
-        URLs to analyze
-      </label>
-
       <Textarea
         id="sx-batch-input"
         value={value}
@@ -73,7 +83,13 @@ export function BatchInput({
           {error}
         </p>
       ) : (
-        <p id="sx-batch-hint" className="text-meta text-[var(--sx-text-soft)]">
+        // The field's description, so a reading cursor doesn't meet it a
+        // second time right after the field.
+        <p
+          id="sx-batch-hint"
+          aria-hidden="true"
+          className="text-meta text-[var(--sx-text-soft)]"
+        >
           One link per line, up to 10. Cmd/Ctrl+Enter starts the batch.
           {urlCount > 0 ? (
             <span className="text-[var(--sx-text-muted)] tabular-nums">

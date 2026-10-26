@@ -3,11 +3,11 @@ import { describe, expect, it } from "vitest";
 
 import {
   findImpersonatedDomain,
-  redirectDestination,
   registrableDomainOf,
   splitLinkAnatomy,
 } from "@/lib/domain/link-anatomy";
 import { getRegistrableDomain } from "@/lib/domain/registrable-domain";
+import { redirectDestination } from "@/lib/domain/url";
 
 const split = (url: string) => splitLinkAnatomy(parse, url);
 

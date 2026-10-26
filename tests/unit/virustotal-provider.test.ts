@@ -84,6 +84,24 @@ describe("runVirusTotalProvider", () => {
     expect(analysisCalls).toBe(2);
   });
 
+  it("says plainly when VirusTotal refuses the address", async () => {
+    const target = "https://scrutinix-check.invalid/";
+    const urlId = Buffer.from(target).toString("base64url");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL): Promise<Response> => {
+        const u = typeof input === "string" ? input : input.toString();
+        return u.includes(`/urls/${urlId}`)
+          ? new Response(null, { status: 404 })
+          : new Response(null, { status: 400 });
+      }),
+    );
+
+    await expect(runVirusTotalProvider(target)).rejects.toThrow(
+      "VirusTotal doesn't accept this address for analysis.",
+    );
+  });
+
   it("drops engines that found nothing from a fresh analysis, as from a report", async () => {
     const target = "https://fresh.example/z";
     const urlId = Buffer.from(target).toString("base64url");
