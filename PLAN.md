@@ -324,7 +324,7 @@ score band. No score or verdict changes.
 - [x] Providers: http:// links check the site's 443 as browsers' HTTPS-Upgrades do (not partial, cacheable); host-only feed listings are caution, not flagged; plain certificate, RDAP, and DNS wording; dual-stack address counts per family; the summary names a stronger sign over a weaker source.
 - [x] Link pattern model: host and path only, UUIDs and IDs removed (kept when they spell a brand or lure word), bar 6.44 calibrated on popular, short, sign-in, and account links; ensemble points on held-out ordinary links 33.6% -> 1.5%, OpenPhish 80% -> 35% (`PATTERN_MODEL_EVALUATION` on /about).
 - [x] The headline replaces the old tagline in metadata, manifest, and the default card; share cards fit long domains; a share with no link says so (`/?nolink=1`); README Shortcut steps match iOS 26.
-- [x] First-load JS 233,564 B (budget 234,000) after splitting export formats and the anatomy into on-demand chunks and inlining four icons.
+- [x] First-load JS 233,567 B (budget 234,000) after splitting export formats and the anatomy into on-demand chunks and inlining four icons.
 
 ### P29.7 Open methodology (2026-10-24, layer 7 of the distinctiveness stack)
 

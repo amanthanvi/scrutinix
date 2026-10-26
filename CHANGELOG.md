@@ -38,7 +38,7 @@ Scrutinix 4.1.0 closes what 4.0.0 left untested or open. Every item below was fo
 
 ### Quality
 
-- First-load JavaScript is 233,564 B gzipped, under the 234,000 budget, after moving export formats and the link breakdown into on-demand chunks and drawing four icons inline.
+- First-load JavaScript is 233,567 B gzipped, under the 234,000 budget, after moving export formats and the link breakdown into on-demand chunks and drawing four icons inline.
 - Unit 820, integration 60, DOM 157 and e2e 78 tests per engine (72 in WebKit, which has no default text size setting).
 
 ## [4.0.0] - 2026-10-25
