@@ -109,6 +109,7 @@ lib/
     link-anatomy.ts       # Isomorphic URL anatomy + look-alike detection (tldts passed in)
     expected-site.ts      # "Were you expecting…?": compare an expected domain (or IP) with the link's registered domain (names never confirmed or denied)
     impersonated-brands.ts # Shared brand list (look-alike ccTLD runs, structure-risk scoring)
+    lure-words.ts         # Structure checks' lure words; the model keeps an ID-like run that spells one
     registrable-domain.ts # Server wrapper over link-anatomy's registrableDomainOf
     copy.ts               # countOf / formatList / capitalize / formatAge for user-facing copy
     share-launch.ts       # Share-target link extraction (extractSharedLink) and ?url= prefill (resolvePrefill)
@@ -149,10 +150,13 @@ tests/
   member. No hosted inference call is required. User-facing copy names the
   two members "link pattern model" and "structure checks" everywhere
   (details rows, consensus notes, verdict reasons). The model reads only
-  the host and path (no query or fragment; UUIDs and IDs left out), with
-  and without scheme and `www.`, and flags only past `PATTERN_MODEL_BAR`,
-  set by an offline evaluation to 2% of ordinary links, sign-in and account
-  links included (`lib/server/ml/model/README.md`). Its own score is a
+  the host and path (no query; no fragment, which scans drop anyway,
+  unless a `#/` route; UUIDs and IDs left out, but an ID-like run that
+  spells a listed brand or lure word stays, so a listed lure can't hide
+  as an ID), with and without scheme and `www.`, and flags only past
+  `PATTERN_MODEL_BAR`, set by an offline evaluation to 2% of ordinary
+  links, sign-in and account links included
+  (`lib/server/ml/model/README.md`). Its own score is a
   distance from that bar, so no copy states it as a percentage; the
   Combined result's "risk N of 100" and /about's points rows use the
   ensemble's combined score of that distance and the structure checks. A

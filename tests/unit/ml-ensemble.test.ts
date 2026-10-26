@@ -56,6 +56,29 @@ describe("runMlEnsembleProvider", () => {
     expect(result.warnings).toEqual([]);
   });
 
+  it("reads a lure word in the query, which the link pattern model leaves out", async () => {
+    classifierMock.mockResolvedValue({
+      label: "benign",
+      score: 0.99,
+      reasons: ["The link pattern model read this link as normal."],
+      model: "urlbert-tiny-v4-phishing-q8",
+    });
+
+    const result = await runMlEnsembleProvider(
+      "https://shop-example.com/?next=paypal-verify",
+    );
+
+    expect(result.lexicalModel.reasons).toContain(
+      "The URL contains high-risk terms such as verify.",
+    );
+    // A brand alone in the query is not a term (tried, it gave points to
+    // Amazon's own sign-in links: openid.return_to=...amazon...).
+    const brandOnly = await runMlEnsembleProvider(
+      "https://shop-example.com/?next=paypal",
+    );
+    expect(brandOnly.lexicalModel.reasons.join(" ")).not.toMatch(/high-risk/);
+  });
+
   it("elevates IP, non-default HTTPS port, and script path over a benign transformer call", async () => {
     classifierMock.mockResolvedValue({
       label: "benign",

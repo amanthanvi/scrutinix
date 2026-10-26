@@ -68,9 +68,22 @@ reads at most 64 tokens, the start of the link.
 So `classifyUrlLocally` (`lib/server/ml/local-classifier.ts`):
 
 1. Reads only the host and path: the query and fragment are left out (the
-   structure checks still read the whole link). In the path, UUIDs are left
-   out whole, then ID-like runs (six or more letters and digits that switch
-   between the two at least twice, or camel-cased random letters).
+   structure checks still read the whole link, query included). A fragment
+   route (`#/signin`, `#!/login`) would read as path, but scans drop the
+   fragment before any check (`normalizeUrlInput`), so neither member sees
+   one. In the path, UUIDs are left out whole, then ID-like runs (six or
+   more letters and digits that switch between the two at least twice, or
+   camel-cased random letters), unless the run spells a listed brand
+   (`lib/domain/impersonated-brands.ts`) or a lure word, five letters or
+   more, in any case, with digits between its letters, standing in for
+   them, or both (`PayPalSecureLogin`, `paypal2verify`, `P4yP4lL0g1n`).
+   The lure words are the structure checks' own (`lib/domain/lure-words.ts`)
+   plus sign-in, account, mail and file-sharing words (`signin`, `logon`,
+   `account`, `confirm`, `verif`, `secur`, `webmail`, `docusign`,
+   `sharepoint`, ...) that the training links' paths tie to phishing at 76%
+   to 100% (47% overall). Shorter names (`hsbc`, `auth`) and runs of hex
+   digits are never kept: they turned up in random ids and hashes
+   (`ad0be` reads as "adobe").
 2. Reads two writings of that: as written, and without its scheme and a
    leading `www.`. Every link gets the same treatment.
 3. Averages the two readings as log-odds of phishing over benign.
@@ -204,12 +217,29 @@ Known misses:
   `is.gd`), and Google Drive share links (3 of 15).
 - Leaving the query out also hides it from the model when it is the
   phishing part (`?email=` with the victim's address, a lookalike
-  redirect). The structure checks still read it. Phishing.Database links
-  with a query were caught at 57.6%, against 58.9% for round one's reading
-  at the same 2% target.
-- An ID-like run in a phishing path is left out of the model's reading too
-  (the structure checks still read the whole link). A phisher could try to
-  evade the model by making path words look like ids.
+  redirect). The structure checks still read it, but lure words add at
+  most 0.25 to their score, so lure words alone never make them call a
+  link risky (0.45). A brand name in the query was tried as a structure
+  term and dropped: it gave points to Amazon's own sign-in links
+  (`openid.return_to=...amazon...`) and gave no phishing link points it
+  didn't already have.
+  Phishing.Database links with a query were caught at 57.6%, against
+  58.9% for round one's reading at the same 2% target.
+- An ID-like run in a phishing path is left out of the model's reading
+  unless it spells a listed brand or lure word (the structure checks still
+  read the whole link). Keeping those (2026-10-26, after a security review
+  showed `/PayPalSecureLogin` and `/paypal2verify` reached the model as
+  the bare site) changed the reading of 21 of the 20,462 corpus links,
+  none of them benign: every benign and held-out figure above is
+  unchanged, and the bar stays 6.44. Phishing.Database flags rose from
+  48.77% to 48.83% (4 links newly flagged, 1 no longer); OpenPhish and
+  malware are unchanged. Feed links rarely write lures as ids, so this
+  closes an evasion more than it catches today's phishing. In a
+  simulation, a random id is kept by chance about once in 50,000
+  (YouTube's 11 characters) to once in 3,000 (120-character tokens), and
+  a hex hash never. A word off the list, a letter look-alike (`PayPaI`),
+  or ordinary words before the lure (`/shop/category/.../PayPalSecureLogin`)
+  still get past the model.
 
 To re-measure, rebuild the corpora above, run each link through
 `normalizeUrlInput` and `runMlEnsembleProvider`, and set the bar on the
