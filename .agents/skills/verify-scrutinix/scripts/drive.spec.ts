@@ -73,6 +73,9 @@ test("site chrome and theme", async ({ page }) => {
       name: "Is this link what it says it is?",
     }),
   ).toBeVisible();
+  await expect(page).toHaveTitle(
+    "Scrutinix — Is this link what it says it is?",
+  );
   // The empty history region exists but draws nothing.
   const history = page.getByRole("region", { name: "Scan history" });
   await expect(history).toBeAttached();
