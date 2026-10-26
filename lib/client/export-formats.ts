@@ -1,14 +1,15 @@
-import {
-  splitLinkAnatomy,
-  type ParseHostname,
-} from "@/lib/domain/link-anatomy";
+import type * as LinkParserModule from "@/lib/client/link-parser";
 import type { AnalysisResult } from "@/lib/domain/types";
 
 /**
  * The CSV and JSON formats for exported results. Only the Batch and history
  * panels export, and both load on demand, so these stay out of the page's
- * first load.
+ * first load. The look-alike column comes from the loaded parser chunk
+ * (`loadLinkParser`), so the anatomy code isn't copied into those panels.
  */
+
+/** The parts of the parser chunk the CSV uses. */
+type CsvParser = Pick<typeof LinkParserModule, "parse" | "splitLinkAnatomy">;
 
 /**
  * Neutralize spreadsheet formula injection: a scanned URL is attacker-
@@ -24,7 +25,7 @@ function escapeCsvCell(value: unknown): string {
 }
 
 /**
- * `parse` (the Public Suffix List parser, when loaded) fills "Look-alike
+ * `parser` (the Public Suffix List parser, when loaded) fills "Look-alike
  * of": the site a link's address imitates. The stored verdict and score
  * stay as data; a reader of the sheet still sees that a "safe" row's
  * address is a look-alike. Without the parser the column says so, since
@@ -34,7 +35,7 @@ const NOT_CHECKED = "Not checked";
 
 export function resultsToCsv(
   results: AnalysisResult[],
-  parse: ParseHostname | null = null,
+  parser: CsvParser | null = null,
 ) {
   const rows = [
     [
@@ -50,8 +51,9 @@ export function resultsToCsv(
     ...results.map((result) => [
       result.url,
       result.verdict,
-      parse
-        ? (splitLinkAnatomy(parse, result.url)?.impersonates ?? "")
+      parser
+        ? (parser.splitLinkAnatomy(parser.parse, result.url)?.impersonates ??
+          "")
         : NOT_CHECKED,
       String(result.threatInfo?.score ?? 0),
       String(result.threatInfo?.confidence ?? 0),

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { parse } from "tldts";
 
 import { resultsToCsv } from "@/lib/client/export-formats";
+import { splitLinkAnatomy } from "@/lib/domain/link-anatomy";
 import {
   createPendingSignalResults,
   type AnalysisResult,
@@ -65,7 +66,7 @@ describe("resultsToCsv", () => {
         buildResult("https://paypal.com.secure-login.xyz/verify"),
         buildResult("https://example.com/"),
       ],
-      parse,
+      { parse, splitLinkAnatomy },
     );
     const [header, lookAlike, plain] = csv.replace(/^\uFEFF/, "").split("\r\n");
     expect(header).toContain('"Verdict","Look-alike of"');

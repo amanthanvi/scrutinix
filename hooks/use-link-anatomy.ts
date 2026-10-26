@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useSyncExternalStore } from "react";
 
 import type * as LinkParserModule from "@/lib/client/link-parser";
-import type { LinkAnatomy, ParseHostname } from "@/lib/domain/link-anatomy";
+import type { LinkAnatomy } from "@/lib/domain/link-anatomy";
 
 /**
  * The loaded parser chunk: tldts' `parse` and the anatomy and
@@ -24,7 +24,7 @@ const RETRY_DELAY_MS = 1_000;
 
 // tldts carries the Public Suffix List (~40 KB gzipped). Load it only once
 // a scan starts or a result shows, never with the initial page.
-let parsePromise: Promise<ParseHostname> | null = null;
+let parsePromise: Promise<LinkParser> | null = null;
 let loadedParser: LinkParser | null = null;
 let loadFailed = false;
 const listeners = new Set<() => void>();
@@ -46,7 +46,7 @@ function importParser(): Promise<LinkParser> {
  * The status stays "failed" while it does: a shown "Unconfirmed" never
  * flickers back to a held band, and changes only if a load succeeds.
  */
-export function preloadLinkParser(): Promise<ParseHostname> {
+export function preloadLinkParser(): Promise<LinkParser> {
   if (!parsePromise) {
     parsePromise = importParser()
       .catch(
@@ -62,7 +62,7 @@ export function preloadLinkParser(): Promise<ParseHostname> {
         (parser) => {
           loadedParser = parser;
           setLoadState(false);
-          return parser.parse;
+          return parser;
         },
         (error: unknown) => {
           parsePromise = null;
@@ -84,7 +84,7 @@ export function warmLinkParser(): void {
  * load in progress, tries again after a failure, and gives null only if it
  * still can't load, so the caller says the address wasn't checked.
  */
-export function loadLinkParser(): Promise<ParseHostname | null> {
+export function loadLinkParser(): Promise<LinkParser | null> {
   return preloadLinkParser().catch(() => null);
 }
 

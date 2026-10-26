@@ -254,10 +254,10 @@ export function HistoryPanel({
               onClick={async () => {
                 // Waits for the address parser, so a cold visit's export
                 // still names every look-alike.
-                const parse = await loadLinkParser();
+                const parser = await loadLinkParser();
                 downloadTextFile(
                   "scan-history.csv",
-                  resultsToCsv(entries, parse),
+                  resultsToCsv(entries, parser),
                 );
               }}
               variant="ghost"

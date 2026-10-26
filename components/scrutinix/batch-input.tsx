@@ -41,8 +41,8 @@ export function BatchInput({
 
   // The export formats load with this panel, not the page.
   const onCsv = async () => {
-    const parse = await loadLinkParser();
-    downloadTextFile("batch.csv", resultsToCsv(results, parse));
+    const parser = await loadLinkParser();
+    downloadTextFile("batch.csv", resultsToCsv(results, parser));
     (await getToast()).success("Downloaded batch.csv");
   };
   const onJson = async () => {
