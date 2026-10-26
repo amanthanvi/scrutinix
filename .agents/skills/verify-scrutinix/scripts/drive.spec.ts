@@ -894,7 +894,9 @@ test("sharing to Scrutinix fills in the link and waits for Analyze", async ({
   await expect(page.getByRole("status").filter({ hasText: note })).toHaveText(
     note,
   );
-  await expect(page.locator("#scan-console").getByRole("alert")).toHaveCount(0);
+  await expect(page.getByRole("alert").filter({ hasText: note })).toHaveCount(
+    0,
+  );
   await page.waitForTimeout(QUIET_WINDOW_MS);
   expect(scans).toHaveLength(1);
   await capture(page, "share-target-no-link.png");

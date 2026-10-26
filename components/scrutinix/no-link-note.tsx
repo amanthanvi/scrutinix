@@ -14,23 +14,19 @@ const ANNOUNCE_AFTER_MS = 500;
  * The share sheet sent something with no link Scrutinix could fill in
  * (`POST /share` redirects to `/?nolink=1`): one quiet line under the form
  * (`note`, `NO_LINK_NOTE` from the page) says so, from the first paint,
- * until the person types, pastes, or scans. Nothing is filled in and
- * nothing scans. Screen readers hear it once, politely, from a status
- * region the server already drew empty; the visible line is hidden from
- * them so it is never read twice.
+ * until the person types or pastes (Single or Batch), scans, or taps
+ * Analyze on an empty field (whose own error then says it). Nothing is
+ * filled in and nothing scans. Screen readers hear it once, politely, from
+ * a status region the server already drew empty; the visible line is
+ * hidden from them so it is never read twice.
  */
 export function NoLinkNote({ note }: { note: string }) {
-  const { singleUrl, active, scan, batch } = useAnalyzerRuntime();
+  const { singleUrl, batchInput, formError, active, live } =
+    useAnalyzerRuntime();
   const [spoken, setSpoken] = useState(false);
   const [settled, setSettled] = useState(false);
   // Once the person moves on, the note has said its piece for good.
-  if (
-    !settled &&
-    (singleUrl !== "" ||
-      active !== null ||
-      scan.state.isStreaming ||
-      batch.state.isStreaming)
-  ) {
+  if (!settled && (singleUrl || batchInput || formError || active || live)) {
     setSettled(true);
   }
 

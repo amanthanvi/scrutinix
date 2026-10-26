@@ -178,7 +178,11 @@ test("a share with no link says so in one quiet line and scans nothing @smoke", 
   expect((await line.boundingBox())!.y).toBeGreaterThan(
     (await input.boundingBox())!.y,
   );
-  // Not an error, and nothing to tap.
+  // Not an error anywhere on the page (the line sits outside the form),
+  // and nothing to tap.
+  await expect(page.getByRole("alert").filter({ hasText: note })).toHaveCount(
+    0,
+  );
   await expect(page.locator("#scan-console").getByRole("alert")).toHaveCount(0);
   await expect(
     page.getByRole("button", { name: "Analyze URL" }),

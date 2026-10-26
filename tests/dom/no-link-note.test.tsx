@@ -139,6 +139,31 @@ describe("arriving from a share with no link to fill in (/?nolink=1)", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it("speaks once: the sentence lands in the region one time and stays put", async () => {
+    stubScan(LINK);
+    renderArrival();
+    const region = screen
+      .getAllByRole("status")
+      .find(
+        (node) => node.textContent === "" && node.classList.contains("sr-only"),
+      )!;
+    const changes: string[] = [];
+    const observer = new MutationObserver(() => {
+      changes.push(region.textContent ?? "");
+    });
+    observer.observe(region, {
+      childList: true,
+      characterData: true,
+      subtree: true,
+    });
+    await waitFor(() => expect(region.textContent).toBe(NO_LINK_NOTE));
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 1_000)));
+    observer.disconnect();
+    expect(region.isConnected).toBe(true);
+    expect(region.textContent).toBe(NO_LINK_NOTE);
+    expect(changes).toEqual([NO_LINK_NOTE]);
+  });
+
   it("goes for good once the person types, even if they clear the field", async () => {
     stubScan(LINK);
     renderArrival();
@@ -149,6 +174,30 @@ describe("arriving from a share with no link to fill in (/?nolink=1)", () => {
     await act(async () => new Promise((resolve) => setTimeout(resolve, 600)));
     expect(visibleNote()).toBeNull();
     expect(noteStatus()).toBeNull();
+  });
+
+  it("goes once the person types in Batch instead", async () => {
+    stubScan(LINK);
+    renderArrival();
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "Batch" }));
+    const batchInput = await screen.findByRole("textbox", {
+      name: /urls to analyze/i,
+    });
+    // Switching tabs alone changes nothing the note says.
+    expect(visibleNote()).not.toBeNull();
+    fireEvent.change(batchInput, { target: { value: "example.com" } });
+    expect(visibleNote()).toBeNull();
+    expect(noteStatus()).toBeNull();
+  });
+
+  it("gives way to the form's own error on an empty Analyze, so it is said once", async () => {
+    const fetchMock = stubScan(LINK);
+    renderArrival();
+    fireEvent.click(screen.getByRole("button", { name: /analyze url/i }));
+    await screen.findByText("Paste a link to check.");
+    expect(visibleNote()).toBeNull();
+    expect(noteStatus()).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("leaves the address once a result lands", async () => {

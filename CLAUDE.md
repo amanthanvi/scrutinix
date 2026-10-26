@@ -69,6 +69,7 @@ components/
     input-panels.tsx      # URL input + Paste + Analyze
     batch-input.tsx       # Batch textarea, Start batch, and exports (loaded on demand)
     input-anatomy.tsx     # The typed link taken apart before a scan (captions) + "Expecting a particular site?"
+    no-link-note.tsx      # /?nolink=1: one muted line under the form + a polite status region; goes once the visitor moves on
     results-section.tsx   # Band → anatomy → strip → Summary questions / Full rows → details → actions; focus + live region
     verdict-panel.tsx     # VerdictBand (Checking/result/snapshot, one element tree) + VerdictDetails
     link-anatomy.tsx      # Registered domain emphasised, look-alike sentence, segment-keyed facts, full-link toggle
