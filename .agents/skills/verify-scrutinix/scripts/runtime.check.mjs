@@ -1086,6 +1086,37 @@ for (const name of ownedDrop) {
   writeFileSync(path.join(ownedEvidence, name), "stale\n");
 }
 const ownedRemoved = runtime.clearEvidenceFiles(ownedEvidence);
+const goneShot = path.join(ownedEvidence, "gone-shot.png");
+writeFileSync(goneShot, "stale\n");
+const goneRemoved = runtime.clearEvidenceFiles(ownedEvidence, (file) => {
+  rmSync(file);
+  const missing = new Error("already gone");
+  missing.code = "ENOENT";
+  throw missing;
+});
+const goneAbsent = !existsSync(goneShot);
+writeFileSync(goneShot, "still\n");
+let unlinkDenied = false;
+try {
+  runtime.clearEvidenceFiles(ownedEvidence, () => {
+    const denied = new Error("denied");
+    denied.code = "EACCES";
+    throw denied;
+  });
+} catch (error) {
+  unlinkDenied = error?.code === "EACCES";
+}
+check(
+  "clearing an evidence file that is already gone continues",
+  goneRemoved === 0 &&
+    goneAbsent &&
+    unlinkDenied &&
+    readFileSync(goneShot, "utf8") === "still\n" &&
+    readFileSync(path.join(ownedEvidence, "package.json"), "utf8") ===
+      ownedKeep["package.json"],
+  { removed: goneRemoved, denied: unlinkDenied },
+);
+rmSync(goneShot);
 check(
   "a marked evidence dir keeps foreign files and removes this skill's artifacts",
   ownedRemoved === ownedDrop.length &&

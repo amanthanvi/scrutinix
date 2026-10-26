@@ -291,11 +291,17 @@ const unmarkedEvidenceReason =
 // itself stays. A *.png screenshot is removed, and so are the exact download
 // names above. Every other file stays, including next-env-*.snapshot recovery
 // copies and the marker. Unlink does not follow a symlink, so a link's target
-// is left alone. The state directory is never cleared: run.json lives there.
+// is left alone. A file that is already gone when unlink runs (another clear
+// removed it after this listing) is the end state this function wants, so
+// ENOENT does not fail the clear. Every other unlink error still does. The
+// state directory is never cleared: run.json lives there.
 // An unmarked VERIFY_EVIDENCE_DIR is not cleared either, including an empty
 // one. The default evidence directory is adopted: the marker is written once,
 // then only skill artifacts are removed.
-export function clearEvidenceFiles(dir = evidenceDir) {
+export function clearEvidenceFiles(
+  dir = evidenceDir,
+  unlinkArtifact = unlinkSync,
+) {
   if (existsSync(dir) && canonicalPath(dir) === canonicalPath(stateDir)) {
     refuseToClear(dir, "is the state directory.");
   }
@@ -328,7 +334,12 @@ export function clearEvidenceFiles(dir = evidenceDir) {
       continue;
     }
     if (!stat.isFile() && !stat.isSymbolicLink()) continue;
-    unlinkSync(file);
+    try {
+      unlinkArtifact(file);
+    } catch (error) {
+      if (error?.code === "ENOENT") continue;
+      throw error;
+    }
     removed += 1;
   }
   return removed;
