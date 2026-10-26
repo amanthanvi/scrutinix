@@ -2,6 +2,7 @@ import { getEnv } from "@/lib/config/env";
 import { PublicError } from "@/lib/domain/public-error";
 import type { GoogleSafeBrowsingData } from "@/lib/domain/types";
 import { fetchWithTimeout } from "@/lib/server/http";
+import packageJson from "@/package.json";
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -38,7 +39,7 @@ export async function runGoogleSafeBrowsingProvider(
       body: JSON.stringify({
         client: {
           clientId: "scrutinix",
-          clientVersion: "4.0.0",
+          clientVersion: packageJson.version,
         },
         threatInfo: {
           threatTypes: [

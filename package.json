@@ -1,6 +1,6 @@
 {
   "name": "scrutinix",
-  "version": "4.0.0",
+  "version": "4.1.0",
   "description": "FOSS multi-signal URL threat analyzer with streamed NDJSON results, batch scans, and local history.",
   "private": true,
   "license": "MIT",
