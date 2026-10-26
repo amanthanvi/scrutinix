@@ -29,7 +29,8 @@ npm run format:check               # Prettier
 npm run test:unit -- --run         # Vitest, node
 npm run test:integration -- --run  # Vitest, node + MSW
 npm run test:dom -- --run          # Vitest, jsdom + fake-indexeddb
-npm run test:e2e                   # Playwright with offline fixtures (E2E_PORT, default 3000)
+npm run test:e2e                   # Playwright with offline fixtures, Chromium (E2E_PORT, default 3000)
+npm run test:e2e:engines           # The same suite in Chromium, Firefox, and WebKit
 npm run lighthouse                 # Lighthouse audit (LIGHTHOUSE_PORT, default 3000)
 npm run check:contrast             # WCAG token-pair guard, both themes
 npm run icons                      # Regenerate favicons/app icons from lib/brand-mark.ts
@@ -57,7 +58,7 @@ app/
 proxy.ts                  # Rate limiting (scan tier for /api/analyze, image tier for /og/result) + CSP nonces
 
 components/
-  ui/                     # Minimal primitives: button, input, textarea, tabs, sonner
+  ui/                     # Minimal primitives: button, input, textarea, tabs, sonner; icons.tsx (the page's four Lucide icons, inline)
   theme-provider.tsx      # next-themes wrapper (system default)
   theme-toggle.tsx        # Mount-safe light/dark toggle in the header
   scrutinix/
@@ -68,6 +69,7 @@ components/
     input-panels.tsx      # URL input + Paste + Analyze
     batch-input.tsx       # Batch textarea, Start batch, and exports (loaded on demand)
     input-anatomy.tsx     # The typed link taken apart before a scan (captions) + "Expecting a particular site?"
+    no-link-note.tsx      # /?nolink=1: one muted line under the form, said once via the announcer; goes once the visitor moves on
     results-section.tsx   # Band → anatomy → strip → Summary questions / Full rows → details → actions; focus + live region
     verdict-panel.tsx     # VerdictBand (Checking/result/snapshot, one element tree) + VerdictDetails
     link-anatomy.tsx      # Registered domain emphasised, look-alike sentence, segment-keyed facts, full-link toggle
@@ -91,30 +93,35 @@ hooks/
   use-scan-stream.ts      # NDJSON consumer for one scan
   use-batch-stream.ts     # NDJSON consumer for batch scans
   use-scan-history.ts     # IndexedDB history with search
-  use-link-anatomy.ts     # Lazy tldts load (preloadLinkParser) + memoized anatomy and ready flag
+  use-link-anatomy.ts     # Lazy parser chunk (preloadLinkParser, getLoadedLinkParser) + memoized anatomy and ready flag
 
 lib/
   brand-mark.ts           # Mark geometry: header, OG cards, scripts/generate-icons.mjs
   domain/                 # Zod schemas, URL validation, verdict logic
-    verdict-guidance.ts   # Imperative line, showScore, announcement, coverage caveat
+    verdict-guidance.ts   # Imperative line, showScore, announcement, coverage caveat; getSharedGuidance
+    verdict-basis.ts      # The four facts the imperative is worded from (signed into shares)
     summary-questions.ts  # Summary's five questions: fixed mapping, answers, why clauses, disagreements
     feed-copy.ts          # Feed display names, feed-match + Google threat-type wording
     reputation.ts         # Client-safe reputation thresholds + hasConfirmedReputationHit
-    signal-severity.ts    # Per-signal severity ("clear" = found nothing; scored => warning)
+    signal-severity.ts    # Per-signal severity ("clear" = found nothing; scored => warning; a feed is "flagged" only for a high-quality listing)
+    certificate.ts        # describeCertificateProblem: a certificate's problem in plain words, never the raw code (probe stores it as ssl.problem for the row/Summary; the lazy engine words its reason)
     signal-signature.ts   # Eight-cell signature, legacy-record check, share snapshot encode/decode
     link-anatomy.ts       # Isomorphic URL anatomy + look-alike detection (tldts passed in)
     expected-site.ts      # "Were you expecting…?": compare an expected domain (or IP) with the link's registered domain (names never confirmed or denied)
     impersonated-brands.ts # Shared brand list (look-alike ccTLD runs, structure-risk scoring)
+    lure-words.ts         # Structure checks' lure words; the model keeps an ID-like run that spells one
     registrable-domain.ts # Server wrapper over link-anatomy's registrableDomainOf
     copy.ts               # countOf / formatList / capitalize / formatAge for user-facing copy
     share-launch.ts       # Share-target link extraction (extractSharedLink) and ?url= prefill (resolvePrefill)
     methodology.ts        # /about's scoring tables, rules, bands, confidence caps (engine-checked by tests/unit/methodology.test.ts)
   og/                     # Share-card renderers (cards.tsx) and font loader (fonts.ts: Newsreader TTF + Geist)
+    card-layout.ts        # Fits the registered domain / look-alike sentence to the card (font-measured; middle ellipsis keeps the end)
   server/                 # Orchestrator, providers, signals, cache, local ONNX ML
     share-metadata.ts     # ?shared= verify + validate → SharedView, page metadata, image cap
     share-signing.ts      # HMAC sign/verify for share links; attaches result.share to streamed results
     rate-limit.ts         # Upstash/in-memory limiter with "scan" and "image" tiers
-  client/                 # NDJSON parser, export utilities
+  client/                 # NDJSON parser, downloads (export.ts), export formats (export-formats.ts: Batch/history only)
+    link-parser.ts        # The lazy parser chunk: tldts parse + link anatomy + expected-site (nothing eager imports these)
   config/                 # Environment validation
 
 scripts/
@@ -144,7 +151,21 @@ tests/
   `@huggingface/transformers`; lexical heuristics are the second ensemble
   member. No hosted inference call is required. User-facing copy names the
   two members "link pattern model" and "structure checks" everywhere
-  (details rows, consensus notes, verdict reasons).
+  (details rows, consensus notes, verdict reasons). The model reads only
+  the host and path (no query; no fragment, which scans drop anyway,
+  unless a `#/` route; UUIDs and IDs left out, but an ID-like run that
+  spells a listed brand or lure word stays, so most listed lures can't
+  hide as an ID; a mostly-digit spelling with inserted digits can), with and without scheme and `www.`, and flags only past
+  `PATTERN_MODEL_BAR`, set by an offline evaluation to 2% of ordinary
+  links, sign-in and account links included
+  (`lib/server/ml/model/README.md`). Its own score is a
+  distance from that bar, so no copy states it as a percentage; the
+  Combined result's "risk N of 100" and /about's points rows use the
+  ensemble's combined score of that distance and the structure checks. A
+  model flag never scores below the structure checks alone, and a
+  structure-led result leads with the structure checks' reasons. A new bar
+  needs a new evaluation and new /about figures (`PATTERN_MODEL_EVALUATION`,
+  whose `bar` a test holds equal to `PATTERN_MODEL_BAR`).
 - **Verdict engine**: confirmed sources can convict; unreachable hosts produce
   an honest `unknown`; exculpatory evidence never erases confirmed hits.
 - **Client errors**: only `PublicError` messages are shown as written;
@@ -171,9 +192,22 @@ tests/
   lands a keyed `.sx-band-rule` draws over the neutral track (240ms,
   `--sx-ease-expo`) and the word rises 4px; both are drawn in place under
   reduced motion. The registered domain sits in the serif under the verdict
-  word (`registeredDomain`, with `holdDomain` keeping its height while the
-  parser loads); it only names the site, and the anatomy's
-  `ownershipSentence` stays the one place the owner sentence is said. The
+  word (`registeredDomain`; while the parser loads, `holdDomain` is the
+  link's host, whose room the site's line keeps for the whole scan); it
+  only names the site, and the anatomy's
+  `ownershipSentence` stays the one place the owner sentence is said. A
+  scan's band (`room`: Checking, the address check, the verdict) is one
+  height whatever lands: `BandRoom` draws the band's own layout twice
+  more, invisibly (generated stand-ins, a subgrid over the band), filled
+  with the tallest band with something in the score's place and the
+  tallest without (`bandSays` in `verdict-guidance.ts`, which a unit test
+  checks against every branch); Look-alike and Unconfirmed only while the
+  address check leaves them possible (`useRoom`: fixed when a scan
+  starts, never narrowed until the next). The last row is the only
+  flexible one, so unused room opens at the band's foot. Nothing moves
+  when a verdict lands (`tests/e2e/landing.fixture.spec.ts`), except a
+  coverage caveat's lines. An Error band's score place is "Try again",
+  where Cancel stood. The
   summary sentence ("because" line) yields whenever the questions or rows
   state the evidence (`evidenceShown`), so in practice only a legacy record
   shows it. It is the only tinted container; once it mounts, the home
@@ -213,7 +247,10 @@ tests/
   not raised. Ages of what was seen, in Summary and Full rows alike, count
   from the result's check time (`evidenceTimeOf`: `checkedAt`, else
   `completedAt`; the stream's start while scanning), never from when it is
-  reopened; certificate expiry counts from now. A plain
+  reopened; certificate expiry counts from now. The same clock judges a
+  VirusTotal analysis current: `buildThreatAssessment(signals, asOf)` (a
+  cache hit passes the original check time), the coverage caveat, the
+  verdict basis's "known threat", and Summary's reported/DNS whys. A plain
   HTTP link that moves to HTTPS says so and still gives the certificate. A
   name with no public address says so ("We found no address", or "only
   private or reserved addresses"), never "points nowhere". A question is pending
@@ -228,10 +265,14 @@ tests/
   which is `aria-hidden` and `select-none`. The
   owner and look-alike are stated by the anatomy, never by a question; the
   anatomy's own facts (certificate, young domain, "Ends at") step aside
-  once the evidence below states them. Legacy records, Error results (all
-  eight rows in Summary), and shared snapshots get no questions. Full keeps
-  the eight rows. A strip cell focuses its question in Summary and opens
-  its row in Full. The PSL lookup is passed in (`registeredDomainOf`);
+  once the evidence below states them. Legacy records, Error results, and
+  shared snapshots get no questions. An Error result has one view, its
+  eight rows, so it draws no Summary/Full switch (a switch must never claim
+  a view that isn't shown); the stored choice carries to the next result.
+  Full keeps the eight rows. A strip cell focuses its question in Summary
+  and its row in Full or on an Error result, opening the row when it has
+  evidence (an Error's rows have none, so its strip hint says "Each check
+  moves to its row below."). The PSL lookup is passed in (`registeredDomainOf`);
   without it a different host is named but never called "a different
   site".
 - **Eight-cell strip**: severities from `lib/domain/signal-signature.ts` in
@@ -244,7 +285,15 @@ tests/
   (`lib/og/cards.tsx` mirrors the shapes). Entries saved before signals were
   kept (`isLegacySignalRecord`: every check carries the sanitizer's
   `MISSING_SIGNAL_DATA`) draw empty glyph slots and a plain note, never
-  eight "failed" cells; a real all-failed scan still draws them. The live
+  eight "failed" cells; a real all-failed scan still draws them. The feeds
+  cell is flagged only for a listing `feedMatchWeight` rates high (the one
+  the confidence math counts as the feeds flagging it); a listing of other
+  links on the site is a warning sign. A plain-HTTP link whose redirects
+  never reach HTTPS has its own host's 443 read, as browsers that try
+  HTTPS first do (a link naming its port is not); only a certificate a
+  browser accepts there is stated, else it has none (`ssl.noHttps`): its
+  cell didn't apply, it counts as skipped in confidence, and it is not
+  partial. The live
   strip heads Evidence as its index: cells numbered 1-8 (`cellNumber`, in
   `signalNames` order, `aria-hidden` tags), and each question's "From" line
   (`QuestionSources`) cites the same numbers while assistive technology
@@ -252,7 +301,11 @@ tests/
   the roving keys follow the layout (`stripColumns`): Left/Right always step
   in order; Up/Down step in order on phones and move a row from 40rem.
 - **Link anatomy**: `lib/domain/link-anatomy.ts` is isomorphic (tldts passed
-  in). Every contiguous run of 2+ subdomain labels is tested; a two-letter
+  in). In the browser it ships only in the lazy parser chunk
+  (`lib/client/link-parser.ts`, reached through `getLoadedLinkParser()` or
+  `loadLinkParser()`); `hostOf` and `redirectDestination`, which the page
+  needs before that chunk, live in `url.ts`.
+  Every contiguous run of 2+ subdomain labels is tested; a two-letter
   country-code run counts only for a listed brand (`amazon.de`), so
   regional/tenant hosts (`acme.us.auth0.com`) never read as look-alikes.
   Look-alikes change presentation only; the stored verdict and score never
@@ -293,7 +346,20 @@ tests/
   payload. The browser never decodes the payload; it receives a
   `SharedView` whose `snapshot` is null unless verified. A signed Safe
   look-alike's preview leads with "Look-alike of <brand>", never "Safe"
-  (`shareHeadline`). The signed check time is `metadata.checkedAt`, which a
+  (`shareHeadline`). The payload signs `basis` too: the four facts the
+  instruction is worded from (`getVerdictBasis`,
+  `lib/domain/verdict-basis.ts`: confidence label, nothing scored, partial
+  coverage, a confirmed reputation hit), never the wording, so
+  `getSharedGuidance` gives the band, metadata, and card the instruction
+  the sender's band showed ("Looks safe to open.", "… it's a known
+  threat."; `tests/unit/share-parity.test.ts` checks every verdict). A
+  payload signed before it (or with a malformed basis), including a
+  history entry saved before it and shared again, keeps the hedged forms.
+  One deliberate difference: a sender whose link parser failed saw
+  "Unconfirmed"; the recipient gets the server's own anatomy instead. The
+  shared band drops a summary that only repeats its instruction
+  (`shouldShowSharedSummary`: "No check flagged this link." under "Looks
+  safe to open."). The signed check time is `metadata.checkedAt`, which a
   cache hit keeps from the original scan. Spaces in `?shared=` are restored
   to "+" before verifying (`normalizeSharedPayload`). Share with no `sig`
   copies the link with a distinct "isn't verified" toast. A signed result
@@ -344,6 +410,17 @@ tests/
   replaces what the page opened on, `clearLaunchParams` drops `shared`,
   `sig`, and `url` from the address. `resolveSharedView` returns null for
   a link `normalizeUrlInput` rejects (private/local hosts), signed or not.
+- **Speech**: every message a screen reader should hear goes through a
+  region already on the page: the results live region (scan start and
+  result) or the root layout's `role="status"` `Announcer`
+  (`components/ui/announcer.tsx`: toasts via `getToast`, a `?url=`
+  arrival, the expected-site answer, history Clear/Undo). Both empty a few
+  seconds after speaking. Text drawn in several inline boxes gets one
+  `sr-only` string with the drawn copy `aria-hidden` (so `getByText` finds
+  it twice; tests locate `p.sx-owner`, toasts in `[data-sonner-toast]`);
+  no `title` beside an `aria-label`; unstyled lists carry `role="list"`.
+  `aria-hidden` goes on the drawn parts themselves, never only on a
+  `display: contents` wrapper (WebKit ignores it there).
 - **UI danger is not a verdict**: form/stream errors and destructive
   confirms use `--sx-danger-fg` / `--sx-danger-border`, never
   `--sx-malicious-*`.
@@ -388,7 +465,7 @@ tests/
 ## Stack
 
 - Node 24 LTS, Next.js 16, React 19, TypeScript 5.9 (strict + noUncheckedIndexedAccess)
-- Tailwind CSS v4, Newsreader (self-hosted display serif) + system sans/mono (bundled Geist only for server OG cards), Radix, Lucide, Zod 4, idb, sonner,
+- Tailwind CSS v4, Newsreader (self-hosted display serif) + system sans/mono (bundled Geist only for server OG cards), Radix, Lucide (shadcn's icon library; the page draws its four inline), Zod 4, idb, sonner,
   next-themes, local `@huggingface/transformers`
 - ESLint 10 with direct Next.js, React, hooks, TypeScript, and JSX accessibility plugins
 - Vitest, MSW, fake-indexeddb, Playwright, axe-core, Lighthouse

@@ -116,6 +116,53 @@ function markUnreachable(signals: SignalResults) {
   };
 }
 
+describe("a plain-HTTP link with no certificate in its path", () => {
+  it("counts the certificate check as one that didn't apply, never as lost coverage", async () => {
+    const signals = await fixtureSignals("example.com");
+    signals.ssl = {
+      status: "success",
+      error: null,
+      durationMs: 3,
+      data: {
+        protocol: null,
+        available: false,
+        validationState: "unavailable",
+        authorized: false,
+        authorizationError: null,
+        issuer: null,
+        subject: null,
+        validFrom: null,
+        validTo: null,
+        daysRemaining: null,
+        selfSigned: false,
+        fingerprint256: null,
+        noHttps: true,
+        observations: [
+          "This link never moves to HTTPS, so there's no certificate to check.",
+        ],
+      },
+    };
+    const skipped = structuredClone(signals);
+    skipped.ssl = {
+      status: "skipped",
+      error: "Not applicable.",
+      data: null,
+      durationMs: 3,
+    };
+
+    const { verdict, threatInfo } = buildThreatAssessment(signals);
+    // /about's arithmetic: the cell says "didn't apply", so it adds what a
+    // check that didn't apply adds.
+    expect(threatInfo?.confidence).toBe(
+      buildThreatAssessment(skipped).threatInfo?.confidence,
+    );
+    expect(verdict).toBe("safe");
+    expect(threatInfo?.limitations).toEqual([]);
+    expect(threatInfo?.confidenceReasons.join(" ")).not.toMatch(/TLS/);
+    expect(getCoverageCaveat({ verdict, signals })).toBeNull();
+  });
+});
+
 describe("buildThreatAssessment", () => {
   it("returns error when every signal fails", () => {
     const signals = createPendingSignalResults();
@@ -477,11 +524,22 @@ describe("buildThreatAssessment", () => {
       },
     };
 
-    const result = buildThreatAssessment(signals);
+    // Checked 30 days after the certificate lapsed.
+    const result = buildThreatAssessment(
+      signals,
+      Date.parse("2025-03-02T00:00:00.000Z"),
+    );
 
     expect(result.verdict).toBe("suspicious");
     expect(result.threatInfo?.score).toBeGreaterThanOrEqual(25);
-    expect(result.threatInfo?.reasons.join(" ")).toMatch(/CERT_HAS_EXPIRED/);
+    // Plain words from the stored facts, even when the stored observation
+    // is an older release's raw code.
+    expect(result.threatInfo?.reasons).toContain(
+      "The site's certificate expired 30 days ago.",
+    );
+    expect(result.threatInfo?.reasons.join(" ")).not.toMatch(
+      /CERT_|TLS validation/,
+    );
   });
 
   it("treats a strong malicious ML verdict as suspicious even without reputation hits", () => {
@@ -1299,6 +1357,70 @@ describe("buildThreatAssessment", () => {
     expect(result.verdict).toBe("suspicious");
     expect(result.threatInfo?.reasons.join(" ")).toMatch(/phishing setup/);
   });
+
+  it("judges every age as of the evidence time it is given", () => {
+    // A cache hit re-derives the verdict at the original check time, so
+    // it reads exactly as the scan it repeats.
+    const DAY = 24 * 60 * 60 * 1000;
+    const checkedAt = Date.parse("2026-10-06T09:00:00.000Z");
+    const signals = createPendingSignalResults();
+    withVirusTotal(signals, {
+      harmless: 40,
+      undetected: 20,
+      lastAnalysisDate: new Date(checkedAt - 29 * DAY).toISOString(),
+    });
+    signals.whois = {
+      status: "success",
+      error: null,
+      durationMs: 12,
+      data: {
+        subjectType: "domain",
+        available: true,
+        registrar: "Example Registrar",
+        registeredAt: new Date(checkedAt - 10 * DAY).toISOString(),
+        updatedAt: null,
+        expiresAt: null,
+        ageDays: 10,
+        country: null,
+        handle: null,
+        rdapUrl: "https://rdap.example.com/domain/new.example",
+        observations: [],
+      },
+    };
+    signals.ssl = {
+      status: "success",
+      error: null,
+      durationMs: 12,
+      data: {
+        protocol: "TLSv1.3",
+        available: true,
+        validationState: "trusted",
+        authorized: true,
+        authorizationError: null,
+        issuer: "Example CA",
+        subject: "new.example",
+        validFrom: new Date(checkedAt - 2 * DAY).toISOString(),
+        validTo: new Date(checkedAt + 88 * DAY).toISOString(),
+        daysRemaining: 88,
+        selfSigned: false,
+        fingerprint256: "abc",
+        observations: [],
+      },
+    };
+
+    const asChecked = buildThreatAssessment(signals, checkedAt);
+    expect(asChecked.threatInfo?.reasons.join(" ")).toMatch(/phishing setup/);
+    expect(asChecked.threatInfo?.limitations.join(" ")).not.toMatch(
+      /VirusTotal analysis from/,
+    );
+    // The same evidence judged 6 days later: the analysis has gone stale
+    // and the certificate (8 days old) is no longer brand-new.
+    const later = buildThreatAssessment(signals, checkedAt + 6 * DAY);
+    expect(later.threatInfo?.reasons.join(" ")).not.toMatch(/phishing setup/);
+    expect(later.threatInfo?.limitations.join(" ")).toMatch(
+      /VirusTotal analysis from 35 days ago/,
+    );
+  });
 });
 
 describe("verdict copy", () => {
@@ -1366,6 +1488,162 @@ describe("verdict copy", () => {
 
     expect(info?.summary).toBe(
       "An untrusted certificate makes this link look risky.",
+    );
+  });
+
+  it("names a warning sign that outweighs every source that flagged the link", () => {
+    // expired.badssl.com in production: an invalid certificate (28) and a
+    // risky link pattern reading (11) read only "The link pattern model
+    // flagged this link."
+    const signals = createPendingSignalResults();
+    signals.ssl = {
+      status: "success",
+      error: null,
+      durationMs: 9,
+      data: {
+        protocol: "TLSv1.2",
+        available: true,
+        validationState: "invalid",
+        authorized: false,
+        authorizationError: "CERT_HAS_EXPIRED",
+        issuer: "COMODO RSA Domain Validation Secure Server CA",
+        subject: "*.badssl.com",
+        validFrom: "2015-04-09T00:00:00.000Z",
+        validTo: "2015-04-12T23:59:59.000Z",
+        daysRemaining: -4214,
+        selfSigned: false,
+        fingerprint256: null,
+        observations: [],
+      },
+    };
+    signals.mlEnsemble = {
+      status: "success",
+      error: null,
+      durationMs: 9,
+      data: {
+        transformerModel: null,
+        lexicalModel: {
+          label: "risky",
+          score: 0.7,
+          reasons: [],
+          model: "lexical-heuristic",
+        },
+        consensusLabel: "risky",
+        consensusScore: 0.7,
+        reasons: [],
+        warnings: [],
+      },
+    };
+
+    expect(buildThreatAssessment(signals).threatInfo?.summary).toBe(
+      "An invalid certificate makes this link look risky, and the link pattern model flagged it.",
+    );
+
+    // A stronger source leads, but the certificate (28) still outweighs
+    // the link pattern model (about 11), so it isn't dropped while the
+    // weaker source is named.
+    signals.googleSafeBrowsing = {
+      status: "success",
+      error: null,
+      durationMs: 5,
+      data: {
+        checkedAt: "2026-10-25T00:00:00.000Z",
+        matches: [
+          {
+            threatType: "MALWARE",
+            platformType: "ANY_PLATFORM",
+            threatEntryType: "URL",
+          },
+        ],
+      },
+    };
+    const listed = buildThreatAssessment(signals).threatInfo;
+    expect(listed?.summary).toBe(
+      "Google Safe Browsing and the link pattern model flagged this link, and an invalid certificate makes it look risky too.",
+    );
+
+    // A source that outweighs the signs still leads alone, by everything
+    // it added: 1 malicious (12) and 2 suspicious (8) engines outweigh a
+    // 15-point domain age.
+    const ranked = cleanSignals();
+    withVirusTotal(ranked, { malicious: 1, suspicious: 2 });
+    withDomainAge(ranked, 10);
+    const assessment = buildThreatAssessment(ranked);
+    expect(assessment.verdict).toBe("suspicious");
+    expect(assessment.threatInfo?.summary).toBe(
+      "1 VirusTotal engine flagged this link.",
+    );
+  });
+
+  it("tailors what to do to the threat the lists name", () => {
+    const listedFor = (...threatTypes: string[]) => {
+      const signals = createPendingSignalResults();
+      signals.googleSafeBrowsing = {
+        status: "success",
+        error: null,
+        durationMs: 5,
+        data: {
+          checkedAt: "2026-10-25T00:00:00.000Z",
+          matches: threatTypes.map((threatType) => ({
+            threatType,
+            platformType: "ANY_PLATFORM",
+            threatEntryType: "URL",
+          })),
+        },
+      };
+      return buildThreatAssessment(signals).threatInfo?.recommendations ?? [];
+    };
+
+    // testsafebrowsing's malware and unwanted-software pages were told to
+    // report them as phishing.
+    for (const type of ["MALWARE", "UNWANTED_SOFTWARE"]) {
+      const malware = listedFor(type);
+      expect(malware).toContain(
+        "Don't download or open anything from this site.",
+      );
+      expect(malware.join(" ")).not.toMatch(/phishing|password/i);
+    }
+    expect(listedFor("SOCIAL_ENGINEERING")).toContain(
+      "Delete the message the link came in, or report it as phishing.",
+    );
+    // Phishing and malware together: the phishing advice, which already
+    // ends with a malware scan.
+    expect(listedFor("MALWARE", "SOCIAL_ENGINEERING")).toContain(
+      "Delete the message the link came in, or report it as phishing.",
+    );
+
+    // A URLhaus listing of this link is malware distribution.
+    const feedHit = createPendingSignalResults();
+    withThreatFeedMatches(feedHit, [
+      {
+        feed: "urlhaus",
+        matchedUrl: "https://evil.example/payload.exe",
+        detail: "lists this link as active malware distribution",
+        confidence: "high",
+        matchType: "url",
+      },
+    ]);
+    expect(
+      buildThreatAssessment(feedHit).threatInfo?.recommendations,
+    ).toContain("Delete the message the link came in.");
+    // A ThreatFox card-skimming indicator steals payment details: the
+    // advice is about the card, not downloads or phishing.
+    const skimmer = createPendingSignalResults();
+    withThreatFeedMatches(skimmer, [
+      {
+        feed: "threatfox",
+        matchedUrl: "https://shop.example/checkout.js",
+        detail: "lists this link as an indicator of card skimming",
+        confidence: "high",
+        matchType: "url",
+      },
+    ]);
+    const skimming = buildThreatAssessment(skimmer).threatInfo;
+    expect(skimming?.recommendations).toContain(
+      "Don't enter payment details on this site.",
+    );
+    expect(skimming?.recommendations.join(" ")).not.toMatch(
+      /download|phishing/i,
     );
   });
 
@@ -1849,6 +2127,51 @@ describe("withScoredSignals (history saved before scoredSignals)", () => {
     expect(entry.verdict).toBe(legacy.verdict);
     expect(entry.threatInfo?.score).toBe(legacy.threatInfo?.score);
     expect(entry.threatInfo?.summary).toBe(legacy.threatInfo?.summary);
+  });
+
+  it("judges the entry as of its own check time, not when it is reopened", () => {
+    // Checked 2026-09-01: a 2-day-old certificate on a 10-day-old domain
+    // (the fresh-setup rule). Reopened weeks later, the certificate would
+    // be weeks old and the rule would no longer hold.
+    const signals = cleanSignals();
+    withDomainAge(signals, 10);
+    if (signals.ssl.data) {
+      signals.ssl.data.validFrom = "2026-08-30T00:00:00.000Z";
+    }
+    const entry = withScoredSignals(legacyHistoryEntry(signals));
+
+    expect(entry.threatInfo?.scoredSignals).toContain("ssl");
+    expect(
+      getScoredSignals(signals, Date.parse("2026-09-01T00:00:01.000Z")).has(
+        "ssl",
+      ),
+    ).toBe(true);
+    expect(
+      getScoredSignals(signals, Date.parse("2026-10-01T00:00:00.000Z")).has(
+        "ssl",
+      ),
+    ).toBe(false);
+  });
+
+  it("never pairs another site's certificate with the link's domain age", () => {
+    // A 10-day-old short-link domain that moves to an established site
+    // whose certificate renewed 2 days ago: not the fresh-setup pattern.
+    const checkedAt = Date.parse("2026-09-01T00:00:00.000Z");
+    const signals = cleanSignals();
+    withDomainAge(signals, 10);
+    if (signals.ssl.data) {
+      signals.ssl.data.validFrom = "2026-08-30T00:00:00.000Z";
+    }
+    expect(getScoredSignals(signals, checkedAt).has("ssl")).toBe(true);
+
+    if (signals.ssl.data) signals.ssl.data.otherSite = "landing.example";
+    expect(getScoredSignals(signals, checkedAt).has("ssl")).toBe(false);
+    const https = getSummaryQuestions({
+      url: "http://short.example/x",
+      signals,
+      now: checkedAt,
+    }).find((question) => question.id === "https");
+    expect(https?.why).not.toMatch(/brand-new certificate/);
   });
 
   it("keeps an explicit empty list and results without threat info", () => {

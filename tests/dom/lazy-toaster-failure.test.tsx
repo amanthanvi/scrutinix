@@ -1,5 +1,12 @@
-import { act, render, screen, fireEvent } from "@testing-library/react";
+import {
+  act,
+  render,
+  screen,
+  fireEvent,
+  waitFor,
+} from "@testing-library/react";
 import { expect, it, vi } from "vitest";
+import { Announcer } from "@/components/ui/announcer";
 import { getToast, LazyToaster } from "@/components/ui/lazy-toaster";
 
 vi.mock("@/components/ui/sonner", () => {
@@ -11,6 +18,7 @@ it("keeps the page and manual share link usable if the toast chunk fails", async
   render(
     <>
       <input aria-label="URL to analyze" />
+      <Announcer />
       <LazyToaster />
     </>,
   );
@@ -28,7 +36,11 @@ it("keeps the page and manual share link usable if the toast chunk fails", async
       }),
     );
   });
-  expect(await screen.findByRole("alert")).toBeTruthy();
+  expect(await screen.findByText("Copy the link below")).toBeTruthy();
+  // Spoken by the status region, like every notification.
+  await waitFor(() =>
+    expect(screen.getByRole("status").textContent).toBe("Copy the link below."),
+  );
   expect(screen.getByRole("textbox", { name: "URL to analyze" })).toBeTruthy();
   expect(
     screen.getByRole("textbox", { name: "Share link" }).getAttribute("value"),
@@ -36,5 +48,5 @@ it("keeps the page and manual share link usable if the toast chunk fails", async
   fireEvent.click(screen.getByRole("button", { name: "Scan again" }));
   expect(retry).toHaveBeenCalledOnce();
   fireEvent.click(screen.getByRole("button", { name: "Dismiss" }));
-  expect(screen.queryByRole("alert")).toBeNull();
+  expect(document.querySelector("[data-notice]")).toBeNull();
 });

@@ -94,9 +94,20 @@ server.once("exit", (code) => {
 
 await waitForServer();
 
+// Chromium unless the caller names engines: `--project=firefox`, or
+// `npm run test:e2e:engines` for all three (playwright.config.ts).
+const args = process.argv.slice(2);
+const namesProject = args.some(
+  (arg) => arg === "--project" || arg.startsWith("--project="),
+);
+
 const testRunner = spawn(
   process.execPath,
-  [playwrightCli, "test", ...process.argv.slice(2)],
+  [
+    playwrightCli,
+    "test",
+    ...(namesProject ? args : ["--project=chromium", ...args]),
+  ],
   {
     env: childEnv,
     stdio: "inherit",

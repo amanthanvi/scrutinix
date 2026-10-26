@@ -24,7 +24,10 @@ export function questionHeadingId(id: SummaryQuestionId): string {
  * hairline tag, so a cited number never reads as a count. Assistive
  * technology hears the plain list ("Sources: VirusTotal, Safe Browsing"),
  * which is also the one text a copy gives: the numbered line is for the eye
- * and can't be selected.
+ * and can't be selected. A line may also break after a dot (`<wbr>`), so
+ * a check that fits only from the gutter starts its own line instead of
+ * following a dot and its margins: Firefox broke only before dots, which
+ * pushed "3 Safe Browsing" past a 320px screen at twice the default text.
  */
 export function QuestionSources({ names }: { names: readonly SignalName[] }) {
   return (
@@ -37,7 +40,12 @@ export function QuestionSources({ names }: { names: readonly SignalName[] }) {
         From{" "}
         {names.map((name, index) => (
           <Fragment key={name}>
-            {index > 0 ? <span className="sx-sources-sep">·</span> : null}
+            {index > 0 ? (
+              <>
+                <span className="sx-sources-sep">·</span>
+                <wbr />
+              </>
+            ) : null}
             <span className="whitespace-nowrap">
               <span className="sx-tag">{cellNumber(name)}</span>
               {cellNames[name]}
@@ -64,7 +72,9 @@ export function SummaryQuestionList({
   questions: readonly SummaryQuestion[];
 }) {
   return (
+    // role="list": Safari reads an unstyled list as a plain group.
     <ul
+      role="list"
       aria-label="Questions"
       className="divide-y divide-[var(--sx-border)] border-b border-[var(--sx-border)]"
     >

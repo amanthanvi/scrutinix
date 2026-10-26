@@ -1,10 +1,12 @@
 import { getEnv } from "@/lib/config/env";
 import { buildThreatAssessment } from "@/lib/domain/verdict";
+import { evidenceTimeOf } from "@/lib/domain/verdict-basis";
 import { createCacheKey, type NormalizedUrl } from "@/lib/domain/url";
 import {
   createPendingSignalResults,
   signalNames,
   type AnalysisResult,
+  type RedirectData,
   type SignalName,
   type SignalPayloadMap,
   type SignalResult,
@@ -81,12 +83,20 @@ export async function runAnalysis(
 
   if (cached) {
     const completedAt = new Date().toISOString();
+    // The evidence is as old as the scan that gathered it; completedAt
+    // and durationMs describe this request.
+    const checkedAt = cached.metadata.checkedAt || cached.metadata.completedAt;
     const cachedResult = {
       ...cached,
       // Re-derive the verdict from the cached signals so results cached by
       // an older release get current copy and `scoredSignals` (the Summary
-      // view's source of truth). The engine is pure, so this is cheap.
-      ...buildThreatAssessment(cached.signals),
+      // view's source of truth). The engine is pure, so this is cheap. Its
+      // ages count from the original check, as the basis, caveat, and
+      // Summary do, so a hit reads exactly as the scan it repeats.
+      ...buildThreatAssessment(
+        cached.signals,
+        evidenceTimeOf({ checkedAt }) ?? Date.now(),
+      ),
       id: scanId,
       metadata: {
         ...cached.metadata,
@@ -94,9 +104,7 @@ export async function runAnalysis(
         cacheHit: true,
         startedAt,
         completedAt,
-        // The evidence is as old as the scan that gathered it; completedAt
-        // and durationMs describe this request.
-        checkedAt: cached.metadata.checkedAt || cached.metadata.completedAt,
+        checkedAt,
         durationMs:
           new Date(completedAt).getTime() - new Date(startedAt).getTime(),
       },
@@ -110,6 +118,11 @@ export async function runAnalysis(
   }
 
   const signals: SignalResults = createPendingSignalResults();
+  // One redirect-chain run per scan: the TLS check of a plain-HTTP link
+  // reads the certificate where this chain first reaches HTTPS.
+  let redirectRun: Promise<RedirectData> | undefined;
+  const redirects = () =>
+    (redirectRun ??= runRedirectSignal(normalizedUrl, signal, scanId));
   // E2E fixture mode (SCRUTINIX_TEST_FIXTURES=1) swaps the real providers
   // for deterministic offline data; see lib/server/test-fixtures.ts.
   const providers: SignalProviderTable = getFixtureSignalProviders(target) ?? {
@@ -118,10 +131,10 @@ export async function runAnalysis(
     googleSafeBrowsing: () =>
       runGoogleSafeBrowsingProvider(normalizedUrl, signal),
     threatFeeds: () => runThreatFeedsProvider(normalizedUrl, signal, scanId),
-    ssl: () => runSslSignal(normalizedUrl, signal, scanId),
+    ssl: () => runSslSignal(normalizedUrl, signal, scanId, redirects),
     whois: () => runWhoisSignal(normalizedUrl, signal),
     dns: () => runDnsSignal(normalizedUrl, signal),
-    redirectChain: () => runRedirectSignal(normalizedUrl, signal, scanId),
+    redirectChain: redirects,
   };
   const task = <Name extends SignalName>(
     name: Name,
@@ -154,7 +167,11 @@ export async function runAnalysis(
   await Promise.all(pending);
 
   const completedAt = new Date().toISOString();
-  const { verdict, threatInfo } = buildThreatAssessment(signals);
+  // Judged as of the check time it is stored with (`checkedAt`).
+  const { verdict, threatInfo } = buildThreatAssessment(
+    signals,
+    Date.parse(completedAt),
+  );
   const partialFailure = hasPartialFailure(signals);
 
   const result: AnalysisResult = {

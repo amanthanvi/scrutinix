@@ -228,6 +228,24 @@ export const sslDataSchema = z.object({
    * so it shows its reference and is never cached.
    */
   probeFailed: z.boolean().optional().catch(undefined),
+  /**
+   * A plain-HTTP link whose redirects never reach HTTPS: no certificate is
+   * in its path. An answer, not lost coverage; the cell reads "didn't
+   * apply".
+   */
+  noHttps: z.boolean().optional().catch(undefined),
+  /**
+   * An invalid or untrusted certificate's problem in plain words, set by
+   * the probe (`describeCertificateProblem`, timeless): what the row and
+   * the Summary say, so the browser never maps verification codes itself.
+   */
+  problem: z.string().optional().catch(undefined),
+  /**
+   * The registered domain the certificate was read from when it isn't the
+   * link's own: an http:// link that moves to HTTPS on another site. Its
+   * age is never paired with the link's domain age.
+   */
+  otherSite: z.string().optional().catch(undefined),
 });
 
 export type SSLData = z.infer<typeof sslDataSchema>;
@@ -758,6 +776,26 @@ export const signalSignatureSchema = z
 
 export type SignalSignature = z.infer<typeof signalSignatureSchema>;
 
+/**
+ * What a result's instruction rests on besides its verdict: four neutral
+ * facts, read from the result by `getVerdictBasis`
+ * (`lib/domain/verdict-basis.ts`). A share signs them so the recipient's
+ * band can word the instruction the way the sender's did; the wording
+ * itself is never stored.
+ */
+export const verdictBasisSchema = z.object({
+  /** `threatInfo.confidenceLabel`; "low" when there is none. */
+  confidence: z.enum(["low", "moderate", "high"]),
+  /** The engine scored nothing against the link; false when unknown. */
+  clean: z.boolean(),
+  /** A check failed or only partly finished (`metadata.partialFailure`). */
+  partial: z.boolean(),
+  /** A reputation source confirmed the threat (`hasConfirmedReputationHit`). */
+  confirmed: z.boolean(),
+});
+
+export type VerdictBasis = z.infer<typeof verdictBasisSchema>;
+
 export const sharedSnapshotSchema = z.object({
   verdict: verdictSchema,
   url: z.string().max(2048),
@@ -765,6 +803,10 @@ export const sharedSnapshotSchema = z.object({
   capturedAt: z.string().max(128),
   // Added with the eight-cell strip; links shared before it still parse.
   signature: signalSignatureSchema.optional().catch(undefined),
+  // Added so a recipient's instruction matches the sender's. Links shared
+  // before it (or with a malformed basis) still parse and keep the hedged
+  // instruction.
+  basis: verdictBasisSchema.optional().catch(undefined),
 });
 
 export type SharedSnapshot = z.infer<typeof sharedSnapshotSchema>;

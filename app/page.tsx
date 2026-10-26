@@ -5,9 +5,15 @@ import { AppFooter } from "@/components/scrutinix/app-footer";
 import { AppHeader } from "@/components/scrutinix/app-header";
 import { ScrutinixErrorBoundary } from "@/components/scrutinix/error-boundary";
 import { HistorySection } from "@/components/scrutinix/history-section";
+import { NoLinkNote } from "@/components/scrutinix/no-link-note";
 import { ResultsSection } from "@/components/scrutinix/results-section";
 import { ScanForm } from "@/components/scrutinix/scan-form";
-import { PREFILL_PARAM, resolvePrefill } from "@/lib/domain/share-launch";
+import {
+  NO_LINK_NOTE,
+  NO_LINK_PARAM,
+  PREFILL_PARAM,
+  resolvePrefill,
+} from "@/lib/domain/share-launch";
 import {
   getSharedMetadata,
   resolveSharedView,
@@ -17,7 +23,7 @@ type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
 function paramOf(
   params: Awaited<SearchParams>,
-  name: "shared" | "sig" | typeof PREFILL_PARAM,
+  name: "shared" | "sig" | typeof PREFILL_PARAM | typeof NO_LINK_PARAM,
 ): string | null {
   const value = params[name];
   return typeof value === "string" && value ? value : null;
@@ -70,6 +76,9 @@ export default async function HomePage({
   const prefill = shared
     ? null
     : resolvePrefill(paramOf(params, PREFILL_PARAM));
+  // The share target found no link to fill in (`/?nolink=1`): say so under
+  // the form. Anything the page did open on outranks it.
+  const noLink = !shared && !prefill && paramOf(params, NO_LINK_PARAM) === "1";
 
   const lead = (className: string) => (
     <p
@@ -129,6 +138,7 @@ export default async function HomePage({
                   <div className="flex flex-col gap-5 sm:gap-7">
                     <div className="max-w-[47.5rem]">
                       <ScanForm />
+                      {noLink ? <NoLinkNote note={NO_LINK_NOTE} /> : null}
                     </div>
                     <ResultsSection />
                   </div>

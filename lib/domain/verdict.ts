@@ -1,3 +1,7 @@
+import {
+  describeCertificateProblem,
+  otherSiteCertificateNote,
+} from "@/lib/domain/certificate";
 import { capitalize, countOf, formatAge, formatList } from "@/lib/domain/copy";
 import { getLimitedChecks } from "@/lib/domain/coverage";
 import {
@@ -32,6 +36,8 @@ import type {
 } from "@/lib/domain/types";
 import { signalLabels, signalNames } from "@/lib/domain/types";
 import { threatScoreToVerdict } from "@/lib/domain/score-bands";
+import { evidenceTimeOf } from "@/lib/domain/verdict-basis";
+import { NOTHING_FLAGGED_SUMMARY } from "@/lib/domain/verdict-guidance";
 
 export { hasConfirmedReputationHit } from "@/lib/domain/reputation";
 
@@ -55,9 +61,12 @@ interface Contribution {
 /** What a scorer returns; `collectContributions` tags it with its signal. */
 type ScoredItem = Omit<Contribution, "signal">;
 
-/** One scorer per signal, so every contribution knows its source check. */
+/**
+ * One scorer per signal, so every contribution knows its source check.
+ * `asOf` is when the evidence was gathered; only ages read it.
+ */
 const SCORERS: ReadonlyArray<
-  readonly [SignalName, (signals: SignalResults) => ScoredItem[]]
+  readonly [SignalName, (signals: SignalResults, asOf: number) => ScoredItem[]]
 > = [
   ["virusTotal", scoreVirusTotal],
   ["googleSafeBrowsing", scoreGoogleSafeBrowsing],
@@ -69,9 +78,12 @@ const SCORERS: ReadonlyArray<
   ["whois", scoreWhois],
 ];
 
-function collectContributions(signals: SignalResults): Contribution[] {
+function collectContributions(
+  signals: SignalResults,
+  asOf: number = Date.now(),
+): Contribution[] {
   return SCORERS.flatMap(([signal, score]) =>
-    score(signals).map((item) => ({ ...item, signal })),
+    score(signals, asOf).map((item) => ({ ...item, signal })),
   );
 }
 
@@ -103,9 +115,10 @@ export function scoredFindings(
  */
 export function getScoredSignals(
   signals: SignalResults,
+  asOf: number = Date.now(),
 ): ReadonlySet<SignalName> {
   return new Set(
-    collectContributions(signals)
+    collectContributions(signals, asOf)
       .filter((item) => item.score > 0)
       .map((item) => item.signal),
   );
@@ -133,16 +146,25 @@ export function getScoredFindings(
  * existed, so Summary shows the checks that drove its verdict instead of
  * guessing from row severity. Only the missing list is derived: the stored
  * verdict, score, and copy stay as saved, and an explicit list (even an
- * empty one) is kept.
+ * empty one) is kept. Judged as of the entry's check time
+ * (`evidenceTimeOf`), as its verdict was: a certificate days old then is
+ * not weeks old now.
  */
 export function withScoredSignals<
-  T extends Pick<AnalysisResult, "signals" | "threatInfo">,
+  T extends Pick<AnalysisResult, "signals" | "threatInfo"> & {
+    metadata?: Partial<
+      Pick<AnalysisResult["metadata"], "checkedAt" | "completedAt">
+    > | null;
+  },
 >(result: T): T {
   if (!result.threatInfo || result.threatInfo.scoredSignals !== undefined) {
     return result;
   }
 
-  const scored = getScoredSignals(result.signals);
+  const scored = getScoredSignals(
+    result.signals,
+    evidenceTimeOf(result.metadata ?? {}) ?? Date.now(),
+  );
   return {
     ...result,
     threatInfo: {
@@ -152,17 +174,29 @@ export function withScoredSignals<
   };
 }
 
+/**
+ * The verdict and its threat info. `asOf` is when the evidence was
+ * gathered (default now): a cache hit passes the original scan's check
+ * time, so a VirusTotal analysis or a certificate is as old as it was then,
+ * and the verdict matches the band's basis, caveat, and Summary
+ * (`evidenceTimeOf`).
+ */
 export function buildThreatAssessment(
   signals: SignalResults,
+  asOf: number = Date.now(),
 ): Pick<AnalysisResult, "verdict" | "threatInfo"> {
   const statuses = Object.values(signals);
   const successfulSignals = statuses.filter(
     (signal) => signal.status === "success",
   ).length;
   const dataRichSignals = countDataRichSignals(signals);
-  const skippedSignals = statuses.filter(
-    (signal) => signal.status === "skipped",
-  ).length;
+  // A plain-HTTP link that never reaches HTTPS has no certificate: the
+  // check ran, but it counts as one that didn't apply, as its cell says.
+  const noCertificate =
+    signals.ssl.status === "success" && signals.ssl.data?.noHttps ? 1 : 0;
+  const skippedSignals =
+    statuses.filter((signal) => signal.status === "skipped").length +
+    noCertificate;
   const failedSignals = statuses.filter(
     (signal) => signal.status === "error",
   ).length;
@@ -174,9 +208,9 @@ export function buildThreatAssessment(
     };
   }
 
-  const contributions = collectContributions(signals);
+  const contributions = collectContributions(signals, asOf);
 
-  applyExculpatoryEvidence(signals, contributions);
+  applyExculpatoryEvidence(signals, contributions, asOf);
 
   const score = clamp(
     contributions.reduce((total, item) => total + item.score, 0),
@@ -193,20 +227,21 @@ export function buildThreatAssessment(
       : bandedVerdict;
   const reasons = [...new Set(contributions.map((item) => item.reason))];
   const categories = [...new Set(contributions.map((item) => item.category))];
-  const limitations = buildLimitations(signals);
+  const limitations = buildLimitations(signals, asOf);
   // The "some checks were limited" claim and the coverage caveat come from
   // this one list; `limitations` keeps the detailed strings for Details and
   // the confidence math.
-  const limitedCoverage = getLimitedChecks(signals).length > 0;
+  const limitedCoverage = getLimitedChecks(signals, asOf).length > 0;
   const confidence = calculateConfidence({
     signals,
     verdict,
     contributions,
-    successfulSignals,
+    successfulSignals: successfulSignals - noCertificate,
     dataRichSignals,
     skippedSignals,
     failedSignals,
     limitations,
+    asOf,
   });
 
   const confidenceLabel = scoreToConfidenceLabel(confidence);
@@ -223,12 +258,13 @@ export function buildThreatAssessment(
     score,
     summary: buildSummary(verdict, contributions, reasons, limitedCoverage),
     categories,
-    reasons: reasons.length ? reasons : ["No check flagged this link."],
+    reasons: reasons.length ? reasons : [NOTHING_FLAGGED_SUMMARY],
     recommendations: buildRecommendations(verdict, {
       limitedCoverage,
       // Same rule as the "Probably safe" imperative, so the first "What
       // to do" item never repeats it.
       provisional: confidenceLabel !== "high" || hasPositiveEvidence,
+      threat: listedThreatKind(signals),
     }),
     limitations,
   };
@@ -268,6 +304,7 @@ function isUnreachable(signals: SignalResults): boolean {
 function applyExculpatoryEvidence(
   signals: SignalResults,
   contributions: Contribution[],
+  asOf: number,
 ) {
   const maxPositive = contributions.reduce(
     (max, item) => Math.max(max, item.score),
@@ -278,7 +315,7 @@ function applyExculpatoryEvidence(
   }
 
   const vt = signals.virusTotal;
-  const vtAgeDays = vtAnalysisAgeDays(signals);
+  const vtAgeDays = vtAnalysisAgeDays(signals, asOf);
   if (
     vt.status === "success" &&
     vt.data &&
@@ -468,7 +505,7 @@ function scoreMlEnsemble(signals: SignalResults): ScoredItem[] {
   return contributions;
 }
 
-function scoreSsl(signals: SignalResults): ScoredItem[] {
+function scoreSsl(signals: SignalResults, asOf: number): ScoredItem[] {
   const signal = signals.ssl;
   if (signal.status !== "success" || !signal.data) {
     return [];
@@ -476,13 +513,15 @@ function scoreSsl(signals: SignalResults): ScoredItem[] {
 
   const contributions: ScoredItem[] = [];
 
+  // Worded from the stored facts, never the raw verification code, so a
+  // cached or older result reads the same plain sentence.
+  const problem = describeCertificateProblem(signal.data, asOf);
+
   if (signal.data.validationState === "invalid") {
     contributions.push({
       score: 28,
       category: "TLS",
-      reason:
-        signal.data.observations?.[0] ??
-        "The site's security certificate isn't trusted.",
+      reason: problem ?? "The site's certificate isn't trusted.",
       quality: "low",
       subject: { text: "an invalid certificate", kind: "sign", group: "tls" },
     });
@@ -492,7 +531,7 @@ function scoreSsl(signals: SignalResults): ScoredItem[] {
     contributions.push({
       score: 26,
       category: "TLS",
-      reason: "The site uses an untrusted or self-signed security certificate.",
+      reason: problem ?? "The site's certificate isn't trusted.",
       quality: "low",
       subject: { text: "an untrusted certificate", kind: "sign", group: "tls" },
     });
@@ -502,7 +541,9 @@ function scoreSsl(signals: SignalResults): ScoredItem[] {
   // pattern. The certificate age alone is deliberately NOT scored -
   // short-lived certificates (Let's Encrypt renewals) make young certs
   // routine on legitimate sites.
-  const validFrom = signal.data.validFrom;
+  // Only the link's own certificate pairs with the link's domain age: one
+  // read on the site an http:// link moves to (`otherSite`) is not its.
+  const validFrom = signal.data.otherSite ? null : signal.data.validFrom;
   const whois = signals.whois;
   const domainAgeDays =
     whois.status === "success" && whois.data ? whois.data.ageDays : null;
@@ -510,7 +551,7 @@ function scoreSsl(signals: SignalResults): ScoredItem[] {
     const issuedAt = new Date(validFrom).getTime();
     const certAgeDays = Number.isNaN(issuedAt)
       ? null
-      : Math.floor((Date.now() - issuedAt) / (1000 * 60 * 60 * 24));
+      : Math.floor((asOf - issuedAt) / (1000 * 60 * 60 * 24));
     if (
       certAgeDays !== null &&
       certAgeDays >= 0 &&
@@ -519,7 +560,7 @@ function scoreSsl(signals: SignalResults): ScoredItem[] {
       contributions.push({
         score: 12,
         category: "TLS",
-        reason: `A security certificate issued ${formatAge(certAgeDays)} ago on a domain registered ${formatAge(domainAgeDays)} ago matches a common phishing setup.`,
+        reason: `A certificate issued ${formatAge(certAgeDays)} ago on a domain registered ${formatAge(domainAgeDays)} ago matches a common phishing setup.`,
         quality: "medium",
         subject: {
           text: "a brand-new certificate on a brand-new domain",
@@ -733,7 +774,7 @@ function scoreWhois(signals: SignalResults): ScoredItem[] {
   return contributions;
 }
 
-function buildLimitations(signals: SignalResults) {
+function buildLimitations(signals: SignalResults, asOf: number) {
   const limitations: string[] = [];
 
   for (const signalName of signalNames) {
@@ -769,10 +810,13 @@ function buildLimitations(signals: SignalResults) {
         signal.data.validationState === "warning" &&
         Array.isArray(data.observations)
       ) {
+        // Whose certificate it is isn't something the check missed.
+        const site = "otherSite" in signal.data ? signal.data.otherSite : null;
+        const whose = site ? otherSiteCertificateNote(site) : null;
         limitations.push(
-          ...data.observations.map(
-            (item) => `${formatSignalName(signalName)}: ${item}`,
-          ),
+          ...data.observations
+            .filter((item) => item !== whose)
+            .map((item) => `${formatSignalName(signalName)}: ${item}`),
         );
       }
 
@@ -804,7 +848,7 @@ function buildLimitations(signals: SignalResults) {
     }
   }
 
-  const vtAgeDays = vtAnalysisAgeDays(signals);
+  const vtAgeDays = vtAnalysisAgeDays(signals, asOf);
   if (vtAgeDays !== null && vtAgeDays > VT_STALE_ANALYSIS_DAYS) {
     limitations.push(
       `${formatSignalName("virusTotal")}: The verdict draws on a VirusTotal analysis from ${countOf(vtAgeDays, "day")} ago.`,
@@ -880,6 +924,7 @@ function calculateConfidence({
   skippedSignals,
   failedSignals,
   limitations,
+  asOf,
 }: {
   signals: SignalResults;
   verdict: Verdict;
@@ -889,6 +934,7 @@ function calculateConfidence({
   skippedSignals: number;
   failedSignals: number;
   limitations: string[];
+  asOf: number;
 }) {
   const cleanHighConfidenceSources = countCleanHighConfidenceSources(signals);
   const positiveHighConfidenceSources =
@@ -956,7 +1002,7 @@ function calculateConfidence({
     );
   }
 
-  const vtAgeDays = vtAnalysisAgeDays(signals);
+  const vtAgeDays = vtAnalysisAgeDays(signals, asOf);
   if (
     effectiveVerdict === "safe" &&
     vtAgeDays !== null &&
@@ -980,22 +1026,86 @@ function calculateConfidence({
   );
 }
 
+const MALWARE_THREATS = new Set([
+  "MALWARE",
+  "UNWANTED_SOFTWARE",
+  "POTENTIALLY_HARMFUL_APPLICATION",
+]);
+
+/** What the lists say a link does, as far as the advice depends on it. */
+type ListedThreat = "phishing" | "skimming" | "malware";
+
+/**
+ * What the lists say the link does: "phishing" when any listing says so,
+ * else "skimming" when one says it steals card details (a ThreatFox card
+ * skimming indicator), else "malware" when one names malware or unwanted
+ * software (a Google malware match, URLhaus, ThreatFox, a DBL or SURBL
+ * malware listing), else null. Listings of other links on the site don't
+ * count.
+ */
+function listedThreatKind(signals: SignalResults): ListedThreat | null {
+  const kinds = new Set<ListedThreat>();
+  for (const match of signals.googleSafeBrowsing.data?.matches ?? []) {
+    const type = match.threatType.toUpperCase();
+    if (type === "SOCIAL_ENGINEERING") kinds.add("phishing");
+    if (MALWARE_THREATS.has(type)) kinds.add("malware");
+  }
+  for (const match of signals.threatFeeds.data?.matches ?? []) {
+    if (isElsewhereOnHost(match)) continue;
+    if (match.feed === "openphish" || /phish/i.test(match.detail)) {
+      kinds.add("phishing");
+    } else if (/skimming/i.test(match.detail)) {
+      kinds.add("skimming");
+    } else if (
+      match.feed === "urlhaus" ||
+      match.feed === "threatfox" ||
+      /malware|botnet|cracked/i.test(match.detail)
+    ) {
+      kinds.add("malware");
+    }
+  }
+  return (
+    (["phishing", "skimming", "malware"] as const).find((kind) =>
+      kinds.has(kind),
+    ) ?? null
+  );
+}
+
 function buildRecommendations(
   verdict: Verdict,
   {
     limitedCoverage,
     provisional,
-  }: { limitedCoverage: boolean; provisional: boolean },
+    threat,
+  }: {
+    limitedCoverage: boolean;
+    provisional: boolean;
+    threat: ListedThreat | null;
+  },
 ) {
   // Actions only: the verdict line already says what the result means.
   switch (verdict) {
     case "critical":
     case "malicious":
-      return [
-        "Don't enter passwords, payment details, or one-time codes on this site.",
-        "Delete the message the link came in, or report it as phishing.",
-        "If you already opened it, change any password you typed there and run a malware scan.",
-      ];
+      // A skimmer steals the card you pay with; a malware site's danger is
+      // what it makes you download. Neither is reported as phishing.
+      if (threat === "skimming") {
+        return [
+          "Don't enter payment details on this site.",
+          "If you already paid there, call your card issuer and watch your statement.",
+        ];
+      }
+      return threat === "malware"
+        ? [
+            "Don't download or open anything from this site.",
+            "Delete the message the link came in.",
+            "If you already downloaded something from it, delete it unopened and run a malware scan.",
+          ]
+        : [
+            "Don't enter passwords, payment details, or one-time codes on this site.",
+            "Delete the message the link came in, or report it as phishing.",
+            "If you already opened it, change any password you typed there and run a malware scan.",
+          ];
     case "suspicious":
       return [
         "Confirm with the sender another way, such as a call or a message you start yourself.",
@@ -1055,33 +1165,54 @@ function buildSummary(
 
     return limitedCoverage
       ? "No check flagged this link, but some checks were limited."
-      : "No check flagged this link.";
+      : NOTHING_FLAGGED_SUMMARY;
   }
 
   if (verdict === "error") {
     return "The scan failed before enough checks finished.";
   }
 
-  const subjects = summarySubjects(contributions);
-  const sources = subjects.filter((subject) => subject.kind === "source");
-  if (sources.length > 0) {
-    return `${capitalize(formatList(sources.map((subject) => subject.text)))} flagged this link.`;
-  }
+  // The line never names weaker evidence while it drops stronger: a sign
+  // is named beside the sources when it outweighs the weakest source named
+  // ("The link pattern model flagged this link." over a 28-point invalid
+  // certificate), and whichever kind is strongest leads.
+  const ranked = summarySubjects(contributions);
+  const sources = ranked
+    .filter((subject) => subject.kind === "source")
+    .slice(0, SUMMARY_SUBJECT_LIMIT);
+  const weakestSource = sources.at(-1)?.score ?? 0;
+  const signs = ranked
+    .filter(
+      (subject) => subject.kind === "sign" && subject.score > weakestSource,
+    )
+    .slice(0, SUMMARY_SUBJECT_LIMIT);
+  const named = (subjects: readonly { text: string }[]) =>
+    formatList(subjects.map((subject) => subject.text));
+  const signsMake = `${named(signs)} ${signs.length === 1 ? "makes" : "make"}`;
 
-  const signs = subjects.filter((subject) => subject.kind === "sign");
+  if (signs.length > 0 && sources.length > 0) {
+    return ranked[0]?.kind === "sign"
+      ? `${capitalize(signsMake)} this link look risky, and ${named(sources)} flagged it.`
+      : `${capitalize(named(sources))} flagged this link, and ${signsMake} it look risky too.`;
+  }
+  if (sources.length > 0) {
+    return `${capitalize(named(sources))} flagged this link.`;
+  }
   if (signs.length > 0) {
-    return `${capitalize(formatList(signs.map((subject) => subject.text)))} ${
-      signs.length === 1 ? "makes" : "make"
-    } this link look risky.`;
+    return `${capitalize(signsMake)} this link look risky.`;
   }
 
   return reasons[0] ?? "Several checks found warning signs.";
 }
 
+/**
+ * The evidence the summary can name, one subject per group (the group's
+ * highest-scoring wording), ranked by everything the group added.
+ */
 function summarySubjects(contributions: Contribution[]) {
   const byGroup = new Map<
     string,
-    { text: string; kind: "source" | "sign"; score: number }
+    { text: string; kind: "source" | "sign"; score: number; top: number }
   >();
 
   for (const item of contributions) {
@@ -1090,22 +1221,21 @@ function summarySubjects(contributions: Contribution[]) {
     }
 
     const existing = byGroup.get(item.subject.group);
-    if (!existing || item.score > existing.score) {
-      byGroup.set(item.subject.group, {
-        text: item.subject.text,
-        kind: item.subject.kind,
-        score: item.score,
-      });
-    }
+    const score = (existing?.score ?? 0) + item.score;
+    byGroup.set(
+      item.subject.group,
+      !existing || item.score > existing.top
+        ? {
+            text: item.subject.text,
+            kind: item.subject.kind,
+            score,
+            top: item.score,
+          }
+        : { ...existing, score },
+    );
   }
 
-  const ranked = [...byGroup.values()].sort((a, b) => b.score - a.score);
-  const sources = ranked.filter((subject) => subject.kind === "source");
-  const signs = ranked.filter((subject) => subject.kind === "sign");
-  return [
-    ...sources.slice(0, SUMMARY_SUBJECT_LIMIT),
-    ...signs.slice(0, SUMMARY_SUBJECT_LIMIT),
-  ];
+  return [...byGroup.values()].sort((a, b) => b.score - a.score);
 }
 
 /**

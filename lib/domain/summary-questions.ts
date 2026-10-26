@@ -13,7 +13,7 @@ import {
   type FeedMatch,
 } from "@/lib/domain/feed-copy";
 import { PRIVATE_ADDRESSES_OMITTED } from "@/lib/domain/blocked-address";
-import { hostOf } from "@/lib/domain/link-anatomy";
+import { hostOf } from "@/lib/domain/url";
 import { redirectsOverHttp } from "@/lib/domain/redirects";
 import {
   hasConfirmedReputationHit,
@@ -157,10 +157,11 @@ export interface SummaryQuestionInput {
   url: string;
   signals: SignalResults;
   /**
-   * Anchors "issued 2 hours ago" and "listed 6 hours ago". For a finished
-   * result, pass its check time (`evidenceTimeOf`) so every age counts
-   * from the same moment as the domain age the server stored; while a scan
-   * streams, now. Tests pass a fixed time.
+   * Anchors "issued 2 hours ago", "listed 6 hours ago", and whether a
+   * VirusTotal analysis is still current. For a finished result, pass its
+   * check time (`evidenceTimeOf`) so every age counts from the same moment
+   * as the domain age the server stored and the band's "known threat";
+   * while a scan streams, now. Tests pass a fixed time.
    */
   now?: number;
   /**
@@ -180,23 +181,9 @@ interface Context extends SummaryQuestionInput {
   lists: ListReading[];
 }
 
-/**
- * When a result's evidence was gathered: `checkedAt` (a cache hit keeps
- * the original scan's), else `completedAt`. A reopened result's ages count
- * from here, never from when it is reopened, so a certificate "issued 2
- * hours ago" stays beside the domain "registered 3 days ago" it was
- * checked with.
- */
-export function evidenceTimeOf(metadata: {
-  checkedAt?: string;
-  completedAt?: string;
-}): number | undefined {
-  for (const value of [metadata.checkedAt, metadata.completedAt]) {
-    const time = value ? Date.parse(value) : Number.NaN;
-    if (Number.isFinite(time)) return time;
-  }
-  return undefined;
-}
+// The evidence clock lives beside the verdict basis, which ages a
+// VirusTotal conviction by it too; Summary's callers import it from here.
+export { evidenceTimeOf } from "@/lib/domain/verdict-basis";
 
 export function getSummaryQuestions(
   input: SummaryQuestionInput,
@@ -451,7 +438,8 @@ function answerReported({ signals, lists, now }: Context): Answer {
         setAside,
         ...unanswered,
       ]),
-      why: hasConfirmedReputationHit(signals)
+      // Aged by the evidence clock, as the band's "known threat" is.
+      why: hasConfirmedReputationHit(signals, now)
         ? "Direct threat reports are a reason to stay away."
         : onlyElsewhere
           ? "A listed link elsewhere on the same site is a warning sign, not proof about this one."
@@ -829,15 +817,21 @@ function answerHttps({ url, signals, now }: Context): Answer {
   if (startsOnPlainHttp(url)) {
     // Plain HTTP that moves to HTTPS: only the first request is exposed.
     if (!redirect?.finalUrl.toLowerCase().startsWith("https://")) {
-      // A plain-HTTP link to a TLS port can still present a certificate,
-      // and the engine scores it, so it is stated when one was read.
+      // A certificate read here is stated: one where the chain passed
+      // through HTTPS; one the site offers on 443 while the chain stays on
+      // HTTP (browsers that try HTTPS first meet it; else `noHttps`); or,
+      // for a chain that never answered, one on the host's own TLS port.
       const certificate =
         signals.ssl.status === "success" && signals.ssl.data?.available
           ? answerCertificate(signals, now)
           : null;
       return {
         answer: sentences([
-          "No. This link doesn't use HTTPS, so the connection isn't encrypted.",
+          redirect?.hops.some((hop) => /^https:/i.test(hop.url))
+            ? "No. This link passes through HTTPS, then ends on plain HTTP."
+            : certificate && redirect?.reachable && signals.ssl.data?.authorized
+              ? "No. This link stays on plain HTTP, though its site also answers over HTTPS."
+              : "No. This link doesn't use HTTPS, so the connection isn't encrypted.",
           certificate?.state ?? null,
           certificate?.issued ?? null,
         ]),
@@ -893,18 +887,27 @@ function answerCertificate(
   const issued = dated
     ? `This certificate was issued ${formatElapsed(now - issuedAt)} ago.`
     : null;
-  // The engine's fresh-certificate rule: days old, on a brand-new domain.
+  // The engine's fresh-certificate rule: days old, on a brand-new domain,
+  // and only the link's own certificate (not one from `otherSite`).
   const domainAge = scoredAgeDays(signals);
   const freshOnNewDomain =
+    !data.otherSite &&
     dated &&
     Math.floor((now - issuedAt) / DAY_MS) < FRESH_CERTIFICATE_DAYS &&
     domainAge !== null &&
     domainAge < NEW_DOMAIN_DAYS;
 
+  // A certificate read where an http:// link moves to another site is
+  // named as that site's.
+  const whose = data.otherSite
+    ? `the certificate at ${data.otherSite}`
+    : "the site's certificate";
   switch (data.validationState) {
     case "trusted":
       return {
-        state: "The site has a valid certificate.",
+        state: data.otherSite
+          ? `${capitalize(whose)} is valid.`
+          : "The site has a valid certificate.",
         issued,
         why: freshOnNewDomain
           ? FRESH_SETUP
@@ -912,13 +915,18 @@ function answerCertificate(
       };
     case "warning":
       return {
-        state: "We couldn't fully verify the site's certificate.",
+        state: `We couldn't fully verify ${whose}.`,
         issued,
         why: freshOnNewDomain ? FRESH_SETUP : ONLY_THE_CONNECTION,
       };
     default:
       return {
-        state: "The site's certificate isn't trusted.",
+        // Why, in plain words: how long ago it expired, as of the check,
+        // else the probe's own sentence (results from before it have none).
+        state:
+          Date.parse(data.validTo ?? "") < now
+            ? `${capitalize(whose)} expired ${formatElapsed(now - Date.parse(data.validTo ?? ""))} ago.`
+            : (data.problem ?? `${capitalize(whose)} isn't trusted.`),
         issued,
         why: "With a certificate error, even the connection may not be private.",
       };
@@ -928,7 +936,7 @@ function answerCertificate(
 // ---------------------------------------------------------------------------
 // What did the other checks find? (DNS, with the hosting network)
 
-function answerOther({ signals }: Context): Answer {
+function answerOther({ signals, now }: Context): Answer {
   const signal = signals.dns;
   if (signal.status === "skipped") {
     return {
@@ -984,7 +992,8 @@ function answerOther({ signals }: Context): Answer {
 
   // Only a confirmed report: a single engine or a listing elsewhere on
   // the host can sit under a Safe verdict, and this must not contradict it.
-  const reportsStand = hasConfirmedReputationHit(signals);
+  // Aged by the evidence clock, as the band's "known threat" is.
+  const reportsStand = hasConfirmedReputationHit(signals, now);
 
   let why: string;
   if (anomalies.some((anomaly) => /punycode/i.test(anomaly))) {

@@ -5,10 +5,15 @@ import {
   type Verdict,
 } from "@/lib/domain/schemas";
 import type { Severity } from "@/lib/domain/signal-severity";
+import { shareHeadline } from "@/lib/domain/verdict-guidance";
 import {
-  ownershipSentence,
-  shareHeadline,
-} from "@/lib/domain/verdict-guidance";
+  OWNERSHIP_LINE,
+  TRACKING,
+  baselineOf,
+  fitRegisteredDomain,
+  layOutOwnership,
+  lineHeightFor,
+} from "@/lib/og/card-layout";
 
 /**
  * Share cards (1200 x 630) in the light theme: the cool near-white ground,
@@ -229,14 +234,43 @@ function Strip({
   );
 }
 
-function clip(value: string, limit = 48): string {
-  return value.length > limit ? `${value.slice(0, limit - 1)}…` : value;
+/**
+ * The registered domain in the display serif, as on the page: one line,
+ * set smaller, or shortened in the middle of its label, when it is long
+ * (`fitRegisteredDomain`).
+ */
+function RegisteredDomain({ domain }: { domain: string }) {
+  const { text, size } = fitRegisteredDomain(domain);
+  return (
+    <div
+      style={{
+        display: "flex",
+        whiteSpace: "pre",
+        fontFamily: SERIF,
+        fontSize: size,
+        fontWeight: 600,
+        lineHeight: 1.05,
+        letterSpacing: `${TRACKING.display}em`,
+      }}
+    >
+      {text}
+    </div>
+  );
 }
+
+/** The look-alike sentence's line box, and the baseline every run sits on. */
+const SENTENCE_LEADING = 1.3;
+const SENTENCE_BASELINE = baselineOf(
+  "serif",
+  OWNERSHIP_LINE.prose,
+  SENTENCE_LEADING,
+);
 
 /**
  * A look-alike states its owner once, in place of the domain line: the
  * shared `ownershipSentence`, with both domains in mono and the owner
- * emphasised, so each domain appears exactly once on the card.
+ * emphasised, so each domain appears exactly once on the card. One row,
+ * or two broken at its comma when it is too wide (`layOutOwnership`).
  */
 function OwnershipLine({
   domain,
@@ -245,59 +279,51 @@ function OwnershipLine({
   domain: string;
   impersonates: string;
 }) {
-  const sentence = ownershipSentence(domain, impersonates);
-  const ownerAt = sentence.indexOf(domain);
-  const brandAt = sentence.lastIndexOf(impersonates);
-  const parts = [
-    { text: sentence.slice(0, ownerAt), mono: false, owner: false },
-    { text: clip(domain, 36), mono: true, owner: true },
-    {
-      text: sentence.slice(ownerAt + domain.length, brandAt),
-      mono: false,
-      owner: false,
-    },
-    { text: clip(impersonates, 36), mono: true, owner: false },
-    {
-      text: sentence.slice(brandAt + impersonates.length),
-      mono: false,
-      owner: false,
-    },
-  ];
   return (
-    <div
-      style={{
-        display: "flex",
-        flexWrap: "wrap",
-        alignItems: "baseline",
-        fontFamily: SERIF,
-        fontSize: 34,
-        color: C.ink,
-        lineHeight: 1.3,
-      }}
-    >
-      {parts.map((part, index) => (
-        <span
-          key={index}
-          style={{
-            display: "flex",
-            whiteSpace: "pre",
-            ...(part.mono
-              ? {
-                  fontFamily: "Geist Mono",
-                  fontWeight: 500,
-                  letterSpacing: "-0.02em",
-                  color: C.ink,
-                  fontSize: part.owner ? 36 : 30,
-                }
-              : {}),
-          }}
-        >
-          {part.text}
-        </span>
+    <div style={{ display: "flex", flexDirection: "column", color: C.ink }}>
+      {layOutOwnership(domain, impersonates).map((row, rowIndex) => (
+        <div key={rowIndex} style={{ display: "flex" }}>
+          {row.map((run, index) => (
+            <span
+              key={index}
+              style={{
+                display: "flex",
+                whiteSpace: "pre",
+                fontSize: run.size,
+                // Each run's own line box puts its baseline on the row's.
+                lineHeight: lineHeightFor(
+                  run.face,
+                  run.size,
+                  SENTENCE_BASELINE,
+                ),
+                ...(run.face === "mono"
+                  ? {
+                      fontFamily: "Geist Mono",
+                      fontWeight: 500,
+                      letterSpacing: `${TRACKING.mono}em`,
+                    }
+                  : { fontFamily: SERIF }),
+              }}
+            >
+              {run.text}
+            </span>
+          ))}
+        </div>
       ))}
     </div>
   );
 }
+
+/**
+ * The home headline as the default card sets it, in explicit lines broken
+ * where the question pauses ("Is this link / what it says it is?"), not
+ * mid-clause after "what". Satori's own wrap breaks by width alone and has
+ * justified a wide gap into a first line, so the card never relies on it.
+ */
+export const DEFAULT_CARD_HEADLINE = [
+  "Is this link",
+  "what it says it is?",
+] as const;
 
 /** The default card: what Scrutinix does, in the product's own voice. */
 export function DefaultCard() {
@@ -317,8 +343,6 @@ export function DefaultCard() {
     >
       <Brand />
       <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
-        {/* Explicit lines: Satori's own wrap strands "click." alone and
-            justifies a wide gap into the first line. */}
         <div
           style={{
             display: "flex",
@@ -330,8 +354,11 @@ export function DefaultCard() {
             letterSpacing: "-0.026em",
           }}
         >
-          <div style={{ display: "flex" }}>Check a link before</div>
-          <div style={{ display: "flex" }}>you click.</div>
+          {DEFAULT_CARD_HEADLINE.map((line) => (
+            <div key={line} style={{ display: "flex" }}>
+              {line}
+            </div>
+          ))}
         </div>
         <div
           style={{
@@ -445,19 +472,7 @@ export function ResultCard({
         <OwnershipLine domain={domain} impersonates={impersonates} />
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {/* The registered domain in the display serif, as on the page. */}
-          <div
-            style={{
-              display: "flex",
-              fontFamily: SERIF,
-              fontSize: 48,
-              fontWeight: 600,
-              lineHeight: 1.05,
-              letterSpacing: "-0.02em",
-            }}
-          >
-            {clip(domain)}
-          </div>
+          <RegisteredDomain domain={domain} />
           <div style={{ display: "flex", fontSize: 24, color: C.muted }}>
             The site this link belongs to.
           </div>

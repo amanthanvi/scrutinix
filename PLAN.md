@@ -20,8 +20,8 @@ state plus the landed analysis-hardening and review-remediation work.
 
 ## Current Snapshot
 
-- Date: 2026-10-24 (release 4.0.0)
-- Execution status: `P21-P28 complete; P29 distinctiveness stack (layers 0-7: public errors, honesty, evidence and Summary questions, anatomy on paste, speed, sharing, editorial identity, open methodology) merged and released as 4.0.0, with the verification skill (#64)`
+- Date: 2026-10-26 (release 4.1.0)
+- Execution status: `P21-P29 complete (4.0.0); P30 known limits closed and released as 4.1.0: real screen-reader, Android share-sheet, iPhone Shortcut, live-provider, and Firefox/WebKit testing, and every finding fixed`
 - Platform:
   - Next.js `16.4.2`
   - React `19.3.x`
@@ -314,6 +314,17 @@ score band. No score or verdict changes.
 - [x] Independent critique (GPT-6.1 Sol, read-only, against the brief and drafts): fixed the band's score/verdict collision at 640px (row layout from 48rem), bring-into-view measuring the domain line instead of the instruction (new e2e, shown failing on the old code and restored from a backup copy), captions widening short parts, the phone strip's "Registration" wrap, and evidence values breaking mid-word. Declined: re-colouring flagged cells (P09's and the existing strip ramp).
 - [x] Verified: format, lint, typecheck clean; unit 49 files / 601, integration 4 / 55, DOM 15 / 93, e2e 46 passed (`E2E_PORT=3133`, axe in both themes), production build, `check:bundle`, `check:contrast` (172), Lighthouse above. Every surface looked at in light and dark at 1440 and 375 (plus 640/768/1024/1280 for the band and anatomy): home empty, pasted, streaming, Safe, Look-alike, Malicious, Critical, feed hit, Unknown, Error, Full, cell focus, shared verified/unverified/expired, batch, history, /about, /privacy, OG cards. Public prose measured at 64–75 characters per line.
 - [ ] Owner: decide whether flagged strip cells keep the Malicious red (P09, the existing ramp) or go ink (P11; one panel judge and the critique preferred it).
+
+### P30 Close 4.0.0's known limits (2026-10-26, release 4.1.0)
+
+- [x] Tested what 4.0.0 had not: a locally built WebAPK from Chromium's own `shell_apk` taking real Android share-sheet shares into production; TalkBack (built from Google's open-source repo, speech from logcat) and VoiceOver in Safari (speech from its caption panel); live production scans of each provider's designated test resources; the README's iPhone Shortcut on an iOS 26.5 simulator; the whole e2e suite in Firefox and WebKit on macOS and Linux.
+- [x] Speech: manual Single/Batch activation, one spoken string per anatomy part and for the owner sentence, a root `role="status"` announcer for toasts, arrivals, the expected-site answer (2 s pause, Enter, blur), and history Clear/Undo; the results live region announces start and result only and empties after 7 s; no `title` beside an `aria-label`; per-mode strip hints outside the toolbar; `role="list"` on unstyled lists; shortened spoken history links. Re-verified with both screen readers.
+- [x] Landing stability: the band holds the room of every verdict that can still land (`BandRoom`, `bandSays`), the site's line holds the link's host while the parser loads, an Error result holds its missing switch's place, and the strip key is drawn whole from the scan's start; `tests/e2e/landing.fixture.spec.ts` checks every frame in every engine (Chromium's layout-shift record too). A coverage caveat is the one documented exception.
+- [x] Shares sign a verdict `basis` (confidence, clean, partial, confirmed) so a verified recipient reads the sender's instruction; one evidence clock (`buildThreatAssessment(signals, asOf)`, cache hits judged at the original `checkedAt`).
+- [x] Providers: http:// links check the site's 443 as browsers' HTTPS-Upgrades do (not partial, cacheable); host-only feed listings are caution, not flagged; plain certificate, RDAP, and DNS wording; dual-stack address counts per family; the summary names a stronger sign over a weaker source.
+- [x] Link pattern model: host and path only, UUIDs and IDs removed (kept when they spell a brand or lure word), bar 6.44 calibrated on popular, short, sign-in, and account links; ensemble points on held-out ordinary links 33.6% -> 1.5%, OpenPhish 80% -> 35% (`PATTERN_MODEL_EVALUATION` on /about).
+- [x] The headline replaces the old tagline in metadata, manifest, and the default card; share cards fit long domains; a share with no link says so (`/?nolink=1`); README Shortcut steps match iOS 26.
+- [x] First-load JS 233,567 B (budget 234,000) after splitting export formats and the anatomy into on-demand chunks and inlining four icons.
 
 ### P29.7 Open methodology (2026-10-24, layer 7 of the distinctiveness stack)
 

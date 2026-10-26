@@ -1,8 +1,8 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useEffect } from "react";
-import { getToast } from "@/components/ui/lazy-toaster";
+import { useEffect, useRef } from "react";
+import { announce, retract } from "@/components/ui/announcer";
 
 import {
   type Tab,
@@ -11,16 +11,12 @@ import {
 import { InputAnatomy } from "@/components/scrutinix/input-anatomy";
 import { retryableChunk } from "@/components/scrutinix/retryable-chunk";
 import { SingleInput } from "@/components/scrutinix/input-panels";
-import { loadLinkParser } from "@/hooks/use-link-anatomy";
+import { useLinkAnatomy } from "@/hooks/use-link-anatomy";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  downloadTextFile,
-  resultsToCsv,
-  resultsToJson,
-} from "@/lib/client/export";
 import { displayUrlOf, normalizeUrlInput } from "@/lib/domain/url";
+import { ownershipSentence } from "@/lib/domain/verdict-guidance";
 
 // A failed chunk stays inside the Batch panel: Single and any result on
 // screen keep working.
@@ -57,6 +53,8 @@ const BatchInput = dynamic(() => loadBatchInput(), {
   ),
 });
 
+const PRESS_ANALYZE = "Press Analyze to check it.";
+
 function StreamError({ message }: { message: string }) {
   return (
     <p role="alert" className="text-body mt-4 text-[var(--sx-danger-fg)]">
@@ -73,7 +71,7 @@ export function ScanForm() {
     batchInput,
     formError,
     inputEditedSinceResult,
-    prefilled,
+    prefill,
     scan,
     setActiveTab,
     setBatchInput,
@@ -89,18 +87,56 @@ export function ScanForm() {
   // below it, and Analyze holds focus for the tap (or Enter) that scans it.
   // Not the field: on a phone that would raise the keyboard over the link.
   useEffect(() => {
-    if (prefilled) document.getElementById("sx-analyze")?.focus();
-  }, [prefilled]);
+    if (prefill) document.getElementById("sx-analyze")?.focus();
+  }, [prefill]);
 
-  // The link in the field, taken apart before a scan: only while it is a
-  // valid web link that isn't already the one on screen (a result, a
-  // running scan, or a shared link), whose own anatomy shows below.
-  const typed = normalizeUrlInput(singleUrl);
+  // The link on screen already (a result, a running scan, or a shared
+  // link), whose own anatomy shows below.
   const shownUrl =
     active?.url ??
     (scan.state.isStreaming ? scan.state.url : null) ??
     shared?.url ??
     null;
+
+  // And it is said once, with the site the link really belongs to when it
+  // spells out another, so the arrival doesn't depend on focus: TalkBack
+  // said only "Analyze URL, button", and VoiceOver's own reading of a new
+  // page moves focus away from Analyze. Only while the link still waits
+  // untouched: once the visitor edits it, scans, or switches to Batch, an
+  // arrival not yet said never is, and one already said is taken back.
+  const arrival = useLinkAnatomy(prefill);
+  // What was said, exactly: a parser that recovers later changes
+  // `arrivalMessage`, but only the words said can be taken back.
+  const arrivalSaid = useRef<string | null>(null);
+  const filledIn = prefill
+    ? `Link filled in: ${new URL(prefill).hostname}.`
+    : "";
+  const arrivalWaits =
+    filledIn !== "" &&
+    activeTab === "single" &&
+    singleUrl === prefill &&
+    !shownUrl;
+  const owner = arrival.anatomy?.impersonates
+    ? ` ${ownershipSentence(arrival.anatomy.registeredDomain, arrival.anatomy.impersonates)}`
+    : "";
+  const arrivalMessage = `${filledIn}${owner} ${PRESS_ANALYZE}`;
+  useEffect(() => {
+    if (!filledIn || arrivalSaid.current !== null) return;
+    if (!arrivalWaits) {
+      arrivalSaid.current = "";
+      return;
+    }
+    if (arrival.status === "pending") return;
+    arrivalSaid.current = arrivalMessage;
+    announce(arrivalMessage);
+  }, [filledIn, arrivalWaits, arrival.status, arrivalMessage]);
+  useEffect(() => {
+    if (!arrivalWaits && arrivalSaid.current) retract(arrivalSaid.current);
+  }, [arrivalWaits]);
+
+  // The link in the field, taken apart before a scan: only while it is a
+  // valid web link that isn't already the one on screen.
+  const typed = normalizeUrlInput(singleUrl);
   // Shown with its fragment ("#/login"), which the scan itself never sees,
   // so a fragment alone doesn't make it a different link.
   const pasteUrl =
@@ -110,8 +146,22 @@ export function ScanForm() {
 
   return (
     <section id="scan-console" aria-label="Scan console">
+      {/* The arrival in reading order too, from the first paint, while the
+          link waits untouched: VoiceOver's own reading of a new page talked
+          over the announcement in Safari. Before the tabs, not in the
+          panel: TalkBack reads a focusable panel's text with its name, so
+          there it was said twice. The owner sentence follows in the link's
+          anatomy, after the field. */}
+      {arrivalWaits ? (
+        <p className="sr-only">{`${filledIn} ${PRESS_ANALYZE}`}</p>
+      ) : null}
+      {/* Manual activation: arrows move focus, Enter or Space switches.
+          A screen reader moves focus as it reads (VoiceOver's VO-Right),
+          and a tab that switched on focus swapped Single and its result
+          for an empty Batch under the reader. */}
       <Tabs
         value={activeTab}
+        activationMode="manual"
         onValueChange={(value) => {
           setActiveTab(value as Tab);
           setFormError(null);
@@ -120,7 +170,10 @@ export function ScanForm() {
       >
         <TabsList aria-label="Scan mode">
           <TabsTrigger value="single">Single</TabsTrigger>
-          {/* The hint says what Batch is without joining the tab's name. */}
+          {/* The hint says what Batch is without joining the tab's name.
+              (Safari still reads it with the name, "Batch up to 10 links";
+              an aria-label "Batch" would hide visible text from the name,
+              which voice control needs.) */}
           <TabsTrigger
             value="batch"
             aria-describedby="sx-batch-tab-hint"
@@ -175,21 +228,7 @@ export function ScanForm() {
             streaming={batch.state.isStreaming}
             onSubmit={() => void startBatchScan()}
             onCancel={batch.cancelBatch}
-            hasResults={batch.state.results.length > 0}
-            onCsv={async () => {
-              const results = batch.state.results;
-              const parse = await loadLinkParser();
-              downloadTextFile("batch.csv", resultsToCsv(results, parse));
-              (await getToast()).success("Downloaded batch.csv");
-            }}
-            onJson={async () => {
-              downloadTextFile(
-                "batch.json",
-                resultsToJson(batch.state.results),
-                "application/json",
-              );
-              (await getToast()).success("Downloaded batch.json");
-            }}
+            results={batch.state.results}
           />
         </TabsContent>
       </Tabs>

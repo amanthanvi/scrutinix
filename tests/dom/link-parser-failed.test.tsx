@@ -31,10 +31,10 @@ import {
   storedResult,
 } from "@/tests/dom/helpers/parser-states";
 
-// The browser's lazy tldts import always fails: offline after the page
-// loaded, or a chunk a deploy removed.
+// The browser's lazy parser chunk (tldts and `lib/client/link-parser.ts`)
+// always fails: offline after the page loaded, or a chunk a deploy removed.
 const parser = vi.hoisted(() => ({ calls: 0 }));
-vi.mock("tldts", async () => {
+vi.mock("@/lib/client/link-parser", async () => {
   parser.calls += 1;
   throw new TypeError("Failed to fetch dynamically imported module");
 });

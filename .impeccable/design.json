@@ -2007,7 +2007,7 @@
       {
         "name": "md",
         "value": "48rem",
-        "purpose": "The score takes its right column beside the verdict."
+        "purpose": "The score (or Cancel, or Try again) takes its right column beside the verdict; a band with nothing there gives its word the full width."
       },
       {
         "name": "lg",

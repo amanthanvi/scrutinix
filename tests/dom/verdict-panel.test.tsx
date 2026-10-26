@@ -1,5 +1,5 @@
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   VERDICT_HEADING_ID,
@@ -8,6 +8,8 @@ import {
   formatSnapshotTime,
 } from "@/components/scrutinix/verdict-panel";
 import { createErrorAnalysisResult } from "@/lib/domain/analysis-result";
+import { spokenTextNodes } from "@/tests/dom/helpers/speech";
+import { SCORE_BANDS, bandSays } from "@/lib/domain/verdict-guidance";
 import {
   createPendingSignalResults,
   type AnalysisResult,
@@ -71,7 +73,7 @@ function renderPanel(
     evidenceShown?: boolean;
     impersonates?: string | null;
     registeredDomain?: string | null;
-    holdDomain?: boolean;
+    holdDomain?: string | null;
   } = {},
 ) {
   return render(
@@ -99,19 +101,50 @@ describe("VerdictBand", () => {
     });
     const band = screen.getByRole("region", { name: "Scan result: Malicious" });
     const heading = screen.getByRole("heading", { level: 2 });
-    const domain = heading.nextElementSibling as HTMLElement;
-    expect(domain.textContent).toBe("secure-login.xyz");
-    expect(domain.className).toContain("sx-band-domain");
+    // The word's slot, then the site's slot holding the domain.
+    const site = heading.parentElement?.nextElementSibling as HTMLElement;
+    const domain = site.querySelector("p.sx-band-domain");
+    expect(domain?.textContent).toBe("secure-login.xyz");
     // The owner sentence belongs to the link anatomy, said once there.
     expect(band.textContent).not.toMatch(/belongs to/);
   });
 
-  it("holds the domain line's height while the link parser loads", () => {
-    renderPanel(buildResult("safe", { score: 4 }), { holdDomain: true });
-    const placeholder = screen.getByRole("heading", { level: 2 })
-      .nextElementSibling as HTMLElement;
-    expect(placeholder.getAttribute("aria-hidden")).toBe("true");
-    expect(placeholder.className).toContain("invisible");
+  it("holds the site's line for the link's whole host while the link parser loads", () => {
+    renderPanel(buildResult("safe", { score: 4 }), {
+      holdDomain: "accounts.example.co.uk",
+    });
+    const site = screen.getByRole("heading", { level: 2 }).parentElement
+      ?.nextElementSibling as HTMLElement;
+    const standIn = site.querySelector("[data-stand-in]");
+    expect(standIn?.getAttribute("data-stand-in")).toBe(
+      "accounts.example.co.uk",
+    );
+    expect(standIn?.getAttribute("aria-hidden")).toBe("true");
+    expect(site.querySelector("p.sx-band-domain")).toBeNull();
+  });
+
+  it("keeps the host's room when the shorter registered domain arrives", () => {
+    const result = buildResult("safe", { score: 4 });
+    const { rerender } = renderPanel(result, {
+      holdDomain: "a-very-long-subdomain.accounts.example.co.uk",
+    });
+    rerender(
+      <VerdictBand
+        result={result}
+        isStreaming={false}
+        sharedSnapshot={null}
+        completedSignals={8}
+        registeredDomain="example.co.uk"
+      />,
+    );
+    const site = screen.getByRole("heading", { level: 2 }).parentElement
+      ?.nextElementSibling as HTMLElement;
+    expect(
+      site.querySelector("[data-stand-in]")?.getAttribute("data-stand-in"),
+    ).toBe("a-very-long-subdomain.accounts.example.co.uk");
+    expect(site.querySelector("p.sx-band-domain")?.textContent).toBe(
+      "example.co.uk",
+    );
   });
 
   it("draws a verdict rule keyed to the result, over the band's track", () => {
@@ -140,10 +173,10 @@ describe("VerdictBand", () => {
     });
     expect(heading.id).toBe(VERDICT_HEADING_ID);
     expect(heading.getAttribute("tabindex")).toBe("-1");
-    // The instruction sits directly under the verdict word.
-    expect(heading.nextElementSibling?.textContent).toBe(
-      "Don't open this link.",
-    );
+    // The instruction sits directly under the verdict word and domain.
+    expect(
+      heading.closest(".sx-band-head")?.nextElementSibling?.textContent,
+    ).toBe("Don't open this link.");
     // One colour encoding: the band is tinted, the word stays ink.
     expect(heading.className).toContain("text-[var(--sx-text)]");
     expect(heading.closest("section")?.getAttribute("style")).toContain(
@@ -342,6 +375,64 @@ describe("VerdictBand", () => {
     expect(screen.queryByRole("meter")).toBeNull();
   });
 
+  it("leaves out a shared summary that only repeats the instruction, as the sender's band did", () => {
+    const clean = {
+      confidence: "high",
+      clean: true,
+      partial: false,
+      confirmed: false,
+    } as const;
+    const safe = {
+      verdict: "safe" as const,
+      url: "https://example.com/",
+      summary: "No check flagged this link.",
+      capturedAt: "2026-10-06T00:00:00.000Z",
+    };
+    const { rerender } = render(
+      <VerdictBand
+        result={null}
+        isStreaming={false}
+        sharedSnapshot={{ ...safe, basis: clean }}
+      />,
+    );
+    expect(screen.getByText("Looks safe to open.")).toBeTruthy();
+    expect(screen.queryByText("No check flagged this link.")).toBeNull();
+
+    // A summary that adds something still shows under the same instruction.
+    const limited = "No check flagged this link, but some checks were limited.";
+    rerender(
+      <VerdictBand
+        result={null}
+        isStreaming={false}
+        sharedSnapshot={{ ...safe, summary: limited, basis: clean }}
+      />,
+    );
+    expect(screen.getByText("Looks safe to open.")).toBeTruthy();
+    expect(screen.getByText(limited)).toBeTruthy();
+
+    // Under the hedge (signed before the basis) and on a look-alike, the
+    // summary says what the instruction doesn't.
+    rerender(
+      <VerdictBand result={null} isStreaming={false} sharedSnapshot={safe} />,
+    );
+    expect(
+      screen.getByText("Probably safe — still check who sent it."),
+    ).toBeTruthy();
+    expect(screen.getByText("No check flagged this link.")).toBeTruthy();
+    rerender(
+      <VerdictBand
+        result={null}
+        isStreaming={false}
+        sharedSnapshot={{ ...safe, basis: clean }}
+        impersonates="paypal.com"
+      />,
+    );
+    expect(
+      screen.getByText("Don't sign in or enter details here."),
+    ).toBeTruthy();
+    expect(screen.getByText("No check flagged this link.")).toBeTruthy();
+  });
+
   it("dates a shared snapshot with its year, in UTC", () => {
     // A check from another year must not read as this year's.
     expect(formatSnapshotTime("2025-12-31T23:30:00.000Z")).toBe(
@@ -357,9 +448,21 @@ describe("VerdictBand", () => {
           summary: "",
           capturedAt: "2026-10-06T09:00:00.000Z",
         }}
+        onRunSharedScan={() => {}}
       />,
     );
-    expect(screen.getByText("Oct 6, 2026, 09:00 AM UTC").tagName).toBe("TIME");
+    // One run of text (a <time> inside it was a reading stop of its own),
+    // read before the button that replaces the result, drawn after it.
+    const provenance = screen.getByText(
+      "Verified Scrutinix result · checked Oct 6, 2026, 09:00 AM UTC. It may be out of date.",
+    );
+    expect(spokenTextNodes(provenance)).toHaveLength(1);
+    const button = screen.getByRole("button", { name: "Run a fresh scan" });
+    expect(
+      provenance.compareDocumentPosition(button) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(provenance.className).toContain("order-last");
   });
 
   it("says an expired shared result is too old, not unverified", () => {
@@ -501,6 +604,255 @@ describe("VerdictBand", () => {
     expect(verdict.textContent).toBe("Malicious");
     expect(document.activeElement).toBe(verdict);
   });
+
+  /** The room a band holds: each stand-in's text, which is never text. */
+  function heldRoom(band: HTMLElement): string[] {
+    const standIns = [...band.querySelectorAll<HTMLElement>("[data-stand-in]")];
+    for (const standIn of standIns) {
+      // Generated content only: nothing to select, find, or hear.
+      expect(standIn.textContent).toBe("");
+      expect(standIn.closest('[aria-hidden="true"]')).not.toBeNull();
+    }
+    return standIns.map((node) => node.dataset.standIn ?? "").sort();
+  }
+
+  function failedScan(): AnalysisResult {
+    return createErrorAnalysisResult({
+      url: "https://example.com/",
+      scanId: "error-scan",
+      startedAt: "2026-08-02T12:00:00.000Z",
+      message: "Scan failed.",
+    });
+  }
+
+  type Check = "pending" | "ready" | "failed";
+
+  /** A scan's band from Checking to the verdict, with the address check. */
+  function scanBand(check: Check, impersonates: string | null = null) {
+    const view = render(
+      <VerdictBand
+        result={null}
+        isStreaming
+        sharedSnapshot={null}
+        completedSignals={3}
+        addressCheck={check}
+        impersonates={impersonates}
+        onCancelScan={() => {}}
+      />,
+    );
+    const land = (result: AnalysisResult, landCheck: Check = check) =>
+      view.rerender(
+        <VerdictBand
+          result={result}
+          isStreaming={false}
+          sharedSnapshot={null}
+          completedSignals={8}
+          addressCheck={landCheck}
+          impersonates={impersonates}
+          onRetry={() => {}}
+        />,
+      );
+    return { ...view, land };
+  }
+
+  it("holds every verdict's room in Checking until the address check says otherwise", () => {
+    scanBand("pending");
+    const room = heldRoom(screen.getByRole("region"));
+    // The longest of everything a band can say, whichever verdict lands.
+    const says = bandSays();
+    for (const text of [
+      ...says.beside.words,
+      ...says.beside.imperatives,
+      ...says.across.words,
+      ...says.across.imperatives,
+      ...says.across.notes,
+      ...says.confidenceLabels,
+      ...SCORE_BANDS,
+      "Cancel scan",
+      "Try again",
+    ]) {
+      expect(room).toContain(text);
+    }
+    // None of it is text the band says.
+    expect(screen.getByRole("region").textContent).not.toContain(
+      "Looks safe to open.",
+    );
+  });
+
+  it("holds no room for a Look-alike or Unconfirmed the address check has ruled out", () => {
+    scanBand("ready");
+    const room = heldRoom(screen.getByRole("region"));
+    expect(room).toContain("Unknown");
+    for (const text of [
+      ...bandSays({ lookAlike: true, unconfirmed: false }).across.notes,
+      ...bandSays({ lookAlike: false, unconfirmed: true }).across.notes,
+      "Look-alike",
+      "Unconfirmed",
+    ]) {
+      expect(room).not.toContain(text);
+    }
+  });
+
+  it("keeps the room Checking held in every verdict it lands as", () => {
+    const cases: [Check, string | null, AnalysisResult][] = [
+      ["ready", null, buildResult("malicious", { score: 73 })],
+      ["ready", null, buildResult("safe", { score: 3 })],
+      ["ready", null, buildResult("unknown", { score: 20 })],
+      ["ready", null, failedScan()],
+      ["ready", "paypal.com", buildResult("safe", { score: 3 })],
+      ["failed", null, buildResult("safe", { score: 3 })],
+      ["pending", null, buildResult("critical", { score: 100 })],
+    ];
+    for (const [check, impersonates, result] of cases) {
+      const { land, unmount } = scanBand(check, impersonates);
+      const checking = heldRoom(screen.getByRole("region"));
+      land(result);
+      expect(
+        heldRoom(screen.getByRole("region")),
+        `${result.verdict} ${check}`,
+      ).toEqual(checking);
+      unmount();
+    }
+  });
+
+  it("never shrinks a scan's room when the address check settles mid-scan", () => {
+    const { land } = scanBand("pending");
+    const checking = heldRoom(screen.getByRole("region"));
+    // A Safe lands while the check runs: the band holds, then states it.
+    land(buildResult("safe", { score: 3 }));
+    expect(screen.getByRole("region").getAttribute("aria-label")).toBe(
+      "Checking the link's address",
+    );
+    expect(heldRoom(screen.getByRole("region"))).toEqual(checking);
+    land(buildResult("safe", { score: 3 }), "ready");
+    expect(
+      screen.getByRole("heading", { level: 2, name: "Safe" }),
+    ).toBeTruthy();
+    expect(heldRoom(screen.getByRole("region"))).toEqual(checking);
+  });
+
+  it("starts the next scan's room from what the address check knows", () => {
+    const { land, rerender } = scanBand("pending");
+    land(buildResult("malicious", { score: 73 }), "ready");
+    expect(heldRoom(screen.getByRole("region"))).toContain("Unconfirmed");
+    // Re-scan: a new scan, with the check ready from the start.
+    rerender(
+      <VerdictBand
+        result={null}
+        isStreaming
+        sharedSnapshot={null}
+        completedSignals={0}
+        addressCheck="ready"
+        onCancelScan={() => {}}
+      />,
+    );
+    expect(heldRoom(screen.getByRole("region"))).not.toContain("Unconfirmed");
+  });
+
+  it("holds the tallest word in the band's own word slot, beside the heading", () => {
+    scanBand("ready");
+    const heading = screen.getByRole("heading", { level: 2, name: "Checking" });
+    const slot = heading.parentElement as HTMLElement;
+    expect(slot.className).toContain("sx-band-word");
+    const words = [...slot.querySelectorAll<HTMLElement>("[data-stand-in]")]
+      .map((node) => node.dataset.standIn)
+      .sort();
+    const says = bandSays({ lookAlike: false, unconfirmed: false });
+    expect(words).toEqual(
+      [...says.beside.words, "Checking", ...says.across.words].sort(),
+    );
+    // Before the heading, so a selection from the word on never crosses them.
+    expect(slot.firstElementChild).not.toBe(heading);
+    expect(slot.lastElementChild).toBe(heading);
+  });
+
+  it("holds no room in a shared band, which only a tap replaces", () => {
+    render(
+      <VerdictBand
+        result={null}
+        isStreaming={false}
+        sharedSnapshot={{
+          verdict: "malicious",
+          url: "https://malicious.scrutinix.test/",
+          summary: "7 VirusTotal engines flagged this link.",
+          capturedAt: "2026-10-06T00:00:00.000Z",
+        }}
+      />,
+    );
+    expect(heldRoom(screen.getByRole("region"))).toEqual([]);
+  });
+
+  it("offers a failed scan's Try again in the score's place, where Cancel stood", () => {
+    const onRetry = vi.fn();
+    const { rerender } = render(
+      <VerdictBand
+        result={failedScan()}
+        isStreaming={false}
+        sharedSnapshot={null}
+        onRetry={onRetry}
+      />,
+    );
+    const retry = screen.getByRole("button", { name: "Try again" });
+    expect(retry.className).toContain("sx-band-aside");
+    expect(retry.closest(".sx-band-line")).toBeNull();
+    fireEvent.click(retry);
+    expect(onRetry).toHaveBeenCalledTimes(1);
+
+    // Only a failed scan offers it.
+    rerender(
+      <VerdictBand
+        result={buildResult("malicious", { score: 73 })}
+        isStreaming={false}
+        sharedSnapshot={null}
+        onRetry={onRetry}
+      />,
+    );
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+  });
+
+  it("never speaks the room it holds: every stand-in is hidden", () => {
+    const { container, rerender } = render(
+      <VerdictBand
+        result={null}
+        isStreaming
+        sharedSnapshot={null}
+        addressCheck="pending"
+        onCancelScan={() => {}}
+      />,
+    );
+    const standIns = () =>
+      Array.from(container.querySelectorAll("[data-stand-in]"));
+    const spoken = () => spokenTextNodes(container).map((text) => text.trim());
+    // Generated content is text to a screen reader unless it is hidden.
+    expect(standIns().length).toBeGreaterThan(10);
+    for (const standIn of standIns()) {
+      expect(standIn.closest("[aria-hidden='true']")).not.toBeNull();
+    }
+    expect(spoken()).toEqual([
+      "Checking",
+      "0 of 8 checks finished",
+      "Cancel scan",
+    ]);
+
+    rerender(
+      <VerdictBand
+        result={failedScan()}
+        isStreaming={false}
+        sharedSnapshot={null}
+        addressCheck="pending"
+        onRetry={() => {}}
+      />,
+    );
+    for (const standIn of standIns()) {
+      expect(standIn.closest("[aria-hidden='true']")).not.toBeNull();
+    }
+    // A failed scan: its word, instruction, and Try again, nothing more.
+    expect(spoken()).toEqual([
+      "Error",
+      "The scan failed — try again.",
+      "Try again",
+    ]);
+  });
 });
 
 describe("VerdictDetails reference", () => {
@@ -562,6 +914,49 @@ describe("VerdictDetails reference", () => {
 });
 
 describe("VerdictDetails wording", () => {
+  it("dates a cache hit by when its evidence was checked, not this request", () => {
+    const result = buildResult("safe", {
+      reasons: ["Nothing flagged."],
+      hasPositiveEvidence: true,
+    });
+    result.metadata = {
+      ...result.metadata,
+      cacheHit: true,
+      checkedAt: "2026-08-02T11:45:00.000Z",
+      durationMs: 1,
+    };
+    const local = (iso: string) =>
+      new Date(iso).toLocaleString("en-US", {
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+
+    render(<VerdictDetails result={result} />);
+
+    expect(
+      screen.getByText(
+        `8/8 checks · checked ${local("2026-08-02T11:45:00.000Z")} · cached`,
+      ),
+    ).toBeTruthy();
+    expect(screen.queryByText(/finished|1 ms/)).toBeNull();
+  });
+
+  it("dates a fresh scan by when it finished", () => {
+    render(
+      <VerdictDetails
+        result={buildResult("safe", {
+          reasons: ["Nothing flagged."],
+          hasPositiveEvidence: true,
+        })}
+      />,
+    );
+
+    expect(screen.getByText(/^8\/8 checks · 1000 ms · finished /)).toBeTruthy();
+    expect(screen.queryByText(/cached|checked /)).toBeNull();
+  });
+
   it("says how many checks failed, so 8/8 never reads as eight answers", () => {
     const signals = Object.fromEntries(
       Object.entries(settledSignals()).map(([name, signal]) => [

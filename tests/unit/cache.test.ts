@@ -91,7 +91,7 @@ describe("ResultCache", () => {
       60_000,
     );
 
-    expect(seen[0]).toMatch(/^sx:result:v2:local:[0-9a-f]{64}$/);
+    expect(seen[0]).toMatch(/^sx:result:v3:local:[0-9a-f]{64}$/);
     expect(seen[0]).not.toContain("secret.example");
   });
 
@@ -131,26 +131,26 @@ describe("ResultCache", () => {
     try {
       const sha = "0123456789abcdef0123456789abcdef01234567";
       expect(await keyFor({ VERCEL_ENV: "production" })).toBe(
-        "sx:result:v2:production",
+        "sx:result:v3:production",
       );
       expect(
         await keyFor({ VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_SHA: sha }),
-      ).toBe("sx:result:v2:preview-0123456789ab");
+      ).toBe("sx:result:v3:preview-0123456789ab");
       expect(
         await keyFor({
           VERCEL_ENV: "preview",
           VERCEL_GIT_COMMIT_SHA: "x:y",
           VERCEL_DEPLOYMENT_ID: "dpl_AbC123",
         }),
-      ).toBe("sx:result:v2:preview-dpl_abc123");
+      ).toBe("sx:result:v3:preview-dpl_abc123");
       // No per-deployment identity: skip the shared cache, never share one.
       expect(
         await keyFor({ VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_SHA: "x:y" }),
       ).toBeNull();
       expect(await keyFor({ VERCEL_ENV: "weird:value" })).toBe(
-        "sx:result:v2:local",
+        "sx:result:v3:local",
       );
-      expect(await keyFor({})).toBe("sx:result:v2:local");
+      expect(await keyFor({})).toBe("sx:result:v3:local");
     } finally {
       vi.unstubAllEnvs();
     }

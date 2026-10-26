@@ -80,8 +80,13 @@ export function feedMatchWeight(match: FeedMatch): {
  * Safe Browsing match, a convicting threat-feed listing (exact link or
  * listed indicator), or 5+ VirusTotal engines on a current analysis. Local
  * heuristics can reach Critical too, but only this earns "known threat".
+ * The analysis is aged as of `asOf` (default now); pass the scan's own
+ * time for a stored result, so it reads as it did when it was checked.
  */
-export function hasConfirmedReputationHit(signals: SignalResults): boolean {
+export function hasConfirmedReputationHit(
+  signals: SignalResults,
+  asOf: number = Date.now(),
+): boolean {
   const gsb = signals.googleSafeBrowsing;
   if (gsb.status === "success" && (gsb.data?.matches?.length ?? 0) > 0) {
     return true;
@@ -98,7 +103,7 @@ export function hasConfirmedReputationHit(signals: SignalResults): boolean {
   }
 
   const vt = signals.virusTotal;
-  const vtAgeDays = vtAnalysisAgeDays(signals);
+  const vtAgeDays = vtAnalysisAgeDays(signals, asOf);
   return (
     vt.status === "success" &&
     !!vt.data &&

@@ -42,3 +42,41 @@ export async function fixtureSignals(host: string): Promise<SignalResults> {
     }
   }
 }
+
+/** Critical from local heuristics alone: no reputation source objected. */
+export async function heuristicCriticalSignals(): Promise<SignalResults> {
+  const signals = await fixtureSignals("example.com");
+  const ml = signals.mlEnsemble.data;
+  if (ml) {
+    ml.consensusLabel = "malicious";
+    ml.consensusScore = 0.98;
+    ml.reasons = ["The link imitates a bank sign-in page."];
+  }
+  if (signals.whois.data) signals.whois.data.ageDays = 3;
+  if (signals.ssl.data) {
+    signals.ssl.data.validationState = "invalid";
+    signals.ssl.data.validFrom = new Date(
+      Date.now() - 86_400_000,
+    ).toISOString();
+  }
+  if (signals.dns.data) {
+    signals.dns.data.anomalies = [
+      "The hostname uses punycode, which can hide a look-alike name.",
+      "No mail records exist for a domain that asks for logins.",
+    ];
+  }
+  if (signals.redirectChain.data) {
+    signals.redirectChain.data.content = {
+      title: "Sign in",
+      crossOriginFormHosts: ["collect.example"],
+      crossOriginPasswordFormHosts: ["collect.example"],
+      passwordInputCount: 1,
+      iframeCount: 0,
+      hiddenIframeCount: 0,
+      obfuscationHints: ["eval", "atob"],
+      metaRefreshTarget: null,
+    };
+  }
+  if (signals.virusTotal.data) signals.virusTotal.data.harmless = 10;
+  return signals;
+}

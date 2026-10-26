@@ -41,6 +41,7 @@ import {
 
 const NOW = Date.parse("2026-10-24T12:00:00.000Z");
 const HOUR = 60 * 60 * 1000;
+const DAY = 24 * HOUR;
 const registeredDomainOf = (host: string) => registrableDomainOf(parse, host);
 
 /** The fixture's signals with its relative listing date pinned to NOW. */
@@ -607,11 +608,68 @@ describe("Does HTTPS make it safe?", () => {
     // A plain-HTTP link to a TLS port can present a certificate, scored.
     signals.ssl.data!.available = true;
     signals.ssl.data!.validationState = "invalid";
+    signals.ssl.data!.authorized = false;
     expect(
       byId(ask(signals, { url: "http://example.com:443/" }), "https").answer,
     ).toBe(
       "No. This link doesn't use HTTPS, so the connection isn't encrypted. The site's certificate isn't trusted.",
     );
+  });
+
+  it("says a site that stays on HTTP also offers HTTPS when it does", () => {
+    // http://example.com answers on HTTP without redirecting, and offers a
+    // valid certificate on 443, which Chrome's HTTPS upgrade uses.
+    const signals = cleanSignals();
+    signals.redirectChain.data = chain([["http://example.com/", 200]]);
+    expect(
+      byId(ask(signals, { url: "http://example.com/" }), "https"),
+    ).toMatchObject({
+      answer:
+        "No. This link stays on plain HTTP, though its site also answers over HTTPS. The site has a valid certificate.",
+      why: "Without encryption, what you send can be read on the way.",
+    });
+  });
+
+  it("says a link that passes through HTTPS ends on plain HTTP", () => {
+    // The TLS check read b.example's certificate on the way.
+    const signals = cleanSignals();
+    signals.redirectChain.data = chain([
+      ["http://a.example/", 301, "https://b.example/"],
+      ["https://b.example/", 302, "http://c.example/"],
+      ["http://c.example/", 200],
+    ]);
+    signals.ssl.data!.otherSite = "b.example";
+    expect(
+      byId(ask(signals, { url: "http://a.example/" }), "https").answer,
+    ).toBe(
+      "No. This link passes through HTTPS, then ends on plain HTTP. The certificate at b.example is valid.",
+    );
+  });
+
+  it("names the site whose certificate was read where the link moves to HTTPS", () => {
+    const signals = cleanSignals();
+    signals.redirectChain.data = chain([
+      ["http://short.example/", 301, "https://landing.example/"],
+      ["https://landing.example/", 200],
+    ]);
+    Object.assign(signals.ssl.data!, {
+      otherSite: "landing.example",
+      validationState: "invalid",
+      authorized: false,
+      authorizationError: "CERT_HAS_EXPIRED",
+      validTo: new Date(NOW - 3 * DAY).toISOString(),
+      problem: "The certificate at landing.example has expired.",
+    });
+    expect(
+      byId(ask(signals, { url: "http://short.example/" }), "https").answer,
+    ).toMatch(
+      /^No\. This link starts on plain HTTP, then moves to HTTPS\. The certificate at landing\.example expired 3 days ago\./,
+    );
+
+    signals.ssl.data!.validationState = "warning";
+    expect(
+      byId(ask(signals, { url: "http://short.example/" }), "https").answer,
+    ).toMatch(/We couldn't fully verify the certificate at landing\.example\./);
   });
 
   it("names hard-to-read code only when the engine counts it", () => {

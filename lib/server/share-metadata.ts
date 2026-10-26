@@ -11,7 +11,7 @@ import type { SharedSnapshot } from "@/lib/domain/types";
 import { normalizeUrlInput } from "@/lib/domain/url";
 import { verifySharePayload } from "@/lib/server/share-signing";
 import {
-  getVerdictGuidance,
+  getSharedGuidance,
   ownershipSentence,
   shareHeadline,
   type VerdictGuidance,
@@ -115,11 +115,9 @@ export function describeSharedSnapshot(
 
   const anatomy = view.anatomy;
   const impersonates = anatomy.impersonates;
-  const guidance = getVerdictGuidance({
-    verdict: snapshot.verdict,
-    threatInfo: null,
-    impersonates,
-  });
+  // The shared band's own call, so the page, its metadata, and the card
+  // state one instruction.
+  const guidance = getSharedGuidance(snapshot, impersonates);
   return {
     snapshot,
     anatomy,

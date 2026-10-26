@@ -7,6 +7,7 @@ import {
   CONVICTS_AT,
   DISCOUNTS_OFF_AT,
   LINK_CHECK_MAX,
+  PATTERN_MODEL_EVALUATION,
   RULES,
   SCORE_BANDS,
   SCORING_TABLES,
@@ -298,7 +299,7 @@ const SCENARIOS: Record<string, Scenario[]> = {
     {
       add: feed({
         feed: "spamhaus-dbl",
-        detail: "lists this domain as a spam domain",
+        detail: "lists this domain as a low-reputation domain",
       }),
       points: 25,
     },
@@ -565,7 +566,8 @@ const NUMBERS: Record<string, number[]> = {
   "age-month": [30, 15],
   "age-young": [30, 179, 8],
   "dns-punycode": [8],
-  "dns-addresses": [MANY_ADDRESS_RECORDS, 4],
+  // The threshold, "IPv4 or IPv6" (per family, not a threshold), then points.
+  "dns-addresses": [MANY_ADDRESS_RECORDS, 4, 6, 4],
   "redirect-hops": [3, 8],
   "redirect-http": [10],
   "redirect-cross": [14],
@@ -677,6 +679,29 @@ describe("/about scoring tables", () => {
     expect(isSharedPlatformHost("docs.google.com")).toBe(true);
     const lists = SCORING_TABLES.find((table) => table.id === "lists");
     expect(lists?.notes.join(" ")).toContain("github.com or docs.google.com");
+  });
+
+  it("states the link pattern model's measured bar, and only that", () => {
+    const link = SCORING_TABLES.find((table) => table.id === "link");
+    const note = link?.notes.find((text) =>
+      text.startsWith("The link pattern model"),
+    );
+    // The bar itself is in the model's own units; the page states what it
+    // flagged at that bar, per kind of link (lib/server/ml/model/README.md).
+    // tests/unit/local-classifier.test.ts holds the bar to the one these
+    // figures were measured at, and checks a sample against the real model.
+    expect(printedNumbers(note ?? "")).toEqual([
+      PATTERN_MODEL_EVALUATION.sitesPer100,
+      100,
+      PATTERN_MODEL_EVALUATION.shortLinksPer100,
+      100,
+      PATTERN_MODEL_EVALUATION.accountLinksPer100,
+      100,
+      PATTERN_MODEL_EVALUATION.phishingPer100,
+      100,
+    ]);
+    expect(note).toContain("with and without https:// and www.");
+    expect(note).toContain("not what follows a ? or #");
   });
 });
 

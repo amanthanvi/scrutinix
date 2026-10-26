@@ -1,7 +1,11 @@
 import { PublicError } from "@/lib/domain/public-error";
+import packageJson from "@/package.json";
 
-/** Outbound identity; rdap.org rejects requests with no or a generic UA (403). */
-export const SCRUTINIX_USER_AGENT = "scrutinix/3.0";
+/**
+ * Outbound identity; rdap.org rejects requests with no or a generic UA
+ * (403). The release's own version, so it never lags a release again.
+ */
+export const SCRUTINIX_USER_AGENT = `scrutinix/${packageJson.version}`;
 
 export async function fetchWithTimeout(
   input: RequestInfo | URL,

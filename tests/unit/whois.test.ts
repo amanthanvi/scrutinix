@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { PublicError } from "@/lib/domain/public-error";
 import { SignalSkipError } from "@/lib/server/signal-error";
+import packageJson from "@/package.json";
 import { runWhoisSignal } from "@/lib/server/signals/whois";
 
 describe("runWhoisSignal", () => {
@@ -67,7 +68,9 @@ describe("runWhoisSignal", () => {
     await runWhoisSignal("https://example.com");
 
     const headers = new Headers(fetchMock.mock.calls[0]?.[1]?.headers);
-    expect(headers.get("user-agent")).toMatch(/^scrutinix\//);
+    // The release's own version: 4.0.0 still sent "scrutinix/3.0".
+    expect(headers.get("user-agent")).toBe(`scrutinix/${packageJson.version}`);
+    expect(packageJson.version).toMatch(/^\d+\.\d+\.\d+/);
   });
 
   it("looks up the registered domain, keeping private-suffix tenants distinct", async () => {
@@ -174,6 +177,80 @@ describe("runWhoisSignal", () => {
       "Registration data was unavailable for this scan.",
     );
     expect(result.observations[0]).toContain("no RDAP record");
+  });
+
+  it("says a TLD without an RDAP service publishes none, not that the domain has no record", async () => {
+    // rdap.org's own answer for .be (no redirect to a registry).
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () =>
+      Response.json(
+        {
+          rdapConformance: ["rdap_level_0"],
+          lang: "en",
+          errorCode: 404,
+          title: "No RDAP service is available for this resource",
+        },
+        { status: 404 },
+      ),
+    );
+
+    const result = await runWhoisSignal("https://youtu.be/jNQXAC9IVRw");
+
+    expect(result.available).toBe(false);
+    expect(result.observations).toEqual([
+      "The .be registry doesn't publish registration data over RDAP, so we couldn't look this domain up.",
+    ]);
+
+    // An internationalized TLD as people write it, not its xn-- form.
+    const idn = await runWhoisSignal("https://пример.рф/");
+    expect(idn.observations).toEqual([
+      "The .рф registry doesn't publish registration data over RDAP, so we couldn't look this domain up.",
+    ]);
+  });
+
+  it("bounds the 404 body it reads, so a stalled body can't hold the scan", async () => {
+    vi.useFakeTimers();
+    try {
+      const stalled = new ReadableStream({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode('{"title":'));
+        },
+      });
+      vi.spyOn(globalThis, "fetch").mockResolvedValue(
+        new Response(stalled, { status: 404 }),
+      );
+
+      const pending = runWhoisSignal("https://example.com");
+      await vi.advanceTimersByTimeAsync(2_100);
+
+      // Answered by its status: no record.
+      await expect(pending).resolves.toMatchObject({
+        available: false,
+        observations: [
+          "Registration data was unavailable for this scan. The registry has no RDAP record for this domain.",
+        ],
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps a registry's own 404 a missing record, whatever its title", async () => {
+    const answer = Response.json(
+      {
+        errorCode: 404,
+        title: "No RDAP service is available for this resource",
+      },
+      { status: 404 },
+    );
+    // Redirected: the registry answered, not rdap.org.
+    Object.defineProperty(answer, "redirected", { value: true });
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(answer);
+
+    const result = await runWhoisSignal("https://unregistered.example.com");
+
+    expect(result.observations[0]).toBe(
+      "Registration data was unavailable for this scan. The registry has no RDAP record for this domain.",
+    );
   });
 
   it("marks literal IP targets as not applicable", async () => {

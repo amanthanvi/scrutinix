@@ -1,7 +1,7 @@
 {
   "name": "Scrutinix",
   "short_name": "Scrutinix",
-  "description": "Check a link before you click.",
+  "description": "Is this link what it says it is? Eight separate checks, one plain verdict.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

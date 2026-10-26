@@ -1,6 +1,13 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, type Page } from "@playwright/test";
 
-import { gotoApp, setDefaultTextSize, submitSingleScan } from "./helpers";
+import {
+  gotoApp,
+  ownerSentence,
+  spokenTextNodes,
+  statusRegion,
+  submitSingleScan,
+  test,
+} from "./helpers";
 
 /**
  * These specs depend on SCRUTINIX_TEST_FIXTURES=1 (set by scripts/run-e2e.mjs),
@@ -46,6 +53,31 @@ test("a VirusTotal conviction renders a malicious verdict", async ({
   await expect(
     page.getByRole("list", { name: "Signals" }).getByRole("listitem"),
   ).toHaveCount(8);
+});
+
+test("a failed scan's band offers Try again, which scans the link again", async ({
+  page,
+}) => {
+  const scans: string[] = [];
+  page.on("request", (request) => {
+    if (new URL(request.url()).pathname === "/api/analyze") {
+      scans.push(request.postData() ?? "");
+    }
+  });
+  await gotoApp(page);
+  await submitSingleScan(page, "https://error.scrutinix.test/");
+
+  const verdict = page.getByLabel(/^scan result: error$/i);
+  await expect(verdict.getByText("The scan failed — try again.")).toBeVisible();
+  // No score or confidence to state: the score's place holds the action
+  // its instruction asks for.
+  await expect(verdict.getByText(/confidence/i)).toHaveCount(0);
+  await verdict.getByRole("button", { name: "Try again" }).click();
+
+  await expect.poll(() => scans.length).toBe(2);
+  expect(scans[1]).toContain("error.scrutinix.test");
+  // The band's heading keeps focus while the new scan runs and lands.
+  await expect(verdict.getByRole("heading", { level: 2 })).toBeFocused();
 });
 
 test("an unreachable host renders an unknown verdict, not safe", async ({
@@ -116,11 +148,14 @@ test("a look-alike subdomain is named plainly and shown as Look-alike", async ({
       /^No check flagged it: on their own, the checks scored it Safe, \d+ out of 100\.$/,
     ),
   ).toBeVisible();
-  await expect(
-    page.getByText("This link belongs to secure-login.xyz, not paypal.com.", {
-      exact: true,
-    }),
-  ).toBeVisible();
+  // One sentence for the eye, its domains set apart, and one string for a
+  // screen reader (TalkBack and VoiceOver read the split one as four).
+  const owner = ownerSentence(page);
+  await expect(owner).toBeVisible();
+  await expect(owner).toHaveCount(1);
+  expect(await spokenTextNodes(owner)).toEqual([
+    "This link belongs to secure-login.xyz, not paypal.com.",
+  ]);
 });
 
 test("a pasted link is taken apart before any scan, then hands over to the result", async ({
@@ -147,9 +182,28 @@ test("a pasted link is taken apart before any scan, then hands over to the resul
     "No. The link only spells out paypal.com.",
   );
   // The owner is stated once, by the anatomy, not again by the answer.
-  await expect(
-    pasted.getByText("This link belongs to secure-login.xyz, not paypal.com."),
-  ).toHaveCount(1);
+  await expect(ownerSentence(pasted)).toHaveCount(1);
+  expect(
+    (await spokenTextNodes(pasted)).filter((text) =>
+      text.includes("This link belongs to"),
+    ),
+  ).toEqual(["This link belongs to secure-login.xyz, not paypal.com."]);
+  // The answer is said once typing pauses (or on Enter, or on leaving the
+  // field), by the page's status region.
+  await expect(statusRegion(page)).toHaveText(
+    "No. The link only spells out paypal.com.",
+  );
+  // Each part is one string after its name, set off from the one before
+  // (TalkBack reads the line as one string), and the line has no title
+  // for Chrome on Android to read instead of the parts.
+  const line = page.locator("#sx-input-anatomy");
+  await expect(line).not.toHaveAttribute("title", /.*/);
+  expect(await spokenTextNodes(line)).toEqual([
+    "https://",
+    ",\u00a0A label anyone can add: paypal.com.",
+    ",\u00a0Registered domain: secure-login.xyz",
+    ",\u00a0A page on that domain: /verify",
+  ]);
 
   // Scanning the same link: the result's own anatomy takes over, so the
   // owner is stated once.
@@ -298,8 +352,88 @@ test("strip cells open their evidence: the question in Summary, the row in Full"
   await expect(page.getByLabel(/DNS Profile:/i)).toBeFocused();
 });
 
-/** The lazily loaded link parser's chunk: tldts and its Public Suffix List. */
-const isParserChunk = (body: string) => body.includes("getPublicSuffix");
+/** The Evidence head's height: where its ink rule sits under the title. */
+function evidenceHeadHeight(page: Page) {
+  return page
+    .locator("#sx-evidence-heading")
+    .evaluate(
+      (heading) => heading.parentElement!.getBoundingClientRect().height,
+    );
+}
+
+test("an Error result shows its eight rows with no Summary/Full switch, and keeps the choice", async ({
+  page,
+}) => {
+  await gotoApp(page);
+  await submitSingleScan(page, "https://error.scrutinix.test/");
+  const band = page.getByRole("region", { name: /^scan result: error$/i });
+  await expect(band.getByText("The scan failed — try again.")).toBeVisible();
+
+  // One view, so no control claiming another: the eight rows, no switch.
+  const viewSwitch = page.getByRole("switch", {
+    name: "Summary Full signal list",
+  });
+  await expect(page.getByRole("region", { name: "Evidence" })).toBeVisible();
+  await expect(page.getByRole("switch")).toHaveCount(0);
+  await expect(page.getByRole("list", { name: "Questions" })).toHaveCount(0);
+  const rows = page.getByRole("list", { name: "Signals" });
+  await expect(rows.getByRole("listitem")).toHaveCount(8);
+  const errorHead = await evidenceHeadHeight(page);
+
+  // The strip leads to the rows it shows: a cell focuses its row (which
+  // holds no evidence to open, and the strip's hint says so).
+  const strip = page.getByRole("toolbar", { name: "Checks" });
+  await expect(strip).toHaveAccessibleDescription(
+    "Each check moves to its row below.",
+  );
+  await strip.getByRole("button", { name: /^Redirects:/ }).click();
+  // A row with no evidence is a plain item, read as one line.
+  const redirects = rows.locator('li[data-signal="redirectChain"]');
+  await expect(redirects).toBeFocused();
+  expect(await spokenTextNodes(redirects)).toEqual([
+    expect.stringMatching(/^Redirect Chain: /),
+  ]);
+  await expect(redirects).not.toHaveAttribute("aria-label", /.*/);
+
+  // The next result has both views, on the stored choice (Summary), and
+  // its rule sits where the Error's did.
+  await submitSingleScan(page, "example.com");
+  await expect(
+    page.getByRole("region", { name: /^scan result: safe$/i }),
+  ).toBeVisible();
+  await expect(viewSwitch).toHaveAttribute("aria-checked", "false");
+  await expect(page.getByRole("list", { name: "Questions" })).toBeVisible();
+  expect(await evidenceHeadHeight(page)).toBe(errorHead);
+  await viewSwitch.click();
+  await expect(viewSwitch).toHaveAttribute("aria-checked", "true");
+
+  // Reopened from history: still no switch, focus on the verdict, and the
+  // announcement says nothing of a view.
+  const history = page.getByRole("region", { name: /scan history/i });
+  await history
+    .getByRole("button", { name: /error\.scrutinix\.test/i })
+    .click();
+  await expect(
+    page.getByRole("heading", { level: 2, name: /^error$/i }),
+  ).toBeFocused();
+  await expect(page.getByRole("switch")).toHaveCount(0);
+  await expect(rows.getByRole("listitem")).toHaveCount(8);
+  await expect(page.locator("[aria-live='polite']").first()).toHaveText(
+    "Result for error.scrutinix.test: Error. The scan failed — try again.",
+  );
+
+  // Back to the Safe result: Full is still the choice.
+  await history.getByRole("button", { name: /example\.com/i }).click();
+  await expect(viewSwitch).toHaveAttribute("aria-checked", "true");
+  await expect(rows.getByRole("listitem")).toHaveCount(8);
+});
+
+/**
+ * The lazily loaded link parser's chunk: tldts and its Public Suffix List,
+ * found by one of the list's entries (kitakyushu.jp). tldts' export names
+ * are tree-shaken away now that only `parse` is imported.
+ */
+const isParserChunk = (body: string) => body.includes("kitakyushu");
 
 /**
  * Route every script chunk through `onParser` when it is the parser's, and
@@ -455,41 +589,80 @@ test("a link parser that fails to load leaves a Safe result Unconfirmed, never S
       () => document.documentElement.scrollWidth <= window.innerWidth,
     ),
   ).toBe(true);
+});
 
-  // With twice the default text size it is larger, and wraps to stay inside.
-  const standard = await measureVerdict(page);
-  await setDefaultTextSize(page, 32);
-  const enlarged = await measureVerdict(page);
+test("an Unconfirmed verdict grows with twice the default text size and wraps inside its band", async ({
+  pageAtDefaultTextSize,
+}) => {
+  // At the narrowest phone width.
+  const unconfirmedAt = async (standard: number) => {
+    const page = await pageAtDefaultTextSize(standard, {
+      viewport: { width: 320, height: 640 },
+    });
+    await interceptParser(page, (_respond, abort) => abort());
+    await gotoApp(page);
+    await submitSingleScan(
+      page,
+      "https://paypal.com.safe.scrutinix.test/login",
+    );
+    await expect(page.getByLabel(/^scan result: unconfirmed$/i)).toBeVisible({
+      timeout: 15_000,
+    });
+    return measureVerdict(page);
+  };
+  const standard = await unconfirmedAt(16);
+  const enlarged = await unconfirmedAt(32);
   expect(enlarged.size).toBeGreaterThan(standard.size);
   expect(enlarged.inside).toBe(true);
 });
 
-test("a larger default text size never shrinks a scored verdict, at any width, and keeps it inside its band", async ({
-  page,
-}) => {
+/**
+ * Scan a Critical link and measure its verdict at each width, from the
+ * narrowest phone through the rem breakpoints (40rem, 48rem) as they move
+ * with the text size, checking at each that the word stays inside its band.
+ */
+async function scoredVerdictAtWidths(page: Page, standard: number) {
   await gotoApp(page);
   await submitSingleScan(page, "https://critical.scrutinix.test/login");
   const verdict = page.getByLabel(/^scan result: critical$/i);
   await expect(verdict.getByRole("meter")).toBeVisible({ timeout: 15_000 });
 
-  // Through the rem breakpoints (40rem, 48rem) as they move with the text.
+  const sizes = new Map<number, number>();
   for (const width of [320, 414, 640, 768, 1024, 1280]) {
     await page.setViewportSize({ width, height: 800 });
-    let previous = 0;
-    for (const standard of [16, 24, 32]) {
-      await setDefaultTextSize(page, standard);
-      const current = await measureVerdict(page);
-      const at = `${width}px wide, ${standard}px text`;
-      expect(current.size, at).toBeGreaterThanOrEqual(previous);
-      expect(current.inside, at).toBe(true);
-      previous = current.size;
+    const current = await measureVerdict(page);
+    expect(current.inside, `${width}px wide, ${standard}px text`).toBe(true);
+    sizes.set(width, current.size);
+  }
+  return sizes;
+}
+
+test("a scored verdict stays inside its band at every width", async ({
+  page,
+}) => {
+  // The engine's own default text size, so this runs in every engine.
+  await scoredVerdictAtWidths(page, 16);
+});
+
+test("a larger default text size never shrinks a scored verdict, at any width, and keeps it inside its band", async ({
+  pageAtDefaultTextSize,
+}) => {
+  // Each width's verdict size at the previous, smaller text size.
+  let previous: Map<number, number> | undefined;
+  const sizeAt320 = new Map<number, number>();
+  for (const standard of [16, 24, 32]) {
+    const page = await pageAtDefaultTextSize(standard);
+    const sizes = await scoredVerdictAtWidths(page, standard);
+    for (const [width, size] of sizes) {
+      expect(
+        size,
+        `${width}px wide, ${standard}px text`,
+      ).toBeGreaterThanOrEqual(previous?.get(width) ?? 0);
     }
+    previous = sizes;
+    sizeAt320.set(standard, sizes.get(320)!);
   }
 
   // The narrowest phone: the 2rem floor makes it larger, not just equal.
-  await page.setViewportSize({ width: 320, height: 800 });
-  await setDefaultTextSize(page, 16);
-  const standard = await measureVerdict(page);
-  await setDefaultTextSize(page, 32);
-  expect((await measureVerdict(page)).size).toBeGreaterThan(standard.size);
+  expect(sizeAt320.get(32)).toBeGreaterThan(sizeAt320.get(16)!);
 });

@@ -2,11 +2,14 @@
 
 import { useEffect, useMemo, useSyncExternalStore } from "react";
 
-import {
-  splitLinkAnatomy,
-  type LinkAnatomy,
-  type ParseHostname,
-} from "@/lib/domain/link-anatomy";
+import type * as LinkParserModule from "@/lib/client/link-parser";
+import type { LinkAnatomy } from "@/lib/domain/link-anatomy";
+
+/**
+ * The loaded parser chunk: tldts' `parse` and the anatomy and
+ * expected-site logic that takes it (`lib/client/link-parser.ts`).
+ */
+export type LinkParser = typeof LinkParserModule;
 
 /**
  * Whether a link's anatomy is known. "pending" while the parser loads,
@@ -21,8 +24,8 @@ const RETRY_DELAY_MS = 1_000;
 
 // tldts carries the Public Suffix List (~40 KB gzipped). Load it only once
 // a scan starts or a result shows, never with the initial page.
-let parsePromise: Promise<ParseHostname> | null = null;
-let loadedParse: ParseHostname | null = null;
+let parsePromise: Promise<LinkParser> | null = null;
+let loadedParser: LinkParser | null = null;
 let loadFailed = false;
 const listeners = new Set<() => void>();
 
@@ -31,8 +34,8 @@ function setLoadState(failed: boolean) {
   for (const listener of listeners) listener();
 }
 
-function importParser(): Promise<ParseHostname> {
-  return import("tldts").then((module) => module.parse);
+function importParser(): Promise<LinkParser> {
+  return import("@/lib/client/link-parser");
 }
 
 /**
@@ -43,12 +46,12 @@ function importParser(): Promise<ParseHostname> {
  * The status stays "failed" while it does: a shown "Unconfirmed" never
  * flickers back to a held band, and changes only if a load succeeds.
  */
-export function preloadLinkParser(): Promise<ParseHostname> {
+export function preloadLinkParser(): Promise<LinkParser> {
   if (!parsePromise) {
     parsePromise = importParser()
       .catch(
         () =>
-          new Promise<ParseHostname>((resolve, reject) => {
+          new Promise<LinkParser>((resolve, reject) => {
             setTimeout(
               () => importParser().then(resolve, reject),
               RETRY_DELAY_MS,
@@ -56,10 +59,10 @@ export function preloadLinkParser(): Promise<ParseHostname> {
           }),
       )
       .then(
-        (parse) => {
-          loadedParse = parse;
+        (parser) => {
+          loadedParser = parser;
           setLoadState(false);
-          return parse;
+          return parser;
         },
         (error: unknown) => {
           parsePromise = null;
@@ -81,7 +84,7 @@ export function warmLinkParser(): void {
  * load in progress, tries again after a failure, and gives null only if it
  * still can't load, so the caller says the address wasn't checked.
  */
-export function loadLinkParser(): Promise<ParseHostname | null> {
+export function loadLinkParser(): Promise<LinkParser | null> {
   return preloadLinkParser().catch(() => null);
 }
 
@@ -90,13 +93,13 @@ export function loadLinkParser(): Promise<ParseHostname | null> {
  * synchronous work over many links (history filtering) that re-runs when
  * `useLinkParserStatus` changes.
  */
-export function getLoadedLinkParser(): ParseHostname | null {
-  return loadedParse;
+export function getLoadedLinkParser(): LinkParser | null {
+  return loadedParser;
 }
 
 /** The parser's status right now; components use `useLinkParserStatus`. */
 export function getLinkParserStatus(): LinkParserStatus {
-  if (loadedParse) return "ready";
+  if (loadedParser) return "ready";
   return loadFailed ? "failed" : "pending";
 }
 
@@ -145,14 +148,14 @@ export function useLinkAnatomy(url: string | null): LinkAnatomyState {
   // deliberate step (a new scan, focusing the link field) tries again: a
   // history row mounting must not re-run it under a result on screen.
   useEffect(() => {
-    if (url && !loadedParse && !loadFailed) warmLinkParser();
+    if (url && !loadedParser && !loadFailed) warmLinkParser();
   }, [url]);
 
   return useMemo(
     () => ({
       anatomy:
-        url && status === "ready" && loadedParse
-          ? splitLinkAnatomy(loadedParse, url)
+        url && status === "ready" && loadedParser
+          ? loadedParser.splitLinkAnatomy(loadedParser.parse, url)
           : null,
       status,
     }),

@@ -3,8 +3,10 @@ import { expect, test, type Page } from "@playwright/test";
 import {
   encodeSharedPayload,
   isolateRateLimit,
+  ownerSentence,
   sharedPath,
   signSharedPayload,
+  statusRegion,
 } from "./helpers";
 
 const LINK = "https://malicious.scrutinix.test/login";
@@ -88,6 +90,11 @@ async function expectWaitingForAnalyze(
   await expect(
     page.getByRole("region", { name: "The link, taken apart" }),
   ).toContainText("scrutinix.test");
+  // Said once, politely, so the arrival doesn't depend on focus (TalkBack
+  // said only "Analyze URL, button"; VoiceOver's page read moves focus).
+  await expect(statusRegion(page)).toHaveText(
+    `Link filled in: ${new URL(link).hostname}. Press Analyze to check it.`,
+  );
 }
 
 /** Tap Analyze: exactly one scan, of the link in the field. */
@@ -145,6 +152,62 @@ test("Share → Scrutinix fills in the shared link and waits for Analyze @smoke"
   expect([...new URL(page.url()).searchParams.keys()]).toEqual(["url"]);
   await expectWaitingForAnalyze(page, scans, LINK);
   await analyzeOnce(page, scans);
+});
+
+test("a share with no link says so in one quiet line and scans nothing @smoke", async ({
+  page,
+}) => {
+  await isolateRateLimit(page);
+  const scans = recordScans(page);
+  const shareCookies = recordShareCookies(page);
+  const note = "We didn't find a link to check in what you shared.";
+  // Android shares plain text as title and text, with no url.
+  await launchFromShareSheet(page, {
+    title: "Dinner plans",
+    text: "Call me when you get home, the door code is the usual one.",
+  });
+
+  // Nothing of the text rides along: only the flag.
+  expect(Object.fromEntries(new URL(page.url()).searchParams)).toEqual({
+    nolink: "1",
+  });
+  expect(await Promise.all(shareCookies)).toEqual([null]);
+  const input = await urlField(page);
+  await expect(input).toHaveValue("");
+
+  // One line under the form, in reading order too; spoken once, politely,
+  // from the page's status region.
+  const line = page.locator("p:not([role='status'])", { hasText: note });
+  await expect(line).toBeVisible();
+  await expect(page.getByRole("status").filter({ hasText: note })).toHaveText(
+    note,
+  );
+  expect((await line.boundingBox())!.y).toBeGreaterThan(
+    (await input.boundingBox())!.y,
+  );
+  // Not an error anywhere on the page (the line sits outside the form),
+  // and nothing to tap.
+  await expect(page.getByRole("alert").filter({ hasText: note })).toHaveCount(
+    0,
+  );
+  await expect(page.locator("#scan-console").getByRole("alert")).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Analyze URL" }),
+  ).not.toBeFocused();
+  await page.waitForTimeout(750);
+  expect(scans).toEqual([]);
+
+  // Gone once the person starts on a link of their own.
+  await input.fill("example.com");
+  await expect(line).toHaveCount(0);
+  await expect(page.getByRole("status").filter({ hasText: note })).toHaveCount(
+    0,
+  );
+
+  // A plain visit never shows it.
+  await page.goto("/");
+  await urlField(page);
+  await expect(page.getByText(note)).toHaveCount(0);
 });
 
 test("a share-sheet launch carries a long link whole @smoke", async ({
@@ -240,9 +303,7 @@ test("a shared link opens recipient-first: the result, then Check another link @
       `${path}&url=${encodeURIComponent("https://other.scrutinix.test/")}`,
     );
     const band = page.getByLabel(bandLabel);
-    const anatomy = page.getByText(
-      "This link belongs to secure-login.xyz, not paypal.com.",
-    );
+    const anatomy = ownerSentence(page);
     const another = page.getByRole("heading", {
       level: 2,
       name: "Check another link",
@@ -301,6 +362,150 @@ test("a fresh scan from a shared link clears it from the address @smoke", async 
   await expect(
     page.getByRole("heading", { name: "Is this link what it says it is?" }),
   ).toBeVisible();
+});
+
+/** The page's meta description: the shared result's own sentence. */
+function metaDescription(page: Page) {
+  return page.locator('meta[name="description"]').getAttribute("content");
+}
+
+test("a signed share states the instruction its basis supports; one signed before it stays hedged @smoke", async ({
+  page,
+}) => {
+  await isolateRateLimit(page);
+  const capturedAt = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+  const confirmedCritical = {
+    verdict: "critical",
+    url: "https://critical.scrutinix.test/login",
+    summary: "Google Safe Browsing lists this link as phishing.",
+    capturedAt,
+    signature: Array(8).fill("malicious"),
+  };
+  const cleanSafe = {
+    verdict: "safe",
+    url: "https://example.com/",
+    summary: "No check flagged this link.",
+    capturedAt,
+    signature: Array(8).fill("clear"),
+  };
+
+  // The summary shows unless it only repeats the instruction ("Looks safe
+  // to open." over "No check flagged this link."), as on the sender's band.
+  for (const [snapshot, word, instruction, summaryShown] of [
+    [
+      {
+        ...confirmedCritical,
+        basis: {
+          confidence: "high",
+          clean: false,
+          partial: false,
+          confirmed: true,
+        },
+      },
+      "critical",
+      "Don't open this link — it's a known threat.",
+      true,
+    ],
+    [
+      {
+        ...cleanSafe,
+        basis: {
+          confidence: "high",
+          clean: true,
+          partial: false,
+          confirmed: false,
+        },
+      },
+      "safe",
+      "Looks safe to open.",
+      false,
+    ],
+    // Signed before the basis existed: the hedged forms, as before.
+    [confirmedCritical, "critical", "Don't open this link.", true],
+    [cleanSafe, "safe", "Probably safe — still check who sent it.", true],
+  ] as const) {
+    const payload = encodeSharedPayload(snapshot);
+    await page.goto(sharedPath(payload, signSharedPayload(payload)));
+    const band = page.getByRole("region", {
+      name: new RegExp(`^scan result: ${word}$`, "i"),
+    });
+    await expect(band).toBeVisible();
+    await expect(
+      band.getByText(/^Verified Scrutinix result · checked/),
+    ).toBeVisible();
+    // Exactly this sentence: "Don't open this link." never passes for the
+    // known-threat form, or the other way round.
+    await expect(band.locator(".sx-band-imperative:not(.sx-slot)")).toHaveText(
+      instruction,
+    );
+    await expect(band.getByText(snapshot.summary, { exact: true })).toHaveCount(
+      summaryShown ? 1 : 0,
+    );
+    expect((await metaDescription(page))?.startsWith(`${instruction} `)).toBe(
+      true,
+    );
+  }
+});
+
+test("a recipient reads the instruction the sender's band showed @smoke", async ({
+  page,
+}) => {
+  // Capture what Share copies instead of reading the system clipboard.
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: {
+        writeText: async (text: string) => {
+          (window as unknown as { __copied?: string }).__copied = text;
+        },
+      },
+    });
+  });
+
+  for (const [link, word, instruction] of [
+    [
+      "https://critical.scrutinix.test/login",
+      "critical",
+      "Don't open this link — it's a known threat.",
+    ],
+    ["https://example.com/", "safe", "Looks safe to open."],
+  ] as const) {
+    await isolateRateLimit(page);
+    await page.goto("/");
+    const input = await urlField(page);
+    await expect(async () => {
+      await input.fill(link);
+      await expect(input).toHaveValue(link);
+    }).toPass();
+    await page.getByRole("button", { name: /analyze url/i }).click();
+    const bandName = new RegExp(`^scan result: ${word}$`, "i");
+    const senderBand = page.getByRole("region", { name: bandName });
+    await expect(
+      senderBand.locator(".sx-band-imperative:not(.sx-slot)"),
+    ).toHaveText(instruction);
+
+    await page.evaluate(() => {
+      delete (window as unknown as { __copied?: string }).__copied;
+    });
+    await page.getByRole("button", { name: "Share" }).click();
+    const copied = await page.waitForFunction(
+      () => (window as unknown as { __copied?: string }).__copied,
+    );
+    const shared = new URL(String(await copied.jsonValue()));
+    expect(shared.searchParams.get("sig")).toMatch(/^[A-Za-z0-9_-]{43}$/);
+
+    await page.goto(`${shared.pathname}${shared.search}`);
+    const band = page.getByRole("region", { name: bandName });
+    await expect(
+      band.getByText(/^Verified Scrutinix result · checked/),
+    ).toBeVisible();
+    await expect(band.locator(".sx-band-imperative:not(.sx-slot)")).toHaveText(
+      instruction,
+    );
+    expect((await metaDescription(page))?.startsWith(`${instruction} `)).toBe(
+      true,
+    );
+  }
 });
 
 test("the site never mentions installing it @smoke", async ({ page }) => {

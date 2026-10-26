@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 
-import { PREFILL_PARAM, extractSharedLink } from "@/lib/domain/share-launch";
+import {
+  NO_LINK_PARAM,
+  PREFILL_PARAM,
+  extractSharedLink,
+} from "@/lib/domain/share-launch";
 import { readBoundedBody } from "@/lib/server/request-body";
 
 export const runtime = "nodejs";
@@ -44,15 +48,17 @@ async function readSharedFields(request: Request) {
  * The installed app's Web Share Target (`share_target` in
  * `public/site.webmanifest`). Takes the first http(s) link from what was
  * shared and redirects to `/?url=<link>`, which fills in the Single field
- * and waits for the person to tap Analyze, as any `?url=` link does. It
- * sets no cookie, and nothing is logged or stored.
+ * and waits for the person to tap Analyze, as any `?url=` link does. With
+ * no link it can fill in (none at all, one that can't be checked, or a body
+ * over the limit), it redirects to `/?nolink=1`, and the page says it found
+ * none. It sets no cookie, and nothing is logged or stored.
  */
 export async function POST(request: Request) {
   const link = extractSharedLink(await readSharedFields(request));
   return redirectTo(
-    link
-      ? `/?${new URLSearchParams({ [PREFILL_PARAM]: link }).toString()}`
-      : "/",
+    `/?${new URLSearchParams(
+      link ? { [PREFILL_PARAM]: link } : { [NO_LINK_PARAM]: "1" },
+    ).toString()}`,
   );
 }
 

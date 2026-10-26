@@ -97,6 +97,59 @@ describe("runDnsSignal", () => {
     );
   });
 
+  it("tells a name that doesn't exist from a lookup that got no answer", async () => {
+    const fail = (code: string) =>
+      Object.assign(new Error(code), { code }) as never;
+
+    mockEmptyLookups();
+    resolve4Mock.mockRejectedValue(fail("ENOTFOUND"));
+    resolve6Mock.mockRejectedValue(fail("ENOTFOUND"));
+    expect(
+      (await runDnsSignal("https://nxdomain.example/")).observations,
+    ).toEqual(["The hostname doesn't exist in DNS."]);
+
+    mockEmptyLookups();
+    resolve4Mock.mockRejectedValue(fail("ESERVFAIL"));
+    resolve6Mock.mockRejectedValue(fail("ETIMEOUT"));
+    expect(
+      (await runDnsSignal("https://servfail.example/")).observations,
+    ).toEqual([
+      "The DNS lookup failed or timed out, so we couldn't find the hostname's addresses.",
+    ]);
+  });
+
+  it("counts address records per family, so a dual-stack name isn't unusual", async () => {
+    const ipv4 = (count: number) =>
+      Array.from({ length: count }, (_, i) => `142.251.163.${90 + i}`);
+    const ipv6 = (count: number) =>
+      Array.from({ length: count }, (_, i) => `2607:f8b0:4004:c1f::${90 + i}`);
+    const unusual =
+      "The hostname resolves to an unusually high number of address records.";
+
+    // youtu.be in production: 4 A and 4 AAAA records.
+    mockEmptyLookups();
+    resolve4Mock.mockResolvedValue(ipv4(4));
+    resolve6Mock.mockResolvedValue(ipv6(4));
+    expect((await runDnsSignal("https://youtu.be/")).anomalies).toEqual([]);
+
+    mockEmptyLookups();
+    resolve4Mock.mockResolvedValue(ipv4(5));
+    resolve6Mock.mockResolvedValue(ipv6(5));
+    expect((await runDnsSignal("https://dual.example/")).anomalies).toEqual([]);
+
+    mockEmptyLookups();
+    resolve4Mock.mockResolvedValue(ipv4(6));
+    expect((await runDnsSignal("https://many4.example/")).anomalies).toEqual([
+      unusual,
+    ]);
+
+    mockEmptyLookups();
+    resolve6Mock.mockResolvedValue(ipv6(6));
+    expect((await runDnsSignal("https://many6.example/")).anomalies).toEqual([
+      unusual,
+    ]);
+  });
+
   it("flags punycode hostnames as anomalies", async () => {
     mockEmptyLookups();
     resolve4Mock.mockResolvedValue(["93.184.216.34"]);

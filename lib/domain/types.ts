@@ -24,6 +24,7 @@ export type {
   ThreatFeedsData,
   ThreatInfo,
   Verdict,
+  VerdictBasis,
   VirusTotalData,
   WhoisData,
 } from "@/lib/domain/schemas";
