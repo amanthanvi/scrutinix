@@ -377,6 +377,15 @@ tests/
   replaces what the page opened on, `clearLaunchParams` drops `shared`,
   `sig`, and `url` from the address. `resolveSharedView` returns null for
   a link `normalizeUrlInput` rejects (private/local hosts), signed or not.
+- **Speech**: every message a screen reader should hear goes through a
+  region already on the page: the results live region (scan start and
+  result) or the root layout's `role="status"` `Announcer`
+  (`components/ui/announcer.tsx`: toasts via `getToast`, a `?url=`
+  arrival, the expected-site answer, history Clear/Undo). Both empty a few
+  seconds after speaking. Text drawn in several inline boxes gets one
+  `sr-only` string with the drawn copy `aria-hidden` (so `getByText` finds
+  it twice; tests locate `p.sx-owner`, toasts in `[data-sonner-toast]`);
+  no `title` beside an `aria-label`; unstyled lists carry `role="list"`.
 - **UI danger is not a verdict**: form/stream errors and destructive
   confirms use `--sx-danger-fg` / `--sx-danger-border`, never
   `--sx-malicious-*`.

@@ -9,7 +9,7 @@ Light and dark appearance, stored in this browser.
 
 ## How to get to it (user POV)
 
-The button sits in the header after Privacy. Its name is `Switch to light theme` when the page is dark, and `Switch to dark theme` when the page is light. Click it. Reload the page. The same theme is still applied.
+The button sits in the header after Privacy. Its name is `Switch to light theme` when the page is dark, and `Switch to dark theme` when the page is light (its `aria-label`; the hover tooltip is a `title` on an `aria-hidden` layer over the button, so it is not read again as a description). Click it. Reload the page. The same theme is still applied.
 
 ## Driving it with Playwright
 

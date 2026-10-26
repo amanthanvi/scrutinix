@@ -5,7 +5,8 @@ Links that arrive from outside the page. Every way in (the Android share target,
 ## Sub-features
 
 - prefill: `/?url=<encoded link>` fills `URL to analyze` with the link as the server normalized it (scheme and host case, default port, and fragment dropped: `HTTPS://Malicious.Scrutinix.Test:443/login#top` becomes `https://malicious.scrutinix.test/login`)
-- focus: Analyze holds focus, not the field, so a phone keyboard never covers the breakdown below it
+- focus: Analyze takes focus, not the field, so a phone keyboard never covers the breakdown below it. That focus holds in Chromium (and Playwright's three engines); in Safari, VoiceOver's own reading of a new page moves focus away from Analyze, so a screen-reader user can't rely on it.
+- arrival: the page's status region (`p[role='status']`) says once, after the link parser settles: `Link filled in: <host>. Press Analyze to check it.`, with the owner sentence before `Press Analyze` when the link spells out another site (`Link filled in: paypal.com.secure-login.xyz. This link belongs to secure-login.xyz, not paypal.com. Press Analyze to check it.`). It clears a few seconds later. Focus doesn't move to the field for it.
 - no-scan: no request to `/api/analyze` until the tap, then exactly one; the address then drops `url`
 - refuse-silently: a value that can't be checked (`javascript:alert(1)`, `http://localhost/`, garbage) fills in nothing and shows no error
 - share-target: `public/site.webmanifest` declares `share_target` (`POST /share`, form-encoded `title`, `text`, `url`). `/share` takes the first web link (the `url` field whole, else a link found in `text`, then `title`), sets no cookie, logs nothing, and answers `303` to `/?url=<link>`. With no link, or when the first link can't be checked (it never falls back to a later one), it answers `303` to `/`. A form another site posts gets the same redirect and still only fills in.
@@ -33,6 +34,9 @@ await expect(page.getByRole("button", { name: "Analyze URL" })).toBeFocused();
 await expect(
   page.getByRole("region", { name: "The link, taken apart" }),
 ).toContainText("scrutinix.test");
+await expect(page.locator("p[role='status']")).toHaveText(
+  "Link filled in: malicious.scrutinix.test. Press Analyze to check it.",
+);
 await page.waitForTimeout(1_000);
 expect(scans).toEqual([]);
 ```
@@ -47,4 +51,5 @@ Screenshot: `share-target-prefilled.png`.
 - Real share-sheet launches (an installed app on Android) are `INCONCLUSIVE` in this loop. The routed POST reaches the same route handler with the same fields; Chromium stamps it `Sec-Fetch-Site: none` as it does a real launch, which Playwright does not report for a routed request.
 - On Back to a page a link arrived on, the router restores the server render: the field is filled again and still nothing scans. `tests/e2e/sharing.smoke.spec.ts` covers that and a link over 4 KiB once encoded; `tests/integration/share-route.test.ts` covers the 16 KiB body limit.
 - The site never asks anyone to install it; the browser's own install UI is the only prompt.
+- "Analyze is focused" is what Chromium (and the drive) shows. Real VoiceOver in Safari starts reading the page on load and takes focus with it; the status-region message is what tells a VoiceOver or TalkBack user a link arrived. Real screen readers are `INCONCLUSIVE` in this loop.
 - `/share` has no rate-limit tier of its own; the scan a person then starts is metered by the scan tier.
