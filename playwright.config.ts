@@ -1,7 +1,26 @@
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
 import { defineConfig, devices } from "@playwright/test";
 
 // scripts/run-e2e.mjs starts the server on the same port (default 3000).
 const port = process.env.E2E_PORT || "3000";
+
+// Playwright's Firefox reads the profile list (profiles.ini) in the
+// installed Firefox's data folder at startup, even with its own profile.
+// macOS can deny other apps that folder (~/Library/Application Support/
+// Firefox); Firefox then exits with "Could not find profile folder." and
+// never launches. MOZ_APP_DATA gives it a folder of its own (tmpdir() is
+// per user on macOS). Its own browsers (helpers.ts) inherit this too.
+const firefoxLaunchOptions =
+  process.platform === "darwin"
+    ? {
+        env: {
+          ...process.env,
+          MOZ_APP_DATA: join(tmpdir(), "scrutinix-e2e-firefox"),
+        },
+      }
+    : {};
 
 export default defineConfig({
   testDir: "./tests/e2e",
@@ -32,7 +51,10 @@ export default defineConfig({
     },
     {
       name: "firefox",
-      use: { ...devices["Desktop Firefox"] },
+      use: {
+        ...devices["Desktop Firefox"],
+        launchOptions: firefoxLaunchOptions,
+      },
     },
     {
       name: "webkit",
