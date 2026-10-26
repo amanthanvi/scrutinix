@@ -234,6 +234,12 @@ export const sslDataSchema = z.object({
    * apply".
    */
   noHttps: z.boolean().optional().catch(undefined),
+  /**
+   * An invalid or untrusted certificate's problem in plain words, set by
+   * the probe (`describeCertificateProblem`, timeless): what the row and
+   * the Summary say, so the browser never maps verification codes itself.
+   */
+  problem: z.string().optional().catch(undefined),
 });
 
 export type SSLData = z.infer<typeof sslDataSchema>;

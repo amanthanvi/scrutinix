@@ -764,15 +764,11 @@ describe("plain findings for checks that couldn't run", () => {
       value: "No TLS handshake could be completed.",
     });
 
+    // A result from before the probe wrote `problem`: a plain fallback,
+    // never the raw code from its notes.
     const states = [
-      [
-        "invalid",
-        "The site's certificate comes from an issuer browsers don't trust.",
-      ],
-      [
-        "untrusted",
-        "The site's certificate comes from an issuer browsers don't trust.",
-      ],
+      ["invalid", "The site's security certificate isn't trusted."],
+      ["untrusted", "The site's security certificate isn't trusted."],
       ["warning", "We couldn't fully verify the site's security certificate."],
       ["trusted", "The site's security certificate is valid."],
     ] as const;
@@ -787,15 +783,16 @@ describe("plain findings for checks that couldn't run", () => {
         }),
       ).toBe(sentence);
     }
-    // No code to go on: still a plain sentence.
+    // The probe's own plain words, when it wrote them.
     expect(
       getSignalSummary("ssl", {
         ...ssl,
         available: true,
         validationState: "invalid",
-        authorizationError: "SOME_FUTURE_CODE",
+        authorizationError: "ERR_TLS_CERT_ALTNAME_INVALID",
+        problem: "The site's certificate was issued for a different name.",
       }),
-    ).toBe("The site's certificate isn't trusted.");
+    ).toBe("The site's certificate was issued for a different name.");
 
     expect(
       getSignalSummary("dns", {

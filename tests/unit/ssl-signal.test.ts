@@ -345,6 +345,40 @@ describe("runSslSignal", () => {
     );
   });
 
+  it("words a certificate problem plainly and keeps the code out of every sentence", async () => {
+    vi.spyOn(tls, "connect").mockImplementation(() => {
+      const socket = {
+        authorizationError: "ERR_TLS_CERT_ALTNAME_INVALID",
+        setTimeout: vi.fn(),
+        once: vi.fn((event: string, handler: () => void) => {
+          if (event === "secureConnect") queueMicrotask(handler);
+          return socket;
+        }),
+        getPeerCertificate: () => ({
+          valid_from: "Jan  1 00:00:00 2026 GMT",
+          valid_to: "Jan  1 00:00:00 2099 GMT",
+          issuer: { CN: "Example CA" },
+          subject: { CN: "*.badssl.com" },
+        }),
+        getProtocol: () => "TLSv1.3",
+        end: vi.fn(),
+        destroy: vi.fn(),
+      };
+      return socket as unknown as tls.TLSSocket;
+    });
+
+    const result = await runSslSignal("https://93.184.215.14/");
+
+    expect(result).toMatchObject({
+      validationState: "invalid",
+      authorizationError: "ERR_TLS_CERT_ALTNAME_INVALID",
+      problem: "The site's certificate was issued for a different name.",
+    });
+    expect(result.observations.join(" ")).not.toMatch(
+      /ERR_|CERT_|TLS validation/,
+    );
+  });
+
   it("reads a plain-HTTP answer on a TLS port as a finding, not a failure", async () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     vi.spyOn(tls, "connect").mockImplementation(

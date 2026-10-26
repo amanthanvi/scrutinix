@@ -13,7 +13,6 @@ import {
   type FeedMatch,
 } from "@/lib/domain/feed-copy";
 import { PRIVATE_ADDRESSES_OMITTED } from "@/lib/domain/blocked-address";
-import { describeCertificateProblem } from "@/lib/domain/certificate";
 import { hostOf } from "@/lib/domain/link-anatomy";
 import { redirectsOverHttp } from "@/lib/domain/redirects";
 import {
@@ -908,11 +907,12 @@ function answerCertificate(
       };
     default:
       return {
-        // Why, in plain words: "The site's certificate expired about 11
-        // years ago.", never "isn't trusted" alone.
+        // Why, in plain words: how long ago it expired, as of the check,
+        // else the probe's own sentence (results from before it have none).
         state:
-          describeCertificateProblem(data, now) ??
-          "The site's certificate isn't trusted.",
+          Date.parse(data.validTo ?? "") < now
+            ? `The site's certificate expired ${formatElapsed(now - Date.parse(data.validTo ?? ""))} ago.`
+            : (data.problem ?? "The site's certificate isn't trusted."),
         issued,
         why: "With a certificate error, even the connection may not be private.",
       };

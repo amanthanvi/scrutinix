@@ -220,8 +220,12 @@ function runSslProbe(
         selfSigned:
           issuerCommonName !== null && issuerCommonName === subjectCommonName,
       };
+      // Plain words for the row and Summary; the code stays in
+      // `authorizationError` and never reaches a sentence.
+      const problem = describeCertificateProblem(facts);
       resolve({
         ...facts,
+        ...(problem ? { problem } : {}),
         protocol: socket.getProtocol() ?? "unknown",
         available: true,
         authorized:
@@ -230,7 +234,7 @@ function runSslProbe(
         subject: subjectCommonName,
         validFrom,
         fingerprint256: certificate.fingerprint256 ?? null,
-        observations: buildSslObservations(facts),
+        observations: buildSslObservations(facts, problem),
       });
     });
 
@@ -255,9 +259,13 @@ function runSslProbe(
   });
 }
 
-/** Plain sentences only: the raw verification code stays in `authorizationError`. */
+/**
+ * Notes beside the certificate fields. Plain sentences only; a problem
+ * (expired included) is the row's own finding (`problem`), not repeated.
+ */
 function buildSslObservations(
   facts: Parameters<typeof describeCertificateProblem>[0],
+  problem: string | null,
 ) {
   const observations: string[] = [];
 
@@ -267,11 +275,12 @@ function buildSslObservations(
     );
   }
 
-  // Covers an expired certificate too ("The site's certificate has expired.").
-  const problem = describeCertificateProblem(facts);
-  if (problem) {
-    observations.push(problem);
-  } else if (facts.daysRemaining !== null && facts.daysRemaining < 14) {
+  if (
+    !problem &&
+    facts.daysRemaining !== null &&
+    facts.daysRemaining >= 0 &&
+    facts.daysRemaining < 14
+  ) {
     observations.push("The certificate expires within the next 14 days.");
   }
 
