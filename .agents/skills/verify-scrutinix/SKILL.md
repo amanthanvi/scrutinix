@@ -256,16 +256,32 @@ node .agents/skills/verify-scrutinix/scripts/cleanup.mjs --help
 
 ## How to report
 
-Put a Proof section on the pull request:
+Every pull request, Dependabot's included, carries a Proof section in its body, written for the head that will merge and in place before the merge. Most merges in the [Dependabot proof audit](../../../docs/agents/dependabot-proof-audit.md) and the [feedback census](../../../docs/agents/feedback-census.md) had no Proof, or one that named an earlier commit or was posted after the merge. A Proof like that covers nothing.
+
+The contract:
+
+1. **Head SHA.** The full 40-character `gh pr view <n> --json headRefOid` value, not a prefix, and not the squash commit on `main`.
+2. **Audit and Verify job URLs.** Links to the `Audit` and `Verify` jobs (`…/actions/runs/<run>/job/<job>`) whose head SHA is that commit and whose conclusion is `success`. A job that is still running, or that ran on an earlier commit, is not proof.
+3. **Greptile status for that head.** Clean pass (0 comments), the findings and how each was settled, or skipped and why. A skip (excluded author, budget) is not a pass. Neither is a green CodeRabbit check that says skipped, rate limited, or no files to review.
+4. **Evidence or `INCONCLUSIVE`.** The commands you ran, a result for each, and evidence paths under the evidence directory that still exist after cleanup. Any step that could not run is `INCONCLUSIVE`, with the reason. A dependency bump with no UI change can say `INCONCLUSIVE: no product change to drive` and rest on Verify.
+5. **Posted before merge.** In the body, earlier than the merge. A new commit makes the old Proof stale: replace it for the new head, and don't leave the old SHA behind.
+
+The `Proof` check (`.github/workflows/proof.yml`, `scripts/check-pr-proof.mjs`) fails until the body has a heading starting with `Proof` whose section quotes the current head SHA in full. It re-runs when the body is edited. It does not read the links, Greptile, or the evidence, so meeting the rest of the contract is on whoever merges. Dependabot writes its own body and rewrites it whenever it rebases, which also changes the head. The merging agent appends the Proof to the end of Dependabot's body once Audit and Verify pass on that head, and adds it again after any rebase.
 
 ```markdown
 ### Proof
 
+- Head: `<40-character head SHA>`
+- Audit: <job URL for that head> (success)
+- Verify: <job URL for that head> (success)
+- Greptile: clean pass on that head | <findings and how each was settled> | skipped (<reason>)
 - Commands: the exact commands, including `npm run verify:doctor` and the drive you ran
 - Evidence: screenshot and download paths under the evidence directory that still exist after cleanup
 - Results: pass or fail per command, plus the observable end state (URL, verdict region, IndexedDB, download, clipboard, theme)
 - INCONCLUSIVE: any step that could not run, and the concrete reason (port busy, browser missing, fixture mode required, live provider keys absent, rate limit window)
 ```
+
+After a squash merge, confirm the push run on the new `main` SHA. The Proof names the pull request head, not that commit.
 
 A missing check is `INCONCLUSIVE`. Do not describe it as passed. Do not paste raw logs (`next.log`, `install.log`, `browsers.log`, `smoke.log`, `drive.log`), the Playwright HTML report, traces, or process command lines into the report.
 

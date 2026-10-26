@@ -1,0 +1,48 @@
+name: Proof
+
+# Fails a pull request until its body has a Proof section quoting the current
+# head SHA in full (scripts/check-pr-proof.mjs; the contract is "How to
+# report" in .agents/skills/verify-scrutinix/SKILL.md). Its own workflow, so
+# a body edit re-runs only this job and never cancels CI's Audit or Verify.
+# Dependabot's pull requests are not exempt: the merging agent appends the
+# Proof to the body before merging.
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: proof-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  proof:
+    name: Proof
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Setup Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version-file: .nvmrc
+
+      # The body is read from the API into a file, never interpolated into
+      # the shell, and a re-run reads it as it is now.
+      - name: Proof cites the head SHA
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER" > "$RUNNER_TEMP/pull.json"
+          node scripts/check-pr-proof.mjs "$RUNNER_TEMP/pull.json"
