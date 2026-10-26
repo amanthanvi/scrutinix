@@ -2,7 +2,12 @@
 
 import { useMemo } from "react";
 import { Button } from "@/components/ui/button";
+import { getToast } from "@/components/ui/lazy-toaster";
 import { Textarea } from "@/components/ui/textarea";
+import { loadLinkParser } from "@/hooks/use-link-anatomy";
+import { downloadTextFile } from "@/lib/client/export";
+import { resultsToCsv, resultsToJson } from "@/lib/client/export-formats";
+import type { AnalysisResult } from "@/lib/domain/types";
 
 interface BatchInputProps {
   value: string;
@@ -11,9 +16,8 @@ interface BatchInputProps {
   streaming: boolean;
   onSubmit: () => void;
   onCancel: () => void;
-  hasResults: boolean;
-  onCsv: () => void;
-  onJson: () => void;
+  /** The batch's finished results, which its export buttons save. */
+  results: AnalysisResult[];
 }
 
 export function BatchInput({
@@ -23,9 +27,7 @@ export function BatchInput({
   streaming,
   onSubmit,
   onCancel,
-  hasResults,
-  onCsv,
-  onJson,
+  results,
 }: BatchInputProps) {
   const urlCount = useMemo(
     () =>
@@ -35,6 +37,18 @@ export function BatchInput({
         .filter(Boolean).length,
     [value],
   );
+  const hasResults = results.length > 0;
+
+  // The export formats load with this panel, not the page.
+  const onCsv = async () => {
+    const parse = await loadLinkParser();
+    downloadTextFile("batch.csv", resultsToCsv(results, parse));
+    (await getToast()).success("Downloaded batch.csv");
+  };
+  const onJson = async () => {
+    downloadTextFile("batch.json", resultsToJson(results), "application/json");
+    (await getToast()).success("Downloaded batch.json");
+  };
 
   return (
     <div className="flex flex-col gap-3">

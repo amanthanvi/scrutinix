@@ -3,7 +3,6 @@
 import dynamic from "next/dynamic";
 import { useEffect, useRef } from "react";
 import { announce } from "@/components/ui/announcer";
-import { getToast } from "@/components/ui/lazy-toaster";
 
 import {
   type Tab,
@@ -12,15 +11,10 @@ import {
 import { InputAnatomy } from "@/components/scrutinix/input-anatomy";
 import { retryableChunk } from "@/components/scrutinix/retryable-chunk";
 import { SingleInput } from "@/components/scrutinix/input-panels";
-import { loadLinkParser, useLinkAnatomy } from "@/hooks/use-link-anatomy";
+import { useLinkAnatomy } from "@/hooks/use-link-anatomy";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  downloadTextFile,
-  resultsToCsv,
-  resultsToJson,
-} from "@/lib/client/export";
 import { displayUrlOf, normalizeUrlInput } from "@/lib/domain/url";
 import { ownershipSentence } from "@/lib/domain/verdict-guidance";
 
@@ -217,21 +211,7 @@ export function ScanForm() {
             streaming={batch.state.isStreaming}
             onSubmit={() => void startBatchScan()}
             onCancel={batch.cancelBatch}
-            hasResults={batch.state.results.length > 0}
-            onCsv={async () => {
-              const results = batch.state.results;
-              const parse = await loadLinkParser();
-              downloadTextFile("batch.csv", resultsToCsv(results, parse));
-              (await getToast()).success("Downloaded batch.csv");
-            }}
-            onJson={async () => {
-              downloadTextFile(
-                "batch.json",
-                resultsToJson(batch.state.results),
-                "application/json",
-              );
-              (await getToast()).success("Downloaded batch.json");
-            }}
+            results={batch.state.results}
           />
         </TabsContent>
       </Tabs>

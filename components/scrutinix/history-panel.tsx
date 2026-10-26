@@ -2,11 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import {
-  downloadTextFile,
-  resultsToCsv,
-  resultsToJson,
-} from "@/lib/client/export";
+import { downloadTextFile } from "@/lib/client/export";
+import { resultsToCsv, resultsToJson } from "@/lib/client/export-formats";
 import { announce } from "@/components/ui/announcer";
 import { countOf } from "@/lib/domain/copy";
 import type { HistoryEntry } from "@/lib/domain/types";

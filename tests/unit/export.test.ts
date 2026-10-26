@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { parse } from "tldts";
 
-import { resultsToCsv } from "@/lib/client/export";
+import { resultsToCsv } from "@/lib/client/export-formats";
 import {
   createPendingSignalResults,
   type AnalysisResult,
