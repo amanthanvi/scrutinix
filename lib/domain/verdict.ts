@@ -1085,26 +1085,49 @@ function buildSummary(
     return "The scan failed before enough checks finished.";
   }
 
-  const subjects = summarySubjects(contributions);
-  const sources = subjects.filter((subject) => subject.kind === "source");
-  if (sources.length > 0) {
-    return `${capitalize(formatList(sources.map((subject) => subject.text)))} flagged this link.`;
-  }
+  // Sources lead, but a sign that outweighs every source is named first:
+  // the line never names only the weaker evidence ("The link pattern model
+  // flagged this link." over a 28-point invalid certificate).
+  const ranked = summarySubjects(contributions);
+  const sources = ranked
+    .filter((subject) => subject.kind === "source")
+    .slice(0, SUMMARY_SUBJECT_LIMIT);
+  const strongestSource = sources[0]?.score ?? 0;
+  const signs = ranked
+    .filter(
+      (subject) =>
+        subject.kind === "sign" &&
+        (sources.length === 0 || subject.score > strongestSource),
+    )
+    .slice(0, SUMMARY_SUBJECT_LIMIT);
+  const named = (subjects: readonly { text: string }[]) =>
+    formatList(subjects.map((subject) => subject.text));
+  const signsClause =
+    signs.length > 0
+      ? `${capitalize(named(signs))} ${signs.length === 1 ? "makes" : "make"} this link look risky`
+      : null;
 
-  const signs = subjects.filter((subject) => subject.kind === "sign");
-  if (signs.length > 0) {
-    return `${capitalize(formatList(signs.map((subject) => subject.text)))} ${
-      signs.length === 1 ? "makes" : "make"
-    } this link look risky.`;
+  if (signsClause && sources.length > 0) {
+    return `${signsClause}, and ${named(sources)} flagged it.`;
+  }
+  if (sources.length > 0) {
+    return `${capitalize(named(sources))} flagged this link.`;
+  }
+  if (signsClause) {
+    return `${signsClause}.`;
   }
 
   return reasons[0] ?? "Several checks found warning signs.";
 }
 
+/**
+ * The evidence the summary can name, one subject per group (the group's
+ * highest-scoring wording), ranked by everything the group added.
+ */
 function summarySubjects(contributions: Contribution[]) {
   const byGroup = new Map<
     string,
-    { text: string; kind: "source" | "sign"; score: number }
+    { text: string; kind: "source" | "sign"; score: number; top: number }
   >();
 
   for (const item of contributions) {
@@ -1113,22 +1136,21 @@ function summarySubjects(contributions: Contribution[]) {
     }
 
     const existing = byGroup.get(item.subject.group);
-    if (!existing || item.score > existing.score) {
-      byGroup.set(item.subject.group, {
-        text: item.subject.text,
-        kind: item.subject.kind,
-        score: item.score,
-      });
-    }
+    const score = (existing?.score ?? 0) + item.score;
+    byGroup.set(
+      item.subject.group,
+      !existing || item.score > existing.top
+        ? {
+            text: item.subject.text,
+            kind: item.subject.kind,
+            score,
+            top: item.score,
+          }
+        : { ...existing, score },
+    );
   }
 
-  const ranked = [...byGroup.values()].sort((a, b) => b.score - a.score);
-  const sources = ranked.filter((subject) => subject.kind === "source");
-  const signs = ranked.filter((subject) => subject.kind === "sign");
-  return [
-    ...sources.slice(0, SUMMARY_SUBJECT_LIMIT),
-    ...signs.slice(0, SUMMARY_SUBJECT_LIMIT),
-  ];
+  return [...byGroup.values()].sort((a, b) => b.score - a.score);
 }
 
 /**

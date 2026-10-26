@@ -1480,6 +1480,67 @@ describe("verdict copy", () => {
     );
   });
 
+  it("names a warning sign that outweighs every source that flagged the link", () => {
+    // expired.badssl.com in production: an invalid certificate (28) and a
+    // risky link pattern reading (11) read only "The link pattern model
+    // flagged this link."
+    const signals = createPendingSignalResults();
+    signals.ssl = {
+      status: "success",
+      error: null,
+      durationMs: 9,
+      data: {
+        protocol: "TLSv1.2",
+        available: true,
+        validationState: "invalid",
+        authorized: false,
+        authorizationError: "CERT_HAS_EXPIRED",
+        issuer: "COMODO RSA Domain Validation Secure Server CA",
+        subject: "*.badssl.com",
+        validFrom: "2015-04-09T00:00:00.000Z",
+        validTo: "2015-04-12T23:59:59.000Z",
+        daysRemaining: -4214,
+        selfSigned: false,
+        fingerprint256: null,
+        observations: [],
+      },
+    };
+    signals.mlEnsemble = {
+      status: "success",
+      error: null,
+      durationMs: 9,
+      data: {
+        transformerModel: null,
+        lexicalModel: {
+          label: "risky",
+          score: 0.7,
+          reasons: [],
+          model: "lexical-heuristic",
+        },
+        consensusLabel: "risky",
+        consensusScore: 0.7,
+        reasons: [],
+        warnings: [],
+      },
+    };
+
+    expect(buildThreatAssessment(signals).threatInfo?.summary).toBe(
+      "An invalid certificate makes this link look risky, and the link pattern model flagged it.",
+    );
+
+    // A source that outweighs the signs still leads alone, by everything
+    // it added: 1 malicious (12) and 2 suspicious (8) engines outweigh a
+    // 15-point domain age.
+    const ranked = cleanSignals();
+    withVirusTotal(ranked, { malicious: 1, suspicious: 2 });
+    withDomainAge(ranked, 10);
+    const assessment = buildThreatAssessment(ranked);
+    expect(assessment.verdict).toBe("suspicious");
+    expect(assessment.threatInfo?.summary).toBe(
+      "1 VirusTotal engine flagged this link.",
+    );
+  });
+
   it("does not repeat the safe summary in the recommendations", () => {
     const signals = createPendingSignalResults();
     withVirusTotal(signals, { harmless: 70, undetected: 10 });
