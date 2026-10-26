@@ -374,7 +374,9 @@ test("a signed share states the instruction its basis supports; one signed befor
     ).toBeVisible();
     // Exactly this sentence: "Don't open this link." never passes for the
     // known-threat form, or the other way round.
-    await expect(band.locator(".sx-band-imperative")).toHaveText(instruction);
+    await expect(band.locator(".sx-band-imperative:not(.sx-slot)")).toHaveText(
+      instruction,
+    );
     await expect(band.getByText(snapshot.summary, { exact: true })).toHaveCount(
       summaryShown ? 1 : 0,
     );
@@ -417,9 +419,9 @@ test("a recipient reads the instruction the sender's band showed @smoke", async 
     await page.getByRole("button", { name: /analyze url/i }).click();
     const bandName = new RegExp(`^scan result: ${word}$`, "i");
     const senderBand = page.getByRole("region", { name: bandName });
-    await expect(senderBand.locator(".sx-band-imperative")).toHaveText(
-      instruction,
-    );
+    await expect(
+      senderBand.locator(".sx-band-imperative:not(.sx-slot)"),
+    ).toHaveText(instruction);
 
     await page.evaluate(() => {
       delete (window as unknown as { __copied?: string }).__copied;
@@ -436,7 +438,9 @@ test("a recipient reads the instruction the sender's band showed @smoke", async 
     await expect(
       band.getByText(/^Verified Scrutinix result · checked/),
     ).toBeVisible();
-    await expect(band.locator(".sx-band-imperative")).toHaveText(instruction);
+    await expect(band.locator(".sx-band-imperative:not(.sx-slot)")).toHaveText(
+      instruction,
+    );
     expect((await metaDescription(page))?.startsWith(`${instruction} `)).toBe(
       true,
     );

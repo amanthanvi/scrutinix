@@ -1063,7 +1063,7 @@ describe("shared links and their signature", () => {
         `https://${host}/login`,
       );
       const instruction = (band: HTMLElement) =>
-        band.querySelector(".sx-band-imperative")?.textContent;
+        band.querySelector(".sx-band-imperative:not(.sx-slot)")?.textContent;
 
       // The sender's own band.
       const sender = renderApp(<OpenStored result={result} />);
@@ -1101,7 +1101,7 @@ describe("shared links and their signature", () => {
       });
       const band = screen.getByLabelText(/^scan result: /i);
       expect(
-        band.querySelector(".sx-band-imperative")?.textContent,
+        band.querySelector(".sx-band-imperative:not(.sx-slot)")?.textContent,
         verdict,
       ).toBe(hedged);
       unmount();

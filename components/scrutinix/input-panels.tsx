@@ -124,7 +124,18 @@ export function SingleInput({
           variant={showingResult && !streaming ? "outline" : "primary"}
           className="h-[3.25rem] shrink-0 px-7 sm:h-14 sm:min-w-36"
         >
-          Analyze
+          {/* The label is semibold on ink and medium on outline; it holds
+              the semibold width in both and starts at the same place, so
+              neither the label, the button, nor the field beside it moves
+              when a verdict lands. */}
+          <span className="sx-slot text-left">
+            <span>Analyze</span>
+            <span
+              aria-hidden="true"
+              data-stand-in="Analyze"
+              className="sx-stand-in font-semibold"
+            />
+          </span>
           <CornerDownLeft aria-hidden="true" className="opacity-70" />
         </Button>
       </div>

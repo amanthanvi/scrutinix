@@ -40,7 +40,6 @@ import {
 import { capitalize } from "@/lib/domain/copy";
 import type { Severity } from "@/lib/domain/signal-severity";
 import {
-  getSignalSignature,
   isLegacySignalRecord,
   severityWords,
 } from "@/lib/domain/signal-signature";
@@ -357,6 +356,7 @@ export function ResultsSection() {
               scan.cancelScan();
               document.getElementById("sx-url-input")?.focus();
             }}
+            onRetry={active ? () => rescanFromBand(active.url) : undefined}
             onRunSharedScan={
               shared
                 ? () => {
@@ -380,7 +380,8 @@ export function ResultsSection() {
                 captions
                 signals={showShared ? null : signals}
                 // The questions and rows state every check's facts, so the
-                // anatomy keeps them only while a scan streams.
+                // anatomy draws none of them, nor holds their room while a
+                // scan streams: nothing under the band collapses as it lands.
                 visibleSignals={hasSignalActivity ? signalNames : []}
                 streaming={scan.state.isStreaming && !active}
               />
@@ -464,9 +465,7 @@ export function ResultsSection() {
                   }
                   onActivate={activateSignal}
                 />
-                {active ? (
-                  <StripLegend signals={signals} scored={scored} />
-                ) : null}
+                <StripLegend />
               </div>
 
               {questions ? (
@@ -552,29 +551,24 @@ const LEGEND_ORDER: readonly Severity[] = [
 ];
 
 /**
- * A key to the strip's shapes: only the states it actually draws, in the
- * words its names and titles use. For the eye (each cell already states
- * its own answer), so hidden from assistive technology.
+ * A key to the strip's shapes: every state a settled strip can draw, in
+ * the words its names and titles use. The whole key, from the scan's
+ * start: it explains the cells as they fill and never grows, shrinks, or
+ * appears as checks or the verdict land, so the evidence below it never
+ * moves. For the eye (each cell already states its own answer), so hidden
+ * from assistive technology.
  */
-function StripLegend({
-  signals,
-  scored,
-}: {
-  signals: SignalResults;
-  scored: ReadonlySet<SignalName>;
-}) {
-  const present = new Set(getSignalSignature(signals, scored));
-  const states = LEGEND_ORDER.filter((severity) => present.has(severity));
-  return states.length > 0 ? (
+function StripLegend() {
+  return (
     <p aria-hidden="true" className="sx-legend">
-      {states.map((severity) => (
+      {LEGEND_ORDER.map((severity) => (
         <span key={severity}>
           <SignalCell severity={severity} settled />
           {capitalize(severityWords[severity])}
         </span>
       ))}
     </p>
-  ) : null;
+  );
 }
 
 function LiveStatus({ text }: { text: string }) {

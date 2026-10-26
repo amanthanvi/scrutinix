@@ -48,6 +48,31 @@ test("a VirusTotal conviction renders a malicious verdict", async ({
   ).toHaveCount(8);
 });
 
+test("a failed scan's band offers Try again, which scans the link again", async ({
+  page,
+}) => {
+  const scans: string[] = [];
+  page.on("request", (request) => {
+    if (new URL(request.url()).pathname === "/api/analyze") {
+      scans.push(request.postData() ?? "");
+    }
+  });
+  await gotoApp(page);
+  await submitSingleScan(page, "https://error.scrutinix.test/");
+
+  const verdict = page.getByLabel(/^scan result: error$/i);
+  await expect(verdict.getByText("The scan failed — try again.")).toBeVisible();
+  // No score or confidence to state: the score's place holds the action
+  // its instruction asks for.
+  await expect(verdict.getByText(/confidence/i)).toHaveCount(0);
+  await verdict.getByRole("button", { name: "Try again" }).click();
+
+  await expect.poll(() => scans.length).toBe(2);
+  expect(scans[1]).toContain("error.scrutinix.test");
+  // The band's heading keeps focus while the new scan runs and lands.
+  await expect(verdict.getByRole("heading", { level: 2 })).toBeFocused();
+});
+
 test("an unreachable host renders an unknown verdict, not safe", async ({
   page,
 }) => {

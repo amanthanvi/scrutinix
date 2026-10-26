@@ -239,3 +239,95 @@ export const test = base.extend<
     for (const context of contexts) await context.close();
   },
 });
+
+/**
+ * Hold every scan's NDJSON stream on this page: the real fixture response
+ * is read in full, then handed to the app one line at a time.
+ * `scan_started` goes out at once; `releaseScanLines(page, n)` sends the
+ * next n lines (eight signal results, then `scan_complete`). `failCheck`
+ * turns one check into a failure (its line and the final result), as a
+ * provider timeout would, so the result carries a coverage caveat.
+ */
+export async function holdScanStream(
+  page: Page,
+  { failCheck = null }: { failCheck?: string | null } = {},
+) {
+  await page.addInitScript((failed) => {
+    const failure = {
+      status: "error",
+      data: null,
+      error: "This check could not be completed.",
+      durationMs: 1,
+    };
+    const rewrite = (line: string) => {
+      if (!failed) return line;
+      const event = JSON.parse(line);
+      if (event.type === "signal_result" && event.name === failed) {
+        event.result = { ...event.result, ...failure };
+      }
+      if (event.type === "scan_complete") {
+        event.result.signals[failed] = {
+          ...event.result.signals[failed],
+          ...failure,
+        };
+      }
+      return JSON.stringify(event);
+    };
+    const realFetch = window.fetch.bind(window);
+    window.fetch = async (input, init) => {
+      const url =
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.href
+            : input.url;
+      if (!new URL(url, location.href).pathname.endsWith("/api/analyze")) {
+        return realFetch(input, init);
+      }
+      const response = await realFetch(input, init);
+      const lines = (await response.text())
+        .split("\n")
+        .filter(Boolean)
+        .map(rewrite);
+      const encoder = new TextEncoder();
+      let sent = 0;
+      let stream!: ReadableStreamDefaultController<Uint8Array>;
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) {
+          stream = controller;
+        },
+      });
+      const release = (count: number) => {
+        for (; count > 0 && sent < lines.length; count -= 1) {
+          stream.enqueue(encoder.encode(`${lines[sent]}\n`));
+          sent += 1;
+        }
+        if (sent === lines.length) {
+          stream.close();
+          // Sent in full: the next scan on this page brings its own.
+          delete (window as { __sxRelease?: unknown }).__sxRelease;
+        }
+      };
+      (window as unknown as { __sxRelease: typeof release }).__sxRelease =
+        release;
+      release(1);
+      return new Response(body, {
+        status: response.status,
+        headers: response.headers,
+      });
+    };
+  }, failCheck);
+}
+
+/** Send the held scan's next `count` lines (see `holdScanStream`). */
+export async function releaseScanLines(page: Page, count: number) {
+  // The questions show as pending before the response arrives.
+  await page.waitForFunction(() => "__sxRelease" in window);
+  await page.evaluate(
+    (n) =>
+      (window as unknown as { __sxRelease: (n: number) => void }).__sxRelease(
+        n,
+      ),
+    count,
+  );
+}
