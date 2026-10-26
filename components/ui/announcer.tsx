@@ -15,7 +15,7 @@ import { useSyncExternalStore } from "react";
 export const ANNOUNCEMENT_MS = 7_000;
 
 let message = "";
-let timers: ReturnType<typeof setTimeout>[] = [];
+let timer: ReturnType<typeof setTimeout> | undefined;
 const listeners = new Set<() => void>();
 
 function show(text: string) {
@@ -28,15 +28,14 @@ function show(text: string) {
  * words again (a second Share) are still a change and are spoken again.
  */
 export function announce(text: string) {
-  timers.forEach(clearTimeout);
+  clearTimeout(timer);
   show("");
-  if (!text) return;
-  timers = [
-    setTimeout(() => {
+  if (text) {
+    timer = setTimeout(() => {
       show(text);
-      timers = [setTimeout(() => show(""), ANNOUNCEMENT_MS)];
-    }, 100),
-  ];
+      timer = setTimeout(show, ANNOUNCEMENT_MS, "");
+    }, 100);
+  }
 }
 
 function subscribe(listener: () => void) {

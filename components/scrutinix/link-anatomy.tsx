@@ -532,7 +532,6 @@ export function LinkAnatomyCompact({
         {anatomy.subdomain ? (
           <span
             dir="rtl"
-            aria-hidden="true"
             data-part="subdomain"
             className="min-w-0 shrink truncate text-[var(--sx-text-soft)]"
           >
@@ -540,7 +539,6 @@ export function LinkAnatomyCompact({
           </span>
         ) : null}
         <span
-          aria-hidden="true"
           data-part="owner"
           className={cn(
             "font-semibold whitespace-nowrap text-[var(--sx-text)]",
@@ -552,7 +550,6 @@ export function LinkAnatomyCompact({
         </span>
         {anatomy.path ? (
           <span
-            aria-hidden="true"
             data-part="path"
             className="min-w-0 shrink-[100] truncate text-[var(--sx-text-soft)]"
           >
