@@ -207,7 +207,8 @@ export const SCORING_TABLES: readonly ScoringTable[] = [
       },
       {
         id: "dns-addresses",
-        finding: "The name points to 6 or more addresses",
+        finding:
+          "The name points to 6 or more addresses of one kind (IPv4 or IPv6)",
         points: "4",
         weak: "unusual DNS records",
       },

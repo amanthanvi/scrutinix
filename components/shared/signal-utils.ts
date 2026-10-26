@@ -153,8 +153,9 @@ export function getSignalSummary(
         return "This link uses a raw IP address instead of a domain name.";
       }
 
+      // The name may not exist, or the lookup got no answer: Notes say which.
       if ((d.addresses?.length ?? 0) === 0 && (d.cnames?.length ?? 0) === 0) {
-        return "This address doesn't point to any server.";
+        return "We found no address for this name.";
       }
 
       return `${countOf(d.addresses?.length ?? 0, "address", "addresses")}, ${countOf(d.mx?.length ?? 0, "mail record")}.`;

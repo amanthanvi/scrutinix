@@ -753,7 +753,7 @@ describe("plain findings for checks that couldn't run", () => {
       "We couldn't check the site's security certificate.",
     );
     expect(getSignalSummary("dns", dns)).toBe(
-      "This address doesn't point to any server.",
+      "We found no address for this name.",
     );
     expect(getSignalSummary("redirectChain", redirect)).toBe(
       "The site didn't respond when we tried to open it.",
