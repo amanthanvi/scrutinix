@@ -250,6 +250,7 @@ export function buildThreatAssessment(
       // Same rule as the "Probably safe" imperative, so the first "What
       // to do" item never repeats it.
       provisional: confidenceLabel !== "high" || hasPositiveEvidence,
+      threat: listedThreatKind(signals),
     }),
     limitations,
   };
@@ -1006,22 +1007,75 @@ function calculateConfidence({
   );
 }
 
+const MALWARE_THREATS = new Set([
+  "MALWARE",
+  "UNWANTED_SOFTWARE",
+  "POTENTIALLY_HARMFUL_APPLICATION",
+]);
+
+/**
+ * What the lists say the link does: "phishing" when any listing says so,
+ * else "malware" when one names malware or unwanted software (a Google
+ * malware match, URLhaus, ThreatFox, a DBL or SURBL malware listing), else
+ * null. Listings of other links on the site don't count.
+ */
+function listedThreatKind(
+  signals: SignalResults,
+): "phishing" | "malware" | null {
+  const kinds = new Set<"phishing" | "malware">();
+  for (const match of signals.googleSafeBrowsing.data?.matches ?? []) {
+    const type = match.threatType.toUpperCase();
+    if (type === "SOCIAL_ENGINEERING") kinds.add("phishing");
+    if (MALWARE_THREATS.has(type)) kinds.add("malware");
+  }
+  for (const match of signals.threatFeeds.data?.matches ?? []) {
+    if (isElsewhereOnHost(match)) continue;
+    if (match.feed === "openphish" || /phish/i.test(match.detail)) {
+      kinds.add("phishing");
+    } else if (
+      match.feed === "urlhaus" ||
+      match.feed === "threatfox" ||
+      /malware|botnet|cracked/i.test(match.detail)
+    ) {
+      kinds.add("malware");
+    }
+  }
+  return kinds.has("phishing")
+    ? "phishing"
+    : kinds.has("malware")
+      ? "malware"
+      : null;
+}
+
 function buildRecommendations(
   verdict: Verdict,
   {
     limitedCoverage,
     provisional,
-  }: { limitedCoverage: boolean; provisional: boolean },
+    threat,
+  }: {
+    limitedCoverage: boolean;
+    provisional: boolean;
+    threat: "phishing" | "malware" | null;
+  },
 ) {
   // Actions only: the verdict line already says what the result means.
   switch (verdict) {
     case "critical":
     case "malicious":
-      return [
-        "Don't enter passwords, payment details, or one-time codes on this site.",
-        "Delete the message the link came in, or report it as phishing.",
-        "If you already opened it, change any password you typed there and run a malware scan.",
-      ];
+      // A malware site's danger is what it makes you download, and it
+      // isn't phishing, so it isn't reported as phishing.
+      return threat === "malware"
+        ? [
+            "Don't download or open anything from this site.",
+            "Delete the message the link came in.",
+            "If you already downloaded something from it, delete it unopened and run a malware scan.",
+          ]
+        : [
+            "Don't enter passwords, payment details, or one-time codes on this site.",
+            "Delete the message the link came in, or report it as phishing.",
+            "If you already opened it, change any password you typed there and run a malware scan.",
+          ];
     case "suspicious":
       return [
         "Confirm with the sender another way, such as a call or a message you start yourself.",

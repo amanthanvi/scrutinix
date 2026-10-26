@@ -1552,6 +1552,59 @@ describe("verdict copy", () => {
     );
   });
 
+  it("tailors what to do to the threat the lists name", () => {
+    const listedFor = (...threatTypes: string[]) => {
+      const signals = createPendingSignalResults();
+      signals.googleSafeBrowsing = {
+        status: "success",
+        error: null,
+        durationMs: 5,
+        data: {
+          checkedAt: "2026-10-25T00:00:00.000Z",
+          matches: threatTypes.map((threatType) => ({
+            threatType,
+            platformType: "ANY_PLATFORM",
+            threatEntryType: "URL",
+          })),
+        },
+      };
+      return buildThreatAssessment(signals).threatInfo?.recommendations ?? [];
+    };
+
+    // testsafebrowsing's malware and unwanted-software pages were told to
+    // report them as phishing.
+    for (const type of ["MALWARE", "UNWANTED_SOFTWARE"]) {
+      const malware = listedFor(type);
+      expect(malware).toContain(
+        "Don't download or open anything from this site.",
+      );
+      expect(malware.join(" ")).not.toMatch(/phishing|password/i);
+    }
+    expect(listedFor("SOCIAL_ENGINEERING")).toContain(
+      "Delete the message the link came in, or report it as phishing.",
+    );
+    // Phishing and malware together: the phishing advice, which already
+    // ends with a malware scan.
+    expect(listedFor("MALWARE", "SOCIAL_ENGINEERING")).toContain(
+      "Delete the message the link came in, or report it as phishing.",
+    );
+
+    // A URLhaus listing of this link is malware distribution.
+    const feedHit = createPendingSignalResults();
+    withThreatFeedMatches(feedHit, [
+      {
+        feed: "urlhaus",
+        matchedUrl: "https://evil.example/payload.exe",
+        detail: "lists this link as active malware distribution",
+        confidence: "high",
+        matchType: "url",
+      },
+    ]);
+    expect(
+      buildThreatAssessment(feedHit).threatInfo?.recommendations,
+    ).toContain("Delete the message the link came in.");
+  });
+
   it("does not repeat the safe summary in the recommendations", () => {
     const signals = createPendingSignalResults();
     withVirusTotal(signals, { harmless: 70, undetected: 10 });
