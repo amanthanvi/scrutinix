@@ -117,7 +117,7 @@ export async function runSslSignal(
   // nothing pair its age with the link's own domain (`otherSite`).
   const linkSite = getRegistrableDomain(bareHostname(url));
   const probedSite = getRegistrableDomain(probeTarget.hostname);
-  return probedSite === linkSite
+  return !result.available || probedSite === linkSite
     ? result
     : {
         ...result,

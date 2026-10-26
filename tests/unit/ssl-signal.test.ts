@@ -375,30 +375,63 @@ describe("runSslSignal", () => {
   });
 
   it("marks a certificate read on another site as that site's", async () => {
-    vi.spyOn(tls, "connect").mockImplementation(failingSocket("ECONNREFUSED"));
+    const upgrade = async () =>
+      chain({
+        finalUrl: "https://93.184.215.15/",
+        hops: [
+          {
+            url: "http://93.184.215.14/",
+            status: 301,
+            location: "https://93.184.215.15/",
+          },
+          { url: "https://93.184.215.15/", status: 200 },
+        ],
+      });
+    const connectSpy = vi.spyOn(tls, "connect").mockImplementation(() => {
+      const socket = {
+        authorizationError: undefined,
+        setTimeout: vi.fn(),
+        once: vi.fn((event: string, handler: () => void) => {
+          if (event === "secureConnect") queueMicrotask(handler);
+          return socket;
+        }),
+        getPeerCertificate: () => ({
+          valid_from: "Jan  1 00:00:00 2026 GMT",
+          valid_to: "Jan  1 00:00:00 2099 GMT",
+          issuer: { CN: "Example CA" },
+          subject: { CN: "landing" },
+        }),
+        getProtocol: () => "TLSv1.3",
+        end: vi.fn(),
+        destroy: vi.fn(),
+      };
+      return socket as unknown as tls.TLSSocket;
+    });
 
     const result = await runSslSignal(
       "http://93.184.215.14/",
       undefined,
       undefined,
-      async () =>
-        chain({
-          finalUrl: "https://93.184.215.15/",
-          hops: [
-            {
-              url: "http://93.184.215.14/",
-              status: 301,
-              location: "https://93.184.215.15/",
-            },
-            { url: "https://93.184.215.15/", status: 200 },
-          ],
-        }),
+      upgrade,
     );
 
     expect(result.otherSite).toBe("93.184.215.15");
     expect(result.observations[0]).toBe(
       "This is the certificate of 93.184.215.15, where the link moves to HTTPS.",
     );
+
+    // No certificate read: nothing to attribute.
+    connectSpy.mockImplementation(failingSocket("ECONNREFUSED"));
+    const refused = await runSslSignal(
+      "http://93.184.215.14/",
+      undefined,
+      undefined,
+      upgrade,
+    );
+    expect(refused.otherSite).toBeUndefined();
+    expect(refused.observations).toEqual([
+      "The host refused a TLS connection on port 443.",
+    ]);
   });
 
   it("reads nothing when the chain answered on HTTP and stopped short", async () => {
