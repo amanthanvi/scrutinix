@@ -25,7 +25,8 @@ Scrutinix 4.1.0 closes what 4.0.0 left untested or open. Every item below was fo
   - Certificate problems are sentences ("The certificate expired about 11 years ago"), not OpenSSL codes.
   - A domain with no registration lookup service is no longer reported as having no record.
   - An ordinary IPv4 + IPv6 answer is no longer "unusual".
-- **The link pattern model** read a third of popular sites, most official short links and half of sign-in links as phishing. It now reads the host and path against a bar set on ordinary links of every shape, so it adds points to about 1.5 in 100 ordinary links. It catches fewer phishing links on its own (OpenPhish 80% → 35%); reputation sources still convict, and `/about` prints the rates. A lure written to look like an ID (`/PayPalSecureLogin`) still reaches it.
+  - What to do follows the threat the lists name: a malware site says not to download anything, a card skimmer says not to enter payment details, and only phishing is reported as phishing.
+- **The link pattern model** read a third of popular sites, most official short links and half of sign-in links as phishing. It now reads the host and path against a bar set on ordinary links of every shape, so it adds points to about 1.5 in 100 ordinary links. It catches fewer phishing links on its own (OpenPhish 80% → 35%); reputation sources still convict, and `/about` prints the rates. A lure written to look like an ID (`/PayPalSecureLogin`, `/P4y7P4l`) still reaches it.
 - **Link previews and the app** state the headline, "Is this link what it says it is?", instead of the old tagline.
 - **Share cards** fit long registered domains, keeping the end that names the site.
 
