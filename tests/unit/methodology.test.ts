@@ -298,7 +298,7 @@ const SCENARIOS: Record<string, Scenario[]> = {
     {
       add: feed({
         feed: "spamhaus-dbl",
-        detail: "lists this domain as a spam domain",
+        detail: "lists this domain as a low-reputation domain",
       }),
       points: 25,
     },
@@ -565,7 +565,8 @@ const NUMBERS: Record<string, number[]> = {
   "age-month": [30, 15],
   "age-young": [30, 179, 8],
   "dns-punycode": [8],
-  "dns-addresses": [MANY_ADDRESS_RECORDS, 4],
+  // The threshold, "IPv4 or IPv6" (per family, not a threshold), then points.
+  "dns-addresses": [MANY_ADDRESS_RECORDS, 4, 6, 4],
   "redirect-hops": [3, 8],
   "redirect-http": [10],
   "redirect-cross": [14],

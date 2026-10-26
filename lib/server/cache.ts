@@ -151,8 +151,11 @@ if (!globalThis.__analysisCache) {
  * Bump when cached results written by older code must not be replayed: the
  * production namespace outlives releases. v2: results from before public
  * errors could hold raw exception text (a TLS probe's OpenSSL message).
+ * v3: DNS data scored IPv4 and IPv6 addresses together as one count, and
+ * provider notes carried older wording (a raw certificate code, "spam
+ * domain", an internal URLhaus sentence).
  */
-const RESULT_CACHE_VERSION = "v2";
+const RESULT_CACHE_VERSION = "v3";
 
 /** Null when no isolated namespace is available; the shared cache is then skipped. */
 function remoteKey(key: string) {

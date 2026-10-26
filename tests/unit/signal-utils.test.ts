@@ -639,6 +639,105 @@ describe("signal severity", () => {
       Object.values(severityColor).map((color) => color.dot),
     ).not.toContain("var(--sx-safe)");
   });
+
+  it("flags the link only for a feed listing the engine counts as convicting", () => {
+    const feeds = (
+      ...matches: ThreatFeedsData["matches"]
+    ): ThreatFeedsData => ({
+      checkedAt: "",
+      matches,
+      observations: [],
+      warnings: [],
+    });
+    const severityOf = (data: ThreatFeedsData) =>
+      getSignalSeverity("success", data, "threatFeeds");
+    const elsewhere = {
+      feed: "urlhaus",
+      matchedUrl: "example.com",
+      detail: "lists 4 malware links on this host",
+      confidence: "medium",
+      matchType: "host",
+    } as const;
+
+    // Other links on the site: corroboration (25), "a warning sign, not
+    // proof" in the copy, so a hatched warning sign, never solid red.
+    expect(severityOf(feeds(elsewhere))).toBe("suspicious");
+    expect(
+      severityOf(
+        feeds({
+          feed: "threatfox",
+          matchedUrl: "https://shared.example/other",
+          detail: "lists another link on this host",
+          confidence: "high",
+          matchType: "url",
+          listedElsewhereOnHost: true,
+        }),
+      ),
+    ).toBe("suspicious");
+    // Weaker direct listings corroborate too.
+    expect(
+      severityOf(
+        feeds({
+          feed: "spamhaus-dbl",
+          matchedUrl: "dbltest.com",
+          detail: "lists this domain as a low-reputation domain",
+          confidence: "medium",
+          matchType: "host",
+        }),
+      ),
+    ).toBe("suspicious");
+    // An exact-link or high-confidence listing flags the link, alongside
+    // anything weaker.
+    expect(
+      severityOf(
+        feeds(elsewhere, {
+          feed: "openphish",
+          matchedUrl: "https://example.com/login",
+          detail: "lists this link as phishing",
+          confidence: "high",
+          matchType: "url",
+        }),
+      ),
+    ).toBe("malicious");
+    expect(
+      severityOf(
+        feeds({
+          feed: "spamhaus-dbl",
+          matchedUrl: "evil.example",
+          detail: "lists this domain as a phishing domain",
+          confidence: "high",
+          matchType: "host",
+        }),
+      ),
+    ).toBe("malicious");
+    expect(severityOf(feeds())).toBe("clear");
+  });
+
+  it("says the certificate check didn't apply to a link that never reaches HTTPS", () => {
+    const ssl = buildSsl({
+      available: false,
+      validationState: "unavailable",
+      authorized: false,
+      issuer: null,
+      subject: null,
+      validFrom: null,
+      validTo: null,
+      daysRemaining: null,
+      fingerprint256: null,
+      noHttps: true,
+      observations: [
+        "This link never moves to HTTPS, so there's no certificate to check.",
+      ],
+    });
+
+    // Not "gave a partial answer": nothing was lost.
+    expect(getSignalSeverity("success", ssl, "ssl")).toBe("skipped");
+    expect(getSignalSummary("ssl", ssl)).toBe(
+      "This link never moves to HTTPS, so there's no certificate to check.",
+    );
+    // No certificate fields to list, so the row has no disclosure.
+    expect(getSignalDetailEntries("ssl", ssl)).toEqual([]);
+  });
 });
 
 describe("plain findings for checks that couldn't run", () => {
@@ -651,10 +750,10 @@ describe("plain findings for checks that couldn't run", () => {
     const redirect = signals.redirectChain.data!;
 
     expect(getSignalSummary("ssl", ssl)).toBe(
-      "We couldn't check the site's security certificate.",
+      "We couldn't check the site's certificate.",
     );
     expect(getSignalSummary("dns", dns)).toBe(
-      "This address doesn't point to any server.",
+      "We found no address for this name.",
     );
     expect(getSignalSummary("redirectChain", redirect)).toBe(
       "The site didn't respond when we tried to open it.",
@@ -665,11 +764,13 @@ describe("plain findings for checks that couldn't run", () => {
       value: "No TLS handshake could be completed.",
     });
 
+    // A result from before the probe wrote `problem`: a plain fallback,
+    // never the raw code from its notes.
     const states = [
-      ["invalid", "The site's security certificate isn't trusted."],
-      ["untrusted", "The site's security certificate isn't trusted."],
-      ["warning", "We couldn't fully verify the site's security certificate."],
-      ["trusted", "The site's security certificate is valid."],
+      ["invalid", "The site's certificate isn't trusted."],
+      ["untrusted", "The site's certificate isn't trusted."],
+      ["warning", "We couldn't fully verify the site's certificate."],
+      ["trusted", "The site's certificate is valid."],
     ] as const;
     for (const [validationState, sentence] of states) {
       expect(
@@ -682,6 +783,16 @@ describe("plain findings for checks that couldn't run", () => {
         }),
       ).toBe(sentence);
     }
+    // The probe's own plain words, when it wrote them.
+    expect(
+      getSignalSummary("ssl", {
+        ...ssl,
+        available: true,
+        validationState: "invalid",
+        authorizationError: "ERR_TLS_CERT_ALTNAME_INVALID",
+        problem: "The site's certificate was issued for a different name.",
+      }),
+    ).toBe("The site's certificate was issued for a different name.");
 
     expect(
       getSignalSummary("dns", {

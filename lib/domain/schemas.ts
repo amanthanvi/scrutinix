@@ -228,6 +228,24 @@ export const sslDataSchema = z.object({
    * so it shows its reference and is never cached.
    */
   probeFailed: z.boolean().optional().catch(undefined),
+  /**
+   * A plain-HTTP link whose redirects never reach HTTPS: no certificate is
+   * in its path. An answer, not lost coverage; the cell reads "didn't
+   * apply".
+   */
+  noHttps: z.boolean().optional().catch(undefined),
+  /**
+   * An invalid or untrusted certificate's problem in plain words, set by
+   * the probe (`describeCertificateProblem`, timeless): what the row and
+   * the Summary say, so the browser never maps verification codes itself.
+   */
+  problem: z.string().optional().catch(undefined),
+  /**
+   * The registered domain the certificate was read from when it isn't the
+   * link's own: an http:// link that moves to HTTPS on another site. Its
+   * age is never paired with the link's domain age.
+   */
+  otherSite: z.string().optional().catch(undefined),
 });
 
 export type SSLData = z.infer<typeof sslDataSchema>;

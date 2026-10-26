@@ -876,6 +876,7 @@ export function VerdictDetails({
     addressUnchecked,
   });
   const metadata = result.metadata;
+  const evidenceAt = metadata?.checkedAt || metadata?.completedAt;
   const completed = Object.values(result.signals).filter(
     (signal) => signal.status !== "pending",
   ).length;
@@ -971,11 +972,15 @@ export function VerdictDetails({
         <p className="text-caption font-mono text-[var(--sx-text-soft)]">
           {completed}/{SIGNAL_COUNT} checks
           {failed > 0 ? ` · ${failed} failed` : ""}
-          {metadata?.durationMs ? ` · ${metadata.durationMs} ms` : ""}
-          {metadata?.completedAt
-            ? ` · finished ${formatTimestamp(metadata.completedAt)}`
-            : ""}
-          {metadata?.cacheHit ? " · cached" : ""}
+          {/* A cache hit replays an earlier scan: say when its evidence was
+              checked, not this request's time or its 1 ms. */}
+          {metadata?.cacheHit
+            ? `${evidenceAt ? ` · checked ${formatTimestamp(evidenceAt)}` : ""} · cached`
+            : `${metadata?.durationMs ? ` · ${metadata.durationMs} ms` : ""}${
+                metadata?.completedAt
+                  ? ` · finished ${formatTimestamp(metadata.completedAt)}`
+                  : ""
+              }`}
         </p>
         {reference ? (
           <p className="text-caption font-mono break-all text-[var(--sx-text-soft)]">

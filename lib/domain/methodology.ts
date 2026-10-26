@@ -115,7 +115,7 @@ export const SCORING_TABLES: readonly ScoringTable[] = [
       },
       {
         id: "dbl-spam",
-        finding: "Spamhaus DBL lists the domain for spam only",
+        finding: "Spamhaus DBL lists the domain only as low-reputation",
         points: "25",
       },
       {
@@ -185,7 +185,8 @@ export const SCORING_TABLES: readonly ScoringTable[] = [
       },
       {
         id: "cert-fresh",
-        finding: "A certificate under 7 days old on a domain under 30 days old",
+        finding:
+          "The link's own certificate is under 7 days old and its domain under 30 days old",
         points: "12",
       },
       {
@@ -207,7 +208,8 @@ export const SCORING_TABLES: readonly ScoringTable[] = [
       },
       {
         id: "dns-addresses",
-        finding: "The name points to 6 or more addresses",
+        finding:
+          "The name points to 6 or more addresses of one kind (IPv4 or IPv6)",
         points: "4",
         weak: "unusual DNS records",
       },

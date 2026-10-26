@@ -234,7 +234,11 @@ async function submitAndPollAnalysis(
   if (!submitResponse.ok) {
     throw new PublicError(
       "lookup_failed",
-      `VirusTotal submission failed with status ${submitResponse.status}.`,
+      // 400: VirusTotal refused the address itself (a name that can't
+      // exist, such as .invalid); said plainly, not as a status code.
+      submitResponse.status === 400
+        ? "VirusTotal doesn't accept this address for analysis."
+        : `VirusTotal submission failed with status ${submitResponse.status}.`,
     );
   }
 

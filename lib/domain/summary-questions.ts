@@ -817,15 +817,21 @@ function answerHttps({ url, signals, now }: Context): Answer {
   if (startsOnPlainHttp(url)) {
     // Plain HTTP that moves to HTTPS: only the first request is exposed.
     if (!redirect?.finalUrl.toLowerCase().startsWith("https://")) {
-      // A plain-HTTP link to a TLS port can still present a certificate,
-      // and the engine scores it, so it is stated when one was read.
+      // A certificate read here is stated: one where the chain passed
+      // through HTTPS; one the site offers on 443 while the chain stays on
+      // HTTP (browsers that try HTTPS first meet it; else `noHttps`); or,
+      // for a chain that never answered, one on the host's own TLS port.
       const certificate =
         signals.ssl.status === "success" && signals.ssl.data?.available
           ? answerCertificate(signals, now)
           : null;
       return {
         answer: sentences([
-          "No. This link doesn't use HTTPS, so the connection isn't encrypted.",
+          redirect?.hops.some((hop) => /^https:/i.test(hop.url))
+            ? "No. This link passes through HTTPS, then ends on plain HTTP."
+            : certificate && redirect?.reachable && signals.ssl.data?.authorized
+              ? "No. This link stays on plain HTTP, though its site also answers over HTTPS."
+              : "No. This link doesn't use HTTPS, so the connection isn't encrypted.",
           certificate?.state ?? null,
           certificate?.issued ?? null,
         ]),
@@ -881,18 +887,27 @@ function answerCertificate(
   const issued = dated
     ? `This certificate was issued ${formatElapsed(now - issuedAt)} ago.`
     : null;
-  // The engine's fresh-certificate rule: days old, on a brand-new domain.
+  // The engine's fresh-certificate rule: days old, on a brand-new domain,
+  // and only the link's own certificate (not one from `otherSite`).
   const domainAge = scoredAgeDays(signals);
   const freshOnNewDomain =
+    !data.otherSite &&
     dated &&
     Math.floor((now - issuedAt) / DAY_MS) < FRESH_CERTIFICATE_DAYS &&
     domainAge !== null &&
     domainAge < NEW_DOMAIN_DAYS;
 
+  // A certificate read where an http:// link moves to another site is
+  // named as that site's.
+  const whose = data.otherSite
+    ? `the certificate at ${data.otherSite}`
+    : "the site's certificate";
   switch (data.validationState) {
     case "trusted":
       return {
-        state: "The site has a valid certificate.",
+        state: data.otherSite
+          ? `${capitalize(whose)} is valid.`
+          : "The site has a valid certificate.",
         issued,
         why: freshOnNewDomain
           ? FRESH_SETUP
@@ -900,13 +915,18 @@ function answerCertificate(
       };
     case "warning":
       return {
-        state: "We couldn't fully verify the site's certificate.",
+        state: `We couldn't fully verify ${whose}.`,
         issued,
         why: freshOnNewDomain ? FRESH_SETUP : ONLY_THE_CONNECTION,
       };
     default:
       return {
-        state: "The site's certificate isn't trusted.",
+        // Why, in plain words: how long ago it expired, as of the check,
+        // else the probe's own sentence (results from before it have none).
+        state:
+          Date.parse(data.validTo ?? "") < now
+            ? `${capitalize(whose)} expired ${formatElapsed(now - Date.parse(data.validTo ?? ""))} ago.`
+            : (data.problem ?? `${capitalize(whose)} isn't trusted.`),
         issued,
         why: "With a certificate error, even the connection may not be private.",
       };

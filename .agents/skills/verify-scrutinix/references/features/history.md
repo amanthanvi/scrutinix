@@ -5,7 +5,7 @@ Completed scans saved in IndexedDB on this device. Search, export, clear, and un
 ## Sub-features
 
 - empty: no rows yet; the region exists and draws nothing
-- list: one row per link (a re-scan replaces the earlier entry): the mini strip, the verdict word (`Look-alike` or `Unconfirmed` where the band says so, `—` while the address check loads), the link with its registered domain in bold, and the time. Click a row to open that result: focus moves to its verdict heading and the live region announces it
+- list: one row per link (a re-scan replaces the earlier entry): the mini strip, the verdict word (`Look-alike` or `Unconfirmed` where the band says so, `—` while the address check loads), the link with its registered domain in bold, and the time you scanned it (`savedAt`, even for a cache hit, whose evidence can be up to 15 minutes older: the opened result's details line says `checked <time> · cached`). Click a row to open that result: focus moves to its verdict heading and the live region announces it
 - filter: searchbox `Filter scan history`, visible after more than 3 saved scans
 - export: CSV and JSON of the visible rows
 - clear-undo: confirm, then undo in the same session
