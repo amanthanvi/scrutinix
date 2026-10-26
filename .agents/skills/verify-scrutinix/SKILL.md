@@ -180,7 +180,7 @@ Stable handles:
 
 The dev server allows 10 analyze requests per minute and 50 per day for each client address, counted in process memory for `next dev`. Every drive test presents its own address (`x-real-ip` from `isolateRateLimit`), as `tests/e2e` does, so no test can run into the limit: `verify:smoke` spends 1 scan and no `verify:drive` test spends more than 4. The address is derived from the runner's pid, so two runs within a minute can land on the same one; 1 + 4 still fits. A batch spends one per link. A person driving one browser by hand shares one address.
 
-The full e2e contract remains `npm run test:e2e` (production build, same fixtures and share key). Use it when the change touches a behavior the sweep does not list. `verify:smoke` is the short loop.
+The full e2e contract remains `npm run test:e2e` (production build, same fixtures and share key, Chromium); `npm run test:e2e:engines` runs it in Firefox and WebKit as well. Use it when the change touches a behavior the sweep does not list. `verify:smoke` is the short loop.
 
 ## Evidence
 

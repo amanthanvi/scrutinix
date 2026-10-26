@@ -1,6 +1,6 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, type Page } from "@playwright/test";
 
-import { gotoApp, setDefaultTextSize, submitSingleScan } from "./helpers";
+import { gotoApp, submitSingleScan, test } from "./helpers";
 
 /**
  * These specs depend on SCRUTINIX_TEST_FIXTURES=1 (set by scripts/run-e2e.mjs),
@@ -525,41 +525,80 @@ test("a link parser that fails to load leaves a Safe result Unconfirmed, never S
       () => document.documentElement.scrollWidth <= window.innerWidth,
     ),
   ).toBe(true);
+});
 
-  // With twice the default text size it is larger, and wraps to stay inside.
-  const standard = await measureVerdict(page);
-  await setDefaultTextSize(page, 32);
-  const enlarged = await measureVerdict(page);
+test("an Unconfirmed verdict grows with twice the default text size and wraps inside its band", async ({
+  pageAtDefaultTextSize,
+}) => {
+  // At the narrowest phone width.
+  const unconfirmedAt = async (standard: number) => {
+    const page = await pageAtDefaultTextSize(standard, {
+      viewport: { width: 320, height: 640 },
+    });
+    await interceptParser(page, (_respond, abort) => abort());
+    await gotoApp(page);
+    await submitSingleScan(
+      page,
+      "https://paypal.com.safe.scrutinix.test/login",
+    );
+    await expect(page.getByLabel(/^scan result: unconfirmed$/i)).toBeVisible({
+      timeout: 15_000,
+    });
+    return measureVerdict(page);
+  };
+  const standard = await unconfirmedAt(16);
+  const enlarged = await unconfirmedAt(32);
   expect(enlarged.size).toBeGreaterThan(standard.size);
   expect(enlarged.inside).toBe(true);
 });
 
-test("a larger default text size never shrinks a scored verdict, at any width, and keeps it inside its band", async ({
-  page,
-}) => {
+/**
+ * Scan a Critical link and measure its verdict at each width, from the
+ * narrowest phone through the rem breakpoints (40rem, 48rem) as they move
+ * with the text size, checking at each that the word stays inside its band.
+ */
+async function scoredVerdictAtWidths(page: Page, standard: number) {
   await gotoApp(page);
   await submitSingleScan(page, "https://critical.scrutinix.test/login");
   const verdict = page.getByLabel(/^scan result: critical$/i);
   await expect(verdict.getByRole("meter")).toBeVisible({ timeout: 15_000 });
 
-  // Through the rem breakpoints (40rem, 48rem) as they move with the text.
+  const sizes = new Map<number, number>();
   for (const width of [320, 414, 640, 768, 1024, 1280]) {
     await page.setViewportSize({ width, height: 800 });
-    let previous = 0;
-    for (const standard of [16, 24, 32]) {
-      await setDefaultTextSize(page, standard);
-      const current = await measureVerdict(page);
-      const at = `${width}px wide, ${standard}px text`;
-      expect(current.size, at).toBeGreaterThanOrEqual(previous);
-      expect(current.inside, at).toBe(true);
-      previous = current.size;
+    const current = await measureVerdict(page);
+    expect(current.inside, `${width}px wide, ${standard}px text`).toBe(true);
+    sizes.set(width, current.size);
+  }
+  return sizes;
+}
+
+test("a scored verdict stays inside its band at every width", async ({
+  page,
+}) => {
+  // The engine's own default text size, so this runs in every engine.
+  await scoredVerdictAtWidths(page, 16);
+});
+
+test("a larger default text size never shrinks a scored verdict, at any width, and keeps it inside its band", async ({
+  pageAtDefaultTextSize,
+}) => {
+  // Each width's verdict size at the previous, smaller text size.
+  let previous: Map<number, number> | undefined;
+  const sizeAt320 = new Map<number, number>();
+  for (const standard of [16, 24, 32]) {
+    const page = await pageAtDefaultTextSize(standard);
+    const sizes = await scoredVerdictAtWidths(page, standard);
+    for (const [width, size] of sizes) {
+      expect(
+        size,
+        `${width}px wide, ${standard}px text`,
+      ).toBeGreaterThanOrEqual(previous?.get(width) ?? 0);
     }
+    previous = sizes;
+    sizeAt320.set(standard, sizes.get(320)!);
   }
 
   // The narrowest phone: the 2rem floor makes it larger, not just equal.
-  await page.setViewportSize({ width: 320, height: 800 });
-  await setDefaultTextSize(page, 16);
-  const standard = await measureVerdict(page);
-  await setDefaultTextSize(page, 32);
-  expect((await measureVerdict(page)).size).toBeGreaterThan(standard.size);
+  expect(sizeAt320.get(32)).toBeGreaterThan(sizeAt320.get(16)!);
 });

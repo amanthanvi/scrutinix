@@ -529,11 +529,12 @@ Then all content is readable and interactive without horizontal scrolling
   - Batch endpoint with concurrent URL processing
   - Rate limit proxy enforcement
 
-- **E2E tests** (Playwright):
+- **E2E tests** (Playwright, offline fixtures; Chromium gates merges, and the same suite runs in Firefox and WebKit as separate CI jobs):
   - Single URL scan happy path
   - Batch scan with multiple URLs
   - Accessibility audit with axe-core
   - Keyboard navigation smoke coverage
+  - No sideways scrolling at a larger default text size (Chromium and Firefox; Safari has no such setting) and at page zoom (every engine)
   - History persistence across page reload
   - Error/degraded states where providers are unavailable
 
