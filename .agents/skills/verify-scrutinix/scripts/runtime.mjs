@@ -294,7 +294,9 @@ const unmarkedEvidenceReason =
 // is left alone. A file that is already gone when unlink runs (another clear
 // removed it after this listing) is the end state this function wants, so
 // ENOENT does not fail the clear. Every other unlink error still does. The
-// state directory is never cleared: run.json lives there.
+// second argument is that unlink. The check replaces it to simulate a file
+// that vanishes after lstat. The state directory is never cleared: run.json
+// lives there.
 // An unmarked VERIFY_EVIDENCE_DIR is not cleared either, including an empty
 // one. The default evidence directory is adopted: the marker is written once,
 // then only skill artifacts are removed.
@@ -334,6 +336,7 @@ export function clearEvidenceFiles(
       continue;
     }
     if (!stat.isFile() && !stat.isSymbolicLink()) continue;
+    // Gone since the lstat is the end state this wants, not a failure.
     try {
       unlinkArtifact(file);
     } catch (error) {
