@@ -103,7 +103,7 @@ lib/
     feed-copy.ts          # Feed display names, feed-match + Google threat-type wording
     reputation.ts         # Client-safe reputation thresholds + hasConfirmedReputationHit
     signal-severity.ts    # Per-signal severity ("clear" = found nothing; scored => warning; a feed is "flagged" only for a high-quality listing)
-    certificate.ts        # describeCertificateProblem: a certificate's problem in plain words (reason, row, Summary), never the raw code
+    certificate.ts        # describeCertificateProblem: a certificate's problem in plain words, never the raw code (probe stores it as ssl.problem for the row/Summary; the lazy engine words its reason)
     signal-signature.ts   # Eight-cell signature, legacy-record check, share snapshot encode/decode
     link-anatomy.ts       # Isomorphic URL anatomy + look-alike detection (tldts passed in)
     expected-site.ts      # "Were you expecting…?": compare an expected domain (or IP) with the link's registered domain (names never confirmed or denied)
