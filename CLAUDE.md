@@ -102,7 +102,8 @@ lib/
     summary-questions.ts  # Summary's five questions: fixed mapping, answers, why clauses, disagreements
     feed-copy.ts          # Feed display names, feed-match + Google threat-type wording
     reputation.ts         # Client-safe reputation thresholds + hasConfirmedReputationHit
-    signal-severity.ts    # Per-signal severity ("clear" = found nothing; scored => warning)
+    signal-severity.ts    # Per-signal severity ("clear" = found nothing; scored => warning; a feed is "flagged" only for a high-quality listing)
+    certificate.ts        # describeCertificateProblem: a certificate's problem in plain words (reason, row, Summary), never the raw code
     signal-signature.ts   # Eight-cell signature, legacy-record check, share snapshot encode/decode
     link-anatomy.ts       # Isomorphic URL anatomy + look-alike detection (tldts passed in)
     expected-site.ts      # "Were you expecting…?": compare an expected domain (or IP) with the link's registered domain (names never confirmed or denied)
@@ -264,7 +265,12 @@ tests/
   (`lib/og/cards.tsx` mirrors the shapes). Entries saved before signals were
   kept (`isLegacySignalRecord`: every check carries the sanitizer's
   `MISSING_SIGNAL_DATA`) draw empty glyph slots and a plain note, never
-  eight "failed" cells; a real all-failed scan still draws them. The live
+  eight "failed" cells; a real all-failed scan still draws them. The feeds
+  cell is flagged only for a listing `feedMatchWeight` rates high (the one
+  the confidence math counts as the feeds flagging it); a listing of other
+  links on the site is a warning sign. A plain-HTTP link whose redirects
+  never reach HTTPS has no certificate (`ssl.noHttps`): its cell didn't
+  apply, it counts as skipped in confidence, and it is not partial. The live
   strip heads Evidence as its index: cells numbered 1-8 (`cellNumber`, in
   `signalNames` order, `aria-hidden` tags), and each question's "From" line
   (`QuestionSources`) cites the same numbers while assistive technology
