@@ -4,6 +4,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -198,6 +199,43 @@ describe("a link handed to the page (?url=, or the share target's redirect to it
       ),
     );
     expect(document.activeElement).toBe(analyzeButton());
+  });
+
+  it("puts the arrival in reading order, before the field, until the link is edited or scanned", async () => {
+    const fetchMock = stubScan(LINK);
+    renderApp({ prefill: LINK });
+    const scanConsole = screen.getByRole("region", { name: "Scan console" });
+    // VoiceOver's own reading of a new page talked over the announcement
+    // in Safari, so a reader meets the arrival on the way to the field.
+    const note = within(scanConsole).getByText(
+      "Link filled in: parcel-help.example. Press Analyze to check it.",
+    );
+    expect(note.className).toContain("sr-only");
+    expect(
+      note.compareDocumentPosition(urlInput()) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    // Outside the tab panel: TalkBack reads a focusable panel's text with
+    // its name, then each stop, so inside it the note was said twice.
+    expect(note.closest("[role='tabpanel']")).toBeNull();
+
+    // Scanned: the result is on screen, so the note goes.
+    await act(async () => {
+      fireEvent.click(analyzeButton());
+    });
+    await waitFor(() =>
+      expect(screen.getByLabelText(/^scan result: /i)).toBeDefined(),
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(within(scanConsole).queryByText(/^Link filled in:/)).toBeNull();
+  });
+
+  it("drops the arrival note once the link is edited", () => {
+    renderApp({ prefill: LINK });
+    const scanConsole = screen.getByRole("region", { name: "Scan console" });
+    expect(within(scanConsole).getByText(/^Link filled in:/)).toBeTruthy();
+    fireEvent.change(urlInput(), { target: { value: `${LINK}/more` } });
+    expect(within(scanConsole).queryByText(/^Link filled in:/)).toBeNull();
   });
 
   it("says a link that imitates nothing was filled in, without an owner sentence", async () => {

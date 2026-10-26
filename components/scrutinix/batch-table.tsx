@@ -7,6 +7,7 @@ import {
   RowVerdict,
   useRowAnatomy,
 } from "@/components/scrutinix/result-row";
+import { spokenLink } from "@/components/scrutinix/link-anatomy";
 import { SignalGlyph } from "@/components/scrutinix/signal-strip";
 import { Button } from "@/components/ui/button";
 import { formatDisplayUrl } from "@/lib/domain/url";
@@ -122,7 +123,7 @@ function BatchRow({
           variant="ghost"
           size="sm"
           className={cn(ROW_TRAILING, "-mr-[10px]")}
-          aria-label={`Open result for ${formatDisplayUrl(item.url)}${lookAlike ? " (look-alike link)" : ""}`}
+          aria-label={`Open result for ${spokenLink(formatDisplayUrl(item.url))}${lookAlike ? " (look-alike link)" : ""}`}
         >
           Open
         </Button>

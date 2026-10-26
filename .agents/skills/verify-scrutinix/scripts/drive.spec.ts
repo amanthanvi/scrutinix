@@ -432,7 +432,7 @@ test("single scan share and rescan", async ({ page }) => {
   await expect(
     toast(page).getByText("Downloaded scan.json", { exact: true }),
   ).toBeVisible();
-  await expect(statusRegion(page)).toHaveText("Downloaded scan.json");
+  await expect(statusRegion(page)).toHaveText("Downloaded scan.json.");
 
   // Re-scan asks the server again (an earlier smoke run may already have
   // cached example.com, so "cached" alone would not prove it ran).
@@ -459,7 +459,7 @@ test("single scan share and rescan", async ({ page }) => {
     toast(page).getByText("It shows this result for 3 days after the check."),
   ).toBeVisible();
   await expect(statusRegion(page)).toHaveText(
-    "Link copied to clipboard It shows this result for 3 days after the check.",
+    "Link copied to clipboard. It shows this result for 3 days after the check.",
   );
   const copied = await page.evaluate(() => navigator.clipboard.readText());
   const link = new URL(copied);

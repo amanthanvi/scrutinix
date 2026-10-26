@@ -1,10 +1,14 @@
 /**
  * What assistive technology gets from a subtree, approximated from the DOM:
- * text outside `aria-hidden` and `hidden` subtrees.
+ * text outside `aria-hidden` and `hidden` subtrees. WebKit ignores
+ * aria-hidden on a `display: contents` element (Tailwind's `contents`), so
+ * Safari read what such a wrapper meant to hide: it hides nothing here.
  */
 function isHidden(node: Element): boolean {
   return (
-    node.getAttribute("aria-hidden") === "true" || node.hasAttribute("hidden")
+    (node.getAttribute("aria-hidden") === "true" &&
+      !node.classList.contains("contents")) ||
+    node.hasAttribute("hidden")
   );
 }
 

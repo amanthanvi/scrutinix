@@ -4,7 +4,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { AnalyzerRuntimeProvider } from "@/components/scrutinix/analyzer-runtime";
 import { ANSWER_PAUSE_MS } from "@/components/scrutinix/input-anatomy";
 import { ScanForm } from "@/components/scrutinix/scan-form";
-import { announce, Announcer } from "@/components/ui/announcer";
+import {
+  announce,
+  ANNOUNCEMENT_MS,
+  Announcer,
+} from "@/components/ui/announcer";
 import {
   spokenText,
   spokenTextNodes,
@@ -62,7 +66,7 @@ describe("the link, taken apart on paste", () => {
     // Each part is spoken after its name; the visual captions are hidden
     // from assistive technology so nothing is read twice.
     expect(spokenText(linkLine())).toBe(
-      "https://A label anyone can add: paypal.com.Registered domain: secure-login.xyzA page on that domain: /verify",
+      "https://,\u00a0A label anyone can add: paypal.com.,\u00a0Registered domain: secure-login.xyz,\u00a0A page on that domain: /verify",
     );
     expect(region.textContent).toContain(OWNER);
   });
@@ -77,12 +81,15 @@ describe("the link, taken apart on paste", () => {
     expect(linkLine().hasAttribute("title")).toBe(false);
     expect(document.querySelector("#scan-console [title]")).toBeNull();
     // A part's name and text in one string: the drawn text is split into
-    // boxes that would read as separate stops.
+    // boxes that would read as separate stops. Each opens with a comma and
+    // a no-break space (an ordinary one is dropped at the edge of the
+    // sr-only box), so TalkBack, which reads the line as one string, keeps
+    // the parts apart.
     expect(spokenTextNodes(linkLine())).toEqual([
       "https://",
-      "A label anyone can add: paypal.com.",
-      "Registered domain: secure-login.xyz",
-      "A page on that domain: /verify",
+      ",\u00a0A label anyone can add: paypal.com.",
+      ",\u00a0Registered domain: secure-login.xyz",
+      ",\u00a0A page on that domain: /verify",
     ]);
     // The eye still reads the link as written, each part captioned.
     expect(visibleText(linkLine())).toBe(
@@ -214,6 +221,73 @@ describe("the link, taken apart on paste", () => {
       vi.advanceTimersByTime(ANSWER_PAUSE_MS);
     });
     expect(status.textContent).toBe("No. The link only spells out paypal.com.");
+  });
+
+  it("waits out a screen-reader typist's pace (about a key a second)", async () => {
+    renderForm();
+    typeLink("https://paypal.com.secure-login.xyz/verify");
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: "Expecting a particular site?",
+      }),
+    );
+    const expected = screen.getByRole("textbox", {
+      name: "Which site were you expecting?",
+    });
+    const status = screen.getByRole("status");
+    vi.useFakeTimers();
+
+    // At 700 ms VoiceOver queued an answer for every partial name and
+    // TalkBack began each one.
+    for (const typed of ["p", "pa", "pay", "paypal.c", "paypal.co"]) {
+      fireEvent.change(expected, { target: { value: typed } });
+      act(() => {
+        vi.advanceTimersByTime(1_150);
+      });
+      expect(status.textContent).toBe("");
+    }
+    fireEvent.change(expected, { target: { value: "paypal.com" } });
+    act(() => {
+      vi.advanceTimersByTime(ANSWER_PAUSE_MS + 100);
+    });
+    expect(status.textContent).toBe("No. The link only spells out paypal.com.");
+  });
+
+  it("says the answer at once on Enter or on leaving the field, and only once", async () => {
+    renderForm();
+    typeLink("https://paypal.com.secure-login.xyz/verify");
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: "Expecting a particular site?",
+      }),
+    );
+    const expected = screen.getByRole("textbox", {
+      name: "Which site were you expecting?",
+    });
+    const status = screen.getByRole("status");
+    vi.useFakeTimers();
+
+    fireEvent.change(expected, { target: { value: "paypal.com" } });
+    fireEvent.keyDown(expected, { key: "Enter" });
+    act(() => {
+      vi.advanceTimersByTime(100);
+    });
+    expect(status.textContent).toBe("No. The link only spells out paypal.com.");
+    // The pause that follows doesn't say it again: the region empties when
+    // the Enter announcement's time is up (a repeat would hold it longer).
+    act(() => {
+      vi.advanceTimersByTime(ANNOUNCEMENT_MS);
+    });
+    expect(status.textContent).toBe("");
+
+    fireEvent.change(expected, { target: { value: "google.com" } });
+    fireEvent.blur(expected);
+    act(() => {
+      vi.advanceTimersByTime(100);
+    });
+    expect(status.textContent).toBe(
+      "No. This link doesn't belong to google.com.",
+    );
   });
 });
 

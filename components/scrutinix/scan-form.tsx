@@ -59,6 +59,8 @@ const BatchInput = dynamic(() => loadBatchInput(), {
   ),
 });
 
+const PRESS_ANALYZE = "Press Analyze to check it.";
+
 function StreamError({ message }: { message: string }) {
   return (
     <p role="alert" className="text-body mt-4 text-[var(--sx-danger-fg)]">
@@ -100,16 +102,17 @@ export function ScanForm() {
   // page moves focus away from Analyze.
   const arrival = useLinkAnatomy(prefill);
   const arrivalSaid = useRef(false);
+  const filledIn = prefill
+    ? `Link filled in: ${new URL(prefill).hostname}.`
+    : "";
   useEffect(() => {
     if (!prefill || arrivalSaid.current || arrival.status === "pending") return;
     arrivalSaid.current = true;
     const owner = arrival.anatomy?.impersonates
       ? ` ${ownershipSentence(arrival.anatomy.registeredDomain, arrival.anatomy.impersonates)}`
       : "";
-    announce(
-      `Link filled in: ${new URL(prefill).hostname}.${owner} Press Analyze to check it.`,
-    );
-  }, [prefill, arrival]);
+    announce(`${filledIn}${owner} ${PRESS_ANALYZE}`);
+  }, [prefill, arrival, filledIn]);
 
   // The link in the field, taken apart before a scan: only while it is a
   // valid web link that isn't already the one on screen (a result, a
@@ -129,6 +132,18 @@ export function ScanForm() {
 
   return (
     <section id="scan-console" aria-label="Scan console">
+      {/* The arrival in reading order too, from the first paint, while the
+          link waits untouched: VoiceOver's own reading of a new page talked
+          over the announcement in Safari. Before the tabs, not in the
+          panel: TalkBack reads a focusable panel's text with its name, so
+          there it was said twice. The owner sentence follows in the link's
+          anatomy, after the field. */}
+      {filledIn &&
+      activeTab === "single" &&
+      singleUrl === prefill &&
+      !shownUrl ? (
+        <p className="sr-only">{`${filledIn} ${PRESS_ANALYZE}`}</p>
+      ) : null}
       {/* Manual activation: arrows move focus, Enter or Space switches.
           A screen reader moves focus as it reads (VoiceOver's VO-Right),
           and a tab that switched on focus swapped Single and its result

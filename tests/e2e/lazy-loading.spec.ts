@@ -70,7 +70,7 @@ test("a failed notification chunk preserves the result and first notification", 
       exact: true,
     }),
   ).toBeVisible();
-  await expect(statusRegion(page)).toHaveText("Downloaded scan.json");
+  await expect(statusRegion(page)).toHaveText("Downloaded scan.json.");
   await expect(
     page.getByRole("heading", { name: "Safe", exact: true }),
   ).toBeVisible();

@@ -8,7 +8,7 @@ Analyze one URL and read the verdict.
 - streaming: the band reads `Checking` with `<n> of 8 checks finished` and a `Cancel scan` button (region `Scanning URL`); the strip fills cell by cell and the five questions hold their place, answering as checks land; Analyze is `aria-disabled` and Escape cancels. The live region says `Checking the link: 8 checks running.` once, not each finished check (the visible count is the progress).
 - verdict: region `Scan result: <word>`, its h2 the word, the registered domain in serif under it, then one instruction; meter `Threat score` where a number means something
 - landing: focus stays on the band's heading after Re-scan, and a verdict that lands below the fold is scrolled fully into view
-- export: `scan.json` download (button `Download result (JSON)`, toast `Downloaded scan.json`, also said once by the page's status region `p[role='status']`)
+- export: `scan.json` download (button `Download result (JSON)`, toast `Downloaded scan.json`, also said once by the page's status region `p[role='status']` as `Downloaded scan.json.`)
 - announce: the live region (`p[aria-live='polite']` in region `Results`) says the result when it lands (see `SKILL.md`) and empties a few seconds later, so a reader moving down the page meets the band, not the same words twice
 - history: the finished scan is saved on this device
 

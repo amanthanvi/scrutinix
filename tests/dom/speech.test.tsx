@@ -255,6 +255,37 @@ describe("lists, rows, and cells", () => {
     expect(summary.textContent).toContain("VirusTotal");
   });
 
+  it("hides generated numbers and stand-ins on themselves inside a named control", async () => {
+    const result = await resultFor("malicious.scrutinix.test");
+    renderApp(<OpenStored result={result} />);
+    fireEvent.click(screen.getByRole("button", { name: "open stored" }));
+    await screen.findByRole("list", { name: "Questions" });
+    fireEvent.click(screen.getByRole("switch", { name: /^Summary Full/ }));
+
+    // Chrome 124 (TalkBack) described a Full row by the ::before number of
+    // a tag hidden only by its parent ("1, collapsed, VirusTotal: …"). A
+    // control named by aria-label keeps all of its generated text hidden
+    // on the element that generates it.
+    const named = document.querySelectorAll(
+      "summary[aria-label], button[aria-label]",
+    );
+    expect(named.length).toBeGreaterThan(8);
+    let generated = 0;
+    for (const control of named) {
+      for (const part of control.querySelectorAll(
+        "[data-n], [data-stand-in]",
+      )) {
+        generated += 1;
+        expect(part.getAttribute("aria-hidden"), part.outerHTML).toBe("true");
+      }
+    }
+    // The eight strip cells, each Full row with evidence, and Analyze's
+    // stand-in.
+    expect(generated).toBe(
+      8 + document.querySelectorAll("summary[aria-label]").length + 1,
+    );
+  });
+
   it("names each strip cell once, its full name and state only on hover", async () => {
     const result = await resultFor("malicious.scrutinix.test");
     renderApp(<OpenStored result={result} />);

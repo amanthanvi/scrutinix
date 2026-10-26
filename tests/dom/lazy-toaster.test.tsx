@@ -39,7 +39,7 @@ it("mounts Sonner on demand and delivers the very first toast", async () => {
   // TalkBack no longer reads "Close toast", the parts, then the whole.
   await waitFor(() =>
     expect(status.textContent).toBe(
-      "Link copied to clipboard It shows this result for 3 days after the check.",
+      "Link copied to clipboard. It shows this result for 3 days after the check.",
     ),
   );
   const sonner = document

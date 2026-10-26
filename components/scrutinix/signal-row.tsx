@@ -75,7 +75,14 @@ export function SignalRow<N extends SignalName>({
         className="flex min-w-0 flex-1 flex-col gap-1 sm:flex-row sm:gap-6 lg:gap-12"
       >
         <span className="text-body flex shrink-0 items-baseline gap-[0.4375rem] font-medium [overflow-wrap:anywhere] text-[var(--sx-text)] sm:w-52 sm:whitespace-nowrap lg:w-[16.625rem]">
-          <span className="sx-tag self-center" data-n={cellNumber(name)} />
+          {/* Hidden on itself, not only by its parent: Chrome 124 on
+              Android spoke a hidden parent's generated number ("1,
+              collapsed, VirusTotal: …") as the row's description. */}
+          <span
+            aria-hidden="true"
+            className="sx-tag self-center"
+            data-n={cellNumber(name)}
+          />
           {label}
         </span>{" "}
         <span className="text-body min-w-0 flex-1 break-words text-[var(--sx-text-muted)]">

@@ -188,19 +188,21 @@ test("a pasted link is taken apart before any scan, then hands over to the resul
       text.includes("This link belongs to"),
     ),
   ).toEqual(["This link belongs to secure-login.xyz, not paypal.com."]);
-  // The answer is said once typing pauses, by the page's status region.
+  // The answer is said once typing pauses (or on Enter, or on leaving the
+  // field), by the page's status region.
   await expect(statusRegion(page)).toHaveText(
     "No. The link only spells out paypal.com.",
   );
-  // Each part is one string after its name, and the line has no title for
-  // Chrome on Android to read instead of the parts.
+  // Each part is one string after its name, set off from the one before
+  // (TalkBack reads the line as one string), and the line has no title
+  // for Chrome on Android to read instead of the parts.
   const line = page.locator("#sx-input-anatomy");
   await expect(line).not.toHaveAttribute("title", /.*/);
   expect(await spokenTextNodes(line)).toEqual([
     "https://",
-    "A label anyone can add: paypal.com.",
-    "Registered domain: secure-login.xyz",
-    "A page on that domain: /verify",
+    ",\u00a0A label anyone can add: paypal.com.",
+    ",\u00a0Registered domain: secure-login.xyz",
+    ",\u00a0A page on that domain: /verify",
   ]);
 
   // Scanning the same link: the result's own anatomy takes over, so the

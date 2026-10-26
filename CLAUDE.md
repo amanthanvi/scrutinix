@@ -386,6 +386,8 @@ tests/
   `sr-only` string with the drawn copy `aria-hidden` (so `getByText` finds
   it twice; tests locate `p.sx-owner`, toasts in `[data-sonner-toast]`);
   no `title` beside an `aria-label`; unstyled lists carry `role="list"`.
+  `aria-hidden` goes on the drawn parts themselves, never only on a
+  `display: contents` wrapper (WebKit ignores it there).
 - **UI danger is not a verdict**: form/stream errors and destructive
   confirms use `--sx-danger-fg` / `--sx-danger-border`, never
   `--sx-malicious-*`.

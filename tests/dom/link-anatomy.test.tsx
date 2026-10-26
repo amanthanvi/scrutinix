@@ -13,6 +13,7 @@ import { createPendingSignalResults, signalNames } from "@/lib/domain/types";
 import { buildThreatAssessment } from "@/lib/domain/verdict";
 import type { AnalysisResult, HistoryEntry } from "@/lib/domain/types";
 import { fixtureSignals } from "@/tests/fixtures/scenario-signals";
+import { spokenText } from "@/tests/dom/helpers/speech";
 
 vi.mock("sonner", () => ({
   toast: { error: vi.fn(), success: vi.fn() },
@@ -54,6 +55,14 @@ async function expectOwnerIsolated() {
   expect(subdomain?.textContent).toBe("paypal.com.");
   expect(subdomain?.contains(owner ?? null)).toBe(false);
   expect(subdomain?.textContent).not.toContain("secure-login.xyz");
+  // The row says its link once, as one string: the drawn parts are hidden
+  // on themselves, not only by the `display: contents` wrapper that WebKit
+  // ignores (Safari read "…not paypal.com paypal.com.secure-login.xyz
+  // /verify"). The spoken string names the owner twice; a drawn part
+  // would add a third.
+  const row = owner?.closest("li");
+  if (!row) throw new Error("no row");
+  expect(spokenText(row).match(/secure-login\.xyz/g)).toHaveLength(2);
 }
 
 describe("compact link anatomy in result rows", () => {
@@ -102,17 +111,23 @@ describe("compact link anatomy in result rows", () => {
       />,
     );
     await expectOwnerIsolated();
-    // The host and the path's first 40 characters, then how much is left,
-    // instead of eleven seconds of slashes; the time set off from the
-    // site it follows.
-    const shown = `paypal.com.secure-login.xyz/verify${"/".repeat(33)}`;
-    const left = long.length - "https://".length - shown.length;
+    // The host and the path's first 40 characters, a run of slashes in
+    // them said once, then how much is left, instead of eleven seconds of
+    // slashes; the time set off from the site it follows.
+    const shown = "paypal.com.secure-login.xyz/verify/";
+    const left = long.length - "https://".length - shown.length - 32;
     const row = screen.getByRole("button", {
       name: new RegExp(
         `^Look-alike\\s*${shown.replaceAll(".", "\\.")}, and ${left} more characters, belongs to secure-login\\.xyz, not paypal\\.com\\s*, checked \\d{2}:\\d{2}$`,
       ),
     });
     expect(row).toBeTruthy();
+    // Safari's name for it is the same string, the drawn link left out.
+    expect(spokenText(row)).toMatch(
+      new RegExp(
+        `^Look-alike${shown.replaceAll(".", "\\.")}, and ${left} more characters, belongs to secure-login\\.xyz, not paypal\\.com, checked \\d{2}:\\d{2}$`,
+      ),
+    );
     // The heading has one name, its count spelled out.
     expect(
       screen.getByRole("heading", { level: 2 }).getAttribute("aria-label"),
@@ -126,6 +141,21 @@ describe("compact link anatomy in result rows", () => {
   it("speaks a link of ordinary length whole", () => {
     expect(spokenLink("example.com/account/settings")).toBe(
       "example.com/account/settings",
+    );
+    // Exactly as written, runs and all, while it is short.
+    expect(spokenLink("example.com/a----b////c")).toBe(
+      "example.com/a----b////c",
+    );
+    // A long one says a run of one symbol once ("/", not 33 slashes), and
+    // never touches the host or letters and digits.
+    expect(spokenLink(`a--b.example.com/x${"-".repeat(60)}0000`)).toBe(
+      "a--b.example.com/x-, and 26 more characters",
+    );
+    expect(spokenLink(`example.com/${"ab".repeat(30)}`)).toBe(
+      `example.com/${"ab".repeat(19)}a, and 21 more characters`,
+    );
+    expect(spokenLink(`example.com/a/${"..".repeat(30)}`)).toBe(
+      "example.com/a/., and 23 more characters",
     );
     const fortyEight = `example.com/${"a".repeat(47)}`;
     expect(spokenLink(fortyEight)).toBe(fortyEight);

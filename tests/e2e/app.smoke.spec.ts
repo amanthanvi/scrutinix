@@ -324,11 +324,18 @@ test("opening a history entry focuses its verdict @smoke", async ({ page }) => {
   ).toBeVisible();
   await expect(historyRegion.getByRole("list")).toHaveAttribute("role", "list");
   // Each row: the verdict, the link, then when it was checked, set apart.
-  await expect(
-    historyRegion.getByRole("button", {
-      name: /^Malicious\s*malicious\.scrutinix\.test\/login\s*, checked \d{2}:\d{2}$/,
-    }),
-  ).toBeVisible();
+  const row = historyRegion.getByRole("button", {
+    name: /^Malicious\s*malicious\.scrutinix\.test\/login\s*, checked \d{2}:\d{2}$/,
+  });
+  await expect(row).toBeVisible();
+  // The link is said once: the drawn parts hide themselves, since WebKit
+  // ignores aria-hidden on their `display: contents` wrapper (Safari read
+  // the drawn link after the spoken one).
+  expect(
+    (await spokenTextNodes(row)).filter((text) =>
+      text.includes("scrutinix.test"),
+    ),
+  ).toEqual(["malicious.scrutinix.test/login"]);
   await historyRegion
     .getByRole("button", { name: /malicious\.scrutinix\.test/i })
     .click();
@@ -549,7 +556,7 @@ test("Share copies a signed link that opens as a verified result @smoke", async 
   // Said once by the page's status region; Sonner's own region, inserted
   // with the toast, is muted (VoiceOver ignored it; TalkBack read it twice).
   await expect(statusRegion(page)).toHaveText(
-    "Link copied to clipboard It shows this result for 3 days after the check.",
+    "Link copied to clipboard. It shows this result for 3 days after the check.",
   );
   await expect(
     page.locator("[data-sonner-toast]").getByText("Link copied to clipboard"),

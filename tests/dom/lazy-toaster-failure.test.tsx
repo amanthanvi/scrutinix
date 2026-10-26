@@ -39,7 +39,7 @@ it("keeps the page and manual share link usable if the toast chunk fails", async
   expect(await screen.findByText("Copy the link below")).toBeTruthy();
   // Spoken by the status region, like every notification.
   await waitFor(() =>
-    expect(screen.getByRole("status").textContent).toBe("Copy the link below"),
+    expect(screen.getByRole("status").textContent).toBe("Copy the link below."),
   );
   expect(screen.getByRole("textbox", { name: "URL to analyze" })).toBeTruthy();
   expect(

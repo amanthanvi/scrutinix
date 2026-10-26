@@ -342,7 +342,10 @@ function hasShortMiddlePart(anatomy: LinkAnatomy, path: string): boolean {
  * part as one string after its name (`spoken`): the drawn text is split
  * into boxes (a domain kept whole, a path's break points) that would read
  * as separate stops. The spoken copy can't be selected, so a copy gives
- * the link as drawn.
+ * the link as drawn. It opens with a comma and a no-break space: TalkBack
+ * reads the line as one string and ran the parts together ("…safe.Registered
+ * domain: scrutinix.testA page…"), and an ordinary space at the edge of
+ * the `sr-only` box is dropped.
  */
 function LinkPart({
   caption,
@@ -357,7 +360,7 @@ function LinkPart({
 }) {
   return (
     <span className={cn("sx-anat-part", owner && "sx-anat-owner")}>
-      <span className="sr-only select-none">{`${caption}: ${spoken}`}</span>
+      <span className="sr-only select-none">{`,\u00a0${caption}: ${spoken}`}</span>
       <span aria-hidden="true" className="sx-anat-text">
         {children}
       </span>
@@ -527,11 +530,15 @@ export function LinkAnatomyCompact({
           : ""}
       </span>
       {/* The full link on hover, where the row truncates it; hidden from
-          assistive technology, which hears the string above. */}
+          assistive technology, which hears the string above. Each drawn
+          part hides itself too: WebKit ignores aria-hidden on this
+          `display: contents` wrapper, and Safari read the drawn link after
+          the spoken one. */}
       <span aria-hidden="true" title={anatomy.href} className="contents">
         {anatomy.subdomain ? (
           <span
             dir="rtl"
+            aria-hidden="true"
             data-part="subdomain"
             className="min-w-0 shrink truncate text-[var(--sx-text-soft)]"
           >
@@ -539,6 +546,7 @@ export function LinkAnatomyCompact({
           </span>
         ) : null}
         <span
+          aria-hidden="true"
           data-part="owner"
           className={cn(
             "font-semibold whitespace-nowrap text-[var(--sx-text)]",
@@ -550,6 +558,7 @@ export function LinkAnatomyCompact({
         </span>
         {anatomy.path ? (
           <span
+            aria-hidden="true"
             data-part="path"
             className="min-w-0 shrink-[100] truncate text-[var(--sx-text-soft)]"
           >
@@ -564,14 +573,25 @@ export function LinkAnatomyCompact({
 /** Path characters a row speaks before it says how many more there are. */
 const SPOKEN_PATH = 40;
 
+/** Four or more of one symbol in a row ("////"): a reader says each one. */
+const SYMBOL_RUN = /([^\p{L}\p{N}])\1{3,}/gu;
+
 /**
- * A row's link as spoken: the host and the start of a long path, then how
- * much is left ("…/verify//////, and 1460 more characters"), so a very
- * long link costs seconds of speech, not most of a minute.
+ * A row's link as spoken: a path up to 48 characters exactly as it is;
+ * a longer one as its first 40 characters, any run of one symbol in them
+ * said once, then how much is left ("…/verify/, and 1471 more
+ * characters"). So a very long link costs seconds of speech (TalkBack
+ * spent 13 s on 40 characters that were mostly slashes). The host is
+ * always said exactly.
  */
 export function spokenLink(display: string): string {
   const pathAt = display.indexOf("/");
   if (pathAt < 0 || display.length - pathAt <= PATH_LIMIT) return display;
   const shown = pathAt + SPOKEN_PATH;
-  return `${display.slice(0, shown)}, and ${countOf(display.length - shown, "more character")}`;
+  return `${display.slice(0, pathAt)}${display
+    .slice(pathAt, shown)
+    .replace(
+      SYMBOL_RUN,
+      "$1",
+    )}, and ${countOf(display.length - shown, "more character")}`;
 }

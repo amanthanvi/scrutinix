@@ -68,7 +68,8 @@ export function ownerSentence(scope: Page | Locator): Locator {
  * The text nodes a screen reader gets from an element: those outside
  * `aria-hidden` and `hidden` subtrees. A sentence split across elements can
  * be read as separate stops (an inline-block inside it was, in TalkBack and
- * VoiceOver); one text node is always one.
+ * VoiceOver); one text node is always one. WebKit ignores aria-hidden on a
+ * `display: contents` element, so that hides nothing here, in any engine.
  */
 export function spokenTextNodes(locator: Locator): Promise<string[]> {
   return locator.evaluate((root) => {
@@ -76,7 +77,8 @@ export function spokenTextNodes(locator: Locator): Promise<string[]> {
     const walk = (node: Node) => {
       if (
         node instanceof Element &&
-        (node.getAttribute("aria-hidden") === "true" ||
+        ((node.getAttribute("aria-hidden") === "true" &&
+          getComputedStyle(node).display !== "contents") ||
           node.hasAttribute("hidden"))
       ) {
         return;

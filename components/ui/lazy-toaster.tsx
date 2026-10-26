@@ -42,15 +42,17 @@ let markReady: (() => void) | undefined;
 
 /**
  * A notification is spoken by the page's own status region (`announce`):
- * its title and a plain-text description, once. Sonner's region is muted
- * (`components/ui/sonner.tsx`), since VoiceOver ignored it and TalkBack
- * read it twice.
+ * its title and a plain-text description, once, as sentences ("Link copied
+ * to clipboard. It shows…": run together, the title had no pause). Sonner's
+ * region is muted (`components/ui/sonner.tsx`), since VoiceOver ignored it
+ * and TalkBack read it twice.
  */
 function spoken(show: (title: ReactNode, options?: NoticeOptions) => unknown) {
   return (title: ReactNode, options?: NoticeOptions) => {
     announce(
       [title, options?.description]
-        .filter((part) => typeof part === "string")
+        .filter((part): part is string => typeof part === "string")
+        .map((part) => part.replace(/(?<![.!?])$/, "."))
         .join(" "),
     );
     return show(title, options);
