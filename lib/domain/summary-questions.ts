@@ -828,7 +828,7 @@ function answerHttps({ url, signals, now }: Context): Answer {
       return {
         answer: sentences([
           redirect?.hops.some((hop) => /^https:/i.test(hop.url))
-            ? "No. This link passes through HTTPS but ends on plain HTTP, so the page isn't encrypted."
+            ? "No. This link passes through HTTPS, then ends on plain HTTP."
             : certificate && redirect?.reachable && signals.ssl.data?.authorized
               ? "No. This link stays on plain HTTP, though its site also answers over HTTPS."
               : "No. This link doesn't use HTTPS, so the connection isn't encrypted.",

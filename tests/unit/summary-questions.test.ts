@@ -642,7 +642,7 @@ describe("Does HTTPS make it safe?", () => {
     expect(
       byId(ask(signals, { url: "http://a.example/" }), "https").answer,
     ).toBe(
-      "No. This link passes through HTTPS but ends on plain HTTP, so the page isn't encrypted. The certificate at b.example is valid.",
+      "No. This link passes through HTTPS, then ends on plain HTTP. The certificate at b.example is valid.",
     );
   });
 
