@@ -12,6 +12,10 @@ import { IMPERSONATED_BRAND_SET } from "@/lib/domain/impersonated-brands";
  * (`lib/domain/registrable-domain.ts`) hands it tldts' static `parse`, and
  * the browser loads tldts lazily (`hooks/use-link-anatomy.ts`) only once a
  * scan starts or a result shows. The `import type` above is erased at build.
+ * In the browser this module rides in that same lazy chunk
+ * (`lib/client/link-parser.ts`): nothing on the page imports it directly,
+ * so a helper the page needs before the parser arrives (`hostOf`) lives in
+ * `url.ts`.
  */
 export type ParseHostname = typeof tldtsParse;
 
@@ -220,26 +224,4 @@ function recognisedDomain(
     ((/^[a-z]{2}$/.test(suffix) || BRAND_GATED_SUFFIXES.has(suffix)) &&
       IMPERSONATED_BRAND_SET.has(name));
   return recognised ? parsed.domain : null;
-}
-
-/** Hostname of a URL, lowercased; null when it does not parse. */
-export function hostOf(url: string): string | null {
-  try {
-    return new URL(url).hostname.toLowerCase().replace(/\.$/, "") || null;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Where the link actually ends, when that is a different host from the one
- * it names: the final redirect host. Null when it ends where it started.
- */
-export function redirectDestination(
-  scannedUrl: string,
-  finalUrl: string | null | undefined,
-): string | null {
-  const start = hostOf(scannedUrl);
-  const end = finalUrl ? hostOf(finalUrl) : null;
-  return start && end && start !== end ? end : null;
 }

@@ -10,8 +10,9 @@ import {
   storedResult,
 } from "@/tests/dom/helpers/parser-states";
 
-// The browser's lazy tldts import: it fails, or waits for the test to
-// release it (a slow network or a cold chunk on a first visit).
+// The browser's lazy parser chunk (tldts and `lib/client/link-parser.ts`):
+// it fails, or waits for the test to release it (a slow network or a cold
+// chunk on a first visit).
 const parser = vi.hoisted(() => {
   const state = {
     fail: true,
@@ -25,7 +26,7 @@ const parser = vi.hoisted(() => {
   };
   return state;
 });
-vi.mock("tldts", async (importOriginal) => {
+vi.mock("@/lib/client/link-parser", async (importOriginal) => {
   await parser.gate;
   if (parser.fail) {
     throw new TypeError("Failed to fetch dynamically imported module");

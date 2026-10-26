@@ -13,7 +13,7 @@ import {
   type FeedMatch,
 } from "@/lib/domain/feed-copy";
 import { PRIVATE_ADDRESSES_OMITTED } from "@/lib/domain/blocked-address";
-import { hostOf } from "@/lib/domain/link-anatomy";
+import { hostOf } from "@/lib/domain/url";
 import { redirectsOverHttp } from "@/lib/domain/redirects";
 import {
   hasConfirmedReputationHit,

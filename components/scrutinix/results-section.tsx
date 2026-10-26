@@ -31,7 +31,6 @@ import {
   warmLinkParser,
 } from "@/hooks/use-link-anatomy";
 import { downloadTextFile } from "@/lib/client/export";
-import { hostOf, registrableDomainOf } from "@/lib/domain/link-anatomy";
 import {
   signalNames,
   type AnalysisResult,
@@ -49,6 +48,7 @@ import {
   getSummaryQuestions,
   questionCiting,
 } from "@/lib/domain/summary-questions";
+import { hostOf } from "@/lib/domain/url";
 import { getVerdictAnnouncement } from "@/lib/domain/verdict-guidance";
 import { cn } from "@/lib/utils";
 
@@ -293,15 +293,15 @@ export function ResultsSection() {
     : scan.state.isStreaming && scan.state.startedAt
       ? evidenceTimeOf({ checkedAt: scan.state.startedAt })
       : undefined;
-  const parse = getLoadedLinkParser();
+  const parser = getLoadedLinkParser();
   const questions =
     showQuestions && linkUrl
       ? getSummaryQuestions({
           url: linkUrl,
           signals,
           now: evidenceTime,
-          registeredDomainOf: parse
-            ? (host) => registrableDomainOf(parse, host)
+          registeredDomainOf: parser
+            ? (host) => parser.registrableDomainOf(parser.parse, host)
             : null,
         })
       : null;

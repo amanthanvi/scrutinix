@@ -18,7 +18,6 @@ import {
   getLoadedLinkParser,
   useLinkParserStatus,
 } from "@/hooks/use-link-anatomy";
-import { splitLinkAnatomy } from "@/lib/domain/link-anatomy";
 import { verdictWord } from "@/lib/domain/verdict-guidance";
 
 interface HistoryDatabase extends DBSchema {
@@ -173,15 +172,16 @@ export function useScanHistory() {
       const verdict = typeof entry.verdict === "string" ? entry.verdict : "";
       // Rows show "Look-alike" for a Safe look-alike, and "Unconfirmed"
       // once the parser has failed: match what is shown.
-      const parse = parserStatus === "ready" ? getLoadedLinkParser() : null;
+      const parser = parserStatus === "ready" ? getLoadedLinkParser() : null;
       const shown =
         verdict && parserStatus !== "pending"
           ? verdictWord({
               verdict: entry.verdict,
-              impersonates: parse
-                ? (splitLinkAnatomy(parse, url)?.impersonates ?? null)
+              impersonates: parser
+                ? (parser.splitLinkAnatomy(parser.parse, url)?.impersonates ??
+                  null)
                 : null,
-              addressUnchecked: !parse,
+              addressUnchecked: !parser,
             })
           : "";
       return (
