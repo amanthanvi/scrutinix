@@ -339,6 +339,40 @@ check(
 runtime.ensureDirs();
 assertPrivate(stateDir);
 assertPrivate(evidenceDir);
+const evidenceMarker = path.join(evidenceDir, runtime.evidenceMarkerName);
+let markerMode = null;
+let markerText = null;
+try {
+  markerMode = lstatSync(evidenceMarker).mode & 0o777;
+  markerText = readFileSync(evidenceMarker, "utf8");
+} catch {
+  markerMode = null;
+  markerText = null;
+}
+check(
+  "creating the evidence directory writes .verify-evidence",
+  runtime.hasEvidenceMarker(evidenceDir) &&
+    markerMode === 0o600 &&
+    markerText === "scrutinix verify evidence\n" &&
+    !runtime.hasEvidenceMarker(stateDir),
+  {
+    marked: runtime.hasEvidenceMarker(evidenceDir),
+    stateMarked: runtime.hasEvidenceMarker(stateDir),
+  },
+);
+rmSync(evidenceMarker, { force: true });
+const plantedPackage = path.join(evidenceDir, "package.json");
+writeFileSync(plantedPackage, '{"name":"keep"}\n');
+runtime.ensureDirs();
+check(
+  "an existing evidence directory is not marked after the fact",
+  !runtime.hasEvidenceMarker(evidenceDir) &&
+    readFileSync(plantedPackage, "utf8") === '{"name":"keep"}\n',
+);
+rmSync(plantedPackage);
+if (!runtime.hasEvidenceMarker(evidenceDir)) {
+  runtime.writeEvidenceMarker(evidenceDir);
+}
 
 chmodSync(stateDir, 0o755);
 let rejectedLoose = false;
@@ -658,6 +692,30 @@ check(
     runtime.describeProcess(self),
   ),
 );
+// A directory name can hold terminal escapes and bidi overrides. Printed
+// paths keep them as visible escapes: one line, nothing the terminal acts on.
+const craftedCwd = "/tmp/a\u001b]0;owned\u0007b\u009b2J\u202ec\nd";
+const printsInert = (line) =>
+  !/[\u0000-\u001f\u007f-\u009f\u200e\u200f\u202a-\u202e\u2066-\u2069]/.test(
+    line,
+  );
+const craftedLines = [
+  runtime.describeProcess({
+    pid: 4242,
+    startTime: "Mon Oct 26 12:00:00 2026",
+    executable: "/usr/bin/node\u001b[2K",
+    cwd: craftedCwd,
+  }),
+  runtime.sameDirectoryDevNote({ pid: 4242, port: 3000, cwd: craftedCwd }),
+];
+check(
+  "printed process paths escape control and bidi characters",
+  craftedLines.every(printsInert) &&
+    craftedLines.every((line) =>
+      line.includes("/tmp/a\\u{1b}]0;owned\\u{7}b\\u{9b}2J\\u{202e}c\\u{a}d"),
+    ) &&
+    runtime.printablePath("/tmp/plain dir") === "/tmp/plain dir",
+);
 
 const listenProbe = net.createServer();
 await new Promise((resolve) => {
@@ -911,6 +969,26 @@ fs.writeFileSync(process.env.VERIFY_REPORT_FILE, JSON.stringify({
 process.exit(1);
 `,
 );
+const driveEvidence = path.join(runDir, "evidence");
+mkdirSync(driveEvidence, { recursive: true, mode: 0o700 });
+writeFileSync(
+  path.join(driveEvidence, runtime.evidenceMarkerName),
+  "scrutinix verify evidence\n",
+  { mode: 0o600 },
+);
+const staleShot = path.join(driveEvidence, "stale-from-last-run.png");
+writeFileSync(staleShot, "old");
+const keptOutside = path.join(scratch, "outside-evidence.txt");
+writeFileSync(keptOutside, "keep");
+symlinkSync(keptOutside, path.join(driveEvidence, "linked.png"));
+const keptSnapshot = path.join(driveEvidence, "next-env-abc.snapshot");
+writeFileSync(keptSnapshot, "snapshot");
+const keptRun = path.join(driveEvidence, "run.json");
+writeFileSync(keptRun, "{}\n");
+const keptNote = path.join(driveEvidence, "notes.txt");
+writeFileSync(keptNote, "keep");
+mkdirSync(path.join(driveEvidence, "nested"));
+writeFileSync(path.join(driveEvidence, "nested", "keep.png"), "keep");
 const driveRun = await runSuiteWith(
   fakePlaywright,
   ["--drive", "--port", String(portA), "-g", "signed"],
@@ -930,6 +1008,234 @@ check(
     ) &&
     driveRun.stderr.includes(`drive: log ${driveLog}`),
   cli(driveRun),
+);
+check(
+  "a drive replaces previous screenshots and leaves state copies",
+  driveRun.stdout.includes("cleared 2 previous files") &&
+    !existsSync(staleShot) &&
+    !existsSync(path.join(driveEvidence, "linked.png")) &&
+    readFileSync(keptOutside, "utf8") === "keep" &&
+    readFileSync(keptSnapshot, "utf8") === "snapshot" &&
+    readFileSync(keptRun, "utf8") === "{}\n" &&
+    readFileSync(keptNote, "utf8") === "keep" &&
+    readFileSync(path.join(driveEvidence, "nested", "keep.png"), "utf8") ===
+      "keep" &&
+    existsSync(driveEvidence),
+  { cleared: driveRun.stdout.includes("cleared 2 previous files") },
+);
+const stateMarker = path.join(runtime.stateDir, "marker-do-not-clear.png");
+writeFileSync(stateMarker, "keep");
+let stateClearRefused = false;
+try {
+  runtime.clearEvidenceFiles(runtime.stateDir);
+} catch (error) {
+  stateClearRefused =
+    error instanceof runtime.UnsafeStateError &&
+    error.message.includes("is the state directory");
+}
+check(
+  "clearing evidence refuses the state directory",
+  stateClearRefused &&
+    existsSync(stateMarker) &&
+    readFileSync(stateMarker, "utf8") === "keep",
+  { refused: stateClearRefused },
+);
+rmSync(stateMarker, { force: true });
+const overlapShot = path.join(runDir, "overlap-keep.png");
+writeFileSync(overlapShot, "keep");
+const overlap = await runSuiteWith(
+  fakePlaywright,
+  ["--drive", "--port", String(portA)],
+  envFor(runDir, { VERIFY_EVIDENCE_DIR: runDir }),
+);
+check(
+  "drive refuses to clear when evidence is the state directory",
+  overlap.status === 2 &&
+    overlap.stderr.includes("is the state directory") &&
+    !overlap.stderr.includes("Playwright exited") &&
+    existsSync(path.join(runDir, "run.json")) &&
+    readFileSync(overlapShot, "utf8") === "keep",
+  cli(overlap),
+);
+rmSync(overlapShot, { force: true });
+
+// A marked directory keeps files this skill did not write. An unmarked
+// directory is refused before anything in it is removed.
+const ownedEvidence = path.join(scratch, "owned-evidence");
+mkdirSync(ownedEvidence, { mode: 0o700 });
+writeFileSync(
+  path.join(ownedEvidence, runtime.evidenceMarkerName),
+  "scrutinix verify evidence\n",
+  { mode: 0o600 },
+);
+const ownedKeep = {
+  "package.json": '{"name":"keep"}\n',
+  "data.csv": "keep,csv\n",
+  "notes.txt": "keep-note\n",
+};
+for (const [name, text] of Object.entries(ownedKeep)) {
+  writeFileSync(path.join(ownedEvidence, name), text);
+}
+const ownedDrop = [
+  "stale-shot.png",
+  "scan.json",
+  "scan-history.csv",
+  "batch.csv",
+];
+for (const name of ownedDrop) {
+  writeFileSync(path.join(ownedEvidence, name), "stale\n");
+}
+const ownedRemoved = runtime.clearEvidenceFiles(ownedEvidence);
+const goneShot = path.join(ownedEvidence, "gone-shot.png");
+writeFileSync(goneShot, "stale\n");
+const goneRemoved = runtime.clearEvidenceFiles(ownedEvidence, (file) => {
+  rmSync(file);
+  const missing = new Error("already gone");
+  missing.code = "ENOENT";
+  throw missing;
+});
+const goneAbsent = !existsSync(goneShot);
+writeFileSync(goneShot, "still\n");
+let unlinkDenied = false;
+try {
+  runtime.clearEvidenceFiles(ownedEvidence, () => {
+    const denied = new Error("denied");
+    denied.code = "EACCES";
+    throw denied;
+  });
+} catch (error) {
+  unlinkDenied = error?.code === "EACCES";
+}
+check(
+  "clearing an evidence file that is already gone continues",
+  goneRemoved === 0 &&
+    goneAbsent &&
+    unlinkDenied &&
+    readFileSync(goneShot, "utf8") === "still\n" &&
+    readFileSync(path.join(ownedEvidence, "package.json"), "utf8") ===
+      ownedKeep["package.json"],
+  { removed: goneRemoved, denied: unlinkDenied },
+);
+rmSync(goneShot);
+check(
+  "a marked evidence dir keeps foreign files and removes this skill's artifacts",
+  ownedRemoved === ownedDrop.length &&
+    Object.entries(ownedKeep).every(
+      ([name, text]) =>
+        readFileSync(path.join(ownedEvidence, name), "utf8") === text,
+    ) &&
+    ownedDrop.every((name) => !existsSync(path.join(ownedEvidence, name))) &&
+    runtime.hasEvidenceMarker(ownedEvidence),
+  { removed: ownedRemoved },
+);
+const driveSource = readFileSync(path.join(scriptDir, "drive.spec.ts"), "utf8");
+const savedDownloads = [
+  ...driveSource.matchAll(/saveDownload\(\s*\w+\s*,\s*"([^"]+)"\s*\)/g),
+].map((match) => match[1]);
+check(
+  "cleared download names are the ones drive.spec.ts saves",
+  savedDownloads.length === runtime.skillEvidenceDownloads.length &&
+    savedDownloads.every((name) =>
+      runtime.skillEvidenceDownloads.includes(name),
+    ) &&
+    runtime.skillEvidenceDownloads.every((name) =>
+      savedDownloads.includes(name),
+    ),
+  { saved: savedDownloads.length },
+);
+const evidenceSource = readFileSync(
+  path.join(scriptDir, "evidence.ts"),
+  "utf8",
+);
+check(
+  "evidence.ts marks a directory only when it creates one",
+  evidenceSource.includes(`"${runtime.evidenceMarkerName}"`) &&
+    evidenceSource.includes("created === undefined") &&
+    evidenceSource.includes("O_EXCL"),
+);
+const unmarkedDir = path.join(scratch, "unmarked-evidence");
+mkdirSync(unmarkedDir, { mode: 0o700 });
+const unmarkedFile = path.join(unmarkedDir, "package.json");
+writeFileSync(unmarkedFile, '{"name":"keep"}\n');
+const unmarked = await runSuiteWith(
+  fakePlaywright,
+  ["--drive", "--port", String(portA)],
+  envFor(runDir, { VERIFY_EVIDENCE_DIR: unmarkedDir }),
+);
+check(
+  "an unmarked VERIFY_EVIDENCE_DIR exits 2 with a recovery hint",
+  unmarked.status === 2 &&
+    unmarked.stderr.includes("has no .verify-evidence marker") &&
+    unmarked.stderr.includes("drive: verify: evidence directory") &&
+    unmarked.stderr.includes("Point VERIFY_EVIDENCE_DIR at a new directory") &&
+    !unmarked.stderr.includes("empty or") &&
+    unmarked.stderr.includes("unset it to use the default") &&
+    unmarked.stderr.includes("Refusing to clear") &&
+    !unmarked.stdout.includes("cleared") &&
+    !unmarked.stderr.includes("Playwright exited") &&
+    readFileSync(unmarkedFile, "utf8") === '{"name":"keep"}\n' &&
+    !existsSync(path.join(unmarkedDir, runtime.evidenceMarkerName)),
+  cli(unmarked),
+);
+const emptyOverride = path.join(scratch, "empty-unmarked");
+mkdirSync(emptyOverride, { mode: 0o700 });
+const emptyRun = await runSuiteWith(
+  fakePlaywright,
+  ["--drive", "--port", String(portA)],
+  envFor(runDir, { VERIFY_EVIDENCE_DIR: emptyOverride }),
+);
+check(
+  "an empty unmarked VERIFY_EVIDENCE_DIR exits 2 with a recovery hint",
+  emptyRun.status === 2 &&
+    emptyRun.stderr.includes("drive: verify: evidence directory") &&
+    emptyRun.stderr.includes("Point VERIFY_EVIDENCE_DIR at a new directory") &&
+    !emptyRun.stderr.includes("empty or") &&
+    emptyRun.stderr.includes("unset it to use the default") &&
+    emptyRun.stderr.includes("Refusing to clear") &&
+    !emptyRun.stdout.includes("cleared") &&
+    !emptyRun.stderr.includes("Playwright exited") &&
+    readdirSync(emptyOverride).length === 0 &&
+    !existsSync(path.join(emptyOverride, runtime.evidenceMarkerName)),
+  cli(emptyRun),
+);
+const adoptState = path.join(scratch, "adopt-state");
+mkdirSync(adoptState, { mode: 0o700 });
+const adoptEvidence = path.join(adoptState, "evidence");
+mkdirSync(adoptEvidence, { mode: 0o700 });
+writeFileSync(path.join(adoptEvidence, "notes.txt"), "keep-note\n");
+writeFileSync(path.join(adoptEvidence, "package.json"), '{"name":"keep"}\n');
+writeFileSync(path.join(adoptEvidence, "stale-shot.png"), "old\n");
+writeFileSync(
+  path.join(scratch, "adopt-evidence.mjs"),
+  `delete process.env.VERIFY_EVIDENCE_DIR;
+process.env.VERIFY_STATE_DIR = process.argv[2];
+const runtime = await import(process.argv[3]);
+const removed = runtime.clearEvidenceFiles();
+process.stdout.write(removed + "\\n");
+process.stdout.write(
+  (runtime.hasEvidenceMarker(runtime.evidenceDir) ? "marked" : "unmarked") +
+    "\\n",
+);
+`,
+);
+const adoptEnv = { ...process.env, VERIFY_STATE_DIR: adoptState };
+delete adoptEnv.VERIFY_EVIDENCE_DIR;
+const adopted = await runCli(
+  path.join(scratch, "adopt-evidence.mjs"),
+  [adoptState, new URL("./runtime.mjs", import.meta.url).href],
+  adoptEnv,
+);
+check(
+  "an unmarked default evidence directory is adopted",
+  adopted.status === 0 &&
+    adopted.stdout === "1\nmarked\n" &&
+    readFileSync(path.join(adoptEvidence, "notes.txt"), "utf8") ===
+      "keep-note\n" &&
+    readFileSync(path.join(adoptEvidence, "package.json"), "utf8") ===
+      '{"name":"keep"}\n' &&
+    !existsSync(path.join(adoptEvidence, "stale-shot.png")) &&
+    runtime.hasEvidenceMarker(adoptEvidence),
+  { status: adopted.status },
 );
 check(
   "Playwright's output is kept in a 0600 log",
@@ -1618,6 +1924,30 @@ check(
     foreignNext.includes("another next dev") &&
     !foreignNext.includes(holderScript),
   { length: foreignNext.length },
+);
+const lockDir = path.join(otherCheckout, ".next", "dev");
+mkdirSync(lockDir, { recursive: true });
+const lockFile = path.join(lockDir, "lock");
+writeFileSync(lockFile, JSON.stringify({ pid: holder.pid, port: holderPort }), {
+  mode: 0o644,
+});
+const held = runtime.heldProjectDevServer(otherCheckout);
+const heldNote = held ? runtime.sameDirectoryDevNote(held) : "";
+check(
+  "a project lock names the next dev to stop, and does not offer another port",
+  held?.pid === holder.pid &&
+    held?.port === holderPort &&
+    heldNote.includes("will not start") &&
+    heldNote.includes("Stop that pid") &&
+    !heldNote.includes("launch on another port"),
+  { matched: held?.pid === holder.pid },
+);
+writeFileSync(lockFile, JSON.stringify({ pid: 1, port: holderPort }), {
+  mode: 0o644,
+});
+check(
+  "a lock whose pid is not next dev is not a holder",
+  runtime.heldProjectDevServer(otherCheckout) === null,
 );
 
 // Finding 6 of round 4: the sleepers and the fake next end through their

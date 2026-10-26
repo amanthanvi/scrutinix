@@ -802,6 +802,56 @@ test("error and critical verdicts", async ({ page }) => {
   ).toBeVisible();
 });
 
+test("a long destination host stays on the page", async ({ page }) => {
+  // lib/server/test-fixtures.ts sends this host through one redirect to a
+  // 63-letter label, the longest a DNS label can be.
+  await page.setViewportSize({ width: 390, height: 844 });
+  await gotoApp(page);
+  await scanSingle(page, "https://long-hop.scrutinix.test/", "safe");
+  const destination = page.locator('[data-question="destination"]');
+  const host =
+    "accountverificationandsecuritycheckpointforyoursigninportalnowx.com";
+  await expect(destination).toContainText(
+    `It ends on ${host}, a different site`,
+  );
+  await expect(destination).toBeVisible();
+  const overflow = await page.evaluate(() => ({
+    page: document.documentElement.scrollWidth,
+    viewport: document.documentElement.clientWidth,
+  }));
+  expect(overflow.page).toBeLessThanOrEqual(overflow.viewport);
+  // The host where it is drawn, not the DOM text: every line box of it on
+  // the page, more than one line (it wraps, not cut or ellipsized), and its
+  // paragraph not scrolling sideways.
+  const drawn = await destination.evaluate((question, name) => {
+    const walker = document.createTreeWalker(question, NodeFilter.SHOW_TEXT);
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      const at = node.textContent?.indexOf(name) ?? -1;
+      const line = node.parentElement;
+      if (at < 0 || !line) continue;
+      const range = document.createRange();
+      range.setStart(node, at);
+      range.setEnd(node, at + name.length);
+      const boxes = [...range.getClientRects()].filter((box) => box.width > 0);
+      return {
+        rows: new Set(boxes.map((box) => Math.round(box.top))).size,
+        left: Math.min(...boxes.map((box) => box.left)),
+        right: Math.max(...boxes.map((box) => box.right)),
+        clipped: line.scrollWidth > line.clientWidth,
+        ellipsis: getComputedStyle(line).textOverflow === "ellipsis",
+      };
+    }
+    return null;
+  }, host);
+  if (!drawn) throw new Error("the destination answer does not name the host");
+  expect(drawn.rows).toBeGreaterThan(1);
+  expect(drawn.left).toBeGreaterThanOrEqual(0);
+  expect(drawn.right).toBeLessThanOrEqual(overflow.viewport);
+  expect(drawn.clipped).toBe(false);
+  expect(drawn.ellipsis).toBe(false);
+  await capture(page, "verdict-long-hop.png");
+});
+
 test("an address check that fails to load reads Unconfirmed", async ({
   page,
 }) => {

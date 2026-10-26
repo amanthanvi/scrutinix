@@ -12,8 +12,10 @@ import {
   ensureDirs,
   exitSummary,
   evidenceDir,
+  foreignNextListeners,
   foreignNextStopHint,
   formatForeignNext,
+  heldProjectDevServer,
   legacyPids,
   legacyState,
   loadState,
@@ -24,6 +26,7 @@ import {
   repoRoot,
   runCommand,
   sameCheckout,
+  sameDirectoryDevNote,
   snapshotNextEnv,
   startSupervisor,
   stateDir,
@@ -143,11 +146,27 @@ async function captureSettledNextEnv() {
 }
 
 function refuseForeignNext() {
-  const summary = formatForeignNext(port);
-  if (!summary) return false;
-  process.stderr.write(`launch: ${summary}\n`);
-  process.stderr.write(`launch: ${foreignNextStopHint(port)}\n`);
+  const holders = foreignNextListeners(port);
+  if (!holders.length) return false;
+  process.stderr.write(`launch: ${formatForeignNext(port)}\n`);
+  const here = holders.some(
+    (holder) =>
+      holder.cwd !== "" &&
+      canonicalPath(holder.cwd) === canonicalPath(repoRoot),
+  );
+  // Next locks .next/dev for the whole project directory. Another --port in
+  // this checkout cannot start while that process holds the lock.
+  const note = here
+    ? "Next runs one next dev per project directory, so another --port in this checkout will not start. "
+    : "";
+  process.stderr.write(`launch: ${note}${foreignNextStopHint(port)}\n`);
   return true;
+}
+
+function noteProjectLock() {
+  const held = heldProjectDevServer();
+  if (!held) return;
+  process.stderr.write(`launch: ${sameDirectoryDevNote(held)}\n`);
 }
 
 // How the app exited, from the supervisor's status: { code, signal } once it
@@ -337,6 +356,7 @@ if (up !== "ready") {
     run.appLog,
     appExitSummary(appExit),
   );
+  if (up === "exited") noteProjectLock();
   await captureSettledNextEnv();
   process.exit(1);
 }
@@ -356,6 +376,7 @@ while (
       run.appLog,
       reply.proven ? appExitSummary(reply.body.app.exit) : null,
     );
+    if (reply.proven) noteProjectLock();
     await captureSettledNextEnv();
     process.exit(1);
   }

@@ -192,9 +192,58 @@ function assertPrivateDir(dir) {
   }
 }
 
+// The evidence directory this skill created carries this regular file. A
+// symlink does not count. An existing VERIFY_EVIDENCE_DIR is never given one:
+// that would claim a folder the variable was pointed at, empty or not. The
+// default evidence directory, when VERIFY_EVIDENCE_DIR is unset, is adopted
+// by clearEvidenceFiles: a directory left by an older version of this skill
+// gets the marker once. evidence.ts writes the same name when a screenshot
+// creates the directory.
+export const evidenceMarkerName = ".verify-evidence";
+
+// Download filenames saveDownload is called with in drive.spec.ts. Anything
+// else, including other .json and .csv files, is not a skill artifact.
+export const skillEvidenceDownloads = Object.freeze([
+  "scan.json",
+  "scan-history.csv",
+  "batch.csv",
+]);
+
+const evidenceDownloadNames = new Set(skillEvidenceDownloads);
+
+function evidenceMarkerPath(dir) {
+  return path.join(dir, evidenceMarkerName);
+}
+
+export function hasEvidenceMarker(dir) {
+  try {
+    return lstatSync(evidenceMarkerPath(dir)).isFile();
+  } catch {
+    return false;
+  }
+}
+
+export function writeEvidenceMarker(dir) {
+  const fd = openSync(
+    evidenceMarkerPath(dir),
+    constants.O_WRONLY |
+      constants.O_CREAT |
+      constants.O_EXCL |
+      constants.O_NOFOLLOW,
+    0o600,
+  );
+  try {
+    writeFileSync(fd, "scrutinix verify evidence\n");
+  } finally {
+    closeSync(fd);
+  }
+}
+
 // Create (0700) or validate the state and evidence directories for writing.
+// The evidence directory is marked only when this call creates it.
 export function ensureDirs(dirs = [stateDir, evidenceDir]) {
   for (const dir of dirs) {
+    let created = false;
     if (!existsSync(dir)) {
       // Nothing is created under a path someone else could swap.
       const problem = ancestorProblem(dir);
@@ -203,11 +252,100 @@ export function ensureDirs(dirs = [stateDir, evidenceDir]) {
           `verify: ${problem}. Refusing to use it for verify state.`,
         );
       }
-      mkdirSync(dir, { recursive: true, mode: 0o700 });
+      created = mkdirSync(dir, { recursive: true, mode: 0o700 }) !== undefined;
       chmodSync(dir, 0o700);
     }
     assertPrivateDir(dir);
+    if (created && canonicalPath(dir) === canonicalPath(evidenceDir)) {
+      writeEvidenceMarker(dir);
+    }
   }
+}
+
+function skillEvidenceArtifact(name) {
+  return name.endsWith(".png") || evidenceDownloadNames.has(name);
+}
+
+function refuseToClear(dir, reason) {
+  throw new UnsafeStateError(
+    `verify: evidence directory ${dir} ${reason} Refusing to clear it.`,
+  );
+}
+
+// Empty and unset are the default. A set VERIFY_EVIDENCE_DIR, even one that
+// names the same path, is an override and is not adopted.
+function evidenceDirOverridden() {
+  const value = process.env.VERIFY_EVIDENCE_DIR;
+  return typeof value === "string" && value.length > 0;
+}
+
+function isDefaultEvidencePath(dir) {
+  if (evidenceDirOverridden()) return false;
+  return canonicalPath(dir) === canonicalPath(path.join(stateDir, "evidence"));
+}
+
+const unmarkedEvidenceReason =
+  "has no .verify-evidence marker, so this skill did not create it. Point VERIFY_EVIDENCE_DIR at a new directory, or unset it to use the default evidence directory.";
+
+// Previous screenshots and the downloads this skill saved. The directory
+// itself stays. A *.png screenshot is removed, and so are the exact download
+// names above. Every other file stays, including next-env-*.snapshot recovery
+// copies and the marker. Unlink does not follow a symlink, so a link's target
+// is left alone. A file that is already gone when unlink runs (another clear
+// removed it after this listing) is the end state this function wants, so
+// ENOENT does not fail the clear. Every other unlink error still does. The
+// second argument is that unlink. The check replaces it to simulate a file
+// that vanishes after lstat. The state directory is never cleared: run.json
+// lives there.
+// An unmarked VERIFY_EVIDENCE_DIR is not cleared either, including an empty
+// one. The default evidence directory is adopted: the marker is written once,
+// then only skill artifacts are removed.
+export function clearEvidenceFiles(
+  dir = evidenceDir,
+  unlinkArtifact = unlinkSync,
+) {
+  if (existsSync(dir) && canonicalPath(dir) === canonicalPath(stateDir)) {
+    refuseToClear(dir, "is the state directory.");
+  }
+  // Refuse an override before ensureDirs so it is not marked and nothing in
+  // it is removed. The default directory is left for adoption after the
+  // privacy checks.
+  if (
+    existsSync(dir) &&
+    !hasEvidenceMarker(dir) &&
+    !isDefaultEvidencePath(dir)
+  ) {
+    refuseToClear(dir, unmarkedEvidenceReason);
+  }
+  ensureDirs([dir]);
+  if (canonicalPath(dir) === canonicalPath(stateDir)) {
+    refuseToClear(dir, "is the state directory.");
+  }
+  if (!hasEvidenceMarker(dir)) {
+    if (isDefaultEvidencePath(dir)) writeEvidenceMarker(dir);
+    else refuseToClear(dir, unmarkedEvidenceReason);
+  }
+  let removed = 0;
+  for (const name of readdirSync(dir)) {
+    if (!skillEvidenceArtifact(name)) continue;
+    const file = path.join(dir, name);
+    let stat;
+    try {
+      stat = lstatSync(file);
+    } catch {
+      continue;
+    }
+    if (!stat.isFile() && !stat.isSymbolicLink()) continue;
+    // Gone since the lstat is the end state this wants, not a failure.
+    try {
+      unlinkArtifact(file);
+    } catch (error) {
+      if (error?.code === "ENOENT") continue;
+      throw error;
+    }
+    removed += 1;
+  }
+  return removed;
 }
 
 // Read a state file only when it is a regular file owned by this user that
@@ -715,8 +853,22 @@ export function processIdentity(pid) {
   };
 }
 
+// A path from another process (its cwd or executable) as inert text: control
+// and bidi characters print as \u{…} escapes, so a crafted directory name can
+// neither drive the terminal nor reorder the line it is printed in.
+export function printablePath(text) {
+  return String(text).replace(
+    /[\u0000-\u001f\u007f-\u009f\u200e\u200f\u202a-\u202e\u2066-\u2069]/g,
+    (char) => `\\u{${char.codePointAt(0).toString(16)}}`,
+  );
+}
+
 export function describeProcess(identity) {
-  return `pid ${identity.pid}, started ${identity.startTime || "unknown"}, executable ${identity.executable || "unknown"}, cwd ${identity.cwd || "unknown"}`;
+  const executable = identity.executable
+    ? printablePath(identity.executable)
+    : "unknown";
+  const cwd = identity.cwd ? printablePath(identity.cwd) : "unknown";
+  return `pid ${identity.pid}, started ${identity.startTime || "unknown"}, executable ${executable}, cwd ${cwd}`;
 }
 
 export function portDetails(port) {
@@ -767,11 +919,42 @@ export function formatForeignNext(port, exclude = []) {
   if (!holders.length) return "";
   const detail = holders
     .map((holder) => {
-      const cwd = holder.cwd ? `, cwd ${holder.cwd}` : "";
+      const cwd = holder.cwd ? `, cwd ${printablePath(holder.cwd)}` : "";
       return `pid ${holder.pid}${cwd}`;
     })
     .join("; ");
   return `another next dev holds port ${port} (${detail}). This skill did not start it and will not stop it.`;
+}
+
+// The dev lock Next writes under .next/dev. One next dev per project
+// directory: a second server in this checkout exits even on a free port.
+export function heldProjectDevServer(root = repoRoot) {
+  const lockFile = path.join(root, ".next", "dev", "lock");
+  let text;
+  try {
+    text = readPrivateFile(lockFile);
+  } catch {
+    return null;
+  }
+  if (!text) return null;
+  let parsed;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  const pid = Number(parsed?.pid);
+  const lockPort = Number(parsed?.port);
+  if (!validPid(pid) || !validPort(lockPort)) return null;
+  if (!isNextDevCommand(commandLine(pid))) return null;
+  const identity = processIdentity(pid);
+  if (!identity?.cwd) return null;
+  if (canonicalPath(identity.cwd) !== canonicalPath(root)) return null;
+  return { pid, port: lockPort, cwd: identity.cwd };
+}
+
+export function sameDirectoryDevNote(held) {
+  return `another next dev already holds this project directory (pid ${held.pid}, port ${held.port}, cwd ${printablePath(held.cwd)}). Next runs one next dev per project directory, so another --port here will not start. Stop that pid, then launch again.`;
 }
 
 // ---- State lock -------------------------------------------------------------

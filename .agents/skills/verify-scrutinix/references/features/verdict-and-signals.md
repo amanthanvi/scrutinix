@@ -35,12 +35,13 @@ Fixture URLs, typed as a person would:
 - `https://critical.scrutinix.test/login` shows `Critical`, `Don't open this link — it's a known threat.`, and a score of 80 or more
 - `https://unreachable.scrutinix.test/` shows `Unknown`, `We couldn't check this link — treat it as unsafe.`, no meter, and `destination` says `We couldn't reach the site, so we can't say where it leads.`
 - `https://error.scrutinix.test/` shows `Error`, `The scan failed — try again.`, button `Try again` in the score's place, eight rows `This check could not be completed.`, no `Summary Full signal list` switch, and a `Reference:` line in the details
+- `https://long-hop.scrutinix.test/` shows `Safe` and, in `destination`, `It ends on accountverificationandsecuritycheckpointforyoursigninportalnowx.com, a different site` (one redirect to a 63-letter name). The question wraps inside a 390px-wide page; the page does not scroll sideways
 - `https://paypal.com.secure-login.xyz/verify` shows `Look-alike` with `secure-login.xyz` under it (a login part spelling out a site, `https://paypal.com@secure-login.xyz/`, is a look-alike too, captioned `Ignored by browsers`)
 - any safe link while the parser chunk fails shows `Unconfirmed`
 
 ## Driving it with Playwright
 
-`npm run verify:drive` tests `single scan share and rescan`, `verdicts and history`, `link taken apart on paste, then a look-alike`, `error and critical verdicts`, and `an address check that fails to load reads Unconfirmed`.
+`npm run verify:drive` tests `single scan share and rescan`, `verdicts and history`, `link taken apart on paste, then a look-alike`, `error and critical verdicts`, `an address check that fails to load reads Unconfirmed`, and `a long destination host stays on the page`.
 
 ```ts
 await scanSingle(page, "https://malicious.scrutinix.test/login", "malicious");
@@ -59,7 +60,7 @@ await expect(page.getByText("Fixture CA")).toBeVisible();
 
 `Unconfirmed` is driven by failing the parser's chunk, a real network failure: route `**/_next/static/chunks/**/*.js`, fetch each, and abort the one whose body contains `kitakyushu` (a Public Suffix List entry; tldts' unused export names are tree-shaken away).
 
-Screenshots: `verdict-malicious.png`, `verdict-unknown.png`, `verdict-feed.png`, `verdict-critical.png`, `verdict-error.png`, `verdict-look-alike.png`, `verdict-unconfirmed.png`, `single-safe.png`.
+Screenshots: `verdict-malicious.png`, `verdict-unknown.png`, `verdict-feed.png`, `verdict-critical.png`, `verdict-error.png`, `verdict-look-alike.png`, `verdict-unconfirmed.png`, `verdict-long-hop.png`, `single-safe.png`.
 
 ## Gotchas
 
