@@ -7,6 +7,7 @@ import {
   CARD_TEXT_WIDTH,
   DOMAIN_LINE,
   FACES,
+  MONO_CHARS,
   OWNERSHIP_LINE,
   TRACKING,
   baselineOf,
@@ -58,6 +59,16 @@ describe("the card's font measurements", () => {
         if (face === "display") expect(chars, char).toContain(char);
         if (face === "mono") expect(font.advance(char), char).toBe(600);
       }
+      // Every character the mono face is measured at 0.6 em, it draws at
+      // 0.6 em; anything else counts as unknown.
+      if (face === "mono") {
+        for (let code = 0; code <= 0xffff; code += 1) {
+          const char = String.fromCharCode(code);
+          if (MONO_CHARS.test(char)) {
+            expect(font.advance(char), `U+${code.toString(16)}`).toBe(600);
+          }
+        }
+      }
     },
   );
 
@@ -81,6 +92,20 @@ describe("the card's font measurements", () => {
         );
       }
     }
+  });
+
+  it("measures a letter the mono face lacks as wider than a CJK fallback draws it", () => {
+    const font = readTtfMetrics(path.join(process.cwd(), FONT_FILES.mono));
+    for (const char of "支付宝한글ภาษาعربي") {
+      expect(font.advance(char), char).toBeNull();
+      // A full-width fallback glyph is 1 em, less the face's tracking.
+      expect(textWidth(char, "mono", 30), char).toBeGreaterThan(30);
+    }
+    // Cyrillic is in the face: measured exactly, not guessed.
+    expect(textWidth("сбербанк", "mono", 30)).toBeCloseTo(
+      8 * (0.6 + TRACKING.mono) * 30,
+      6,
+    );
   });
 
   it("gives each run the line box that puts its baseline on the row's", () => {
@@ -211,6 +236,75 @@ describe("a look-alike's ownership sentence", () => {
       expect(brandRun.size).toBeLessThanOrEqual(ownerRun.size);
       expect(brandRun.text.endsWith(brand.slice(brand.indexOf(".")))).toBe(
         true,
+      );
+    }
+  });
+
+  it("fits an imitated site in any script, keeping its end", () => {
+    // A login name is decoded, so the imitated site can be any script
+    // (`支付宝….com@evil.com`). Each row is held to what the fonts draw:
+    // their own advances, and a full em for a fallback glyph.
+    const fonts = {
+      serif: readTtfMetrics(path.join(process.cwd(), FONT_FILES.serif)),
+      mono: readTtfMetrics(path.join(process.cwd(), FONT_FILES.mono)),
+    };
+    const drawnWidth = (row: SentenceRun[]) =>
+      row.reduce((sum, run) => {
+        let units = 0;
+        for (const char of run.text) {
+          units += (fonts[run.face].advance(char) ?? 1000) / 1000;
+          units += TRACKING[run.face];
+        }
+        return sum + units * run.size;
+      }, 0);
+    for (const [owner, brand] of [
+      ["evil.com", `${"支付宝".repeat(12)}.com`],
+      [`${LABEL_63}.com`, `${"支付宝".repeat(12)}.com`],
+      ["evil.com", `${"сбербанк".repeat(6)}.рф`],
+      ["evil.com", `${"ภาษาไทย".repeat(9)}.com`],
+    ] as const) {
+      const rows = layOutOwnership(owner, brand);
+      for (const row of rows) {
+        expect(drawnWidth(row), rowText(row)).toBeLessThanOrEqual(
+          CARD_TEXT_WIDTH,
+        );
+      }
+      const brandRun = rows
+        .at(-1)!
+        .filter((run) => run.face === "mono")
+        .at(-1)!;
+      const suffix = brand.slice(brand.indexOf("."));
+      expect(brandRun.text.endsWith(suffix), brandRun.text).toBe(true);
+      expect(brandRun.text.startsWith(brand.slice(0, 2)), brandRun.text).toBe(
+        true,
+      );
+    }
+  });
+
+  it("shortens a label between whole letters, never inside one", () => {
+    const segmenter = new Intl.Segmenter("en", { granularity: "grapheme" });
+    const letters = (text: string) =>
+      Array.from(segmenter.segment(text), ({ segment }) => segment);
+    for (const label of [
+      // Letters outside the Basic Multilingual Plane (two UTF-16 units).
+      "𠜎𠜱𠝹𠱓".repeat(12),
+      // Letters that carry combining marks.
+      "नमस्ते".repeat(12),
+      "ภาษาไทย".repeat(12),
+    ]) {
+      const brand = `${label}.com`;
+      const rows = layOutOwnership("evil.com", brand);
+      const { text } = rows
+        .at(-1)!
+        .filter((run) => run.face === "mono")
+        .at(-1)!;
+      expect(text).not.toMatch(/\p{Cs}/u); // no half of a surrogate pair
+      const [head, rest] = text.split("…") as [string, string];
+      const tail = rest.slice(0, -".com".length);
+      const whole = letters(label);
+      expect(letters(head)).toEqual(whole.slice(0, letters(head).length));
+      expect(letters(tail)).toEqual(
+        whole.slice(whole.length - letters(tail).length),
       );
     }
   });

@@ -53,15 +53,25 @@ export const FACES: Record<Face, FaceMetrics> = {
     ascender: 0.735,
     descender: -0.265,
   },
-  // Monospaced: every glyph a domain can hold is 0.6 em.
+  // Monospaced: every character `MONO_CHARS` matches is 0.6 em.
   mono: { chars: "", widths: [], ascender: 1.005, descender: -0.295 },
 };
 
+/**
+ * The characters Geist Mono draws at its one width, 0.6 em: printable
+ * ASCII, the ellipsis, Latin-1's letters, and basic Cyrillic (the test
+ * reads every match back from the font). The imitated site in a
+ * look-alike's sentence can be a decoded login name in any script
+ * ("支付宝.com@evil.com"), drawn from a fallback face; it is measured as
+ * unknown.
+ */
+export const MONO_CHARS = /^[ -~…À-ÿЀ-џ]$/u;
 const MONO_WIDTH = 600;
 /**
- * A character outside a table (hostnames are lower case, so in practice
- * none) counts as 1.2 em, wider than any letter in these faces: a guess
- * only ever makes a line smaller than it had to be, never too wide.
+ * A character outside a face's table (an owner is punycode, so in practice
+ * only an imitated site's non-Latin letters) counts as 1.2 em, wider than
+ * any glyph these faces or a CJK fallback draw: a guess only ever makes a
+ * line smaller than it had to be, never too wide.
  */
 const UNKNOWN_WIDTH = 1200;
 
@@ -75,7 +85,9 @@ export const TRACKING: Record<Face, number> = {
 const ELLIPSIS = "…";
 
 function advance(face: Face, char: string): number {
-  if (face === "mono") return MONO_WIDTH;
+  if (face === "mono") {
+    return MONO_CHARS.test(char) ? MONO_WIDTH : UNKNOWN_WIDTH;
+  }
   const { chars, widths } = FACES[face];
   const index = chars.indexOf(char);
   return index >= 0 ? widths[index]! : UNKNOWN_WIDTH;
@@ -143,21 +155,29 @@ export function fitDomain(
 
   const fits = (text: string) => textWidth(text, face, minSize) <= width;
   const dot = domain.indexOf(".");
-  const label = dot > 0 ? domain.slice(0, dot) : domain;
+  // Cut between whole characters as a reader sees them, so an imitated
+  // site in another script never loses a mark from its letter.
+  const label = graphemes(dot > 0 ? domain.slice(0, dot) : domain);
   const suffix = dot > 0 ? domain.slice(dot) : "";
   for (let keep = label.length - 1; keep >= 2; keep -= 1) {
-    const head = label.slice(0, Math.ceil(keep / 2));
-    const tail = label.slice(label.length - Math.floor(keep / 2));
+    const head = label.slice(0, Math.ceil(keep / 2)).join("");
+    const tail = label.slice(label.length - Math.floor(keep / 2)).join("");
     const text = `${head}${ELLIPSIS}${tail}${suffix}`;
     if (fits(text)) return { text, size: minSize };
   }
   // A suffix too long for the line on its own: keep the domain's end.
-  const chars = [...domain];
+  const chars = graphemes(domain);
   for (let keep = chars.length - 1; keep > 0; keep -= 1) {
     const text = `${ELLIPSIS}${chars.slice(-keep).join("")}`;
     if (fits(text)) return { text, size: minSize };
   }
   return { text: ELLIPSIS, size: minSize };
+}
+
+const graphemeSegmenter = new Intl.Segmenter("en", { granularity: "grapheme" });
+
+function graphemes(text: string): string[] {
+  return Array.from(graphemeSegmenter.segment(text), ({ segment }) => segment);
 }
 
 /** The registered domain line, in the display serif. */
