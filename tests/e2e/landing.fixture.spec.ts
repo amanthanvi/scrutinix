@@ -15,8 +15,9 @@ import {
  * its place, and the browser records no layout shift. The one exception,
  * a coverage caveat, is pinned below. Depends on SCRUTINIX_TEST_FIXTURES=1
  * (scripts/run-e2e.mjs); see lib/server/test-fixtures.ts for the scenarios.
- * The positions are the check in every engine; the browser's own record of
- * layout shifts is Chromium's alone (`expectNoLayoutShift`).
+ * The positions, measured at every frame of a landing (`watchLayout`), are
+ * the check in every engine; the browser's own record of layout shifts is
+ * Chromium's alone (`expectNoLayoutShift`).
  */
 
 const VERDICTS = [
@@ -40,17 +41,98 @@ const VIEWPORTS = [
   DESKTOP,
 ] as const;
 
+/** The band's height and where everything from it to the evidence sits. */
+type Layout = {
+  band: number;
+  /** What the band says first: the word, the site, the instruction. */
+  said: (number | null)[];
+  tops: number[];
+  list: "questions" | "rows";
+  items: number[];
+};
+
 /**
- * Record every layout shift on the page with its start time, input or not:
+ * Before the page's own scripts run: `sxLayout`, the measure `layout`
+ * takes; a watch that takes it at every frame from `markLanding` until
+ * `landing` reads it, so a move that undoes itself before the end state is
+ * measured is caught in every engine; and, where the engine records layout
+ * shifts (Chromium alone), every shift with its start time, input or not:
  * a landing happens long after the tap, and any shift after `markLanding`
- * is the landing's. Only where the engine records layout shifts (Chromium).
+ * is the landing's.
+ *
+ * The measure is the band's height and where everything from the band to
+ * the last question (or row) sits on the page: layout offsets, so neither
+ * scrolling nor the viewport's edge hides a move. `list` names what the
+ * evidence shows, since a failed scan trades the questions for its eight
+ * rows when it lands (it has nothing to answer them with).
  */
-async function recordLayoutShifts(page: Page) {
+async function watchLayout(page: Page) {
   await page.addInitScript(() => {
+    const top = (node: Element) => {
+      let sum = 0;
+      for (
+        let at: HTMLElement | null = node as HTMLElement;
+        at;
+        at = at.offsetParent as HTMLElement | null
+      ) {
+        sum += at.offsetTop;
+      }
+      return sum;
+    };
+    const measure = (): Layout | null => {
+      const heading = document.getElementById("sx-verdict-heading");
+      const band = heading?.closest("section");
+      if (!band) return null;
+      const marks = [
+        band,
+        document.getElementById("sx-link-anatomy-heading"),
+        document.getElementById("sx-evidence-heading"),
+        document.querySelector('[role="toolbar"][aria-label="Checks"]'),
+        document.querySelector(
+          'ul[aria-label="Questions"], ul[aria-label="Signals"]',
+        ),
+      ].filter((node): node is Element => node !== null);
+      const questions = document.querySelectorAll(
+        'ul[aria-label="Questions"] h4',
+      );
+      return {
+        band: band.getBoundingClientRect().height,
+        said: [
+          heading,
+          band.querySelector(":scope > .sx-band-body > .sx-band-head > p"),
+          band.querySelector(":scope > .sx-band-body > .sx-band-imperative"),
+        ].map((node) => (node ? top(node) : null)),
+        tops: marks.map(top),
+        list: questions.length > 0 ? "questions" : "rows",
+        items: [
+          ...(questions.length > 0
+            ? questions
+            : document.querySelectorAll('ul[aria-label="Signals"] > li')),
+        ].map(top),
+      };
+    };
+
+    const frames: (Layout | null)[] = [];
+    let watching = false;
+    const watch = () => {
+      if (!watching) return;
+      requestAnimationFrame(watch);
+      frames.push(measure());
+    };
+
     const shifts: { at: number; value: number; moved: string[] }[] = [];
     const recorded =
       PerformanceObserver.supportedEntryTypes.includes("layout-shift");
     Object.assign(window, {
+      sxLayout: measure,
+      sxFrames: frames,
+      sxWatch: (on: boolean) => {
+        if (on && !watching) {
+          frames.length = 0;
+          requestAnimationFrame(watch);
+        }
+        watching = on;
+      },
       sxShifts: shifts,
       sxShiftsRecorded: recorded,
       sxLanding: Infinity,
@@ -76,26 +158,46 @@ async function recordLayoutShifts(page: Page) {
   });
 }
 
-async function markLanding(page: Page) {
-  await page.evaluate(() =>
-    Object.assign(window, { sxLanding: performance.now() }),
+/** The measure now (`watchLayout`). */
+async function layout(page: Page) {
+  const now = await page.evaluate(() =>
+    (window as unknown as { sxLayout: () => Layout | null }).sxLayout(),
   );
+  if (!now) throw new Error("No verdict band.");
+  return now;
 }
 
-/** The landing's shifts, once the frames after it have been reported. */
-async function landingShifts(page: Page) {
+/** From here, anything that moves is the landing's: watch every frame. */
+async function markLanding(page: Page) {
+  await page.evaluate(() => {
+    Object.assign(window, { sxLanding: performance.now() });
+    (window as unknown as { sxWatch: (on: boolean) => void }).sxWatch(true);
+  });
+}
+
+/**
+ * The landing, once the frames after it have been drawn and reported:
+ * every frame the watch measured, and the layout shifts the browser
+ * recorded (where it records them).
+ */
+async function landing(page: Page) {
   return page.evaluate(async () => {
     for (let frame = 0; frame < 3; frame += 1) {
       await new Promise((resolve) => requestAnimationFrame(resolve));
     }
     await new Promise((resolve) => setTimeout(resolve, 100));
-    const { sxShifts, sxShiftsRecorded, sxLanding } = window as unknown as {
-      sxShifts: { at: number; value: number; moved: string[] }[];
-      sxShiftsRecorded: boolean;
-      sxLanding: number;
-    };
+    const { sxFrames, sxWatch, sxShifts, sxShiftsRecorded, sxLanding } =
+      window as unknown as {
+        sxFrames: (Layout | null)[];
+        sxWatch: (on: boolean) => void;
+        sxShifts: { at: number; value: number; moved: string[] }[];
+        sxShiftsRecorded: boolean;
+        sxLanding: number;
+      };
+    sxWatch(false);
     const landed = sxShifts.filter((shift) => shift.at >= sxLanding);
     return {
+      frames: [...sxFrames],
       recorded: sxShiftsRecorded,
       sum: landed.reduce((total, shift) => total + shift.value, 0),
       moved: landed.flatMap((shift) => shift.moved),
@@ -104,13 +206,57 @@ async function landingShifts(page: Page) {
 }
 
 /**
+ * `now` keeps `before`'s band height and positions; with `said`, the
+ * band's word, site, and instruction stay put too, and with `items`, every
+ * answer (or row).
+ */
+function expectStill(
+  now: Layout | null,
+  before: Layout,
+  at: string,
+  { said = false, items = false } = {},
+) {
+  expect(now, `${at}: verdict band`).not.toBeNull();
+  if (!now) return;
+  expect(now.band, `${at}: band height`).toBe(before.band);
+  if (said) {
+    expect(now.said, `${at}: word, site, instruction`).toEqual(before.said);
+  }
+  expect(now.tops, `${at}: positions`).toEqual(before.tops);
+  if (items) {
+    expect(now.items, `${at}: answers`).toEqual(before.items);
+  }
+}
+
+/**
+ * Nothing moved at any frame of the landing, in every engine: each frame
+ * the watch measured keeps `before`'s layout (`expectStill`).
+ */
+function expectStillAtEveryFrame(
+  frames: (Layout | null)[],
+  before: Layout,
+  at: string,
+  options?: { said?: boolean; items?: boolean },
+) {
+  expect(frames.length, `${at}: frames measured`).toBeGreaterThan(0);
+  frames.forEach((frame, index) =>
+    expectStill(
+      frame,
+      before,
+      `${at} (frame ${index + 1} of ${frames.length})`,
+      options,
+    ),
+  );
+}
+
+/**
  * The browser recorded no layout shift in the landing. Chromium must
  * record them; Firefox and WebKit have no Layout Instability API (an empty
- * record there would prove nothing), so the check runs wherever it exists
- * and the positions are the check everywhere.
+ * record there would prove nothing), so the check runs wherever it exists,
+ * and the positions at every frame are the check everywhere.
  */
 function expectNoLayoutShift(
-  shifts: Awaited<ReturnType<typeof landingShifts>>,
+  shifts: Awaited<ReturnType<typeof landing>>,
   browserName: string,
   link?: string,
 ) {
@@ -121,60 +267,6 @@ function expectNoLayoutShift(
     const moved = `moved ${shifts.moved.join(", ")}`;
     expect(shifts.sum, link ? `${link}: ${moved}` : moved).toBe(0);
   }
-}
-
-/**
- * The band's height and where everything from the band to the last
- * question (or row) sits on the page: layout offsets, so neither scrolling
- * nor the viewport's edge hides a move. `list` names what the evidence
- * shows, since a failed scan trades the questions for its eight rows when
- * it lands (it has nothing to answer them with).
- */
-function layout(page: Page) {
-  return page.evaluate(() => {
-    const heading = document.getElementById("sx-verdict-heading");
-    const band = heading?.closest("section");
-    if (!band) throw new Error("No verdict band.");
-    const top = (node: Element) => {
-      let sum = 0;
-      for (
-        let at: HTMLElement | null = node as HTMLElement;
-        at;
-        at = at.offsetParent as HTMLElement | null
-      ) {
-        sum += at.offsetTop;
-      }
-      return sum;
-    };
-    const marks = [
-      band,
-      document.getElementById("sx-link-anatomy-heading"),
-      document.getElementById("sx-evidence-heading"),
-      document.querySelector('[role="toolbar"][aria-label="Checks"]'),
-      document.querySelector(
-        'ul[aria-label="Questions"], ul[aria-label="Signals"]',
-      ),
-    ].filter((node): node is Element => node !== null);
-    const questions = document.querySelectorAll(
-      'ul[aria-label="Questions"] h4',
-    );
-    return {
-      band: band.getBoundingClientRect().height,
-      // What the band says first: the word, the site, the instruction.
-      said: [
-        heading,
-        band.querySelector(":scope > .sx-band-body > .sx-band-head > p"),
-        band.querySelector(":scope > .sx-band-body > .sx-band-imperative"),
-      ].map((node) => (node ? top(node) : null)),
-      tops: marks.map(top),
-      list: questions.length > 0 ? "questions" : "rows",
-      items: [
-        ...(questions.length > 0
-          ? questions
-          : document.querySelectorAll('ul[aria-label="Signals"] > li')),
-      ].map(top),
-    };
-  });
 }
 
 /** Every check's cell has settled in the strip. */
@@ -199,7 +291,7 @@ for (const viewport of VIEWPORTS) {
       browserName,
     }) => {
       test.setTimeout(120_000);
-      await recordLayoutShifts(page);
+      await watchLayout(page);
       await holdScanStream(page);
       for (const [link, word] of VERDICTS) {
         await gotoApp(page);
@@ -221,19 +313,16 @@ for (const viewport of VIEWPORTS) {
         await expect(
           page.getByLabel(`Scan result: ${word}`, { exact: true }),
         ).toBeVisible();
-        const shifts = await landingShifts(page);
+        const landed = await landing(page);
         const after = await layout(page);
-        expect(after.band, `${link}: band height`).toBe(before.band);
-        expect(after.said, `${link}: word, site, instruction`).toEqual(
-          before.said,
-        );
-        expect(after.tops, `${link}: positions`).toEqual(before.tops);
+        // An Error result trades its questions for rows (checked below).
+        const still = { said: true, items: word !== "Error" };
+        expectStill(after, before, link, still);
         if (word === "Error") {
           expect([before.list, after.list]).toEqual(["questions", "rows"]);
-        } else {
-          expect(after.items, `${link}: answers`).toEqual(before.items);
         }
-        expectNoLayoutShift(shifts, browserName, link);
+        expectStillAtEveryFrame(landed.frames, before, link, still);
+        expectNoLayoutShift(landed, browserName, link);
       }
     });
   });
@@ -271,7 +360,7 @@ test.describe("on a phone", () => {
       await parserHeld;
       return "go";
     });
-    await recordLayoutShifts(page);
+    await watchLayout(page);
     await holdScanStream(page);
     await gotoApp(page);
     await page.evaluate(() => document.fonts.ready);
@@ -286,11 +375,10 @@ test.describe("on a phone", () => {
     await expect(
       page.getByLabel("Checking the link's address", { exact: true }),
     ).toBeVisible();
-    const shifts = await landingShifts(page);
-    const held = await layout(page);
-    expect(held.band).toBe(before.band);
-    expect(held.tops).toEqual(before.tops);
-    expectNoLayoutShift(shifts, browserName);
+    const landed = await landing(page);
+    expectStill(await layout(page), before, "held");
+    expectStillAtEveryFrame(landed.frames, before, "held");
+    expectNoLayoutShift(landed, browserName);
 
     // The parser arrives: the band states the verdict in the same room.
     // (The link's breakdown below it is drawn only now, so it may reflow.)
@@ -310,7 +398,7 @@ test.describe("on a phone", () => {
       parserRequests += 1;
       return "fail";
     });
-    await recordLayoutShifts(page);
+    await watchLayout(page);
     await holdScanStream(page);
     await gotoApp(page);
     await page.evaluate(() => document.fonts.ready);
@@ -331,11 +419,10 @@ test.describe("on a phone", () => {
     await expect(
       page.getByLabel("Scan result: Unconfirmed", { exact: true }),
     ).toBeVisible();
-    const shifts = await landingShifts(page);
-    const after = await layout(page);
-    expect(after.band).toBe(before.band);
-    expect(after.tops).toEqual(before.tops);
-    expectNoLayoutShift(shifts, browserName);
+    const landed = await landing(page);
+    expectStill(await layout(page), before, "Unconfirmed");
+    expectStillAtEveryFrame(landed.frames, before, "Unconfirmed");
+    expectNoLayoutShift(landed, browserName);
   });
 });
 
@@ -360,6 +447,7 @@ for (const viewport of [PHONE, DESKTOP]) {
       page,
     }) => {
       test.setTimeout(60_000);
+      await watchLayout(page);
       await holdScanStream(page, { failCheck: "whois" });
       for (const [link, word] of [
         ["https://malicious.scrutinix.test/login", "Malicious"],
