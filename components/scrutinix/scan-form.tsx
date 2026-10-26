@@ -144,12 +144,12 @@ export function ScanForm() {
       >
         <TabsList aria-label="Scan mode">
           <TabsTrigger value="single">Single</TabsTrigger>
-          {/* The hint says what Batch is without joining the tab's name:
-              Safari counts even an aria-hidden hint in a name taken from
-              the tab's text, so the name is set. */}
+          {/* The hint says what Batch is without joining the tab's name.
+              (Safari still reads it with the name, "Batch up to 10 links";
+              an aria-label "Batch" would hide visible text from the name,
+              which voice control needs.) */}
           <TabsTrigger
             value="batch"
-            aria-label="Batch"
             aria-describedby="sx-batch-tab-hint"
             className="flex-wrap gap-x-1.5"
           >
