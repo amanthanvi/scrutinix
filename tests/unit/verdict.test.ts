@@ -1626,6 +1626,25 @@ describe("verdict copy", () => {
     expect(
       buildThreatAssessment(feedHit).threatInfo?.recommendations,
     ).toContain("Delete the message the link came in.");
+    // A ThreatFox card-skimming indicator steals payment details: the
+    // advice is about the card, not downloads or phishing.
+    const skimmer = createPendingSignalResults();
+    withThreatFeedMatches(skimmer, [
+      {
+        feed: "threatfox",
+        matchedUrl: "https://shop.example/checkout.js",
+        detail: "lists this link as an indicator of card skimming",
+        confidence: "high",
+        matchType: "url",
+      },
+    ]);
+    const skimming = buildThreatAssessment(skimmer).threatInfo;
+    expect(skimming?.recommendations).toContain(
+      "Don't enter payment details on this site.",
+    );
+    expect(skimming?.recommendations.join(" ")).not.toMatch(
+      /download|phishing/i,
+    );
   });
 
   it("does not repeat the safe summary in the recommendations", () => {

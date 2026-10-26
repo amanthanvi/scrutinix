@@ -1032,16 +1032,19 @@ const MALWARE_THREATS = new Set([
   "POTENTIALLY_HARMFUL_APPLICATION",
 ]);
 
+/** What the lists say a link does, as far as the advice depends on it. */
+type ListedThreat = "phishing" | "skimming" | "malware";
+
 /**
  * What the lists say the link does: "phishing" when any listing says so,
- * else "malware" when one names malware or unwanted software (a Google
- * malware match, URLhaus, ThreatFox, a DBL or SURBL malware listing), else
- * null. Listings of other links on the site don't count.
+ * else "skimming" when one says it steals card details (a ThreatFox card
+ * skimming indicator), else "malware" when one names malware or unwanted
+ * software (a Google malware match, URLhaus, ThreatFox, a DBL or SURBL
+ * malware listing), else null. Listings of other links on the site don't
+ * count.
  */
-function listedThreatKind(
-  signals: SignalResults,
-): "phishing" | "malware" | null {
-  const kinds = new Set<"phishing" | "malware">();
+function listedThreatKind(signals: SignalResults): ListedThreat | null {
+  const kinds = new Set<ListedThreat>();
   for (const match of signals.googleSafeBrowsing.data?.matches ?? []) {
     const type = match.threatType.toUpperCase();
     if (type === "SOCIAL_ENGINEERING") kinds.add("phishing");
@@ -1051,6 +1054,8 @@ function listedThreatKind(
     if (isElsewhereOnHost(match)) continue;
     if (match.feed === "openphish" || /phish/i.test(match.detail)) {
       kinds.add("phishing");
+    } else if (/skimming/i.test(match.detail)) {
+      kinds.add("skimming");
     } else if (
       match.feed === "urlhaus" ||
       match.feed === "threatfox" ||
@@ -1059,11 +1064,11 @@ function listedThreatKind(
       kinds.add("malware");
     }
   }
-  return kinds.has("phishing")
-    ? "phishing"
-    : kinds.has("malware")
-      ? "malware"
-      : null;
+  return (
+    (["phishing", "skimming", "malware"] as const).find((kind) =>
+      kinds.has(kind),
+    ) ?? null
+  );
 }
 
 function buildRecommendations(
@@ -1075,15 +1080,21 @@ function buildRecommendations(
   }: {
     limitedCoverage: boolean;
     provisional: boolean;
-    threat: "phishing" | "malware" | null;
+    threat: ListedThreat | null;
   },
 ) {
   // Actions only: the verdict line already says what the result means.
   switch (verdict) {
     case "critical":
     case "malicious":
-      // A malware site's danger is what it makes you download, and it
-      // isn't phishing, so it isn't reported as phishing.
+      // A skimmer steals the card you pay with; a malware site's danger is
+      // what it makes you download. Neither is reported as phishing.
+      if (threat === "skimming") {
+        return [
+          "Don't enter payment details on this site.",
+          "If you already paid there, call your card issuer and watch your statement.",
+        ];
+      }
       return threat === "malware"
         ? [
             "Don't download or open anything from this site.",
