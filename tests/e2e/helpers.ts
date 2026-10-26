@@ -198,7 +198,9 @@ export const test = base.extend<
       await provide((standard) => {
         let browser = launched.get(standard);
         if (!browser) {
-          // The project's launch options (headless, args) apply as well.
+          // The project's launch options (headless, args, and on macOS
+          // env with MOZ_APP_DATA) apply as well, merged at the top level
+          // only: spread `launchOptions.env` into any `env` passed here.
           browser = playwright.firefox.launch({
             firefoxUserPrefs: {
               ...launchOptions.firefoxUserPrefs,
