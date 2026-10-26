@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { gotoApp, submitSingleScan } from "./helpers";
+import { gotoApp, statusRegion, submitSingleScan } from "./helpers";
 
 for (const width of [1440, 375]) {
   test(`Batch preserves its layout while its chunk loads at ${width}px`, async ({
@@ -64,9 +64,13 @@ test("a failed notification chunk preserves the result and first notification", 
   await page.waitForLoadState("networkidle");
   await page.route("**/_next/static/chunks/*.js", (route) => route.abort());
   await page.getByRole("button", { name: "Download result (JSON)" }).click();
+  // The fallback notice shows it, and the status region says it.
   await expect(
-    page.getByText("Downloaded scan.json", { exact: true }),
+    page.locator("[data-notice]").getByText("Downloaded scan.json", {
+      exact: true,
+    }),
   ).toBeVisible();
+  await expect(statusRegion(page)).toHaveText("Downloaded scan.json");
   await expect(
     page.getByRole("heading", { name: "Safe", exact: true }),
   ).toBeVisible();

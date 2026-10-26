@@ -3,8 +3,10 @@ import { expect, test, type Page } from "@playwright/test";
 import {
   encodeSharedPayload,
   isolateRateLimit,
+  ownerSentence,
   sharedPath,
   signSharedPayload,
+  statusRegion,
 } from "./helpers";
 
 const LINK = "https://malicious.scrutinix.test/login";
@@ -88,6 +90,11 @@ async function expectWaitingForAnalyze(
   await expect(
     page.getByRole("region", { name: "The link, taken apart" }),
   ).toContainText("scrutinix.test");
+  // Said once, politely, so the arrival doesn't depend on focus (TalkBack
+  // said only "Analyze URL, button"; VoiceOver's page read moves focus).
+  await expect(statusRegion(page)).toHaveText(
+    `Link filled in: ${new URL(link).hostname}. Press Analyze to check it.`,
+  );
 }
 
 /** Tap Analyze: exactly one scan, of the link in the field. */
@@ -240,9 +247,7 @@ test("a shared link opens recipient-first: the result, then Check another link @
       `${path}&url=${encodeURIComponent("https://other.scrutinix.test/")}`,
     );
     const band = page.getByLabel(bandLabel);
-    const anatomy = page.getByText(
-      "This link belongs to secure-login.xyz, not paypal.com.",
-    );
+    const anatomy = ownerSentence(page);
     const another = page.getByRole("heading", {
       level: 2,
       name: "Check another link",

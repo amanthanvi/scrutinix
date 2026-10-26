@@ -1,6 +1,13 @@
 import { expect, type Page } from "@playwright/test";
 
-import { gotoApp, submitSingleScan, test } from "./helpers";
+import {
+  gotoApp,
+  ownerSentence,
+  spokenTextNodes,
+  statusRegion,
+  submitSingleScan,
+  test,
+} from "./helpers";
 
 /**
  * These specs depend on SCRUTINIX_TEST_FIXTURES=1 (set by scripts/run-e2e.mjs),
@@ -141,11 +148,14 @@ test("a look-alike subdomain is named plainly and shown as Look-alike", async ({
       /^No check flagged it: on their own, the checks scored it Safe, \d+ out of 100\.$/,
     ),
   ).toBeVisible();
-  await expect(
-    page.getByText("This link belongs to secure-login.xyz, not paypal.com.", {
-      exact: true,
-    }),
-  ).toBeVisible();
+  // One sentence for the eye, its domains set apart, and one string for a
+  // screen reader (TalkBack and VoiceOver read the split one as four).
+  const owner = ownerSentence(page);
+  await expect(owner).toBeVisible();
+  await expect(owner).toHaveCount(1);
+  expect(await spokenTextNodes(owner)).toEqual([
+    "This link belongs to secure-login.xyz, not paypal.com.",
+  ]);
 });
 
 test("a pasted link is taken apart before any scan, then hands over to the result", async ({
@@ -172,9 +182,26 @@ test("a pasted link is taken apart before any scan, then hands over to the resul
     "No. The link only spells out paypal.com.",
   );
   // The owner is stated once, by the anatomy, not again by the answer.
-  await expect(
-    pasted.getByText("This link belongs to secure-login.xyz, not paypal.com."),
-  ).toHaveCount(1);
+  await expect(ownerSentence(pasted)).toHaveCount(1);
+  expect(
+    (await spokenTextNodes(pasted)).filter((text) =>
+      text.includes("This link belongs to"),
+    ),
+  ).toEqual(["This link belongs to secure-login.xyz, not paypal.com."]);
+  // The answer is said once typing pauses, by the page's status region.
+  await expect(statusRegion(page)).toHaveText(
+    "No. The link only spells out paypal.com.",
+  );
+  // Each part is one string after its name, and the line has no title for
+  // Chrome on Android to read instead of the parts.
+  const line = page.locator("#sx-input-anatomy");
+  await expect(line).not.toHaveAttribute("title", /.*/);
+  expect(await spokenTextNodes(line)).toEqual([
+    "https://",
+    "A label anyone can add: paypal.com.",
+    "Registered domain: secure-login.xyz",
+    "A page on that domain: /verify",
+  ]);
 
   // Scanning the same link: the result's own anatomy takes over, so the
   // owner is stated once.
@@ -358,7 +385,13 @@ test("an Error result shows its eight rows with no Summary/Full switch, and keep
     "Each check moves to its row below.",
   );
   await strip.getByRole("button", { name: /^Redirects:/ }).click();
-  await expect(rows.getByLabel(/^Redirect Chain:/)).toBeFocused();
+  // A row with no evidence is a plain item, read as one line.
+  const redirects = rows.locator('li[data-signal="redirectChain"]');
+  await expect(redirects).toBeFocused();
+  expect(await spokenTextNodes(redirects)).toEqual([
+    expect.stringMatching(/^Redirect Chain: /),
+  ]);
+  await expect(redirects).not.toHaveAttribute("aria-label", /.*/);
 
   // The next result has both views, on the stored choice (Summary), and
   // its rule sits where the Error's did.
