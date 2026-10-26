@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { resetEnvForTests } from "@/lib/config/env";
 import { encodeSharedSnapshot } from "@/lib/domain/signal-signature";
+import { fitRegisteredDomain } from "@/lib/og/card-layout";
 import { ResultCard } from "@/lib/og/cards";
 import { signSharePayload } from "@/lib/server/share-signing";
 
@@ -116,6 +117,36 @@ describe("GET /og/result", () => {
       }),
     );
     expect(plain).toContain("Safe");
+  });
+
+  it("draws a long registered domain as fitted to the card, whole or by its middle", () => {
+    const props = {
+      verdict: "critical",
+      tone: "critical",
+      imperative: "Don't open this link.",
+      impersonates: null,
+      signature: undefined,
+      capturedAt: "2026-10-06T09:00:00.000Z",
+    } as const;
+    for (const domain of [
+      "an-extremely-long-registered-domain-for-testing-cards.com",
+      `${"wm".repeat(31)}w.com`,
+    ]) {
+      const text = textOf(ResultCard({ ...props, domain }));
+      expect(text).toContain(fitRegisteredDomain(domain).text);
+    }
+    const lookAlike = textOf(
+      ResultCard({
+        ...props,
+        verdict: "safe",
+        domain: `${"wm".repeat(31)}w.com`,
+        impersonates: "paypal.com",
+      }),
+    ).join("");
+    // Two rows, broken at the comma; the owner keeps its start and its end.
+    expect(lookAlike).toMatch(
+      /This link belongs to wmwm[mw]*…[mw]*mw\.com,not paypal\.com\.$/,
+    );
   });
 
   it("sends an unsigned payload to the default card", async () => {

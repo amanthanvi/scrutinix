@@ -112,6 +112,7 @@ lib/
     share-launch.ts       # Share-target link extraction (extractSharedLink) and ?url= prefill (resolvePrefill)
     methodology.ts        # /about's scoring tables, rules, bands, confidence caps (engine-checked by tests/unit/methodology.test.ts)
   og/                     # Share-card renderers (cards.tsx) and font loader (fonts.ts: Newsreader TTF + Geist)
+    card-layout.ts        # Fits the registered domain / look-alike sentence to the card (font-measured; middle ellipsis keeps the end)
   server/                 # Orchestrator, providers, signals, cache, local ONNX ML
     share-metadata.ts     # ?shared= verify + validate → SharedView, page metadata, image cap
     share-signing.ts      # HMAC sign/verify for share links; attaches result.share to streamed results
