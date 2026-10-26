@@ -5,7 +5,11 @@ import { getRegistrableDomain } from "@/lib/domain/registrable-domain";
 import { isSharedPlatformHost } from "@/lib/domain/shared-platforms";
 import type { WhoisData } from "@/lib/domain/types";
 import { bareHostname } from "@/lib/domain/url";
-import { fetchWithTimeout, SCRUTINIX_USER_AGENT } from "@/lib/server/http";
+import {
+  fetchWithTimeout,
+  SCRUTINIX_USER_AGENT,
+  withTimeout,
+} from "@/lib/server/http";
 import { SignalSkipError } from "@/lib/server/signal-error";
 
 /* RdapEvent interface removed — RDAP fields are now validated at runtime via asRecord(). */
@@ -149,12 +153,20 @@ export async function runWhoisSignal(
   };
 }
 
-/** rdap.org's own answer for a TLD with no RDAP service. */
+/**
+ * rdap.org's own answer for a TLD with no RDAP service. `fetchWithTimeout`
+ * stops timing once headers arrive, so the body read has its own bound; a
+ * body that stalls, errors, or isn't that answer leaves the 404 what its
+ * status says, no record.
+ */
 async function isMissingRdapService(response: Response): Promise<boolean> {
   try {
-    const title = asRecord(await response.json())?.title;
+    const title = asRecord(
+      await withTimeout(response.json(), 2_000, "RDAP error body"),
+    )?.title;
     return typeof title === "string" && /no rdap service/i.test(title);
   } catch {
+    void response.body?.cancel().catch(() => {});
     return false;
   }
 }

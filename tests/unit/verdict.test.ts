@@ -2111,6 +2111,27 @@ describe("withScoredSignals (history saved before scoredSignals)", () => {
     ).toBe(false);
   });
 
+  it("never pairs another site's certificate with the link's domain age", () => {
+    // A 10-day-old short-link domain that moves to an established site
+    // whose certificate renewed 2 days ago: not the fresh-setup pattern.
+    const checkedAt = Date.parse("2026-09-01T00:00:00.000Z");
+    const signals = cleanSignals();
+    withDomainAge(signals, 10);
+    if (signals.ssl.data) {
+      signals.ssl.data.validFrom = "2026-08-30T00:00:00.000Z";
+    }
+    expect(getScoredSignals(signals, checkedAt).has("ssl")).toBe(true);
+
+    if (signals.ssl.data) signals.ssl.data.otherSite = "landing.example";
+    expect(getScoredSignals(signals, checkedAt).has("ssl")).toBe(false);
+    const https = getSummaryQuestions({
+      url: "http://short.example/x",
+      signals,
+      now: checkedAt,
+    }).find((question) => question.id === "https");
+    expect(https?.why).not.toMatch(/brand-new certificate/);
+  });
+
   it("keeps an explicit empty list and results without threat info", () => {
     const safe = cleanSignals();
     const { verdict, threatInfo } = buildThreatAssessment(safe);

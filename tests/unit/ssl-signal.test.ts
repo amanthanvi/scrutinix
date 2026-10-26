@@ -27,7 +27,9 @@ describe("getTlsProbeTarget", () => {
   });
 
   it("defaults https to 443 when port omitted", () => {
-    expect(getTlsProbeTarget("https://example.com/path")?.port).toBe(443);
+    expect(getTlsProbeTarget("https://example.com/path")).toMatchObject({
+      port: 443,
+    });
   });
 
   it("reads a plain-HTTP link's own host on 443, never port 80", () => {
@@ -41,8 +43,12 @@ describe("getTlsProbeTarget", () => {
   it("preserves an explicit port 0 instead of the scheme default", () => {
     // The redirect probe targets the URL's literal port; substituting 80/443
     // here would let one scan mix evidence from two different endpoints.
-    expect(getTlsProbeTarget("http://example.test:0/start")?.port).toBe(0);
-    expect(getTlsProbeTarget("https://example.test:0/start")?.port).toBe(0);
+    expect(getTlsProbeTarget("http://example.test:0/start")).toMatchObject({
+      port: 0,
+    });
+    expect(getTlsProbeTarget("https://example.test:0/start")).toMatchObject({
+      port: 0,
+    });
   });
 
   it("reads a plain-HTTP link's certificate where its chain reaches HTTPS", () => {
@@ -96,7 +102,30 @@ describe("getTlsProbeTarget", () => {
           hops: [{ url: "http://plain.example/", status: 200 }],
         }),
       ),
-    ).toBeNull();
+    ).toEqual({ skip: "no-https" });
+  });
+
+  it("never reads the link's own TLS port once its chain answered on HTTP and stopped", () => {
+    // http://origin.example -> http://down.example (refused): origin's
+    // 443 was never in the visitor's path.
+    expect(
+      getTlsProbeTarget(
+        "http://origin.example/",
+        chain({
+          reachable: false,
+          terminalStatus: 302,
+          terminalError: "The host refused the connection.",
+          finalUrl: "http://down.example/",
+          hops: [
+            {
+              url: "http://origin.example/",
+              status: 302,
+              location: "http://down.example/",
+            },
+          ],
+        }),
+      ),
+    ).toEqual({ skip: "chain-stopped" });
   });
 
   it("falls back to the link's own TLS port when the chain never answered", () => {
@@ -343,6 +372,64 @@ describe("runSslSignal", () => {
     expect(connectSpy).toHaveBeenCalledWith(
       expect.objectContaining({ host: "93.184.215.15", port: 443 }),
     );
+  });
+
+  it("marks a certificate read on another site as that site's", async () => {
+    vi.spyOn(tls, "connect").mockImplementation(failingSocket("ECONNREFUSED"));
+
+    const result = await runSslSignal(
+      "http://93.184.215.14/",
+      undefined,
+      undefined,
+      async () =>
+        chain({
+          finalUrl: "https://93.184.215.15/",
+          hops: [
+            {
+              url: "http://93.184.215.14/",
+              status: 301,
+              location: "https://93.184.215.15/",
+            },
+            { url: "https://93.184.215.15/", status: 200 },
+          ],
+        }),
+    );
+
+    expect(result.otherSite).toBe("93.184.215.15");
+    expect(result.observations[0]).toBe(
+      "This is the certificate of 93.184.215.15, where the link moves to HTTPS.",
+    );
+  });
+
+  it("reads nothing when the chain answered on HTTP and stopped short", async () => {
+    const connectSpy = vi.spyOn(tls, "connect");
+
+    const result = await runSslSignal(
+      "http://93.184.215.14/",
+      undefined,
+      undefined,
+      async () =>
+        chain({
+          reachable: false,
+          terminalStatus: 302,
+          finalUrl: "http://93.184.215.16/",
+          hops: [
+            {
+              url: "http://93.184.215.14/",
+              status: 302,
+              location: "http://93.184.215.16/",
+            },
+          ],
+        }),
+    );
+
+    expect(connectSpy).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ available: false });
+    expect(result.noHttps).toBeUndefined();
+    expect(result.probeFailed).toBeUndefined();
+    expect(result.observations).toEqual([
+      "The redirects stopped before reaching HTTPS, so there was no certificate to read.",
+    ]);
   });
 
   it("words a certificate problem plainly and keeps the code out of every sentence", async () => {

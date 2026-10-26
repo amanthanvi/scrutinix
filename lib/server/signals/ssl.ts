@@ -2,6 +2,7 @@ import tls from "node:tls";
 import { isIP } from "node:net";
 
 import { describeCertificateProblem } from "@/lib/domain/certificate";
+import { getRegistrableDomain } from "@/lib/domain/registrable-domain";
 import type { RedirectData, SSLData } from "@/lib/domain/types";
 import { bareHostname } from "@/lib/domain/url";
 import {
@@ -13,15 +14,24 @@ import {
   selectPublicProbeAddresses,
 } from "@/lib/server/public-network-target";
 
+export type TlsProbeTarget =
+  | { hostname: string; port: number }
+  /** The chain answered and never reached HTTPS: no certificate in its path. */
+  | { skip: "no-https" }
+  /** The chain answered, then stopped before it reached HTTPS. */
+  | { skip: "chain-stopped" };
+
 /**
  * Where the TLS probe reads a certificate (exported for unit tests).
  *
  * An https: link: its own host and port. An http: link: the first HTTPS
  * address its redirect chain reached, the certificate a visitor's browser
  * checks there (http://github.com moves to https://github.com/). A chain
- * that answered and never reached HTTPS has no certificate to read, so
- * null. When the chain is unknown or never answered, the link's own host
- * on the port the link names, else 443: a site that answers only over TLS
+ * that answered and never reached HTTPS has none; one that answered and
+ * then stopped short never showed which certificate comes next, so neither
+ * reads the link's own TLS port, which isn't in the visitor's path. Only a
+ * chain that never answered (or is unknown) falls back to the link's own
+ * host on the port it names, else 443: a site that answers only over TLS
  * still counts as answering. Never port 80 for a plain link: a web server
  * there answers a TLS hello with plain HTTP (ERR_SSL_WRONG_VERSION_NUMBER),
  * which says nothing about the site.
@@ -33,7 +43,7 @@ import {
 export function getTlsProbeTarget(
   url: string,
   chain?: RedirectData | null,
-): { hostname: string; port: number } | null {
+): TlsProbeTarget {
   const target = new URL(url);
   if (target.protocol === "http:" && chain) {
     const firstHttps = [...chain.hops.map((hop) => hop.url), chain.finalUrl]
@@ -43,7 +53,10 @@ export function getTlsProbeTarget(
       return endpointOf(firstHttps);
     }
     if (chain.reachable) {
-      return null;
+      return { skip: "no-https" };
+    }
+    if (chain.hops.length > 0) {
+      return { skip: "chain-stopped" };
     }
   }
 
@@ -85,11 +98,44 @@ export async function runSslSignal(
       ? await redirects().catch(() => null)
       : null;
   const probeTarget = getTlsProbeTarget(url, chain);
-  if (!probeTarget) {
-    return createNoHttpsSslData();
+  if ("skip" in probeTarget) {
+    return probeTarget.skip === "no-https"
+      ? createNoHttpsSslData()
+      : createUnavailableSslData(
+          "The redirects stopped before reaching HTTPS, so there was no certificate to read.",
+        );
   }
 
-  const { hostname, port } = probeTarget;
+  const result = await probeEndpoint(
+    probeTarget.hostname,
+    probeTarget.port,
+    url,
+    signal,
+    scanId,
+  );
+  // The certificate of the site an http:// link moves to: say so, and let
+  // nothing pair its age with the link's own domain (`otherSite`).
+  const linkSite = getRegistrableDomain(bareHostname(url));
+  const probedSite = getRegistrableDomain(probeTarget.hostname);
+  return probedSite === linkSite
+    ? result
+    : {
+        ...result,
+        otherSite: probedSite,
+        observations: [
+          `This is the certificate of ${probedSite}, where the link moves to HTTPS.`,
+          ...result.observations,
+        ],
+      };
+}
+
+async function probeEndpoint(
+  hostname: string,
+  port: number,
+  url: string,
+  signal: AbortSignal | undefined,
+  scanId: string | undefined,
+): Promise<SSLData> {
   const deadline = Date.now() + SSL_SIGNAL_BUDGET_MS;
   const publicTarget = await assertPublicNetworkTarget(hostname, {
     signal,

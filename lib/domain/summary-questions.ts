@@ -882,9 +882,11 @@ function answerCertificate(
   const issued = dated
     ? `This certificate was issued ${formatElapsed(now - issuedAt)} ago.`
     : null;
-  // The engine's fresh-certificate rule: days old, on a brand-new domain.
+  // The engine's fresh-certificate rule: days old, on a brand-new domain,
+  // and only the link's own certificate (not one from `otherSite`).
   const domainAge = scoredAgeDays(signals);
   const freshOnNewDomain =
+    !data.otherSite &&
     dated &&
     Math.floor((now - issuedAt) / DAY_MS) < FRESH_CERTIFICATE_DAYS &&
     domainAge !== null &&

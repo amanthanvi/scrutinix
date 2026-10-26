@@ -240,6 +240,12 @@ export const sslDataSchema = z.object({
    * the Summary say, so the browser never maps verification codes itself.
    */
   problem: z.string().optional().catch(undefined),
+  /**
+   * The registered domain the certificate was read from when it isn't the
+   * link's own: an http:// link that moves to HTTPS on another site. Its
+   * age is never paired with the link's domain age.
+   */
+  otherSite: z.string().optional().catch(undefined),
 });
 
 export type SSLData = z.infer<typeof sslDataSchema>;

@@ -538,7 +538,9 @@ function scoreSsl(signals: SignalResults, asOf: number): ScoredItem[] {
   // pattern. The certificate age alone is deliberately NOT scored -
   // short-lived certificates (Let's Encrypt renewals) make young certs
   // routine on legitimate sites.
-  const validFrom = signal.data.validFrom;
+  // Only the link's own certificate pairs with the link's domain age: one
+  // read on the site an http:// link moves to (`otherSite`) is not its.
+  const validFrom = signal.data.otherSite ? null : signal.data.validFrom;
   const whois = signals.whois;
   const domainAgeDays =
     whois.status === "success" && whois.data ? whois.data.ageDays : null;

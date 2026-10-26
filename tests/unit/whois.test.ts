@@ -201,6 +201,33 @@ describe("runWhoisSignal", () => {
     ]);
   });
 
+  it("bounds the 404 body it reads, so a stalled body can't hold the scan", async () => {
+    vi.useFakeTimers();
+    try {
+      const stalled = new ReadableStream({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode('{"title":'));
+        },
+      });
+      vi.spyOn(globalThis, "fetch").mockResolvedValue(
+        new Response(stalled, { status: 404 }),
+      );
+
+      const pending = runWhoisSignal("https://example.com");
+      await vi.advanceTimersByTimeAsync(2_100);
+
+      // Answered by its status: no record.
+      await expect(pending).resolves.toMatchObject({
+        available: false,
+        observations: [
+          "Registration data was unavailable for this scan. The registry has no RDAP record for this domain.",
+        ],
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("keeps a registry's own 404 a missing record, whatever its title", async () => {
     const answer = Response.json(
       {
