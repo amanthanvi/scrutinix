@@ -176,6 +176,47 @@ describe("runWhoisSignal", () => {
     expect(result.observations[0]).toContain("no RDAP record");
   });
 
+  it("says a TLD without an RDAP service publishes none, not that the domain has no record", async () => {
+    // rdap.org's own answer for .be (no redirect to a registry).
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      Response.json(
+        {
+          rdapConformance: ["rdap_level_0"],
+          lang: "en",
+          errorCode: 404,
+          title: "No RDAP service is available for this resource",
+        },
+        { status: 404 },
+      ),
+    );
+
+    const result = await runWhoisSignal("https://youtu.be/jNQXAC9IVRw");
+
+    expect(result.available).toBe(false);
+    expect(result.observations).toEqual([
+      "The .be registry doesn't publish registration data over RDAP, so we couldn't look this domain up.",
+    ]);
+  });
+
+  it("keeps a registry's own 404 a missing record, whatever its title", async () => {
+    const answer = Response.json(
+      {
+        errorCode: 404,
+        title: "No RDAP service is available for this resource",
+      },
+      { status: 404 },
+    );
+    // Redirected: the registry answered, not rdap.org.
+    Object.defineProperty(answer, "redirected", { value: true });
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(answer);
+
+    const result = await runWhoisSignal("https://unregistered.example.com");
+
+    expect(result.observations[0]).toBe(
+      "Registration data was unavailable for this scan. The registry has no RDAP record for this domain.",
+    );
+  });
+
   it("marks literal IP targets as not applicable", async () => {
     await expect(
       runWhoisSignal("https://45.151.155.223/x86_64"),
