@@ -23,9 +23,10 @@ function headingOf(line) {
   return { level: match[1].length, text: match[2] ?? "" };
 }
 
-/** Every Proof section in a Markdown body: from its ATX heading to the next heading at the same level or above. Headings inside code fences don't count. */
+/** Every Proof section in a Markdown body: from its ATX heading to the next heading at the same level or above. Headings inside code fences don't count, and nothing inside an HTML comment does: it doesn't render, and an unclosed one hides the rest of the body. */
 export function proofSections(body) {
-  const lines = String(body ?? "").split(/\r?\n/);
+  const visible = String(body ?? "").replace(/<!--[\s\S]*?(?:-->|$)/g, "");
+  const lines = visible.split(/\r?\n/);
   const sections = [];
   let fence = null;
   let open = null;

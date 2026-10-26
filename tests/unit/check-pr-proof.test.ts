@@ -61,6 +61,15 @@ describe("PR Proof guard", () => {
     expect(check(body).ok).toBe(true);
   });
 
+  it("ignores a Proof or SHA hidden in an HTML comment", () => {
+    expect(check(`<!--\n### Proof\n${HEAD}\n-->\n`).ok).toBe(false);
+    expect(check(`### Proof\n\n<!-- ${HEAD} -->\nPending.`).ok).toBe(false);
+    expect(check(`### Proof\n\nPending.\n<!-- unclosed\n${HEAD}`).ok).toBe(
+      false,
+    );
+    expect(check(`### Proof\n<!-- note -->\nHead ${HEAD}`).ok).toBe(true);
+  });
+
   it("passes when any of several Proof sections quotes the head", () => {
     const body = `### Proof\n${OLDER}\n\n### Proof (rebased)\n${HEAD}\n`;
     expect(check(body).ok).toBe(true);
