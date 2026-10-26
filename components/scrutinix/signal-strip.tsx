@@ -148,61 +148,78 @@ export function SignalStrip({
     moveFocus(target);
   };
 
+  // One hint per mode, each with its own id, kept out of the toolbar (it
+  // holds only the eight cells): Safari kept the first hint's words when
+  // one element's text changed, and counted the hint as a ninth item.
+  const hintId = `sx-strip-hint-${leadsTo}`;
   return (
-    <div
-      role="toolbar"
-      aria-label="Checks"
-      aria-describedby="sx-strip-hint"
-      className="sx-strip"
-    >
-      <span id="sx-strip-hint" className="sr-only">
-        {leadsTo === "question"
-          ? "Each check moves to the question it answers below."
-          : leadsTo === "status-row"
-            ? "Each check moves to its row below."
-            : "Each check opens its evidence below."}
+    <>
+      <span id={hintId} hidden>
+        {STRIP_HINTS[leadsTo]}
       </span>
-      {signalNames.map((name, index) => {
-        const severity = signature[index] ?? "pending";
-        const finding = getSignalFinding(name, signals[name]);
-        return (
-          <button
-            key={name}
-            ref={(node) => {
-              cellRefs.current[index] = node;
-            }}
-            type="button"
-            data-signal={name}
-            tabIndex={index === focusIndex ? 0 : -1}
-            // The name starts with the visible label (WCAG 2.5.3), so
-            // "click Redirects" works; the title keeps the full name.
-            aria-label={`${cellNames[name]}: ${finding}`}
-            title={`${signalLabels[name]} — ${severityWords[severity]}`}
-            onClick={() => {
-              setFocusIndex(index);
-              onActivate(name);
-            }}
-            onFocus={() => setFocusIndex(index)}
-            onKeyDown={(event) => onKeyDown(event, index)}
-            className="sx-strip-cell"
-          >
-            <SignalCell
-              severity={severity}
-              live={streaming}
-              className="sx-cell-bar"
-            />
-            <CellLabel name={name} severity={severity} />
-          </button>
-        );
-      })}
-    </div>
+      <div
+        role="toolbar"
+        aria-label="Checks"
+        aria-describedby={hintId}
+        className="sx-strip"
+      >
+        {signalNames.map((name, index) => {
+          const severity = signature[index] ?? "pending";
+          const finding = getSignalFinding(name, signals[name]);
+          return (
+            <button
+              key={name}
+              ref={(node) => {
+                cellRefs.current[index] = node;
+              }}
+              type="button"
+              data-signal={name}
+              tabIndex={index === focusIndex ? 0 : -1}
+              // The name starts with the visible label (WCAG 2.5.3), so
+              // "click Redirects" works.
+              aria-label={`${cellNames[name]}: ${finding}`}
+              onClick={() => {
+                setFocusIndex(index);
+                onActivate(name);
+              }}
+              onFocus={() => setFocusIndex(index)}
+              onKeyDown={(event) => onKeyDown(event, index)}
+              className="sx-strip-cell"
+            >
+              {/* The full name and state on hover, hidden from assistive
+                  technology: a title on the cell was read as a second
+                  name. */}
+              <span
+                aria-hidden="true"
+                title={`${signalLabels[name]} — ${severityWords[severity]}`}
+                className="contents"
+              >
+                <SignalCell
+                  severity={severity}
+                  live={streaming}
+                  className="sx-cell-bar"
+                />
+                <CellLabel name={name} severity={severity} />
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </>
   );
 }
+
+/** What a cell leads to, said once as the toolbar's description. */
+const STRIP_HINTS = {
+  question: "Each check moves to the question it answers below.",
+  row: "Each check opens its evidence below.",
+  "status-row": "Each check moves to its row below.",
+} as const;
 
 /** A settled strip drawn from a stored signature (shared snapshots). */
 export function SignatureStrip({ signature }: { signature: SignalSignature }) {
   return (
-    <ul aria-label="Checks" className="sx-strip">
+    <ul role="list" aria-label="Checks" className="sx-strip">
       {signalNames.map((name, index) => {
         const severity = signature[index] ?? "pending";
         return (

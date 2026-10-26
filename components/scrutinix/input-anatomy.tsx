@@ -3,6 +3,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 
 import { LinkAnatomyView } from "@/components/scrutinix/link-anatomy";
+import { announce } from "@/components/ui/announcer";
 import { Input } from "@/components/ui/input";
 import { getLoadedLinkParser, useLinkAnatomy } from "@/hooks/use-link-anatomy";
 import { compareExpectedSite } from "@/lib/domain/expected-site";
@@ -26,13 +27,15 @@ export function InputAnatomy({ url }: { url: string }) {
         id="sx-input-anatomy"
         url={url}
         anatomy={anatomy}
-        captions
         size="form"
       />
       <ExpectedSite anatomy={anatomy} />
     </section>
   );
 }
+
+/** How long typing pauses before the expected-site answer is spoken. */
+export const ANSWER_PAUSE_MS = 700;
 
 /**
  * "Expecting a particular site?": one optional field, answered instantly
@@ -53,6 +56,14 @@ function ExpectedSite({ anatomy }: { anatomy: LinkAnatomy }) {
   const parse = getLoadedLinkParser();
   const comparison =
     open && parse ? compareExpectedSite(parse, anatomy, expected) : null;
+  // The answer shows as you type; it is spoken once typing pauses, not
+  // for every partial name ("paypal.c", "paypal.co", …).
+  const answer = comparison?.sentence ?? "";
+  useEffect(() => {
+    if (!answer) return;
+    const timer = window.setTimeout(() => announce(answer), ANSWER_PAUSE_MS);
+    return () => window.clearTimeout(timer);
+  }, [answer]);
 
   if (!open) {
     return (
@@ -90,7 +101,6 @@ function ExpectedSite({ anatomy }: { anatomy: LinkAnatomy }) {
       />
       <p
         id={answerId}
-        aria-live="polite"
         className={cn(
           // A long typed domain or name breaks rather than widen a phone.
           "text-body min-h-6 wrap-anywhere",
@@ -99,7 +109,7 @@ function ExpectedSite({ anatomy }: { anatomy: LinkAnatomy }) {
             : "text-[var(--sx-text-muted)]",
         )}
       >
-        {comparison?.sentence ?? ""}
+        {answer}
       </p>
     </div>
   );

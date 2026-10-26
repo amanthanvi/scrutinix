@@ -26,7 +26,8 @@ export function ThemeToggle() {
       variant="ghost"
       size="icon"
       onClick={mounted ? () => setTheme(isDark ? "light" : "dark") : undefined}
-      aria-label={label}
+      // The title is the icon's name and its hover tooltip at once. With
+      // an aria-label too, it was read again as a description.
       title={label}
       className="rounded-md"
     >

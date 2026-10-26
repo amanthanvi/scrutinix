@@ -64,7 +64,10 @@ export function BatchTable({
         </p>
       </div>
 
-      <ul className="divide-y divide-[var(--sx-border)] border-b border-[var(--sx-border)]">
+      <ul
+        role="list"
+        className="divide-y divide-[var(--sx-border)] border-b border-[var(--sx-border)]"
+      >
         {items.map((item) => (
           <BatchRow
             key={`${item.index}-${item.url}`}

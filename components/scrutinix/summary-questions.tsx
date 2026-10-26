@@ -72,7 +72,9 @@ export function SummaryQuestionList({
   questions: readonly SummaryQuestion[];
 }) {
   return (
+    // role="list": Safari reads an unstyled list as a plain group.
     <ul
+      role="list"
       aria-label="Questions"
       className="divide-y divide-[var(--sx-border)] border-b border-[var(--sx-border)]"
     >

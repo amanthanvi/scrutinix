@@ -50,7 +50,9 @@ export function SignalRow<N extends SignalName>({
   }
 
   // The visible text, in order (WCAG 2.5.3: the name contains the label a
-  // voice user reads off the screen): "{Label}: {finding}".
+  // voice user reads off the screen): "{Label}: {finding}". Said once: the
+  // visible parts are hidden from assistive technology, which read them
+  // and then this again.
   const ariaLabel = `${label}: ${finding}`;
 
   // Stagger only the initial pending fill; resolving rows enter instantly.
@@ -68,7 +70,10 @@ export function SignalRow<N extends SignalName>({
         settled
         className="mt-[0.3125rem] h-3.5 w-6 shrink-0 rounded-[2px]"
       />
-      <span className="flex min-w-0 flex-1 flex-col gap-1 sm:flex-row sm:gap-6 lg:gap-12">
+      <span
+        aria-hidden="true"
+        className="flex min-w-0 flex-1 flex-col gap-1 sm:flex-row sm:gap-6 lg:gap-12"
+      >
         <span className="text-body flex shrink-0 items-baseline gap-[0.4375rem] font-medium [overflow-wrap:anywhere] text-[var(--sx-text)] sm:w-52 sm:whitespace-nowrap lg:w-[16.625rem]">
           <span
             aria-hidden="true"
@@ -85,14 +90,16 @@ export function SignalRow<N extends SignalName>({
   );
 
   if (entries.length === 0) {
+    // A plain item, read as one line: a named item was a group whose name
+    // and contents both spoke.
     return (
       <li
         data-signal={name}
-        aria-label={ariaLabel}
         tabIndex={-1}
         className="sx-enter flex scroll-mt-6 items-start gap-3.5 py-4 outline-offset-2"
         style={enterDelay}
       >
+        <span className="sr-only select-none">{ariaLabel}</span>
         {summaryRow}
         <span aria-hidden="true" className="size-2 shrink-0" />
       </li>

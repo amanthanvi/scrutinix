@@ -8,6 +8,7 @@ import {
   formatSnapshotTime,
 } from "@/components/scrutinix/verdict-panel";
 import { createErrorAnalysisResult } from "@/lib/domain/analysis-result";
+import { spokenTextNodes } from "@/tests/dom/helpers/speech";
 import { SCORE_BANDS, bandSays } from "@/lib/domain/verdict-guidance";
 import {
   createPendingSignalResults,
@@ -417,9 +418,21 @@ describe("VerdictBand", () => {
           summary: "",
           capturedAt: "2026-10-06T09:00:00.000Z",
         }}
+        onRunSharedScan={() => {}}
       />,
     );
-    expect(screen.getByText("Oct 6, 2026, 09:00 AM UTC").tagName).toBe("TIME");
+    // One run of text (a <time> inside it was a reading stop of its own),
+    // read before the button that replaces the result, drawn after it.
+    const provenance = screen.getByText(
+      "Verified Scrutinix result · checked Oct 6, 2026, 09:00 AM UTC. It may be out of date.",
+    );
+    expect(spokenTextNodes(provenance)).toHaveLength(1);
+    const button = screen.getByRole("button", { name: "Run a fresh scan" });
+    expect(
+      provenance.compareDocumentPosition(button) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(provenance.className).toContain("order-last");
   });
 
   it("says an expired shared result is too old, not unverified", () => {
@@ -765,6 +778,50 @@ describe("VerdictBand", () => {
       />,
     );
     expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+  });
+
+  it("never speaks the room it holds: every stand-in is hidden", () => {
+    const { container, rerender } = render(
+      <VerdictBand
+        result={null}
+        isStreaming
+        sharedSnapshot={null}
+        addressCheck="pending"
+        onCancelScan={() => {}}
+      />,
+    );
+    const standIns = () =>
+      Array.from(container.querySelectorAll("[data-stand-in]"));
+    const spoken = () => spokenTextNodes(container).map((text) => text.trim());
+    // Generated content is text to a screen reader unless it is hidden.
+    expect(standIns().length).toBeGreaterThan(10);
+    for (const standIn of standIns()) {
+      expect(standIn.closest("[aria-hidden='true']")).not.toBeNull();
+    }
+    expect(spoken()).toEqual([
+      "Checking",
+      "0 of 8 checks finished",
+      "Cancel scan",
+    ]);
+
+    rerender(
+      <VerdictBand
+        result={failedScan()}
+        isStreaming={false}
+        sharedSnapshot={null}
+        addressCheck="pending"
+        onRetry={() => {}}
+      />,
+    );
+    for (const standIn of standIns()) {
+      expect(standIn.closest("[aria-hidden='true']")).not.toBeNull();
+    }
+    // A failed scan: its word, instruction, and Try again, nothing more.
+    expect(spoken()).toEqual([
+      "Error",
+      "The scan failed — try again.",
+      "Try again",
+    ]);
   });
 });
 

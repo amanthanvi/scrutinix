@@ -4,7 +4,10 @@ import { describe, expect, it, vi } from "vitest";
 
 import { BatchTable } from "@/components/scrutinix/batch-table";
 import { HistoryPanel } from "@/components/scrutinix/history-panel";
-import { LinkAnatomyView } from "@/components/scrutinix/link-anatomy";
+import {
+  LinkAnatomyView,
+  spokenLink,
+} from "@/components/scrutinix/link-anatomy";
 import { splitLinkAnatomy } from "@/lib/domain/link-anatomy";
 import { createPendingSignalResults, signalNames } from "@/lib/domain/types";
 import { buildThreatAssessment } from "@/lib/domain/verdict";
@@ -80,6 +83,57 @@ describe("compact link anatomy in result rows", () => {
     ).toBeTruthy();
   });
 
+  it("speaks a long link briefly, then when it was checked", async () => {
+    const long = `https://paypal.com.secure-login.xyz/verify${"/".repeat(1_500)}step`;
+    const entry: HistoryEntry = {
+      ...(await resultFor(long, "example.com")),
+      savedAt: new Date().toISOString(),
+    };
+    const { container } = render(
+      <HistoryPanel
+        entries={[entry]}
+        totalCount={1}
+        historyQuery=""
+        onHistoryQueryChange={() => {}}
+        onSelect={() => {}}
+        onClear={() => {}}
+        canUndoClear={false}
+        onUndoClear={() => {}}
+      />,
+    );
+    await expectOwnerIsolated();
+    // The host and the path's first 40 characters, then how much is left,
+    // instead of eleven seconds of slashes; the time set off from the
+    // site it follows.
+    const shown = `paypal.com.secure-login.xyz/verify${"/".repeat(33)}`;
+    const left = long.length - "https://".length - shown.length;
+    const row = screen.getByRole("button", {
+      name: new RegExp(
+        `^Look-alike\\s*${shown.replaceAll(".", "\\.")}, and ${left} more characters, belongs to secure-login\\.xyz, not paypal\\.com\\s*, checked \\d{2}:\\d{2}$`,
+      ),
+    });
+    expect(row).toBeTruthy();
+    // The heading has one name, its count spelled out.
+    expect(
+      screen.getByRole("heading", { level: 2 }).getAttribute("aria-label"),
+    ).toBe("History (1 scan)");
+    // The full link stays on hover, never in what is spoken.
+    const titled = container.querySelector("[title]");
+    expect(titled?.getAttribute("title")).toBe(long);
+    expect(titled?.closest("[aria-hidden='true']")).toBe(titled);
+  });
+
+  it("speaks a link of ordinary length whole", () => {
+    expect(spokenLink("example.com/account/settings")).toBe(
+      "example.com/account/settings",
+    );
+    const fortyEight = `example.com/${"a".repeat(47)}`;
+    expect(spokenLink(fortyEight)).toBe(fortyEight);
+    expect(spokenLink(`${fortyEight}b`)).toBe(
+      `example.com/${"a".repeat(39)}, and 9 more characters`,
+    );
+  });
+
   it("keeps a look-alike's owner whole in a batch row", async () => {
     const result = await resultFor(LOOKALIKE, "example.com");
     render(
@@ -152,11 +206,7 @@ describe("LinkAnatomyView facts", () => {
 describe("LinkAnatomyView captions", () => {
   const captioned = (url: string) =>
     render(
-      <LinkAnatomyView
-        url={url}
-        anatomy={splitLinkAnatomy(parse, url)}
-        captions
-      />,
+      <LinkAnatomyView url={url} anatomy={splitLinkAnatomy(parse, url)} />,
     ).container.querySelector("#sx-link-anatomy");
 
   it("brackets each part inline when every part can carry its caption", () => {

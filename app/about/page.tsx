@@ -264,6 +264,7 @@ export default function AboutPage() {
           check never reads as an endorsement.
         </p>
         <ul
+          role="list"
           className={`${PROSE_MEASURE} grid gap-x-6 gap-y-2.5 sm:grid-cols-2`}
         >
           {cellLegend.map((item) => (
