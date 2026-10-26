@@ -69,6 +69,7 @@ components/
     input-panels.tsx      # URL input + Paste + Analyze
     batch-input.tsx       # Batch textarea, Start batch, and exports (loaded on demand)
     input-anatomy.tsx     # The typed link taken apart before a scan (captions) + "Expecting a particular site?"
+    no-link-note.tsx      # /?nolink=1: one muted line under the form + a polite status region; goes once the visitor moves on
     results-section.tsx   # Band → anatomy → strip → Summary questions / Full rows → details → actions; focus + live region
     verdict-panel.tsx     # VerdictBand (Checking/result/snapshot, one element tree) + VerdictDetails
     link-anatomy.tsx      # Registered domain emphasised, look-alike sentence, segment-keyed facts, full-link toggle
@@ -113,6 +114,7 @@ lib/
     share-launch.ts       # Share-target link extraction (extractSharedLink) and ?url= prefill (resolvePrefill)
     methodology.ts        # /about's scoring tables, rules, bands, confidence caps (engine-checked by tests/unit/methodology.test.ts)
   og/                     # Share-card renderers (cards.tsx) and font loader (fonts.ts: Newsreader TTF + Geist)
+    card-layout.ts        # Fits the registered domain / look-alike sentence to the card (font-measured; middle ellipsis keeps the end)
   server/                 # Orchestrator, providers, signals, cache, local ONNX ML
     share-metadata.ts     # ?shared= verify + validate → SharedView, page metadata, image cap
     share-signing.ts      # HMAC sign/verify for share links; attaches result.share to streamed results

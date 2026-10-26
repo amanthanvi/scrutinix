@@ -11,6 +11,21 @@ import { normalizeUrlInput } from "@/lib/domain/url";
 /** The query parameter that prefills the Single field. */
 export const PREFILL_PARAM = "url";
 
+/**
+ * The flag (`/?nolink=1`) the share target adds when what was shared held
+ * no link it could fill in, so the page can say so in one quiet line. It
+ * carries nothing from the shared text.
+ */
+export const NO_LINK_PARAM = "nolink";
+
+/**
+ * What the page says on `NO_LINK_PARAM`, true whatever reached `/share`
+ * without a link to fill in: none at all, a first link that can't be
+ * checked, or a body over the limit.
+ */
+export const NO_LINK_NOTE =
+  "We didn't find a link to check in what you shared.";
+
 /** The share-target fields, in the order a link is looked for in them. */
 export interface SharedFields {
   url?: string | null;

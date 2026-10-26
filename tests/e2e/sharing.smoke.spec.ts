@@ -147,6 +147,62 @@ test("Share → Scrutinix fills in the shared link and waits for Analyze @smoke"
   await analyzeOnce(page, scans);
 });
 
+test("a share with no link says so in one quiet line and scans nothing @smoke", async ({
+  page,
+}) => {
+  await isolateRateLimit(page);
+  const scans = recordScans(page);
+  const shareCookies = recordShareCookies(page);
+  const note = "We didn't find a link to check in what you shared.";
+  // Android shares plain text as title and text, with no url.
+  await launchFromShareSheet(page, {
+    title: "Dinner plans",
+    text: "Call me when you get home, the door code is the usual one.",
+  });
+
+  // Nothing of the text rides along: only the flag.
+  expect(Object.fromEntries(new URL(page.url()).searchParams)).toEqual({
+    nolink: "1",
+  });
+  expect(await Promise.all(shareCookies)).toEqual([null]);
+  const input = await urlField(page);
+  await expect(input).toHaveValue("");
+
+  // One line under the form, for the eye; spoken once, politely, from the
+  // status region (the visible line is hidden from assistive technology).
+  const line = page.locator("p[aria-hidden='true']", { hasText: note });
+  await expect(line).toBeVisible();
+  await expect(page.getByRole("status").filter({ hasText: note })).toHaveText(
+    note,
+  );
+  expect((await line.boundingBox())!.y).toBeGreaterThan(
+    (await input.boundingBox())!.y,
+  );
+  // Not an error anywhere on the page (the line sits outside the form),
+  // and nothing to tap.
+  await expect(page.getByRole("alert").filter({ hasText: note })).toHaveCount(
+    0,
+  );
+  await expect(page.locator("#scan-console").getByRole("alert")).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Analyze URL" }),
+  ).not.toBeFocused();
+  await page.waitForTimeout(750);
+  expect(scans).toEqual([]);
+
+  // Gone once the person starts on a link of their own.
+  await input.fill("example.com");
+  await expect(line).toHaveCount(0);
+  await expect(page.getByRole("status").filter({ hasText: note })).toHaveCount(
+    0,
+  );
+
+  // A plain visit never shows it.
+  await page.goto("/");
+  await urlField(page);
+  await expect(page.getByText(note)).toHaveCount(0);
+});
+
 test("a share-sheet launch carries a long link whole @smoke", async ({
   page,
 }) => {

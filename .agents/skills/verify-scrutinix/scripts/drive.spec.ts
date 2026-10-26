@@ -879,6 +879,33 @@ test("sharing to Scrutinix fills in the link and waits for Analyze", async ({
   await page.waitForTimeout(QUIET_WINDOW_MS);
   expect(scans).toHaveLength(1);
 
+  // A share with no link: home with only the flag, one quiet line under
+  // the form, the same sentence in a status region, and nothing scanned.
+  const note = "We didn't find a link to check in what you shared.";
+  await launchFromShareSheet(page, {
+    title: "Dinner plans",
+    text: "Call me when you get home.",
+  });
+  expect(new URL(page.url()).search).toBe("?nolink=1");
+  await waitForHydration(page);
+  await expect(input).toHaveValue("");
+  const noLinkLine = page.locator("p[aria-hidden='true']", { hasText: note });
+  await expect(noLinkLine).toBeVisible();
+  await expect(page.getByRole("status").filter({ hasText: note })).toHaveText(
+    note,
+  );
+  await expect(page.getByRole("alert").filter({ hasText: note })).toHaveCount(
+    0,
+  );
+  await page.waitForTimeout(QUIET_WINDOW_MS);
+  expect(scans).toHaveLength(1);
+  await capture(page, "share-target-no-link.png");
+  await fillSingle(page, "example.com");
+  await expect(noLinkLine).toHaveCount(0);
+  await expect(page.getByRole("status").filter({ hasText: note })).toHaveCount(
+    0,
+  );
+
   // Opened by hand, /share has nothing to receive and goes home.
   const opened = await page.request.get("/share", { maxRedirects: 0 });
   expect(opened.status()).toBe(303);
