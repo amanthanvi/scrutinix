@@ -127,6 +127,7 @@ lib/
 scripts/
   build-display-fonts.sh  # Rebuild fonts/newsreader/ from the pinned Fontsource tarball (needs fontTools)
   check-contrast.mjs      # WCAG token-pair guard for both themes (also run by the unit suite)
+  check-pr-proof.mjs      # Proof workflow: PR body needs a Proof section quoting the current head SHA
   generate-icons.mjs      # `npm run icons`: favicons/app icons from lib/brand-mark.ts (sharp; embeds provenance)
   run-e2e.mjs             # Build + start + Playwright on E2E_PORT
 
