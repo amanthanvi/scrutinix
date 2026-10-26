@@ -26,17 +26,44 @@ could not run. Dependency PRs need a narrower proof: the full PR head SHA,
 and the Audit and Verify job URLs for that SHA. Either way the proof has to
 be on the PR before the merge, and it has to name the head that merged.
 
-| PR                                                     | Proof                                                                                                                                                                                                                                                               | Names the full head SHA                                                                                                                                                                                 | Verify job linked                                                                                           | When                                                                                                                           |
-| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| [#64](https://github.com/amanthanvi/scrutinix/pull/64) | Body section, plus [one SHA comment](https://github.com/amanthanvi/scrutinix/pull/64#issuecomment-6193048517)                                                                                                                                                       | No. The comment names `1a23cf0fd22a14f99a56002e055ce259dc79a0de`. The merged head is `0b52fb887754fc29fd59c4ffbbdf6c554e77de64`. Landing notes say "verified on the rebased branch" and name no commit. | No job URL. Local `verify:check` / smoke / drive results are in the body, with no evidence-directory paths. | The SHA comment is from 2026-10-15, ten days before merge.                                                                     |
-| [#65](https://github.com/amanthanvi/scrutinix/pull/65) | None                                                                                                                                                                                                                                                                | No                                                                                                                                                                                                      | No                                                                                                          | Merged 2026-10-13. Head `3ee6e41e26b2515718c693a1e9ab8b7df458b3dc` had green Audit and Verify.                                 |
-| [#66](https://github.com/amanthanvi/scrutinix/pull/66) | None                                                                                                                                                                                                                                                                | No                                                                                                                                                                                                      | No                                                                                                          | Merged 2026-10-13, about three minutes after a rate-limited CodeRabbit reply. Head `f14c0048019da6cb717da415a71ce858160a9d65`. |
-| [#67](https://github.com/amanthanvi/scrutinix/pull/67) | [Comment](https://github.com/amanthanvi/scrutinix/pull/67#issuecomment-6173656596) names head `dc59defb30760c97094914b35b9f828488bf8111`, the [Verify job](https://github.com/amanthanvi/scrutinix/actions/runs/38601392020/job/115981259006), and the other checks | Yes                                                                                                                                                                                                     | Yes                                                                                                         | Posted 2026-10-14T16:55:19Z. `mergedAt` is 2026-10-14T16:55:00Z. The proof arrived 19 seconds after the merge.                 |
-| [#68](https://github.com/amanthanvi/scrutinix/pull/68) | None. [Close note](https://github.com/amanthanvi/scrutinix/pull/68#issuecomment-6273197719) says #69 already shipped vitest 5.0.5                                                                                                                                   | No                                                                                                                                                                                                      | No                                                                                                          | Closed, not merged. Head `fb0ec10767a1e432a802bfadc1b5dcc7df39f06f` was green.                                                 |
-| [#69](https://github.com/amanthanvi/scrutinix/pull/69) | [Comment](https://github.com/amanthanvi/scrutinix/pull/69#issuecomment-6273113930)                                                                                                                                                                                  | Yes, `2ae80fd94259e2f9ff40cbdf981750b1f309e5c7`                                                                                                                                                         | Yes, [job](https://github.com/amanthanvi/scrutinix/actions/runs/39268074685/job/118112798580)               | Posted 2026-10-19T17:25:35Z, six seconds before `mergedAt` 17:25:41Z.                                                          |
+| PR                                                     | Merged | Full head SHA in the proof | Verify job             |
+| ------------------------------------------------------ | ------ | -------------------------- | ---------------------- |
+| [#64](https://github.com/amanthanvi/scrutinix/pull/64) | yes    | no                         | no                     |
+| [#65](https://github.com/amanthanvi/scrutinix/pull/65) | yes    | no                         | no                     |
+| [#66](https://github.com/amanthanvi/scrutinix/pull/66) | yes    | no                         | no                     |
+| [#67](https://github.com/amanthanvi/scrutinix/pull/67) | yes    | yes, after `mergedAt`      | yes, after `mergedAt`  |
+| [#68](https://github.com/amanthanvi/scrutinix/pull/68) | no     | no                         | no                     |
+| [#69](https://github.com/amanthanvi/scrutinix/pull/69) | yes    | yes, before `mergedAt`     | yes, before `mergedAt` |
 
-That is 5 proof gaps across 6 PRs (#64, #65, #66, #67, #68). #69 is the
-Dependabot proof that met the bar.
+Four merges landed without a proof that covered the head (#64, #65, #66,
+#67). #68 closed unmerged, also with no proof. #69 is the Dependabot proof
+that met the bar.
+
+- **#64.** The body has local `verify:check`, smoke, and drive results, and
+  no evidence-directory paths. The only SHA comment names
+  `1a23cf0fd22a14f99a56002e055ce259dc79a0de`
+  ([comment](https://github.com/amanthanvi/scrutinix/pull/64#issuecomment-6193048517),
+  2026-10-15). The merged head is
+  `0b52fb887754fc29fd59c4ffbbdf6c554e77de64`. Landing notes say "verified on
+  the rebased branch" and name no commit.
+- **#65.** No proof comment. Merged 2026-10-13. Head
+  `3ee6e41e26b2515718c693a1e9ab8b7df458b3dc` had green Audit and Verify.
+- **#66.** No proof comment. Merged 2026-10-13, about three minutes after a
+  rate-limited CodeRabbit reply. Head
+  `f14c0048019da6cb717da415a71ce858160a9d65`.
+- **#67.** [Comment](https://github.com/amanthanvi/scrutinix/pull/67#issuecomment-6173656596)
+  names head `dc59defb30760c97094914b35b9f828488bf8111` and the
+  [Verify job](https://github.com/amanthanvi/scrutinix/actions/runs/38601392020/job/115981259006).
+  Posted 2026-10-14T16:55:19Z. `mergedAt` is 2026-10-14T16:55:00Z, so the
+  proof arrived 19 seconds after the merge.
+- **#68.** No proof. The
+  [close note](https://github.com/amanthanvi/scrutinix/pull/68#issuecomment-6273197719)
+  says #69 already shipped vitest 5.0.5. Closed, not merged. Head
+  `fb0ec10767a1e432a802bfadc1b5dcc7df39f06f` was green.
+- **#69.** [Comment](https://github.com/amanthanvi/scrutinix/pull/69#issuecomment-6273113930)
+  names `2ae80fd94259e2f9ff40cbdf981750b1f309e5c7` and links the
+  [Verify job](https://github.com/amanthanvi/scrutinix/actions/runs/39268074685/job/118112798580).
+  Posted 2026-10-19T17:25:35Z, six seconds before `mergedAt` 17:25:41Z.
 
 **Rule.** Write the proof against `gh pr view --json headRefOid` and post it
 before merging. Quote the full 40-character head SHA. Link the Audit job and
@@ -111,12 +138,27 @@ seven `@greptileai review` comments, several inside the same half hour.
 Final heads of all six PRs were green on Audit and Verify. #64 was red four
 times on the way there. Dependabot CI never went red.
 
-| Run                                                                             | Head         | Job                | What failed                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| ------------------------------------------------------------------------------- | ------------ | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [38735480301](https://github.com/amanthanvi/scrutinix/actions/runs/38735480301) | `f6a5496cb6` | Verify, Format     | `prettier --check` on `.agents/skills/verify-scrutinix/scripts/runtime.mjs`, `scripts/runtime.check.mjs`, and `SKILL.md`                                                                                                                                                                                                                                                                                                                                                      |
-| [38736005333](https://github.com/amanthanvi/scrutinix/actions/runs/38736005333) | `206458c655` | Verify, Install    | `npm ci` `ETIMEDOUT` to the registry. The same run warned `playwright-report/` was missing.                                                                                                                                                                                                                                                                                                                                                                                   |
-| [38740769671](https://github.com/amanthanvi/scrutinix/actions/runs/38740769671) | `6d1f38dff5` | Verify, Lighthouse | `performance: 0.88` against a 0.90 minimum. Accessibility was 1.00.                                                                                                                                                                                                                                                                                                                                                                                                           |
-| [39796798300](https://github.com/amanthanvi/scrutinix/actions/runs/39796798300) | `a34fe53680` | Audit              | 5 unreviewed vite advisories, 0 fixable: [GHSA-698v-4r3x-3vcv](https://github.com/advisories/GHSA-698v-4r3x-3vcv), [GHSA-r825-w8mm-5pxw](https://github.com/advisories/GHSA-r825-w8mm-5pxw), [GHSA-587h-7wmj-h5pm](https://github.com/advisories/GHSA-587h-7wmj-h5pm), [GHSA-rq7h-c2jc-7f22](https://github.com/advisories/GHSA-rq7h-c2jc-7f22), [GHSA-vfpm-58rq-9qcg](https://github.com/advisories/GHSA-vfpm-58rq-9qcg). `braces` GHSA-vfj7-8cjw-p6xm was already accepted. |
+| Run                                                                             | Head         | Job                |
+| ------------------------------------------------------------------------------- | ------------ | ------------------ |
+| [38735480301](https://github.com/amanthanvi/scrutinix/actions/runs/38735480301) | `f6a5496cb6` | Verify, Format     |
+| [38736005333](https://github.com/amanthanvi/scrutinix/actions/runs/38736005333) | `206458c655` | Verify, Install    |
+| [38740769671](https://github.com/amanthanvi/scrutinix/actions/runs/38740769671) | `6d1f38dff5` | Verify, Lighthouse |
+| [39796798300](https://github.com/amanthanvi/scrutinix/actions/runs/39796798300) | `a34fe53680` | Audit              |
+
+- **38735480301.** `prettier --check` failed on
+  `.agents/skills/verify-scrutinix/scripts/runtime.mjs`,
+  `scripts/runtime.check.mjs`, and `SKILL.md`.
+- **38736005333.** `npm ci` reached the registry with `ETIMEDOUT`. The same
+  run warned that `playwright-report/` was missing.
+- **38740769671.** Lighthouse printed `performance: 0.88` against a 0.90
+  minimum. Accessibility was 1.00.
+- **39796798300.** Audit reported 5 unreviewed vite advisories and 0
+  fixable: [GHSA-698v-4r3x-3vcv](https://github.com/advisories/GHSA-698v-4r3x-3vcv),
+  [GHSA-r825-w8mm-5pxw](https://github.com/advisories/GHSA-r825-w8mm-5pxw),
+  [GHSA-587h-7wmj-h5pm](https://github.com/advisories/GHSA-587h-7wmj-h5pm),
+  [GHSA-rq7h-c2jc-7f22](https://github.com/advisories/GHSA-rq7h-c2jc-7f22),
+  and [GHSA-vfpm-58rq-9qcg](https://github.com/advisories/GHSA-vfpm-58rq-9qcg).
+  `braces` GHSA-vfj7-8cjw-p6xm was already accepted.
 
 **Rules.**
 
