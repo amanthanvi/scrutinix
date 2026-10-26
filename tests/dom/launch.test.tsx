@@ -10,6 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AnalyzerRuntimeProvider } from "@/components/scrutinix/analyzer-runtime";
 import { ResultsSection } from "@/components/scrutinix/results-section";
 import { ScanForm } from "@/components/scrutinix/scan-form";
+import { announce, Announcer } from "@/components/ui/announcer";
 import { resolvePrefill } from "@/lib/domain/share-launch";
 import {
   encodeSharedSnapshot,
@@ -92,6 +93,7 @@ function renderApp({
     <AnalyzerRuntimeProvider prefill={prefill} shared={shared}>
       <ScanForm />
       <ResultsSection />
+      <Announcer />
     </AnalyzerRuntimeProvider>,
   );
 }
@@ -128,6 +130,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+  announce("");
 });
 
 describe("a link handed to the page (?url=, or the share target's redirect to it)", () => {
@@ -180,6 +183,31 @@ describe("a link handed to the page (?url=, or the share target's redirect to it
       view.unmount();
     }
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("says once that a link was filled in, and whose it really is", async () => {
+    stubScan(LINK);
+    const lookAlike = "https://paypal.com.secure-login.xyz/verify";
+    renderApp({ prefill: resolvePrefill(lookAlike) });
+    const status = screen.getByRole("status");
+    // Not by moving focus to the field (the phone keyboard would cover the
+    // link): a polite message, once the address check knows the owner.
+    await waitFor(() =>
+      expect(status.textContent).toBe(
+        "Link filled in: paypal.com.secure-login.xyz. This link belongs to secure-login.xyz, not paypal.com. Press Analyze to check it.",
+      ),
+    );
+    expect(document.activeElement).toBe(analyzeButton());
+  });
+
+  it("says a link that imitates nothing was filled in, without an owner sentence", async () => {
+    stubScan(LINK);
+    renderApp({ prefill: LINK });
+    await waitFor(() =>
+      expect(screen.getByRole("status").textContent).toBe(
+        "Link filled in: parcel-help.example. Press Analyze to check it.",
+      ),
+    );
   });
 
   it("leaves an empty field alone when there is nothing to fill in", async () => {
