@@ -15,6 +15,8 @@ import {
  * its place, and the browser records no layout shift. The one exception,
  * a coverage caveat, is pinned below. Depends on SCRUTINIX_TEST_FIXTURES=1
  * (scripts/run-e2e.mjs); see lib/server/test-fixtures.ts for the scenarios.
+ * The positions are the check in every engine; the browser's own record of
+ * layout shifts is Chromium's alone (`expectNoLayoutShift`).
  */
 
 const VERDICTS = [
@@ -41,12 +43,19 @@ const VIEWPORTS = [
 /**
  * Record every layout shift on the page with its start time, input or not:
  * a landing happens long after the tap, and any shift after `markLanding`
- * is the landing's.
+ * is the landing's. Only where the engine records layout shifts (Chromium).
  */
 async function recordLayoutShifts(page: Page) {
   await page.addInitScript(() => {
     const shifts: { at: number; value: number; moved: string[] }[] = [];
-    Object.assign(window, { sxShifts: shifts, sxLanding: Infinity });
+    const recorded =
+      PerformanceObserver.supportedEntryTypes.includes("layout-shift");
+    Object.assign(window, {
+      sxShifts: shifts,
+      sxShiftsRecorded: recorded,
+      sxLanding: Infinity,
+    });
+    if (!recorded) return;
     new PerformanceObserver((list) => {
       for (const entry of list.getEntries() as unknown as {
         startTime: number;
@@ -80,16 +89,38 @@ async function landingShifts(page: Page) {
       await new Promise((resolve) => requestAnimationFrame(resolve));
     }
     await new Promise((resolve) => setTimeout(resolve, 100));
-    const { sxShifts, sxLanding } = window as unknown as {
+    const { sxShifts, sxShiftsRecorded, sxLanding } = window as unknown as {
       sxShifts: { at: number; value: number; moved: string[] }[];
+      sxShiftsRecorded: boolean;
       sxLanding: number;
     };
     const landed = sxShifts.filter((shift) => shift.at >= sxLanding);
     return {
+      recorded: sxShiftsRecorded,
       sum: landed.reduce((total, shift) => total + shift.value, 0),
       moved: landed.flatMap((shift) => shift.moved),
     };
   });
+}
+
+/**
+ * The browser recorded no layout shift in the landing. Chromium must
+ * record them; Firefox and WebKit have no Layout Instability API (an empty
+ * record there would prove nothing), so the check runs wherever it exists
+ * and the positions are the check everywhere.
+ */
+function expectNoLayoutShift(
+  shifts: Awaited<ReturnType<typeof landingShifts>>,
+  browserName: string,
+  link?: string,
+) {
+  if (browserName === "chromium") {
+    expect(shifts.recorded, "Chromium records layout shifts").toBe(true);
+  }
+  if (shifts.recorded) {
+    const moved = `moved ${shifts.moved.join(", ")}`;
+    expect(shifts.sum, link ? `${link}: ${moved}` : moved).toBe(0);
+  }
 }
 
 /**
@@ -165,6 +196,7 @@ for (const viewport of VIEWPORTS) {
 
     test(`nothing moves when any verdict lands (${viewport.width}px)`, async ({
       page,
+      browserName,
     }) => {
       test.setTimeout(120_000);
       await recordLayoutShifts(page);
@@ -201,7 +233,7 @@ for (const viewport of VIEWPORTS) {
         } else {
           expect(after.items, `${link}: answers`).toEqual(before.items);
         }
-        expect(shifts.sum, `${link}: moved ${shifts.moved.join(", ")}`).toBe(0);
+        expectNoLayoutShift(shifts, browserName, link);
       }
     });
   });
@@ -229,6 +261,7 @@ test.describe("on a phone", () => {
 
   test("a Safe verdict held for the address check, and the one it becomes, keep the band's height", async ({
     page,
+    browserName,
   }) => {
     let releaseParser = () => {};
     const parserHeld = new Promise<void>((resolve) => {
@@ -257,7 +290,7 @@ test.describe("on a phone", () => {
     const held = await layout(page);
     expect(held.band).toBe(before.band);
     expect(held.tops).toEqual(before.tops);
-    expect(shifts.sum, `moved ${shifts.moved.join(", ")}`).toBe(0);
+    expectNoLayoutShift(shifts, browserName);
 
     // The parser arrives: the band states the verdict in the same room.
     // (The link's breakdown below it is drawn only now, so it may reflow.)
@@ -270,6 +303,7 @@ test.describe("on a phone", () => {
 
   test("an Unconfirmed verdict lands without moving anything", async ({
     page,
+    browserName,
   }) => {
     let parserRequests = 0;
     await routeParser(page, async () => {
@@ -301,7 +335,7 @@ test.describe("on a phone", () => {
     const after = await layout(page);
     expect(after.band).toBe(before.band);
     expect(after.tops).toEqual(before.tops);
-    expect(shifts.sum, `moved ${shifts.moved.join(", ")}`).toBe(0);
+    expectNoLayoutShift(shifts, browserName);
   });
 });
 
@@ -360,7 +394,8 @@ for (const viewport of [PHONE, DESKTOP]) {
         );
         // Everything below the band moves by the band's growth and no more.
         // Layout offsets are whole pixels and the growth is not, so each
-        // may round either way.
+        // may round either way: one rounding before and one after leave a
+        // true move less than 1px off (0.97px seen, Chromium on Linux).
         expect(after.tops[0], `${link}: band`).toBe(before.tops[0]);
         const below = [
           ...before.tops
