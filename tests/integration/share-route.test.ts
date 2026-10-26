@@ -7,6 +7,9 @@ import { parseScanRequest } from "@/lib/server/scan-request";
 
 const ORIGIN = "https://www.scrutinix.net";
 
+/** Where a share with no link it can fill in lands: home, with the note. */
+const NO_LINK = "/?nolink=1";
+
 function shareRequest(
   fields: Record<string, string>,
   { site }: { site?: string } = {},
@@ -90,14 +93,24 @@ describe("POST /share", () => {
     expect(response.headers.getSetCookie()).toEqual([]);
   });
 
-  it("goes home with nothing prefilled when no checkable link was shared", async () => {
+  it("goes home with nothing prefilled, flagged for the note, when no checkable link was shared", async () => {
     for (const fields of [
       { text: "see you at 6" } as Record<string, string>,
+      // Android's share of plain text: title and text, no url.
+      {
+        title: "Dinner plans",
+        text: "Call me when you get home, the door code is the usual one.",
+      },
+      {},
       { url: "http://localhost:3000/admin" },
+      { text: "ftp://files.example/report.pdf" },
     ]) {
       const response = await POST(shareRequest(fields, { site: "none" }));
       expect(response.status).toBe(303);
-      expect(response.headers.get("location")).toBe("/");
+      // Relative, and nothing from the shared text rides along.
+      expect(response.headers.get("location")).toBe(NO_LINK);
+      expect(response.headers.getSetCookie()).toEqual([]);
+      expect(response.headers.get("cache-control")).toBe("no-store");
     }
   });
 
@@ -112,7 +125,7 @@ describe("POST /share", () => {
       body: `text=${"a".repeat(19_990)}`,
     });
     const response = await POST(big);
-    expect(response.headers.get("location")).toBe("/");
+    expect(response.headers.get("location")).toBe(NO_LINK);
   });
 
   it("stops reading a streamed body at 16 KiB, whatever its Content-Length says", async () => {
@@ -128,7 +141,7 @@ describe("POST /share", () => {
           ...(declared ? { "content-length": declared } : {}),
         }),
       );
-      expect(response.headers.get("location"), String(declared)).toBe("/");
+      expect(response.headers.get("location"), String(declared)).toBe(NO_LINK);
       // Cancelled at the chunk that crossed the limit (plus the one the
       // stream queued ahead), not drained.
       expect(stream.sent(), String(declared)).toBeLessThanOrEqual(
@@ -177,7 +190,7 @@ describe("POST /share", () => {
         body: "text=https://parcel-help.example/",
       }),
     );
-    expect(plain.headers.get("location")).toBe("/");
+    expect(plain.headers.get("location")).toBe(NO_LINK);
   });
 
   it("is never cached", async () => {
@@ -189,7 +202,7 @@ describe("POST /share", () => {
 });
 
 describe("GET /share", () => {
-  it("goes home", () => {
+  it("goes home, with no note: nothing was shared", () => {
     const response = GET();
     expect(response.status).toBe(303);
     expect(response.headers.get("location")).toBe("/");
@@ -230,7 +243,7 @@ describe("a Unicode link, from the share sheet to the scan", () => {
       "That link is too long to check (over 2,048 characters).",
     );
     const shared = await POST(shareRequest({ url: long }, { site: "none" }));
-    expect(shared.headers.get("location")).toBe("/");
+    expect(shared.headers.get("location")).toBe(NO_LINK);
     expect(resolvePrefill(long)).toBeNull();
     const refused = await scanRequest(long);
     expect(refused.ok).toBe(false);

@@ -30,10 +30,10 @@ import {
   type SignalName,
 } from "@/lib/domain/types";
 import { normalizeUrlInput } from "@/lib/domain/url";
-import { PREFILL_PARAM } from "@/lib/domain/share-launch";
+import { NO_LINK_PARAM, PREFILL_PARAM } from "@/lib/domain/share-launch";
 
 /** Query parameters that describe what the page opened on. */
-const LAUNCH_PARAMS = ["shared", "sig", PREFILL_PARAM] as const;
+const LAUNCH_PARAMS = ["shared", "sig", PREFILL_PARAM, NO_LINK_PARAM] as const;
 
 /**
  * Drop the link the page opened on from the address bar once something
