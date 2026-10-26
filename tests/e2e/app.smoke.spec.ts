@@ -325,7 +325,7 @@ test("opening a history entry focuses its verdict @smoke", async ({ page }) => {
   await expect(historyRegion.getByRole("list")).toHaveAttribute("role", "list");
   // Each row: the verdict, the link, then when it was checked, set apart.
   const row = historyRegion.getByRole("button", {
-    name: /^Malicious\s*malicious\.scrutinix\.test\/login\s*, checked \d{2}:\d{2}$/,
+    name: /^Malicious\s*malicious\.scrutinix\.test\/login\s*, scanned \d{2}:\d{2}$/,
   });
   await expect(row).toBeVisible();
   // The link is said once: the drawn parts hide themselves, since WebKit

@@ -118,14 +118,14 @@ describe("compact link anatomy in result rows", () => {
     const left = long.length - "https://".length - shown.length - 32;
     const row = screen.getByRole("button", {
       name: new RegExp(
-        `^Look-alike\\s*${shown.replaceAll(".", "\\.")}, and ${left} more characters, belongs to secure-login\\.xyz, not paypal\\.com\\s*, checked \\d{2}:\\d{2}$`,
+        `^Look-alike\\s*${shown.replaceAll(".", "\\.")}, and ${left} more characters, belongs to secure-login\\.xyz, not paypal\\.com\\s*, scanned \\d{2}:\\d{2}$`,
       ),
     });
     expect(row).toBeTruthy();
     // Safari's name for it is the same string, the drawn link left out.
     expect(spokenText(row)).toMatch(
       new RegExp(
-        `^Look-alike${shown.replaceAll(".", "\\.")}, and ${left} more characters, belongs to secure-login\\.xyz, not paypal\\.com, checked \\d{2}:\\d{2}$`,
+        `^Look-alike${shown.replaceAll(".", "\\.")}, and ${left} more characters, belongs to secure-login\\.xyz, not paypal\\.com, scanned \\d{2}:\\d{2}$`,
       ),
     );
     // The heading has one name, its count spelled out.

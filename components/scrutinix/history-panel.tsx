@@ -80,9 +80,11 @@ function HistoryRow({
             "text-caption font-mono text-[var(--sx-text-soft)]",
           )}
         >
-          {/* Heard as "…, checked 15:44", never run on from the link (the
-              space stays outside the hidden words, which drop their own). */}
-          <span className="sr-only">, checked</span>{" "}
+          {/* Heard as "…, scanned 15:44": when you scanned it, the time
+              shown (a cached result's evidence can be older). Never run on
+              from the link: the space stays outside the hidden words, which
+              drop their own. */}
+          <span className="sr-only">, scanned</span>{" "}
           {formatTimestamp(entry.savedAt)}
         </span>
       </button>
