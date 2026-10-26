@@ -7,6 +7,7 @@ import {
   CONVICTS_AT,
   DISCOUNTS_OFF_AT,
   LINK_CHECK_MAX,
+  PATTERN_MODEL_EVALUATION,
   RULES,
   SCORE_BANDS,
   SCORING_TABLES,
@@ -678,6 +679,29 @@ describe("/about scoring tables", () => {
     expect(isSharedPlatformHost("docs.google.com")).toBe(true);
     const lists = SCORING_TABLES.find((table) => table.id === "lists");
     expect(lists?.notes.join(" ")).toContain("github.com or docs.google.com");
+  });
+
+  it("states the link pattern model's measured bar, and only that", () => {
+    const link = SCORING_TABLES.find((table) => table.id === "link");
+    const note = link?.notes.find((text) =>
+      text.startsWith("The link pattern model"),
+    );
+    // The bar itself is in the model's own units; the page states what it
+    // flagged at that bar, per kind of link (lib/server/ml/model/README.md).
+    // tests/unit/local-classifier.test.ts holds the bar to the one these
+    // figures were measured at, and checks a sample against the real model.
+    expect(printedNumbers(note ?? "")).toEqual([
+      PATTERN_MODEL_EVALUATION.sitesPer100,
+      100,
+      PATTERN_MODEL_EVALUATION.shortLinksPer100,
+      100,
+      PATTERN_MODEL_EVALUATION.accountLinksPer100,
+      100,
+      PATTERN_MODEL_EVALUATION.phishingPer100,
+      100,
+    ]);
+    expect(note).toContain("with and without https:// and www.");
+    expect(note).toContain("not what follows a ? or #");
   });
 });
 

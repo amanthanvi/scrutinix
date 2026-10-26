@@ -146,7 +146,18 @@ tests/
   `@huggingface/transformers`; lexical heuristics are the second ensemble
   member. No hosted inference call is required. User-facing copy names the
   two members "link pattern model" and "structure checks" everywhere
-  (details rows, consensus notes, verdict reasons).
+  (details rows, consensus notes, verdict reasons). The model reads only
+  the host and path (no query or fragment; UUIDs and IDs left out), with
+  and without scheme and `www.`, and flags only past `PATTERN_MODEL_BAR`,
+  set by an offline evaluation to 2% of ordinary links, sign-in and account
+  links included (`lib/server/ml/model/README.md`). Its own score is a
+  distance from that bar, so no copy states it as a percentage; the
+  Combined result's "risk N of 100" and /about's points rows use the
+  ensemble's combined score of that distance and the structure checks. A
+  model flag never scores below the structure checks alone, and a
+  structure-led result leads with the structure checks' reasons. A new bar
+  needs a new evaluation and new /about figures (`PATTERN_MODEL_EVALUATION`,
+  whose `bar` a test holds equal to `PATTERN_MODEL_BAR`).
 - **Verdict engine**: confirmed sources can convict; unreachable hosts produce
   an honest `unknown`; exculpatory evidence never erases confirmed hits.
 - **Client errors**: only `PublicError` messages are shown as written;

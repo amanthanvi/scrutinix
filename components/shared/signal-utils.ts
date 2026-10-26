@@ -290,10 +290,12 @@ export function getSignalDetailEntries(
         },
       ];
       if (d.transformerModel) {
-        // The model's score is its confidence in the label it chose.
+        // No percentage: the model's score is its distance from the bar
+        // it must clear (lib/server/ml/local-classifier.ts), not a
+        // calibrated certainty.
         entries.push({
           label: "Model reading",
-          value: `${plainModelLabel(d.transformerModel.label)} · ${Math.round((d.transformerModel.score ?? 0) * 100)}% sure`,
+          value: plainModelLabel(d.transformerModel.label),
         });
       }
       if (d.reasons?.length) {

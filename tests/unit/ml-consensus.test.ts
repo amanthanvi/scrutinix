@@ -151,6 +151,84 @@ describe("classifyConsensus", () => {
   });
 });
 
+describe("classifyConsensus with the model's score as a distance from its bar", () => {
+  const structure = (
+    label: "benign" | "risky" | "malicious",
+    score: number,
+  ) => ({
+    label,
+    score,
+    reasons: ["The URL targets a literal IP address instead of a domain."],
+    model: "lexical-heuristic",
+  });
+  const model = (label: "benign" | "malicious", score: number) => ({
+    label,
+    score,
+    reasons: [
+      `The link pattern model read this link as ${label === "benign" ? "normal" : "phishing"}.`,
+    ],
+    model: "urlbert-tiny-v4-phishing-q8",
+  });
+
+  it("never scores a model flag below the structure checks alone", () => {
+    // A flag just past the bar has a score near 0.5. Before the floor
+    // applied to flags too, agreeing with risky structure scored less
+    // than reading the link as normal (0.59 against 0.78 here).
+    for (const lexical of [
+      structure("risky", 0.5),
+      structure("risky", 0.7),
+      structure("malicious", 0.8),
+      structure("malicious", 0.95),
+    ]) {
+      const normal = classifyConsensus(model("benign", 0.99), lexical);
+      for (const score of [0.5, 0.55, 0.62, 0.8, 1]) {
+        const flagged = classifyConsensus(model("malicious", score), lexical);
+        expect(flagged.score).toBeGreaterThanOrEqual(normal.score);
+      }
+    }
+  });
+
+  it("leads with the structure checks' reasons when only they flag the link", () => {
+    const result = classifyConsensus(
+      model("benign", 0.9),
+      structure("risky", 0.52),
+    );
+    expect(result.label).toBe("risky");
+    expect(result.reasons[0]).toBe(
+      "The URL targets a literal IP address instead of a domain.",
+    );
+
+    const signals = createPendingSignalResults();
+    signals.mlEnsemble = {
+      status: "success",
+      error: null,
+      durationMs: 1,
+      data: {
+        transformerModel: model("benign", 0.9),
+        lexicalModel: structure("risky", 0.52),
+        consensusLabel: result.label,
+        consensusScore: result.score,
+        reasons: result.reasons,
+        warnings: [],
+      },
+    };
+    // The verdict states why the score went up, not the model's "normal".
+    expect(buildThreatAssessment(signals).threatInfo?.reasons).toEqual([
+      "The URL targets a literal IP address instead of a domain.",
+    ]);
+  });
+
+  it("leads with the model's reading when the model flags the link", () => {
+    const result = classifyConsensus(
+      model("malicious", 0.9),
+      structure("risky", 0.5),
+    );
+    expect(result.reasons[0]).toBe(
+      "The link pattern model read this link as phishing.",
+    );
+  });
+});
+
 describe("one plain name per ensemble member", () => {
   it("uses the same names in the details rows and the consensus notes", async () => {
     const { getSignalDetailEntries } =

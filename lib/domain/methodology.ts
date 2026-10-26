@@ -53,6 +53,28 @@ export const LINK_CHECK_MAX = 45;
 /** Any single finding worth this much switches both discounts off. */
 export const DISCOUNTS_OFF_AT = 45;
 
+/**
+ * What /about states about the link pattern model's bar, from the offline
+ * evaluation in lib/server/ml/model/README.md ("Reading and bar"). The bar
+ * (`PATTERN_MODEL_BAR`, lib/server/ml/local-classifier.ts) was set so the
+ * model flags at most `targetPer100` in 100 of the calibration half of the
+ * ordinary links; the rest are rounded rates on links held out from setting
+ * it. `bar` is the bar these figures were measured at, and
+ * tests/unit/local-classifier.test.ts holds it equal to PATTERN_MODEL_BAR,
+ * so a new bar can't ship with old figures.
+ */
+export const PATTERN_MODEL_EVALUATION = {
+  bar: 6.44,
+  targetPer100: 2,
+  /** Popular sites (bare, www., a short page), deep links, sign-in pages. */
+  sitesPer100: 1,
+  shortLinksPer100: 3,
+  /** Verify, reset, unsubscribe, order and email click-tracking links. */
+  accountLinksPer100: 16,
+  /** The OpenPhish public feed, never used to choose anything. */
+  phishingPer100: 36,
+} as const;
+
 export const SCORE_BANDS: ReadonlyArray<{
   min: number;
   max: number;
@@ -158,18 +180,21 @@ export const SCORING_TABLES: readonly ScoringTable[] = [
     caption: "Checks of the link itself",
     notes: [
       `No single one of these can make a link Malicious: the most any one adds is ${LINK_CHECK_MAX}. Several together can.`,
+      `The link pattern model reads only the link's site and path, not what follows a ? or #. It reads them twice, with and without https:// and www., leaving out random-looking IDs like those in short links and shared documents, and averages the two readings. In a test on links not used to set its bar, it flagged about ${PATTERN_MODEL_EVALUATION.sitesPer100} in 100 popular sites, pages inside them, and sign-in pages, ${PATTERN_MODEL_EVALUATION.shortLinksPer100} in 100 official short links, and ${PATTERN_MODEL_EVALUATION.accountLinksPer100} in 100 account and email links (account confirmation pages, email verification and click-tracking links). It flagged about ${PATTERN_MODEL_EVALUATION.phishingPer100} in 100 links from a public phishing list.`,
       "The page checks read the page's HTML as it downloads; they don't run its scripts.",
     ],
     rows: [
       {
         id: "ml-malicious",
         finding: "The link pattern model calls it malicious",
-        points: "45 × the model's score (0 to 1), rounded, but at least 25",
+        points:
+          "45 × the score the model and the structure checks give together (0 to 1), rounded, but at least 25",
       },
       {
         id: "ml-risky",
         finding: "The link pattern model calls it risky",
-        points: "16 × the model's score, rounded",
+        points:
+          "16 × the score the model and the structure checks give together, rounded",
       },
       {
         id: "cert-invalid",
