@@ -76,7 +76,8 @@ So `classifyUrlLocally` (`lib/server/ml/local-classifier.ts`):
    camel-cased random letters), unless the run spells a listed brand
    (`lib/domain/impersonated-brands.ts`) or a lure word, five letters or
    more, in any case, with digits between its letters, standing in for
-   them, or both (`PayPalSecureLogin`, `paypal2verify`, `P4yP4lL0g1n`).
+   them, or both, each digit read on its own (`PayPalSecureLogin`,
+   `paypal2verify`, `P4yP4lL0g1n`, `P4y7P4l`, `10g1ns`).
    The lure words are the structure checks' own (`lib/domain/lure-words.ts`)
    plus sign-in, account, mail and file-sharing words (`signin`, `logon`,
    `account`, `confirm`, `verif`, `secur`, `webmail`, `docusign`,
@@ -234,12 +235,26 @@ Known misses:
   unchanged, and the bar stays 6.44. Phishing.Database flags rose from
   48.77% to 48.83% (4 links newly flagged, 1 no longer); OpenPhish and
   malware are unchanged. Feed links rarely write lures as ids, so this
-  closes an evasion more than it catches today's phishing. In a
-  simulation, a random id is kept by chance about once in 50,000
-  (YouTube's 11 characters) to once in 3,000 (120-character tokens), and
-  a hex hash never. A word off the list, a letter look-alike (`PayPaI`),
-  or ordinary words before the lure (`/shop/category/.../PayPalSecureLogin`)
-  still get past the model.
+  closes an evasion more than it catches today's phishing. Reading each
+  digit on its own (2026-10-26, after a release review showed
+  `/P4y7P4l` reached the model as the bare site: read as a whole, its 7
+  became a "t"; kept, it reads 7.41) changed no corpus link's reading,
+  so the figures and the bar stand. On the whole Phishing.Database list
+  it changed 22 of 788,714 readings (2 newly flagged, 2 no longer: a kept
+  run can read less like phishing than the gap it leaves), and in the
+  model's training links 18 phishing and 1 benign (still 5 below the
+  bar). Mixing the two needs two of the word's characters written as
+  themselves; otherwise every look-alike digit must stand for a letter
+  and only 2, 6, 8 and 9 may sit between, as before. Without the two
+  characters, a long number with one letter in it spelled `wallet` or
+  `reset` by chance (40 digits and a letter: 1 in 63). In a simulation, a
+  random id is kept by chance about once in 57,000 (YouTube's 11
+  characters; 80,000 before) to once in 2,900 (120-character tokens;
+  3,600 before), and a hex hash never. The weak spot is a long number
+  with two letters in it: 1 in 240 for 40 digits (12,500 before). A word
+  off the list, a letter look-alike (`PayPaI`), or ordinary words before
+  the lure (`/shop/category/.../PayPalSecureLogin`) still get past the
+  model.
 
 To re-measure, rebuild the corpora above, run each link through
 `normalizeUrlInput` and `runMlEnsembleProvider`, and set the bar on the

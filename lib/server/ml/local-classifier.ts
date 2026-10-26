@@ -124,42 +124,92 @@ const KEPT_WORDS: readonly string[] = [
   "wetransfer",
 ].filter((word) => /^[a-z\d]{5,}$/.test(word));
 
-/** Digits that stand in for letters ("P4yPa1" spells paypal). */
+/** The digit that stands in for a letter ("P4yPa1" spells paypal). */
 const LETTER_DIGITS: Record<string, string> = {
-  "0": "o",
-  "3": "e",
-  "4": "a",
-  "5": "s",
-  "7": "t",
+  a: "4",
+  e: "3",
+  i: "1",
+  l: "1",
+  o: "0",
+  s: "5",
+  t: "7",
 };
 
+const LOOK_ALIKE_DIGITS: ReadonlySet<string> = new Set(
+  Object.values(LETTER_DIGITS),
+);
+
 /**
- * Whether a run spells a brand or lure word, in any case, with digits
- * between its letters ("paypal2verify"), for letters ("L0g1n"), or both
- * ("P4y2P4l"): a phishing path written to look like an ID still reaches
- * the model. A run of hex digits never does: it is a hash, and with digits
- * read as letters, hashes spell "adobe" ("ad0be").
+ * Each kept word as the characters each of its letters may be written
+ * with: the letter itself first, then its digit. A digit in the word
+ * ("office365") is only itself. The bit masks in `spellsKeptWord` hold a
+ * word of up to 30 characters (the longest is 15). A longer one would
+ * overflow them (1 << 32 is 1) and keep every run, so it is left out.
+ */
+const KEPT_SPELLINGS: readonly (readonly string[])[] = KEPT_WORDS.filter(
+  (word) => word.length <= 30,
+).map((word) => [...word].map((char) => char + (LETTER_DIGITS[char] ?? "")));
+
+/**
+ * Whether a run spells a brand or lure word, in any case, each digit in it
+ * either standing for a letter ("L0g1n") or sitting between letters
+ * ("paypal2verify"), in any mix ("P4y7P4l"): a phishing path written to
+ * look like an ID still reaches the model. A run of hex digits never does:
+ * it is a hash, and with digits read as letters, hashes spell "adobe"
+ * ("ad0be").
+ *
+ * Mixing the two needs at least two of the word's characters written as
+ * themselves ("10g1ns": g and n). Otherwise a long number with a letter in
+ * it spells a word by chance: "w" with 4, 1, 1, 3 and 7 somewhere in the
+ * digits after it is "wallet". With fewer, every look-alike digit must
+ * stand for a letter, and only the others (2, 6, 8, 9) may sit between
+ * ("5734m" and "52734m" are "steam").
+ *
+ * The match is one pass over the run. A regular expression with digits
+ * allowed between letters (`[s5]\d*[t7]\d*[e3]\d*[a4]\d*m`) backtracks
+ * badly on a long run of look-alike digits, and a path can be 2,000
+ * characters.
  */
 function spellsKeptWord(token: string): boolean {
   if (/^[\da-f]+$/i.test(token)) {
     return false;
   }
   const lower = token.toLowerCase();
-  const lettersOnly = (one: string) =>
-    lower
-      .replace(/\d/g, (digit) =>
-        digit === "1" ? one : (LETTER_DIGITS[digit] ?? digit),
-      )
-      .replace(/\d+/g, "");
-  const readings = [
-    lower,
-    lower.replace(/\d+/g, ""),
-    lettersOnly("l"),
-    lettersOnly("i"),
-  ];
-  return KEPT_WORDS.some((word) =>
-    readings.some((reading) => reading.includes(word)),
-  );
+  return KEPT_SPELLINGS.some((spelling) => {
+    // Bit k of each mask: a stretch ending at this character spells the
+    // word's first k characters, with none, one, or two or more of them
+    // written as themselves (`none`, `one`, `more`), or with no look-alike
+    // digit as noise (`clean`). A word can start anywhere: bit 0 is
+    // always set.
+    let none = 1;
+    let one = 0;
+    let more = 0;
+    let clean = 1;
+    for (const char of lower) {
+      // Which of the word's characters this one can be, as itself or as
+      // a digit; and, for a digit, which started stretches it can sit in.
+      let fits = 0;
+      let itself = 0;
+      for (const [k, written] of spelling.entries()) {
+        if (written.includes(char)) fits |= 1 << k;
+        if (written[0] === char) itself |= 1 << k;
+      }
+      const between = char >= "0" && char <= "9" ? ~1 : 0;
+      const noise = LOOK_ALIKE_DIGITS.has(char) ? 0 : between;
+      [none, one, more, clean] = [
+        1 | ((none & fits & ~itself) << 1) | (none & between),
+        ((none & itself) << 1) |
+          ((one & fits & ~itself) << 1) |
+          (one & between),
+        ((one & itself) << 1) | ((more & fits) << 1) | (more & between),
+        1 | ((clean & fits) << 1) | (clean & noise),
+      ];
+      if ((more | clean) & (1 << spelling.length)) {
+        return true;
+      }
+    }
+    return false;
+  });
 }
 
 /** A UUID, removed whole: split on "-" its pieces read as stray fragments. */

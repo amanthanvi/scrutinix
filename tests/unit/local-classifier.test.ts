@@ -147,6 +147,19 @@ describe("classifyUrlLocally (bundled model)", () => {
     ).toBe("malicious");
   });
 
+  it.each([
+    "https://shop-example.com/P4y7P4l",
+    "https://shop-example.com/L0g7in",
+  ])(
+    "reads the lure %s, a digit for a letter and another between letters, as phishing",
+    async (url) => {
+      // Read as a whole, each run took its 7 for a "t" and spelled
+      // nothing, so the model read the bare site. Kept, these read about 1
+      // past the bar (7.41 and 7.53) when this was written.
+      expect((await classifyUrlLocally(scanned(url))).label).toBe("malicious");
+    },
+  );
+
   it(`flags no more than ${PATTERN_MODEL_EVALUATION.targetPer100} in 100 of a held-out sample of ordinary links`, async () => {
     const flagged: string[] = [];
     for (const url of ORDINARY_LINKS) {
@@ -242,12 +255,31 @@ describe("modelWritings", () => {
     ]) {
       expect(modelWritings(url)[0]).toBe(url);
     }
+    // Each digit is read on its own, as a letter or as noise between
+    // letters, so one run can mix the two: 7 sits between letters in
+    // "P4y7P4l" though it can stand for "t", and "10g1ns" reads 1 as l and
+    // as i. The last four are from phishing links (Phishing.Database and
+    // the model's training set).
+    for (const url of [
+      "https://shop-example.com/P4y7P4l",
+      "https://shop-example.com/L0g7in",
+      "https://shop-example.com/p4ypal2verify",
+      "https://shop-example.com/10g1ns",
+      "https://shop-example.com/0ffice365",
+      "https://shop-example.com/Payp44lle",
+      "https://shop-example.com/micr0sof0t",
+    ]) {
+      expect(modelWritings(url)[0]).toBe(url);
+    }
     // The same shapes spelling nothing are IDs, and go.
     for (const id of [
       "PxyPzlSqcureLxgin",
       "pqypql2vxrify",
       "Q4zP4kK0r9n",
       "MyQ1gn1nPage",
+      "Q4y7P4k",
+      "K0g7in",
+      "Pqyp44kle",
     ]) {
       expect(modelWritings(`https://shop-example.com/${id}`)[1]).toBe(
         "shop-example.com/",
@@ -267,6 +299,35 @@ describe("modelWritings", () => {
         "shop-example.com/",
       );
     }
+  });
+
+  it("keeps a word written nearly all in digits only if no look-alike is noise", () => {
+    // One letter as itself and the rest as look-alikes still spells the
+    // word, with 2, 6, 8 or 9 between ("steam").
+    for (const id of ["x5734m9", "x52734m9"]) {
+      const url = `https://shop-example.com/${id}`;
+      expect(modelWritings(url)[0]).toBe(url);
+    }
+    // A long number with one letter in it spells a word by chance when
+    // any digit may be noise: "w" then 4, 1, 1, 3, 7 ("wallet"), "r" then
+    // 3, 5, 3, 7 ("reset").
+    for (const id of ["9w0401103070x", "x40r30591387"]) {
+      expect(modelWritings(`https://shop-example.com/${id}`)[1]).toBe(
+        "shop-example.com/",
+      );
+    }
+  });
+
+  it("reads a long run of look-alike digits in one pass", () => {
+    // Digits that could each be a letter or noise ("5734" over and over
+    // nearly spells "steam"): a backtracking match takes many seconds on
+    // a path this long; one pass takes about 10 milliseconds.
+    const id = `x${"5734".repeat(500)}x`;
+    const started = performance.now();
+    expect(modelWritings(`https://shop-example.com/${id}`)[1]).toBe(
+      "shop-example.com/",
+    );
+    expect(performance.now() - started).toBeLessThan(1000);
   });
 
   it("still leaves out IDs that spell nothing", () => {
