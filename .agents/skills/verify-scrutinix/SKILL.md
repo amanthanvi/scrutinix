@@ -188,6 +188,8 @@ Proof artifacts go to the evidence directory (`/tmp/scrutinix-verify/evidence/`,
 
 The default directory (no `VERIFY_EVIDENCE_DIR`) is adopted when it already exists without a marker. The next smoke or drive writes `.verify-evidence` once and clears only those artifacts. That is the upgrade path for a directory left by an older version of this skill. A `VERIFY_EVIDENCE_DIR` that already exists without the marker is not adopted, including an empty one: smoke and drive exit 2 before Playwright and say to point `VERIFY_EVIDENCE_DIR` at a new directory, or to unset it and use the default. The state directory is refused the same way. A symlink is removed and its target is left in place. A doctor failure leaves the previous files alone. Cleanup never deletes the directory.
 
+Run one smoke or drive at a time per state directory. Two at once share the evidence directory, the suite's log, and its report, so one run's clear removes the other's screenshots. Runs in parallel come from different checkouts, each with its own `--port` and `VERIFY_STATE_DIR` (see "Isolate"). The same clear replaces evidence a Proof cites once the next smoke or drive runs in that directory, so a pull request whose evidence has to outlive later runs gets a `VERIFY_STATE_DIR` of its own.
+
 - `*.png` screenshots taken by the specs (`smoke-home.png`, `smoke-safe.png`, and the drive shots such as `anatomy-paste.png`, `verdict-look-alike.png`, `share-target-prefilled.png`, and `single-shared-verified.png`; each feature file lists its own)
 - `scan.json`, `scan-history.csv`, and `batch.csv` saved from the download the UI produced
 

@@ -692,6 +692,30 @@ check(
     runtime.describeProcess(self),
   ),
 );
+// A directory name can hold terminal escapes and bidi overrides. Printed
+// paths keep them as visible escapes: one line, nothing the terminal acts on.
+const craftedCwd = "/tmp/a\u001b]0;owned\u0007b\u009b2J\u202ec\nd";
+const printsInert = (line) =>
+  !/[\u0000-\u001f\u007f-\u009f\u200e\u200f\u202a-\u202e\u2066-\u2069]/.test(
+    line,
+  );
+const craftedLines = [
+  runtime.describeProcess({
+    pid: 4242,
+    startTime: "Mon Oct 26 12:00:00 2026",
+    executable: "/usr/bin/node\u001b[2K",
+    cwd: craftedCwd,
+  }),
+  runtime.sameDirectoryDevNote({ pid: 4242, port: 3000, cwd: craftedCwd }),
+];
+check(
+  "printed process paths escape control and bidi characters",
+  craftedLines.every(printsInert) &&
+    craftedLines.every((line) =>
+      line.includes("/tmp/a\\u{1b}]0;owned\\u{7}b\\u{9b}2J\\u{202e}c\\u{a}d"),
+    ) &&
+    runtime.printablePath("/tmp/plain dir") === "/tmp/plain dir",
+);
 
 const listenProbe = net.createServer();
 await new Promise((resolve) => {

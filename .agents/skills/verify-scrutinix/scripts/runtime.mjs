@@ -839,8 +839,22 @@ export function processIdentity(pid) {
   };
 }
 
+// A path from another process (its cwd or executable) as inert text: control
+// and bidi characters print as \u{…} escapes, so a crafted directory name can
+// neither drive the terminal nor reorder the line it is printed in.
+export function printablePath(text) {
+  return String(text).replace(
+    /[\u0000-\u001f\u007f-\u009f\u200e\u200f\u202a-\u202e\u2066-\u2069]/g,
+    (char) => `\\u{${char.codePointAt(0).toString(16)}}`,
+  );
+}
+
 export function describeProcess(identity) {
-  return `pid ${identity.pid}, started ${identity.startTime || "unknown"}, executable ${identity.executable || "unknown"}, cwd ${identity.cwd || "unknown"}`;
+  const executable = identity.executable
+    ? printablePath(identity.executable)
+    : "unknown";
+  const cwd = identity.cwd ? printablePath(identity.cwd) : "unknown";
+  return `pid ${identity.pid}, started ${identity.startTime || "unknown"}, executable ${executable}, cwd ${cwd}`;
 }
 
 export function portDetails(port) {
@@ -891,7 +905,7 @@ export function formatForeignNext(port, exclude = []) {
   if (!holders.length) return "";
   const detail = holders
     .map((holder) => {
-      const cwd = holder.cwd ? `, cwd ${holder.cwd}` : "";
+      const cwd = holder.cwd ? `, cwd ${printablePath(holder.cwd)}` : "";
       return `pid ${holder.pid}${cwd}`;
     })
     .join("; ");
@@ -926,7 +940,7 @@ export function heldProjectDevServer(root = repoRoot) {
 }
 
 export function sameDirectoryDevNote(held) {
-  return `another next dev already holds this project directory (pid ${held.pid}, port ${held.port}, cwd ${held.cwd}). Next runs one next dev per project directory, so another --port here will not start. Stop that pid, then launch again.`;
+  return `another next dev already holds this project directory (pid ${held.pid}, port ${held.port}, cwd ${printablePath(held.cwd)}). Next runs one next dev per project directory, so another --port here will not start. Stop that pid, then launch again.`;
 }
 
 // ---- State lock -------------------------------------------------------------
