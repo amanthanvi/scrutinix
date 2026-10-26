@@ -6,6 +6,7 @@ import {
   type Browser,
   type BrowserContext,
   type BrowserContextOptions,
+  type Locator,
   type Page,
 } from "@playwright/test";
 
@@ -52,6 +53,53 @@ export async function submitSingleScan(page: Page, url: string) {
     await expect(input).toHaveValue(url);
   }).toPass();
   await page.getByRole("button", { name: /analyze url/i }).click();
+}
+
+/**
+ * A look-alike's owner sentence ("This link belongs to …, not …."): one
+ * paragraph, drawn with its domains set apart and spoken as one string, so
+ * `getByText` finds it twice (the drawn copy and the spoken one).
+ */
+export function ownerSentence(scope: Page | Locator): Locator {
+  return scope.locator("p.sx-owner");
+}
+
+/**
+ * The text nodes a screen reader gets from an element: those outside
+ * `aria-hidden` and `hidden` subtrees. A sentence split across elements can
+ * be read as separate stops (an inline-block inside it was, in TalkBack and
+ * VoiceOver); one text node is always one. WebKit ignores aria-hidden on a
+ * `display: contents` element, so that hides nothing here, in any engine.
+ */
+export function spokenTextNodes(locator: Locator): Promise<string[]> {
+  return locator.evaluate((root) => {
+    const found: string[] = [];
+    const walk = (node: Node) => {
+      if (
+        node instanceof Element &&
+        ((node.getAttribute("aria-hidden") === "true" &&
+          getComputedStyle(node).display !== "contents") ||
+          node.hasAttribute("hidden"))
+      ) {
+        return;
+      }
+      if (node.nodeType === Node.TEXT_NODE) {
+        if (node.textContent?.trim()) found.push(node.textContent);
+        return;
+      }
+      node.childNodes.forEach(walk);
+    };
+    walk(root);
+    return found;
+  });
+}
+
+/**
+ * The page's status region (`components/ui/announcer.tsx`): notifications,
+ * a link arriving from outside, and the expected-site answer are said here.
+ */
+export function statusRegion(page: Page): Locator {
+  return page.locator("p[role='status']");
 }
 
 let clientCounter = 0;

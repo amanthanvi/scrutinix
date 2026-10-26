@@ -3,6 +3,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 
 import { LinkAnatomyView } from "@/components/scrutinix/link-anatomy";
+import { announce } from "@/components/ui/announcer";
 import { Input } from "@/components/ui/input";
 import { getLoadedLinkParser, useLinkAnatomy } from "@/hooks/use-link-anatomy";
 import { compareExpectedSite } from "@/lib/domain/expected-site";
@@ -26,12 +27,24 @@ export function InputAnatomy({ url }: { url: string }) {
         id="sx-input-anatomy"
         url={url}
         anatomy={anatomy}
-        captions
         size="form"
       />
       <ExpectedSite anatomy={anatomy} />
     </section>
   );
+}
+
+/**
+ * How long typing pauses before the expected-site answer is spoken. At
+ * 700 ms a screen-reader typist (about a key a second) heard an answer for
+ * every partial name; Enter or leaving the field says it at once.
+ */
+export const ANSWER_PAUSE_MS = 2_000;
+
+/** Say `text` unless it is what this field said last. */
+function sayOnce(said: { current: string }, text: string) {
+  if (text && text !== said.current) announce(text);
+  said.current = text;
 }
 
 /**
@@ -53,6 +66,18 @@ function ExpectedSite({ anatomy }: { anatomy: LinkAnatomy }) {
   const parse = getLoadedLinkParser();
   const comparison =
     open && parse ? compareExpectedSite(parse, anatomy, expected) : null;
+  // The answer shows as you type; it is spoken once typing pauses, on
+  // Enter, or on leaving the field, not for every partial name
+  // ("paypal.c", "paypal.co", …), and not twice in a row.
+  const answer = comparison?.sentence ?? "";
+  const said = useRef("");
+  useEffect(() => {
+    const timer = window.setTimeout(
+      () => sayOnce(said, answer),
+      ANSWER_PAUSE_MS,
+    );
+    return () => window.clearTimeout(timer);
+  }, [answer]);
 
   if (!open) {
     return (
@@ -84,13 +109,16 @@ function ExpectedSite({ anatomy }: { anatomy: LinkAnatomy }) {
         ref={fieldRef}
         value={expected}
         onChange={(event) => setExpected(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") sayOnce(said, answer);
+        }}
+        onBlur={() => sayOnce(said, answer)}
         placeholder="paypal.com or PayPal"
         aria-describedby={answerId}
         className="h-12 max-w-sm"
       />
       <p
         id={answerId}
-        aria-live="polite"
         className={cn(
           // A long typed domain or name breaks rather than widen a phone.
           "text-body min-h-6 wrap-anywhere",
@@ -99,7 +127,7 @@ function ExpectedSite({ anatomy }: { anatomy: LinkAnatomy }) {
             : "text-[var(--sx-text-muted)]",
         )}
       >
-        {comparison?.sentence ?? ""}
+        {answer}
       </p>
     </div>
   );

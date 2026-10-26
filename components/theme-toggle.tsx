@@ -27,9 +27,11 @@ export function ThemeToggle() {
       size="icon"
       onClick={mounted ? () => setTheme(isDark ? "light" : "dark") : undefined}
       aria-label={label}
-      title={label}
-      className="rounded-md"
+      className="relative rounded-md"
     >
+      {/* The tooltip, over the whole button and hidden from assistive
+          technology: a title on the button was read again after its name. */}
+      <span aria-hidden="true" title={label} className="absolute inset-0" />
       {!mounted ? (
         <MoonStar className="h-4 w-4" />
       ) : isDark ? (

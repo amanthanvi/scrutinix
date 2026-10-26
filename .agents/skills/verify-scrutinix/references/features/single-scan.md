@@ -5,10 +5,11 @@ Analyze one URL and read the verdict.
 ## Sub-features
 
 - submit: Analyze button or Enter in the field
-- streaming: the band reads `Checking` with `<n> of 8 checks finished` and a `Cancel scan` button (region `Scanning URL`); the strip fills cell by cell and the five questions hold their place, answering as checks land; Analyze is `aria-disabled` and Escape cancels
+- streaming: the band reads `Checking` with `<n> of 8 checks finished` and a `Cancel scan` button (region `Scanning URL`); the strip fills cell by cell and the five questions hold their place, answering as checks land; Analyze is `aria-disabled` and Escape cancels. The live region says `Checking the link: 8 checks running.` once, not each finished check (the visible count is the progress).
 - verdict: region `Scan result: <word>`, its h2 the word, the registered domain in serif under it, then one instruction; meter `Threat score` where a number means something
 - landing: focus stays on the band's heading after Re-scan, and a verdict that lands below the fold is scrolled fully into view
-- export: `scan.json` download (button `Download result (JSON)`, toast `Downloaded scan.json`)
+- export: `scan.json` download (button `Download result (JSON)`, toast `Downloaded scan.json`, also said once by the page's status region `p[role='status']` as `Downloaded scan.json.`)
+- announce: the live region (`p[aria-live='polite']` in region `Results`) says the result when it lands (see `SKILL.md`) and empties a few seconds later, so a reader moving down the page meets the band, not the same words twice
 - history: the finished scan is saved on this device
 
 ## How to get to it (user POV)
@@ -42,6 +43,9 @@ Screenshots: `smoke-home.png`, `smoke-safe.png`, `single-safe.png`.
 
 - Fill the box inside `expect(...).toPass()`. A fill before hydration can be wiped.
 - The visible button text is `Analyze`. The accessible name is `Analyze URL`. It is never disabled at rest: an empty submit shows `Paste a link to check.`
+- The Single/Batch tabs switch only when chosen (Enter, Space, or a click; `activationMode="manual"`): arrows move focus without switching. VoiceOver moves focus as it reads, and a tab that switched on focus replaced the result with an empty Batch view.
+- Toast text is in the DOM twice for a few seconds (the toast and the status region), so match it inside `[data-sonner-toast]`.
+- The live region empties a few seconds after it speaks. Assert its text right after the result lands, not after a long wait.
 - Fixture scans finish quickly. Cancel is `INCONCLUSIVE` in this loop because the button is not a stable target. Do not fail a drive for a missing `Cancel scan` control on `example.com`.
 - A Safe band waits for the link parser before it states a word (region `Checking the link's address`), because the same scan may be a look-alike. Wait on the final region name, not on the first band you see.
 - The first scan after launch compiles the analyze route and can take longer than later scans. Assertions wait 20 seconds by default, so the specs give a scan 60 seconds to land (`SCAN_TIMEOUT_MS` in `scripts/support.ts`); the whole test may take 180.

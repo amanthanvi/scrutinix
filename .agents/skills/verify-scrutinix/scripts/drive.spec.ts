@@ -49,11 +49,32 @@ function scrollsSideways(page: Page) {
   );
 }
 
-/** The result's polite live region (the expected-site answer is another). */
+/** The result's polite live region. */
 function liveRegion(page: Page) {
   return page
     .getByRole("region", { name: "Results", exact: true })
     .locator("p[aria-live='polite']");
+}
+
+/**
+ * The page's status region: notifications, a link arriving from outside,
+ * and the expected-site answer are said here (toasts are muted).
+ */
+function statusRegion(page: Page) {
+  return page.locator("p[role='status']");
+}
+
+/** A notification as drawn (the status region holds the same words). */
+function toast(page: Page) {
+  return page.locator("[data-sonner-toast], [data-notice]");
+}
+
+/**
+ * The look-alike's owner sentence, drawn once and spoken once (the spoken
+ * copy is its own string, so getByText finds the sentence twice).
+ */
+function ownerSentence(scope: Page | ReturnType<Page["getByRole"]>) {
+  return scope.locator("p.sx-owner");
 }
 
 async function ogImagePath(page: Page): Promise<string> {
@@ -104,6 +125,11 @@ test("site chrome and theme", async ({ page }) => {
   await expect(page.getByRole("tab", { name: "Single" })).toBeFocused();
   await page.keyboard.press("ArrowRight");
   await expect(page.getByRole("tab", { name: "Batch" })).toBeFocused();
+  // Focus alone never switches the mode: Enter or Space (or a click) does.
+  await expect(page.getByRole("tab", { name: "Single" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
 
   const before = await toggle.getAttribute("aria-label");
   await toggle.click();
@@ -404,8 +430,9 @@ test("single scan share and rescan", async ({ page }) => {
   await saveDownload(jsonDownload, "scan.json");
   expect(readEvidence("scan.json")).toContain("https://example.com/");
   await expect(
-    page.getByText("Downloaded scan.json", { exact: true }),
+    toast(page).getByText("Downloaded scan.json", { exact: true }),
   ).toBeVisible();
+  await expect(statusRegion(page)).toHaveText("Downloaded scan.json.");
 
   // Re-scan asks the server again (an earlier smoke run may already have
   // cached example.com, so "cached" alone would not prove it ran).
@@ -427,10 +454,13 @@ test("single scan share and rescan", async ({ page }) => {
 
   // Share copies a link signed with the published e2e key launch sets.
   await page.getByRole("button", { name: "Share" }).click();
-  await expect(page.getByText("Link copied to clipboard")).toBeVisible();
+  await expect(toast(page).getByText("Link copied to clipboard")).toBeVisible();
   await expect(
-    page.getByText("It shows this result for 3 days after the check."),
+    toast(page).getByText("It shows this result for 3 days after the check."),
   ).toBeVisible();
+  await expect(statusRegion(page)).toHaveText(
+    "Link copied to clipboard. It shows this result for 3 days after the check.",
+  );
   const copied = await page.evaluate(() => navigator.clipboard.readText());
   const link = new URL(copied);
   expect(link.searchParams.get("shared")).toBeTruthy();
@@ -675,7 +705,10 @@ test("link taken apart on paste, then a look-alike", async ({ page }) => {
     "No. The link only spells out paypal.com.",
   );
   // The owner is stated once, by the anatomy, not again by the answer.
-  await expect(pasted.getByText(LOOK_ALIKE_OWNER)).toHaveCount(1);
+  await expect(ownerSentence(pasted)).toHaveCount(1);
+  await expect(statusRegion(page)).toHaveText(
+    "No. The link only spells out paypal.com.",
+  );
   await expected.fill("secure-login.xyz");
   await expect(pasted).toContainText("Matches secure-login.xyz.");
   await expected.fill("PayPal");
@@ -705,7 +738,8 @@ test("link taken apart on paste, then a look-alike", async ({ page }) => {
   ).toBeVisible();
   await expect(verdict.getByRole("meter")).toHaveCount(0);
   await expect(verdict.getByText(/High confidence/)).toHaveCount(0);
-  await expect(page.getByText(LOOK_ALIKE_OWNER, { exact: true })).toBeVisible();
+  await expect(ownerSentence(page)).toContainText(LOOK_ALIKE_OWNER);
+  await expect(ownerSentence(page)).toBeVisible();
   await page.getByText("How we reached this verdict", { exact: true }).click();
   await expect(
     page.getByText(
@@ -829,11 +863,16 @@ test("sharing to Scrutinix fills in the link and waits for Analyze", async ({
   );
   await waitForHydration(page);
   await expect(input).toHaveValue(link);
+  // Chromium keeps focus on Analyze; Safari with VoiceOver's page read
+  // moves it, so the arrival is also said once by the status region.
   await expect(analyze).toBeFocused();
   await expect(input).not.toBeFocused();
   await expect(
     page.getByRole("region", { name: "The link, taken apart" }),
   ).toContainText("scrutinix.test");
+  await expect(statusRegion(page)).toHaveText(
+    "Link filled in: malicious.scrutinix.test. Press Analyze to check it.",
+  );
   await page.waitForTimeout(QUIET_WINDOW_MS);
   expect(scans).toEqual([]);
   await expect(page.getByRole("region", { name: /scan result/i })).toHaveCount(

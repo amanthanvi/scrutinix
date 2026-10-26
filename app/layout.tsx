@@ -5,6 +5,7 @@ import { headers } from "next/headers";
 import "@/app/globals.css";
 import "@/app/scrutinix.css";
 import { ThemeProvider } from "@/components/theme-provider";
+import { Announcer } from "@/components/ui/announcer";
 import { LazyToaster } from "@/components/ui/lazy-toaster";
 import { getSiteUrl } from "@/lib/site-url";
 
@@ -103,6 +104,7 @@ export default async function RootLayout({
           nonce={nonce}
         >
           <div className="scrutinix-theme">{children}</div>
+          <Announcer />
           <LazyToaster />
         </ThemeProvider>
       </body>

@@ -270,6 +270,7 @@ export default function AboutPage() {
           HTTPS a browser would use instead.
         </p>
         <ul
+          role="list"
           className={`${PROSE_MEASURE} grid gap-x-6 gap-y-2.5 sm:grid-cols-2`}
         >
           {cellLegend.map((item) => (

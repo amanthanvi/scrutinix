@@ -4,9 +4,9 @@ The link in the field is taken apart in the browser as soon as it is a checkable
 
 ## Sub-features
 
-- on-paste: region `The link, taken apart` under the field, with captions (`A label anyone can add`, `Registered domain` in bold, `A page on that domain`); no request to `/api/analyze`
-- look-alike: when the rest of the link spells out another site, `This link belongs to <owner>, not <site>.` (for `https://paypal.com.secure-login.xyz/verify`: `secure-login.xyz`, not `paypal.com`). A login part does too (`https://paypal.com@secure-login.xyz/`), captioned `Ignored by browsers`.
-- expected-site: button `Expecting a particular site?` opens textbox `Which site were you expecting?` (focused) with a polite live answer:
+- on-paste: region `The link, taken apart` under the field, with captions (`A label anyone can add`, `Registered domain` in bold, `A page on that domain`); no request to `/api/analyze`. A screen reader hears each part as one string after its name (`, Registered domain: secure-login.xyz`: the comma and no-break space keep the parts apart in TalkBack, which reads the line as one string and ran them together, `…safe.Registered domain: scrutinix.testA page…`); the drawn parts and captions are `aria-hidden`, and the line has no `title` (Chrome on Android read a title as the line's whole text, so TalkBack never spoke the part names). A long path may break after the slashes that follow a name (`<wbr>`) before it wraps anywhere.
+- look-alike: when the rest of the link spells out another site, `This link belongs to <owner>, not <site>.` (for `https://paypal.com.secure-login.xyz/verify`: `secure-login.xyz`, not `paypal.com`), in `p.sx-owner`. It is drawn with its domains in mono, each kept whole, and spoken as one string (an `sr-only` copy; the drawn one is `aria-hidden`): its inline-block domains were four reading stops in TalkBack and VoiceOver. A login part does too (`https://paypal.com@secure-login.xyz/`), captioned `Ignored by browsers`.
+- expected-site: button `Expecting a particular site?` opens textbox `Which site were you expecting?` (focused). The answer shows as you type (it is the field's description) and is spoken by the page's status region (`p[role='status']`) once typing pauses for 2 s, on Enter, or on leaving the field, and not twice in a row; never on every keystroke (at 700 ms, a screen-reader typist at about a key a second heard an answer for every partial name):
   - a matching domain or link: `Matches <owner>.`
   - the site a look-alike spells out: `No. The link only spells out <site>.`; another domain on a look-alike: `No. This link doesn't belong to <domain>.`; another domain otherwise: `This link belongs to <owner>, not <domain>.`
   - a name, not an address: `We can't tell from a name whether <owner> is <name>'s site. Type its address to compare.`
@@ -38,6 +38,9 @@ const expected = page.getByRole("textbox", {
 });
 await expected.fill("paypal.com");
 await expect(pasted).toContainText("No. The link only spells out paypal.com.");
+await expect(page.locator("p[role='status']")).toHaveText(
+  "No. The link only spells out paypal.com.",
+);
 expect(scans).toEqual([]);
 ```
 
@@ -51,4 +54,5 @@ Screenshots: `anatomy-paste.png`, `verdict-look-alike.png`.
 - The region exists only while the field holds a checkable link that is not already on screen. An unchecked `javascript:` or private-network value shows none, and neither does the link of the result currently shown.
 - The result's breakdown is a heading, not a region, so the page never has two regions with the same name. Match the result's breakdown with `getByRole("heading", { name: "The link, taken apart" })`.
 - A look-alike changes presentation only. The stored verdict and score are unchanged (see `Look-alike` in `verdict-and-signals.md`).
+- The owner sentence is in the DOM twice (spoken copy and drawn copy), so `getByText(<sentence>)` matches two elements. Locate it as `p.sx-owner` (`toContainText`, `toHaveCount(1)`), as the drive does; `toContainText` on the region still works.
 - Regional and tenant hosts (`acme.us.auth0.com`) are not look-alikes; a two-letter country-code run counts only for a listed brand (`amazon.de`).

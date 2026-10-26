@@ -13,6 +13,7 @@ import {
   settleAnimations,
   sharedPath,
   signSharedPayload,
+  spokenTextNodes,
   submitSingleScan,
   test,
 } from "./helpers";
@@ -250,6 +251,13 @@ test("home page keyboard navigation @smoke", async ({ page }) => {
     name: /switch to light theme|switch to dark theme|toggle theme/i,
   });
   await expect(themeToggle).toBeFocused();
+  // Its name once: the hover tooltip sits on a hidden layer, not on the
+  // button, where it was read again as a description.
+  await expect(themeToggle).toHaveAccessibleDescription("");
+  await expect(themeToggle).not.toHaveAttribute("title", /.*/);
+  await expect(
+    themeToggle.locator("[aria-hidden='true'][title]"),
+  ).toHaveAttribute("title", /^Switch to (light|dark) theme$/);
 
   // And back: a button to the link before it.
   await pressShiftTab(page);
@@ -258,10 +266,74 @@ test("home page keyboard navigation @smoke", async ({ page }) => {
   await expect(themeToggle).toBeFocused();
 
   await pressTab(page);
-  await expect(page.getByRole("tab", { name: /^single$/i })).toBeFocused();
+  const single = page.getByRole("tab", { name: "Single", exact: true });
+  await expect(single).toBeFocused();
 
+  // Arrows move focus; Enter or Space chooses. A screen reader moves focus
+  // as it reads (VoiceOver), and Batch must not take over then.
   await page.keyboard.press("ArrowRight");
-  await expect(page.getByRole("tab", { name: /^batch$/i })).toBeFocused();
+  const batch = page.getByRole("tab", { name: "Batch", exact: true });
+  await expect(batch).toBeFocused();
+  await expect(batch).toHaveAccessibleDescription("up to 10 links");
+  await expect(single).toHaveAttribute("aria-selected", "true");
+  await expect(
+    page.getByRole("textbox", { name: "URL to analyze" }),
+  ).toBeVisible();
+  await page.keyboard.press("Enter");
+  await expect(batch).toHaveAttribute("aria-selected", "true");
+  await expect(
+    page.getByRole("textbox", { name: "URLs to analyze, one per line" }),
+  ).toBeVisible();
+});
+
+test("a result keeps its place when a reader's focus passes the Batch tab @smoke", async ({
+  page,
+}) => {
+  await gotoApp(page);
+  await submitSingleScan(page, "https://malicious.scrutinix.test/login");
+  const band = page.getByLabel(/^scan result: malicious$/i);
+  await expect(band).toBeVisible();
+  await page.getByRole("tab", { name: "Batch", exact: true }).focus();
+  await expect(
+    page.getByRole("tab", { name: "Single", exact: true }),
+  ).toHaveAttribute("aria-selected", "true");
+  await expect(band).toBeVisible();
+});
+
+test("what a screen reader hears of a result @smoke", async ({ page }) => {
+  await gotoApp(page);
+  await submitSingleScan(page, "https://malicious.scrutinix.test/login");
+  await expect(page.getByLabel(/^scan result: malicious$/i)).toBeVisible();
+
+  // The live region says the result, then empties: it sits before the
+  // band, so a reader moving down the page would hear it twice.
+  const live = page.locator("p[aria-live='polite']");
+  await expect(live).toHaveCount(1);
+  await expect(live).toHaveText(/^Result for malicious\.scrutinix\.test: /);
+  await expect(live).toHaveText("", { timeout: 15_000 });
+
+  // Every unstyled list says it is a list, so Safari counts its items.
+  const questions = page.getByRole("list", { name: "Questions" });
+  await expect(questions).toHaveAttribute("role", "list");
+
+  // The strip's hint is one element per mode, outside the toolbar, which
+  // holds only its eight cells; no cell carries a title to read twice.
+  const strip = page.getByRole("toolbar", { name: "Checks" });
+  await expect(strip).toHaveAccessibleDescription(
+    "Each check moves to the question it answers below.",
+  );
+  await expect(strip.locator(":scope > *")).toHaveCount(8);
+  await expect(strip.locator(":scope > button[title]")).toHaveCount(0);
+  await page.getByRole("switch", { name: /^summary full/i }).click();
+  await expect(strip).toHaveAccessibleDescription(
+    "Each check opens its evidence below.",
+  );
+  await expect(page.locator("[id^='sx-strip-hint']")).toHaveCount(1);
+  const rows = page.getByRole("list", { name: "Signals" });
+  await expect(rows).toHaveAttribute("role", "list");
+  // A row with evidence is read by its name alone.
+  const virusTotal = rows.getByLabel(/^VirusTotal:/);
+  expect(await spokenTextNodes(virusTotal)).toEqual([]);
 });
 
 for (const colorScheme of ["light", "dark"] as const) {

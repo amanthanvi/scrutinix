@@ -31,6 +31,7 @@ import {
   type AnalysisResult,
   type SignalResults,
 } from "@/lib/domain/types";
+import { spokenTextNodes, visibleText } from "@/tests/dom/helpers/speech";
 import { cleanSignals } from "@/tests/fixtures/lure-signals";
 import { fixtureSignals } from "@/tests/fixtures/scenario-signals";
 
@@ -199,14 +200,14 @@ const lookalikeShare = encodeSharedSnapshot({
 });
 
 /**
- * The link as written, without the anatomy's captions (hidden from
- * assistive technology) or their spoken names (screen-reader only).
+ * The link as drawn, without the anatomy's captions or the spoken copy of
+ * each part (screen-reader only).
  */
 function linkText(element: Element | null): string | null {
   if (!element) return null;
   const copy = element.cloneNode(true) as Element;
   copy
-    .querySelectorAll('[aria-hidden="true"], .sr-only')
+    .querySelectorAll(".sx-anat-caption, .sr-only")
     .forEach((node) => node.remove());
   return copy.textContent;
 }
@@ -247,12 +248,16 @@ describe("shared snapshot first paint", () => {
       (node) =>
         node.id !== "sx-link-anatomy" &&
         !node.closest(".sr-only, [aria-live]") &&
-        /paypal\.com/.test(node.textContent ?? ""),
+        /paypal\.com/.test(visibleText(node)),
     );
     expect(sentences).toHaveLength(1);
-    expect(sentences[0]?.textContent).toBe(
+    expect(visibleText(sentences[0]!)).toBe(
       "This link belongs to secure-login.xyz, not paypal.com.",
     );
+    // Heard once too, as one string.
+    expect(spokenTextNodes(sentences[0]!)).toEqual([
+      "This link belongs to secure-login.xyz, not paypal.com.",
+    ]);
   });
 });
 
@@ -486,7 +491,7 @@ describe("ResultsSection", () => {
         fireEvent.click(screen.getByRole("button", { name: "Analyze URL" }));
       });
       await waitFor(() => {
-        expect(region.textContent).toBe("0 of 8 checks finished.");
+        expect(region.textContent).toBe("Checking the link: 8 checks running.");
       });
 
       fireEvent.click(screen.getByRole("button", { name: "open stored" }));
@@ -753,7 +758,7 @@ describe("ResultsSection", () => {
       fireEvent.click(screen.getByRole("button", { name: "open stored" }));
       await screen.findByRole("heading", { level: 2, name: "Malicious" });
 
-      const visible = visibleText(container);
+      const visible = seenText(container);
       expect(visible.match(pattern)?.length, `${host}: ${fact}`).toBe(1);
       unmount();
     }
@@ -798,8 +803,7 @@ describe("ResultsSection", () => {
     expect(document.activeElement).toBe(cells[7]);
 
     // Summary: a cell moves focus to the question that cites its check.
-    expect(strip.getAttribute("aria-describedby")).toBe("sx-strip-hint");
-    expect(document.getElementById("sx-strip-hint")?.textContent).toBe(
+    expect(stripHint(strip)).toBe(
       "Each check moves to the question it answers below.",
     );
     const dnsCell = cells.find(
@@ -827,9 +831,7 @@ describe("ResultsSection", () => {
 
     // Full: the same cell opens the check's row and focuses it.
     fireEvent.click(screen.getByRole("switch", { name: /^Summary Full/ }));
-    expect(document.getElementById("sx-strip-hint")?.textContent).toBe(
-      "Each check opens its evidence below.",
-    );
+    expect(stripHint(strip)).toBe("Each check opens its evidence below.");
     fireEvent.click(dnsCell);
     await waitFor(() => {
       const row = screen.getByLabelText(/^DNS Profile:/);
@@ -1246,22 +1248,27 @@ describe("ResultsSection focus and states", () => {
     ).toHaveLength(8);
     // The strip leads to the rows it shows, and a cell focuses its row.
     // They hold no evidence, so the hint promises a move, not an opening.
-    expect(document.getElementById("sx-strip-hint")?.textContent).toBe(
-      "Each check moves to its row below.",
-    );
     const strip = screen.getByRole("toolbar", { name: "Checks" });
+    expect(stripHint(strip)).toBe("Each check moves to its row below.");
     fireEvent.click(within(strip).getByRole("button", { name: /^Redirects:/ }));
     await waitFor(() => {
       expect(document.activeElement).toBe(
-        screen.getByLabelText(/^Redirect Chain:/, { selector: "li" }),
+        document.querySelector('li[data-signal="redirectChain"]'),
       );
     });
+    // A row with no evidence is a plain item read as one line, not a
+    // named group whose name and contents both speak.
+    const row = document.activeElement!;
+    expect(row.hasAttribute("aria-label")).toBe(false);
+    expect(spokenTextNodes(row)).toEqual([
+      "Redirect Chain: The provider timed out.",
+    ]);
 
     // The stored choice (Summary) is untouched for the next result.
     fireEvent.click(screen.getByRole("button", { name: "open safe" }));
     await screen.findByRole("list", { name: "Questions" });
     expect(viewSwitch()?.getAttribute("aria-checked")).toBe("false");
-    expect(document.getElementById("sx-strip-hint")?.textContent).toBe(
+    expect(stripHint(screen.getByRole("toolbar", { name: "Checks" }))).toBe(
       "Each check moves to the question it answers below.",
     );
 
@@ -1278,8 +1285,26 @@ describe("ResultsSection focus and states", () => {
   });
 });
 
+/**
+ * The strip's description: one hint per mode, each with its own id (Safari
+ * kept a hint's first words when its text changed), hidden and outside the
+ * toolbar, which holds only the eight cells.
+ */
+function stripHint(strip: HTMLElement): string | null {
+  const id = strip.getAttribute("aria-describedby") ?? "";
+  expect(id).toMatch(/^sx-strip-hint-/);
+  const hint = document.getElementById(id);
+  expect(hint?.hidden).toBe(true);
+  expect(strip.contains(hint)).toBe(false);
+  expect(Array.from(strip.children).map((cell) => cell.tagName)).toEqual(
+    Array(8).fill("BUTTON"),
+  );
+  expect(document.querySelectorAll('[id^="sx-strip-hint"]')).toHaveLength(1);
+  return hint?.textContent ?? null;
+}
+
 /** Text a sighted user sees: closed <details> show only their <summary>. */
-function visibleText(root: Element): string {
+function seenText(root: Element): string {
   const parts: string[] = [];
   const walk = (node: Node) => {
     if (node.nodeType === Node.TEXT_NODE) {

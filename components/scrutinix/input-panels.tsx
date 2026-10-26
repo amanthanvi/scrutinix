@@ -57,10 +57,8 @@ export function SingleInput({
 
   return (
     <div className="flex flex-col gap-3">
-      <label htmlFor="sx-url-input" className="sr-only">
-        URL to analyze
-      </label>
-
+      {/* Named by aria-label alone: a hidden <label> was a reading stop
+          of its own, then the field said the same words. */}
       <div className="sx-input-row flex flex-col gap-2.5 sm:flex-row">
         <div className="relative min-w-0 flex-1">
           <Input

@@ -350,7 +350,7 @@ function useCreateAnalyzerRuntime(
     live,
     openStoredResult,
     // Arrived with a link to check (`?url=`) that waits for a tap.
-    prefilled: Boolean(prefill),
+    prefill,
     rescanUrl,
     scan,
     scored,

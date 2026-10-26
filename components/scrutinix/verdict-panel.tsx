@@ -704,22 +704,21 @@ export function VerdictBand({
             {sharedSnapshot.summary}
           </p>
         ) : null}
+        {/* What the result is comes before the button that replaces it
+            (it is drawn after it), and in one run of text: a <time>
+            inside it was its own reading stop. */}
         <div
           className={cn(
             CONFIDENCE_LINE,
             "flex flex-wrap items-center gap-x-5 gap-y-3",
           )}
         >
+          <p className={cn("text-meta order-last", BAND_INK)}>
+            {`Verified Scrutinix result · checked ${formatSnapshotTime(sharedSnapshot.capturedAt)}. It may be out of date.`}
+          </p>
           {onRunSharedScan ? (
             <InkButton onClick={onRunSharedScan} label="Run a fresh scan" />
           ) : null}
-          <p className={cn("text-meta", BAND_INK)}>
-            Verified Scrutinix result · checked{" "}
-            <time dateTime={sharedSnapshot.capturedAt}>
-              {formatSnapshotTime(sharedSnapshot.capturedAt)}
-            </time>
-            . It may be out of date.
-          </p>
         </div>
       </Band>
     );
@@ -922,7 +921,7 @@ export function VerdictDetails({
         {reasons.length > 0 ? (
           <div>
             <h3 className={DETAIL_HEADING}>What we found</h3>
-            <ul className="mt-1.5 space-y-1 text-[var(--sx-text)]">
+            <ul role="list" className="mt-1.5 space-y-1 text-[var(--sx-text)]">
               {reasons.slice(0, 6).map((reason, index) => (
                 <li key={`${index}-${reason}`}>{reason}</li>
               ))}
@@ -933,7 +932,7 @@ export function VerdictDetails({
         {recommendations.length > 0 ? (
           <div>
             <h3 className={DETAIL_HEADING}>What to do</h3>
-            <ul className="mt-1.5 space-y-1 text-[var(--sx-text)]">
+            <ul role="list" className="mt-1.5 space-y-1 text-[var(--sx-text)]">
               {recommendations.map((item) => (
                 <li key={item}>{item}</li>
               ))}
@@ -944,7 +943,10 @@ export function VerdictDetails({
         {limitations.length > 0 ? (
           <div>
             <h3 className={DETAIL_HEADING}>Caveats</h3>
-            <ul className="mt-1.5 space-y-1 text-[var(--sx-text-muted)]">
+            <ul
+              role="list"
+              className="mt-1.5 space-y-1 text-[var(--sx-text-muted)]"
+            >
               {limitations.slice(0, 4).map((item, index) => (
                 <li key={`${index}-${item}`}>{item}</li>
               ))}
@@ -961,7 +963,10 @@ export function VerdictDetails({
                 ? `Why the checks have ${confidenceLabel} confidence`
                 : `Why ${confidenceLabel} confidence`}
             </h3>
-            <ul className="mt-1.5 space-y-1 text-[var(--sx-text-muted)]">
+            <ul
+              role="list"
+              className="mt-1.5 space-y-1 text-[var(--sx-text-muted)]"
+            >
               {confidenceReasons.slice(0, 4).map((item, index) => (
                 <li key={`${index}-${item}`}>{item}</li>
               ))}

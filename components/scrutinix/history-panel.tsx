@@ -7,6 +7,8 @@ import {
   resultsToCsv,
   resultsToJson,
 } from "@/lib/client/export";
+import { announce } from "@/components/ui/announcer";
+import { countOf } from "@/lib/domain/copy";
 import type { HistoryEntry } from "@/lib/domain/types";
 import {
   ROW_LAYOUT,
@@ -31,6 +33,8 @@ interface HistoryPanelProps {
   canUndoClear: boolean;
   onUndoClear: () => void;
 }
+
+const CLEARED = "History was cleared. Undo restores the previous list.";
 
 function formatTimestamp(iso: string): string {
   const d = new Date(iso);
@@ -79,6 +83,9 @@ function HistoryRow({
             "text-caption font-mono text-[var(--sx-text-soft)]",
           )}
         >
+          {/* Heard as "…, checked 15:44", never run on from the link (the
+              space stays outside the hidden words, which drop their own). */}
+          <span className="sr-only">, checked</span>{" "}
           {formatTimestamp(entry.savedAt)}
         </span>
       </button>
@@ -107,12 +114,26 @@ export function HistoryPanel({
     };
   }, []);
 
+  // Confirm clear and Undo each remove the button pressed. Once the change
+  // lands, say what happened and put focus on the button that reverses it,
+  // rather than let it fall to the page.
+  const pressedRef = useRef(false);
+  const undoRef = useRef<HTMLButtonElement>(null);
+  const clearRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!pressedRef.current) return;
+    pressedRef.current = false;
+    announce(canUndoClear ? CLEARED : "History restored.");
+    (canUndoClear ? undoRef : clearRef).current?.focus();
+  }, [canUndoClear]);
+
   const handleClear = () => {
     if (confirmClear) {
       if (clearTimerRef.current) {
         clearTimeout(clearTimerRef.current);
         clearTimerRef.current = null;
       }
+      pressedRef.current = true;
       onClear();
       setConfirmClear(false);
       return;
@@ -134,29 +155,36 @@ export function HistoryPanel({
   return (
     <section aria-label="Scan history">
       <div className="flex min-h-11 flex-wrap items-end justify-between gap-x-3 gap-y-1 border-b border-[var(--sx-text)] pb-2">
-        <h2 className="sx-section-title">
+        {/* One name, "History (2 scans)": the heading's own text would
+            read as "History2" and its parts as a group of items. */}
+        <h2
+          className="sx-section-title"
+          aria-label={
+            totalCount > 0
+              ? `History (${countOf(totalCount, "scan")})`
+              : undefined
+          }
+        >
           History
           {totalCount > 0 ? (
-            <>
-              <span
-                aria-hidden="true"
-                className="text-meta ml-2 font-mono font-normal text-[var(--sx-text-soft)]"
-              >
-                {totalCount}
-              </span>
-              {/* Name reads "History (2 scans)", not "History2". */}
-              <span className="sr-only">
-                {totalCount === 1 ? " (1 scan)" : ` (${totalCount} scans)`}
-              </span>
-            </>
+            <span
+              aria-hidden="true"
+              className="text-meta ml-2 font-mono font-normal text-[var(--sx-text-soft)]"
+            >
+              {totalCount}
+            </span>
           ) : null}
         </h2>
 
         <div className="-mr-[10px] flex items-center gap-1">
           {canUndoClear ? (
             <Button
+              ref={undoRef}
               type="button"
-              onClick={onUndoClear}
+              onClick={() => {
+                pressedRef.current = true;
+                onUndoClear();
+              }}
               variant="ghost"
               size="sm"
               aria-label="Undo clear history"
@@ -166,6 +194,7 @@ export function HistoryPanel({
           ) : null}
           {totalCount > 0 ? (
             <Button
+              ref={clearRef}
               type="button"
               onClick={handleClear}
               variant="ghost"
@@ -186,9 +215,7 @@ export function HistoryPanel({
       </div>
 
       {canUndoClear ? (
-        <p className="text-meta mt-3 text-[var(--sx-text-muted)]">
-          History was cleared. Undo restores the previous list.
-        </p>
+        <p className="text-meta mt-3 text-[var(--sx-text-muted)]">{CLEARED}</p>
       ) : null}
 
       {totalCount > 3 ? (
@@ -213,6 +240,7 @@ export function HistoryPanel({
       ) : (
         <>
           <ul
+            role="list"
             className={cn(
               "divide-y divide-[var(--sx-border)] border-b border-[var(--sx-border)]",
               totalCount > 3 && "mt-3 border-t",

@@ -23,6 +23,7 @@ import {
   VerdictDetails,
 } from "@/components/scrutinix/verdict-panel";
 import { SIGNAL_COUNT } from "@/components/shared/scrutinix-types";
+import { ANNOUNCEMENT_MS } from "@/components/ui/announcer";
 import { Button } from "@/components/ui/button";
 import {
   getLoadedLinkParser,
@@ -37,7 +38,7 @@ import {
   type SignalName,
   type SignalResults,
 } from "@/lib/domain/types";
-import { capitalize } from "@/lib/domain/copy";
+import { capitalize, countOf } from "@/lib/domain/copy";
 import type { Severity } from "@/lib/domain/signal-severity";
 import {
   isLegacySignalRecord,
@@ -318,7 +319,6 @@ export function ResultsSection() {
                 activeTab,
                 active,
                 scanStreaming: scan.state.isStreaming,
-                done,
                 batchStreaming: batch.state.isStreaming,
                 batchDone: batch.state.results.length,
                 batchTotal: batch.state.items.length,
@@ -381,7 +381,6 @@ export function ResultsSection() {
               <LinkAnatomyView
                 url={linkUrl}
                 anatomy={anatomy}
-                captions
                 signals={showShared ? null : signals}
                 // The questions and rows state every check's facts, so the
                 // anatomy draws none of them, nor holds their room while a
@@ -490,6 +489,7 @@ export function ResultsSection() {
               ) : (
                 <ul
                   ref={signalListRef}
+                  role="list"
                   aria-label="Signals"
                   className="divide-y divide-[var(--sx-border)] border-b border-[var(--sx-border)]"
                 >
@@ -588,20 +588,41 @@ function StripLegend() {
   );
 }
 
+/**
+ * The polite live region. It stays mounted (a region inserted with its
+ * message is announced unreliably) and holds each message only long enough
+ * to be spoken: it sits before the band, so a reader moving through the
+ * page would otherwise hear the result twice. A message that comes back
+ * (the same result reopened, after a blank) is shown, and spoken, again.
+ */
 function LiveStatus({ text }: { text: string }) {
+  const [spoken, setSpoken] = useState({ text, cleared: false });
+  if (spoken.text !== text) setSpoken({ text, cleared: false });
+  const cleared = spoken.text === text && spoken.cleared;
+  useEffect(() => {
+    if (!text || cleared) return;
+    const timer = window.setTimeout(
+      () => setSpoken({ text, cleared: true }),
+      ANNOUNCEMENT_MS,
+    );
+    return () => window.clearTimeout(timer);
+  }, [text, cleared]);
   return (
     <p className="sr-only" aria-live="polite">
-      {text}
+      {cleared ? "" : text}
     </p>
   );
 }
 
-/** Polite live-region text: progress while streaming, the shown verdict after. */
+/**
+ * Polite live-region text: that the scan (or batch) started, then the
+ * shown verdict (or how the batch ended). Progress in between is the
+ * band's visible count, not a message per finished check.
+ */
 function getLiveStatus({
   activeTab,
   active,
   scanStreaming,
-  done,
   batchStreaming,
   batchDone,
   batchTotal,
@@ -612,7 +633,6 @@ function getLiveStatus({
   activeTab: "single" | "batch";
   active: AnalysisResult | null;
   scanStreaming: boolean;
-  done: number;
   batchStreaming: boolean;
   batchDone: number;
   batchTotal: number;
@@ -621,9 +641,7 @@ function getLiveStatus({
   registeredDomain: string | null;
 }): string {
   if (activeTab === "batch") {
-    if (batchStreaming) {
-      return `${batchDone} of ${batchTotal} links scanned.`;
-    }
+    if (batchStreaming) return `Checking ${countOf(batchTotal, "link")}.`;
     if (batchTotal === 0) return "";
     // Error, rate limit, or cancel: nothing completed the rest.
     return batchDone < batchTotal
@@ -634,7 +652,7 @@ function getLiveStatus({
   // A displayed result outranks progress, matching the verdict band: an
   // opened saved result is announced even while a scan streams behind it.
   if (scanStreaming && !active) {
-    return `${done} of ${SIGNAL_COUNT} checks finished.`;
+    return `Checking the link: ${SIGNAL_COUNT} checks running.`;
   }
 
   return active

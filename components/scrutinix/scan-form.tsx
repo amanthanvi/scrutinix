@@ -1,7 +1,8 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
+import { announce } from "@/components/ui/announcer";
 import { getToast } from "@/components/ui/lazy-toaster";
 
 import {
@@ -11,7 +12,7 @@ import {
 import { InputAnatomy } from "@/components/scrutinix/input-anatomy";
 import { retryableChunk } from "@/components/scrutinix/retryable-chunk";
 import { SingleInput } from "@/components/scrutinix/input-panels";
-import { loadLinkParser } from "@/hooks/use-link-anatomy";
+import { loadLinkParser, useLinkAnatomy } from "@/hooks/use-link-anatomy";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -21,6 +22,7 @@ import {
   resultsToJson,
 } from "@/lib/client/export";
 import { displayUrlOf, normalizeUrlInput } from "@/lib/domain/url";
+import { ownershipSentence } from "@/lib/domain/verdict-guidance";
 
 // A failed chunk stays inside the Batch panel: Single and any result on
 // screen keep working.
@@ -57,6 +59,8 @@ const BatchInput = dynamic(() => loadBatchInput(), {
   ),
 });
 
+const PRESS_ANALYZE = "Press Analyze to check it.";
+
 function StreamError({ message }: { message: string }) {
   return (
     <p role="alert" className="text-body mt-4 text-[var(--sx-danger-fg)]">
@@ -73,7 +77,7 @@ export function ScanForm() {
     batchInput,
     formError,
     inputEditedSinceResult,
-    prefilled,
+    prefill,
     scan,
     setActiveTab,
     setBatchInput,
@@ -89,8 +93,26 @@ export function ScanForm() {
   // below it, and Analyze holds focus for the tap (or Enter) that scans it.
   // Not the field: on a phone that would raise the keyboard over the link.
   useEffect(() => {
-    if (prefilled) document.getElementById("sx-analyze")?.focus();
-  }, [prefilled]);
+    if (prefill) document.getElementById("sx-analyze")?.focus();
+  }, [prefill]);
+
+  // And it is said once, with the site the link really belongs to when it
+  // spells out another, so the arrival doesn't depend on focus: TalkBack
+  // said only "Analyze URL, button", and VoiceOver's own reading of a new
+  // page moves focus away from Analyze.
+  const arrival = useLinkAnatomy(prefill);
+  const arrivalSaid = useRef(false);
+  const filledIn = prefill
+    ? `Link filled in: ${new URL(prefill).hostname}.`
+    : "";
+  useEffect(() => {
+    if (!prefill || arrivalSaid.current || arrival.status === "pending") return;
+    arrivalSaid.current = true;
+    const owner = arrival.anatomy?.impersonates
+      ? ` ${ownershipSentence(arrival.anatomy.registeredDomain, arrival.anatomy.impersonates)}`
+      : "";
+    announce(`${filledIn}${owner} ${PRESS_ANALYZE}`);
+  }, [prefill, arrival, filledIn]);
 
   // The link in the field, taken apart before a scan: only while it is a
   // valid web link that isn't already the one on screen (a result, a
@@ -110,8 +132,25 @@ export function ScanForm() {
 
   return (
     <section id="scan-console" aria-label="Scan console">
+      {/* The arrival in reading order too, from the first paint, while the
+          link waits untouched: VoiceOver's own reading of a new page talked
+          over the announcement in Safari. Before the tabs, not in the
+          panel: TalkBack reads a focusable panel's text with its name, so
+          there it was said twice. The owner sentence follows in the link's
+          anatomy, after the field. */}
+      {filledIn &&
+      activeTab === "single" &&
+      singleUrl === prefill &&
+      !shownUrl ? (
+        <p className="sr-only">{`${filledIn} ${PRESS_ANALYZE}`}</p>
+      ) : null}
+      {/* Manual activation: arrows move focus, Enter or Space switches.
+          A screen reader moves focus as it reads (VoiceOver's VO-Right),
+          and a tab that switched on focus swapped Single and its result
+          for an empty Batch under the reader. */}
       <Tabs
         value={activeTab}
+        activationMode="manual"
         onValueChange={(value) => {
           setActiveTab(value as Tab);
           setFormError(null);
@@ -120,7 +159,10 @@ export function ScanForm() {
       >
         <TabsList aria-label="Scan mode">
           <TabsTrigger value="single">Single</TabsTrigger>
-          {/* The hint says what Batch is without joining the tab's name. */}
+          {/* The hint says what Batch is without joining the tab's name.
+              (Safari still reads it with the name, "Batch up to 10 links";
+              an aria-label "Batch" would hide visible text from the name,
+              which voice control needs.) */}
           <TabsTrigger
             value="batch"
             aria-describedby="sx-batch-tab-hint"

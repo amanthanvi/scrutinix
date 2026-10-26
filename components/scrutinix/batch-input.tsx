@@ -38,10 +38,6 @@ export function BatchInput({
 
   return (
     <div className="flex flex-col gap-3">
-      <label htmlFor="sx-batch-input" className="sr-only">
-        URLs to analyze
-      </label>
-
       <Textarea
         id="sx-batch-input"
         value={value}
@@ -73,7 +69,13 @@ export function BatchInput({
           {error}
         </p>
       ) : (
-        <p id="sx-batch-hint" className="text-meta text-[var(--sx-text-soft)]">
+        // The field's description, so a reading cursor doesn't meet it a
+        // second time right after the field.
+        <p
+          id="sx-batch-hint"
+          aria-hidden="true"
+          className="text-meta text-[var(--sx-text-soft)]"
+        >
           One link per line, up to 10. Cmd/Ctrl+Enter starts the batch.
           {urlCount > 0 ? (
             <span className="text-[var(--sx-text-muted)] tabular-nums">

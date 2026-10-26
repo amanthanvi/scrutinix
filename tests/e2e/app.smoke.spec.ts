@@ -7,8 +7,11 @@ import {
   encodeSharedPayload,
   gotoApp,
   isolateRateLimit,
+  ownerSentence,
   sharedPath,
   signSharedPayload,
+  spokenTextNodes,
+  statusRegion,
   submitSingleScan,
 } from "./helpers";
 
@@ -319,6 +322,20 @@ test("opening a history entry focuses its verdict @smoke", async ({ page }) => {
   await expect(
     historyRegion.getByRole("heading", { name: /^History \(2 scans\)$/ }),
   ).toBeVisible();
+  await expect(historyRegion.getByRole("list")).toHaveAttribute("role", "list");
+  // Each row: the verdict, the link, then when it was checked, set apart.
+  const row = historyRegion.getByRole("button", {
+    name: /^Malicious\s*malicious\.scrutinix\.test\/login\s*, checked \d{2}:\d{2}$/,
+  });
+  await expect(row).toBeVisible();
+  // The link is said once: the drawn parts hide themselves, since WebKit
+  // ignores aria-hidden on their `display: contents` wrapper (Safari read
+  // the drawn link after the spoken one).
+  expect(
+    (await spokenTextNodes(row)).filter((text) =>
+      text.includes("scrutinix.test"),
+    ),
+  ).toEqual(["malicious.scrutinix.test/login"]);
   await historyRegion
     .getByRole("button", { name: /malicious\.scrutinix\.test/i })
     .click();
@@ -363,8 +380,19 @@ test("history clear can be undone @smoke", async ({ page }) => {
     .click();
 
   await expect(historyRegion.getByText(/history was cleared/i)).toBeVisible();
-  await historyRegion.getByRole("button", { name: /undo clear/i }).click();
+  // The pressed button is gone: focus moves to the one that reverses it,
+  // and the status region says what happened.
+  const undo = historyRegion.getByRole("button", { name: /undo clear/i });
+  await expect(undo).toBeFocused();
+  await expect(statusRegion(page)).toHaveText(
+    "History was cleared. Undo restores the previous list.",
+  );
+  await undo.click();
   await expect(historyRegion.getByText(/example\.com/i).first()).toBeVisible();
+  await expect(
+    historyRegion.getByRole("button", { name: "Clear all history" }),
+  ).toBeFocused();
+  await expect(statusRegion(page)).toHaveText("History restored.");
 });
 
 /** A check time inside the 3-day window a signed share is shown for. */
@@ -525,6 +553,15 @@ test("Share copies a signed link that opens as a verified result @smoke", async 
   const copied = await page.waitForFunction(
     () => (window as unknown as { __copied?: string }).__copied,
   );
+  // Said once by the page's status region; Sonner's own region, inserted
+  // with the toast, is muted (VoiceOver ignored it; TalkBack read it twice).
+  await expect(statusRegion(page)).toHaveText(
+    "Link copied to clipboard. It shows this result for 3 days after the check.",
+  );
+  await expect(
+    page.locator("[data-sonner-toast]").getByText("Link copied to clipboard"),
+  ).toBeVisible();
+  await expect(page.locator("section[aria-live]")).toHaveCount(0);
   const link = new URL(String(await copied.jsonValue()));
   expect(link.searchParams.get("shared")).toBeTruthy();
   expect(link.searchParams.get("sig")).toMatch(/^[A-Za-z0-9_-]{43}$/);
@@ -585,9 +622,10 @@ test("a tampered shared link opens the neutral view @smoke", async ({
     "Scrutinix checked this link: it is safe.",
   );
   // Scrutinix's own anatomy of the link still states its real owner.
-  await expect(
-    page.getByText("This link belongs to secure-login.xyz, not paypal.com."),
-  ).toBeVisible();
+  await expect(ownerSentence(page)).toBeVisible();
+  expect(await spokenTextNodes(ownerSentence(page))).toEqual([
+    "This link belongs to secure-login.xyz, not paypal.com.",
+  ]);
 
   // The image route refuses to draw a card for the forged payload.
   const image = await request.get(
