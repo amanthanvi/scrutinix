@@ -8,9 +8,10 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AnalyzerRuntimeProvider } from "@/components/scrutinix/analyzer-runtime";
-import { NO_LINK_NOTE, NoLinkNote } from "@/components/scrutinix/no-link-note";
+import { NoLinkNote } from "@/components/scrutinix/no-link-note";
 import { ResultsSection } from "@/components/scrutinix/results-section";
 import { ScanForm } from "@/components/scrutinix/scan-form";
+import { NO_LINK_NOTE } from "@/lib/domain/share-launch";
 import {
   createPendingSignalResults,
   signalNames,
@@ -82,7 +83,7 @@ function renderArrival() {
   return render(
     <AnalyzerRuntimeProvider>
       <ScanForm />
-      <NoLinkNote />
+      <NoLinkNote note={NO_LINK_NOTE} />
       <ResultsSection />
     </AnalyzerRuntimeProvider>,
   );

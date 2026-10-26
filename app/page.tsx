@@ -9,6 +9,7 @@ import { NoLinkNote } from "@/components/scrutinix/no-link-note";
 import { ResultsSection } from "@/components/scrutinix/results-section";
 import { ScanForm } from "@/components/scrutinix/scan-form";
 import {
+  NO_LINK_NOTE,
   NO_LINK_PARAM,
   PREFILL_PARAM,
   resolvePrefill,
@@ -137,7 +138,7 @@ export default async function HomePage({
                   <div className="flex flex-col gap-5 sm:gap-7">
                     <div className="max-w-[47.5rem]">
                       <ScanForm />
-                      {noLink ? <NoLinkNote /> : null}
+                      {noLink ? <NoLinkNote note={NO_LINK_NOTE} /> : null}
                     </div>
                     <ResultsSection />
                   </div>

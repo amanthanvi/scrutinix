@@ -5,13 +5,6 @@ import { useEffect, useState } from "react";
 import { useAnalyzerRuntime } from "@/components/scrutinix/analyzer-runtime";
 
 /**
- * True whatever reached `/share` without a link to fill in: no link at all,
- * one that can't be checked, or a body past the limit.
- */
-export const NO_LINK_NOTE =
-  "We didn't find a link to check in what you shared.";
-
-/**
  * Past the page's own load: a polite message queued while a screen reader
  * is still announcing the new page can be dropped.
  */
@@ -20,12 +13,13 @@ const ANNOUNCE_AFTER_MS = 500;
 /**
  * The share sheet sent something with no link Scrutinix could fill in
  * (`POST /share` redirects to `/?nolink=1`): one quiet line under the form
- * says so, from the first paint, until the person types, pastes, or scans.
- * Nothing is filled in and nothing scans. Screen readers hear it once,
- * politely, from a status region the server already drew empty; the
- * visible line is hidden from them so it is never read twice.
+ * (`note`, `NO_LINK_NOTE` from the page) says so, from the first paint,
+ * until the person types, pastes, or scans. Nothing is filled in and
+ * nothing scans. Screen readers hear it once, politely, from a status
+ * region the server already drew empty; the visible line is hidden from
+ * them so it is never read twice.
  */
-export function NoLinkNote() {
+export function NoLinkNote({ note }: { note: string }) {
   const { singleUrl, active, scan, batch } = useAnalyzerRuntime();
   const [spoken, setSpoken] = useState(false);
   const [settled, setSettled] = useState(false);
@@ -52,10 +46,10 @@ export function NoLinkNote() {
         aria-hidden="true"
         className="text-meta mt-3 text-[var(--sx-text-muted)]"
       >
-        {NO_LINK_NOTE}
+        {note}
       </p>
       <p role="status" className="sr-only">
-        {spoken ? NO_LINK_NOTE : ""}
+        {spoken ? note : ""}
       </p>
     </>
   );
