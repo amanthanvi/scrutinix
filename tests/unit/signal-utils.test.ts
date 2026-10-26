@@ -750,7 +750,7 @@ describe("plain findings for checks that couldn't run", () => {
     const redirect = signals.redirectChain.data!;
 
     expect(getSignalSummary("ssl", ssl)).toBe(
-      "We couldn't check the site's security certificate.",
+      "We couldn't check the site's certificate.",
     );
     expect(getSignalSummary("dns", dns)).toBe(
       "We found no address for this name.",
@@ -767,10 +767,10 @@ describe("plain findings for checks that couldn't run", () => {
     // A result from before the probe wrote `problem`: a plain fallback,
     // never the raw code from its notes.
     const states = [
-      ["invalid", "The site's security certificate isn't trusted."],
-      ["untrusted", "The site's security certificate isn't trusted."],
-      ["warning", "We couldn't fully verify the site's security certificate."],
-      ["trusted", "The site's security certificate is valid."],
+      ["invalid", "The site's certificate isn't trusted."],
+      ["untrusted", "The site's certificate isn't trusted."],
+      ["warning", "We couldn't fully verify the site's certificate."],
+      ["trusted", "The site's certificate is valid."],
     ] as const;
     for (const [validationState, sentence] of states) {
       expect(

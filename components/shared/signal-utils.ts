@@ -120,19 +120,19 @@ export function getSignalSummary(
       if (!d.available) {
         // Unavailable covers DNS failures and timeouts too: say what we
         // know (no answer), never that the site refused encryption.
-        return "We couldn't check the site's security certificate.";
+        return "We couldn't check the site's certificate.";
       }
 
       if (d.validationState === "trusted") {
-        return "The site's security certificate is valid.";
+        return "The site's certificate is valid.";
       }
 
       if (d.validationState === "warning") {
-        return "We couldn't fully verify the site's security certificate.";
+        return "We couldn't fully verify the site's certificate.";
       }
 
       // The probe's plain words (`problem`); older results have none.
-      return d.problem ?? "The site's security certificate isn't trusted.";
+      return d.problem ?? "The site's certificate isn't trusted.";
     }
     case "whois": {
       const d = data as WhoisData;

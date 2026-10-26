@@ -1,4 +1,5 @@
 import { isIP } from "node:net";
+import { domainToUnicode } from "node:url";
 
 import { PublicError } from "@/lib/domain/public-error";
 import { getRegistrableDomain } from "@/lib/domain/registrable-domain";
@@ -71,7 +72,8 @@ export async function runWhoisSignal(
     // service. A 404 it answers itself, unredirected, means the TLD has
     // none (.be): that is not the domain lacking a record.
     if (!response.redirected && (await isMissingRdapService(response))) {
-      const tld = domain.split(".").at(-1) ?? domain;
+      // As people write it: .xn--p1ai is .рф.
+      const tld = domainToUnicode(domain.split(".").at(-1) ?? domain);
       return createUnavailableWhoisData(
         rdapUrl,
         `The .${tld} registry doesn't publish registration data over RDAP, so we couldn't look this domain up.`,

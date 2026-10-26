@@ -74,7 +74,7 @@ const ZONE_DEFINITIONS: Array<
     testRecord: "dbltest.com",
     describe: (codes) => {
       // Strongest first: an answer can carry several codes, and a domain
-      // listed for phishing and spam is a phishing domain.
+      // listed as phishing and as low-reputation is a phishing domain.
       const known: Array<[string, string, "medium" | "high"]> = [
         ["127.0.1.4", "lists this domain as a phishing domain", "high"],
         ["127.0.1.5", "lists this domain as a malware domain", "high"],

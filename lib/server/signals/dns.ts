@@ -172,7 +172,7 @@ function describeMissingAddresses(codes: readonly (string | null)[]): string {
   if (codes.every((code) => code === null || NO_ADDRESS_CODES.has(code))) {
     return "No A, AAAA, or CNAME records were returned for the hostname.";
   }
-  return "The DNS lookup got no answer (a server failure or a timeout), so we couldn't find the hostname's addresses.";
+  return "The DNS lookup failed or timed out, so we couldn't find the hostname's addresses.";
 }
 
 function errorCodeOf(reason: unknown): string {

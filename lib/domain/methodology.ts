@@ -186,7 +186,7 @@ export const SCORING_TABLES: readonly ScoringTable[] = [
       {
         id: "cert-fresh",
         finding:
-          "A certificate under 7 days old on a domain under 30 days old, both the link's own",
+          "The link's own certificate is under 7 days old and its domain under 30 days old",
         points: "12",
       },
       {

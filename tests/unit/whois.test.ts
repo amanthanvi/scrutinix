@@ -181,7 +181,7 @@ describe("runWhoisSignal", () => {
 
   it("says a TLD without an RDAP service publishes none, not that the domain has no record", async () => {
     // rdap.org's own answer for .be (no redirect to a registry).
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () =>
       Response.json(
         {
           rdapConformance: ["rdap_level_0"],
@@ -198,6 +198,12 @@ describe("runWhoisSignal", () => {
     expect(result.available).toBe(false);
     expect(result.observations).toEqual([
       "The .be registry doesn't publish registration data over RDAP, so we couldn't look this domain up.",
+    ]);
+
+    // An internationalized TLD as people write it, not its xn-- form.
+    const idn = await runWhoisSignal("https://пример.рф/");
+    expect(idn.observations).toEqual([
+      "The .рф registry doesn't publish registration data over RDAP, so we couldn't look this domain up.",
     ]);
   });
 

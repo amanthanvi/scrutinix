@@ -114,7 +114,7 @@ describe("runDnsSignal", () => {
     expect(
       (await runDnsSignal("https://servfail.example/")).observations,
     ).toEqual([
-      "The DNS lookup got no answer (a server failure or a timeout), so we couldn't find the hostname's addresses.",
+      "The DNS lookup failed or timed out, so we couldn't find the hostname's addresses.",
     ]);
   });
 
