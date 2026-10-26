@@ -640,6 +640,79 @@ describe("signal severity", () => {
     ).not.toContain("var(--sx-safe)");
   });
 
+  it("flags the link only for a feed listing the engine counts as convicting", () => {
+    const feeds = (
+      ...matches: ThreatFeedsData["matches"]
+    ): ThreatFeedsData => ({
+      checkedAt: "",
+      matches,
+      observations: [],
+      warnings: [],
+    });
+    const severityOf = (data: ThreatFeedsData) =>
+      getSignalSeverity("success", data, "threatFeeds");
+    const elsewhere = {
+      feed: "urlhaus",
+      matchedUrl: "example.com",
+      detail: "lists 4 malware links on this host",
+      confidence: "medium",
+      matchType: "host",
+    } as const;
+
+    // Other links on the site: corroboration (25), "a warning sign, not
+    // proof" in the copy, so a hatched warning sign, never solid red.
+    expect(severityOf(feeds(elsewhere))).toBe("suspicious");
+    expect(
+      severityOf(
+        feeds({
+          feed: "threatfox",
+          matchedUrl: "https://shared.example/other",
+          detail: "lists another link on this host",
+          confidence: "high",
+          matchType: "url",
+          listedElsewhereOnHost: true,
+        }),
+      ),
+    ).toBe("suspicious");
+    // Weaker direct listings corroborate too.
+    expect(
+      severityOf(
+        feeds({
+          feed: "spamhaus-dbl",
+          matchedUrl: "dbltest.com",
+          detail: "lists this domain as a low-reputation domain",
+          confidence: "medium",
+          matchType: "host",
+        }),
+      ),
+    ).toBe("suspicious");
+    // An exact-link or high-confidence listing flags the link, alongside
+    // anything weaker.
+    expect(
+      severityOf(
+        feeds(elsewhere, {
+          feed: "openphish",
+          matchedUrl: "https://example.com/login",
+          detail: "lists this link as phishing",
+          confidence: "high",
+          matchType: "url",
+        }),
+      ),
+    ).toBe("malicious");
+    expect(
+      severityOf(
+        feeds({
+          feed: "spamhaus-dbl",
+          matchedUrl: "evil.example",
+          detail: "lists this domain as a phishing domain",
+          confidence: "high",
+          matchType: "host",
+        }),
+      ),
+    ).toBe("malicious");
+    expect(severityOf(feeds())).toBe("clear");
+  });
+
   it("says the certificate check didn't apply to a link that never reaches HTTPS", () => {
     const ssl = buildSsl({
       available: false,

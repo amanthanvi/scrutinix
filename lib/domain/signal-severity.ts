@@ -1,4 +1,9 @@
-import type { SignalName, SignalPayloadMap } from "@/lib/domain/types";
+import { feedMatchWeight } from "@/lib/domain/reputation";
+import type {
+  SignalName,
+  SignalPayloadMap,
+  ThreatFeedsData,
+} from "@/lib/domain/types";
 
 /**
  * Per-signal severity. "clear" means "this source found nothing" - it is
@@ -91,10 +96,17 @@ function getBaseSeverity(
     return (d.matches?.length ?? 0) > 0 ? "malicious" : "clear";
   }
   if (name === "threatFeeds") {
-    const d = data as { matches: unknown[]; warnings?: string[] };
-    if ((d.matches?.length ?? 0) === 0 && (d.warnings?.length ?? 0) > 0)
-      return "neutral";
-    return (d.matches?.length ?? 0) > 0 ? "malicious" : "clear";
+    const d = data as ThreatFeedsData;
+    const matches = d.matches ?? [];
+    if (matches.length === 0) {
+      return (d.warnings?.length ?? 0) > 0 ? "neutral" : "clear";
+    }
+    // Flagged only for a listing the engine treats as the feed vouching for
+    // this link (exact link, or high confidence). A listing of other links
+    // on the site, or a weaker one, corroborates: a warning sign.
+    return matches.some((match) => feedMatchWeight(match).quality === "high")
+      ? "malicious"
+      : "suspicious";
   }
   if (name === "mlEnsemble") {
     const d = data as { consensusLabel: string; warnings?: string[] };
