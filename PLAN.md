@@ -332,7 +332,8 @@ score band. No score or verdict changes.
 - [x] `Proof` workflow (`.github/workflows/proof.yml`, `scripts/check-pr-proof.mjs`, `tests/unit/check-pr-proof.test.ts`) fails a pull request until its body has a Proof section quoting the current head SHA in full; it re-runs on body edits without cancelling CI. Dependabot is not exempt; the merging agent appends the Proof.
 - [x] The verify skill's "How to report" states the Proof contract: head SHA, Audit and Verify job URLs, Greptile status, evidence or `INCONCLUSIVE`, posted before merge.
 - [ ] Owner: add `Proof` to `fleet-merge-gate`'s required checks once it has run green on a few pull requests.
-- [ ] Owner (suggested): a `CODEOWNERS` entry for `.github/workflows/proof.yml` and `scripts/check-pr-proof.mjs`, with code-owner review in the ruleset. Under `pull_request` a PR runs its own copy of the guard, so it could edit the guard to pass itself.
+- [x] `CODEOWNERS` now covers the Proof guard: `@amanthanvi` owns `.github/workflows/proof.yml`, `scripts/check-pr-proof.mjs`, `tests/unit/check-pr-proof.test.ts`, and `.github/CODEOWNERS`. Under `pull_request` a PR runs its own copy of the guard, so it could edit the guard to pass itself.
+- [ ] Code-owner review is being turned on in the `fleet-merge-gate` ruleset (done separately by Aman's steward, not in this PR). Every fleet PR is authored as amanthanvi and GitHub ignores an author's own approval, so with code-owner review required, a PR touching the guard files needs Aman to merge it through his admin bypass. That's intended.
 
 ### P24 Resolve September dependency maintenance
 
