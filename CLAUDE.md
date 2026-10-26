@@ -297,8 +297,9 @@ tests/
   in order; Up/Down step in order on phones and move a row from 40rem.
 - **Link anatomy**: `lib/domain/link-anatomy.ts` is isomorphic (tldts passed
   in). In the browser it ships only in the lazy parser chunk
-  (`lib/client/link-parser.ts`, reached through `getLoadedLinkParser()`);
-  `hostOf`, which the page needs before that chunk, lives in `url.ts`.
+  (`lib/client/link-parser.ts`, reached through `getLoadedLinkParser()` or
+  `loadLinkParser()`); `hostOf` and `redirectDestination`, which the page
+  needs before that chunk, live in `url.ts`.
   Every contiguous run of 2+ subdomain labels is tested; a two-letter
   country-code run counts only for a listed brand (`amazon.de`), so
   regional/tenant hosts (`acme.us.auth0.com`) never read as look-alikes.

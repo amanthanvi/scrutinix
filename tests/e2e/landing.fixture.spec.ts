@@ -334,7 +334,7 @@ for (const viewport of VIEWPORTS) {
 /**
  * The lazily loaded link parser's chunk: tldts and its Public Suffix List,
  * found by one of the list's entries (kitakyushu.jp). tldts' export names
- * are minified away now that only `parse` is imported.
+ * are tree-shaken away now that only `parse` is imported.
  */
 async function routeParser(page: Page, onParser: () => Promise<"go" | "fail">) {
   await page.route("**/_next/static/chunks/**/*.js", async (route) => {

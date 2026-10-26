@@ -14,8 +14,8 @@ import { IMPERSONATED_BRAND_SET } from "@/lib/domain/impersonated-brands";
  * scan starts or a result shows. The `import type` above is erased at build.
  * In the browser this module rides in that same lazy chunk
  * (`lib/client/link-parser.ts`): nothing on the page imports it directly,
- * so a helper the page needs before the parser arrives (`hostOf`) lives in
- * `url.ts`.
+ * so helpers the page needs before the parser arrives (`hostOf`,
+ * `redirectDestination`) live in `url.ts`.
  */
 export type ParseHostname = typeof tldtsParse;
 
