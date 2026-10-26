@@ -71,11 +71,12 @@ describe("runMlEnsembleProvider", () => {
     expect(result.lexicalModel.reasons).toContain(
       "The URL contains high-risk terms such as verify.",
     );
-    // The same link with no lure in it gets no such term.
-    const plain = await runMlEnsembleProvider(
-      "https://shop-example.com/?next=home",
+    // A brand alone in the query is not a term (tried, it gave points to
+    // Amazon's own sign-in links: openid.return_to=...amazon...).
+    const brandOnly = await runMlEnsembleProvider(
+      "https://shop-example.com/?next=paypal",
     );
-    expect(plain.lexicalModel.reasons.join(" ")).not.toMatch(/high-risk/);
+    expect(brandOnly.lexicalModel.reasons.join(" ")).not.toMatch(/high-risk/);
   });
 
   it("elevates IP, non-default HTTPS port, and script path over a benign transformer call", async () => {

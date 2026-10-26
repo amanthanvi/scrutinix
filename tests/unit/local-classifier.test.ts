@@ -115,6 +115,22 @@ describe("classifyUrlLocally (bundled model)", () => {
     expect(finding.label).toBe("malicious");
   });
 
+  // Ordinary pages whose ID-like names spell a kept word now reach the
+  // model whole; each read at least 2 below the bar when this was written.
+  it.each([
+    "https://www.nuget.org/Account/ForgotPasswordConfirmation",
+    "https://example-store.com/Identity/Account/ResetPasswordConfirmation",
+    "https://example-store.com/Account/ExternalLoginConfirmation",
+    "https://developers.google.com/identity/sign-in/android/reference/com/google/android/gms/auth/api/signin/GoogleSignInClient",
+    "https://github.com/firebase/quickstart-android/blob/master/auth/app/src/main/java/com/google/firebase/quickstart/auth/java/GoogleSignInActivity.java",
+    "https://developer.apple.com/documentation/authenticationservices/ASAuthorizationAppleIDButton",
+    "https://docs.aws.amazon.com/cognito-user-identity-pools/latest/APIReference/API_ConfirmSignUp.html",
+    "https://developer.android.com/reference/android/accounts/AccountManagerFuture",
+    "https://github.com/pnp/PnP-JS-Core/blob/master/src/sharepoint/SharePointQueryable.ts",
+  ])("reads the ordinary page %s as normal", async (url) => {
+    expect((await classifyUrlLocally(scanned(url))).label).toBe("benign");
+  });
+
   it("reads a lure written to look like an ID", async () => {
     // Left out as an ID, this lure reached the model as the bare site,
     // which reads normal; kept, it reads phishing (about 1.5 past the bar
@@ -214,14 +230,42 @@ describe("modelWritings", () => {
   it("keeps an ID-like run that spells a brand or lure word", () => {
     for (const url of [
       // Camel case, digits between words, a brand and "ID", digits for
-      // letters: each is ID-like, and each spells a brand or lure word.
+      // letters ("1" as l or as i), and both at once.
       "https://shop-example.com/PayPalSecureLogin",
       "https://shop-example.com/paypal2verify",
       "https://shop-example.com/AppleIDVerify",
       "https://shop-example.com/P4yP4lL0g1n",
+      "https://shop-example.com/MyS1gn1nPage",
+      "https://shop-example.com/P4y2P4l",
+      "https://shop-example.com/SharePoint2Document",
       "https://shop-example.com/x/MyAccountUpdate9",
     ]) {
       expect(modelWritings(url)[0]).toBe(url);
+    }
+    // The same shapes spelling nothing are IDs, and go.
+    for (const id of [
+      "PxyPzlSqcureLxgin",
+      "pqypql2vxrify",
+      "Q4zP4kK0r9n",
+      "MyQ1gn1nPage",
+    ]) {
+      expect(modelWritings(`https://shop-example.com/${id}`)[1]).toBe(
+        "shop-example.com/",
+      );
+    }
+  });
+
+  it("keeps no ID for a short word, a short brand, or a hash", () => {
+    // "auth" and "hsbc" turn up inside random ids; a hex hash with digits
+    // read as letters spells "adobe".
+    for (const id of [
+      "xAuth9Qz2",
+      "1qKhsBCdL0J",
+      "65e3da15f4e1d64395ad0beefc10a653",
+    ]) {
+      expect(modelWritings(`https://shop-example.com/${id}`)[1]).toBe(
+        "shop-example.com/",
+      );
     }
   });
 

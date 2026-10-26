@@ -94,22 +94,35 @@ function isIdLike(token: string): boolean {
 }
 
 /**
- * What an ID-like run is kept for: a listed brand, or a lure word of five
- * letters or more (shorter ones turn up inside random ids). The lure words
- * are the structure checks' own, plus the sign-in and account words the
- * model's training links tie most to phishing (in their paths: confirm
- * 96%, signin 94%, billing 92%, account 83%, suspend 76%, against 47% of
- * all its links).
+ * What an ID-like run is kept for: a listed brand or a lure word, five
+ * letters or more (shorter ones, "hsbc" or "auth", turn up inside random
+ * ids). The lure words are the structure checks' own, plus the sign-in,
+ * account, mail and file-sharing words (and the stems of "verification"
+ * and "security") that the model's training links tie to phishing: in
+ * their paths, 76% (suspend) to 100% (docusign), against 47% of all its
+ * links.
  */
 const KEPT_WORDS: readonly string[] = [
   ...IMPERSONATED_BRANDS,
-  ...HIGH_RISK_KEYWORDS.filter((word) => /^[a-z]{5,}$/.test(word)),
+  ...HIGH_RISK_KEYWORDS,
   "signin",
+  "signon",
+  "logon",
   "account",
   "confirm",
+  "validate",
+  "verif",
+  "secur",
   "billing",
   "suspend",
-];
+  "upgrade",
+  "webmail",
+  "mailbox",
+  "docusign",
+  "sharepoint",
+  "onedrive",
+  "wetransfer",
+].filter((word) => /^[a-z\d]{5,}$/.test(word));
 
 /** Digits that stand in for letters ("P4yPa1" spells paypal). */
 const LETTER_DIGITS: Record<string, string> = {
@@ -122,21 +135,27 @@ const LETTER_DIGITS: Record<string, string> = {
 
 /**
  * Whether a run spells a brand or lure word, in any case, with digits
- * between its letters ("paypal2verify"), or with digits for letters
- * ("L0g1n"): a phishing path written to look like an ID still reaches the
- * model.
+ * between its letters ("paypal2verify"), for letters ("L0g1n"), or both
+ * ("P4y2P4l"): a phishing path written to look like an ID still reaches
+ * the model. A run of hex digits never does: it is a hash, and with digits
+ * read as letters, hashes spell "adobe" ("ad0be").
  */
 function spellsKeptWord(token: string): boolean {
+  if (/^[\da-f]+$/i.test(token)) {
+    return false;
+  }
   const lower = token.toLowerCase();
-  const asLetters = (one: string) =>
-    lower.replace(/\d/g, (digit) =>
-      digit === "1" ? one : (LETTER_DIGITS[digit] ?? digit),
-    );
+  const lettersOnly = (one: string) =>
+    lower
+      .replace(/\d/g, (digit) =>
+        digit === "1" ? one : (LETTER_DIGITS[digit] ?? digit),
+      )
+      .replace(/\d+/g, "");
   const readings = [
     lower,
     lower.replace(/\d+/g, ""),
-    asLetters("l"),
-    asLetters("i"),
+    lettersOnly("l"),
+    lettersOnly("i"),
   ];
   return KEPT_WORDS.some((word) =>
     readings.some((reading) => reading.includes(word)),
