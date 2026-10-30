@@ -31,5 +31,6 @@ Screenshot: `chrome-theme.png`.
 ## Gotchas
 
 - Do not assume the first theme. The default is `system`, and Playwright emulates `prefers-color-scheme: light` unless a test sets `colorScheme`, so a fresh drive context usually starts light; read the button's name instead of assuming.
+- The button is named `Toggle theme` until the client has mounted, and its click handler is not wired yet. Wait for `Switch to light theme` or `Switch to dark theme` before clicking. `gotoApp` (and `waitForHydration`) do this.
 - The storage key is `theme` (`next-themes` default). There is no Scrutinix-specific key.
 - A fresh Playwright context has an empty `localStorage`. Theme does not leak into the next test.

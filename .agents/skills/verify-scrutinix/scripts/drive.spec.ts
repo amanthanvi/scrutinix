@@ -194,6 +194,15 @@ test("about and privacy", async ({ page }) => {
   }
   await expect(page.getByText("Safe", { exact: true })).toBeVisible();
   await expect(page.getByText("80–100", { exact: true })).toBeVisible();
+  // The pattern-model note, not a point figure: IDs stay out unless they
+  // spell a brand or a word like login or verify, and the two readings
+  // are averaged.
+  await expect(
+    page.getByText(
+      /but not one that spells a brand or a word like login or verify/,
+    ),
+  ).toBeVisible();
+  await expect(page.getByText(/averages the two readings/)).toBeVisible();
   const confidenceTable = page.getByRole("columnheader", {
     name: "Percentage points",
   });
@@ -747,6 +756,17 @@ test("link taken apart on paste, then a look-alike", async ({ page }) => {
     ),
   ).toBeVisible();
   await expect(
+    page.getByRole("heading", {
+      level: 3,
+      name: "Why the checks have high confidence",
+    }),
+  ).toBeVisible();
+  await expect(
+    page.getByText(
+      "Confidence covers reputation only; the address still imitates paypal.com.",
+    ),
+  ).toBeVisible();
+  await expect(
     page
       .getByRole("region", { name: "Scan history" })
       .getByRole("listitem")
@@ -812,7 +832,7 @@ test("a long destination host stays on the page", async ({ page }) => {
   const host =
     "accountverificationandsecuritycheckpointforyoursigninportalnowx.com";
   await expect(destination).toContainText(
-    `It ends on ${host}, a different site`,
+    `It ends on ${host}, a different site, after 1 redirect.`,
   );
   await expect(destination).toBeVisible();
   const overflow = await page.evaluate(() => ({
