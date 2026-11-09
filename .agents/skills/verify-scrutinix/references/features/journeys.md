@@ -27,14 +27,14 @@ Paste a link: it is taken apart under the field. Analyze it. Reload: the row is 
 6. `verdicts and history` proves Malicious, Unknown, and a feed listing, the strip leading to questions and rows, four saved URLs surviving reload, filter, export, reopening with focus and announcement, clear and undo, and the four rows surviving About, Privacy, and the wordmark.
 7. `link taken apart on paste, then a look-alike` proves the breakdown and `Expecting a particular site?` before any request, then `Look-alike`.
 8. `error and critical verdicts` proves Error with its reference, Critical, and the band's link to `/about#scoring`.
-9. `an address check that fails to load reads Unconfirmed` proves a Safe result is never shown as Safe without its address check.
-10. `sharing to Scrutinix fills in the link and waits for Analyze` proves `/?url=` and `POST /share` scan nothing until the tap.
-11. `batch scan` proves two more URLs land in IndexedDB and Open returns to Single.
-12. `a Batch panel that fails to load retries in place` proves the lazy panel's failure and recovery.
-13. `larger default text reflows without sideways scrolling` proves 200% text on a 320px phone.
-14. `a long destination host stays on the page` proves a Safe redirect to a 63-letter hostname is named in full in `destination` and wraps inside a 390px-wide page.
+9. `a long destination host stays on the page` proves a Safe redirect to a 63-letter hostname is named in full in `destination`, including `after 1 redirect`, and wraps inside a 390px-wide page.
+10. `an address check that fails to load reads Unconfirmed` proves a Safe result is never shown as Safe without its address check.
+11. `sharing to Scrutinix fills in the link and waits for Analyze` proves `/?url=` and `POST /share` scan nothing until the tap.
+12. `batch scan` proves two more URLs land in IndexedDB and Open returns to Single.
+13. `a Batch panel that fails to load retries in place` proves the lazy panel's failure and recovery.
+14. `larger default text reflows without sideways scrolling` proves 200% text on a 320px phone.
 
-Each test presents its own client address to the rate limiter (`isolateRateLimit`), so the sweep fits the dev server's 10 per minute per-client limit; no test spends more than 4. A reviewer who drives one browser context by hand shares one address, and should keep to 10 scans a minute.
+Each test presents its own client address to the rate limiter (`isolateRateLimit` inside `gotoApp`, or called directly before a navigation that does not use `gotoApp`), so the sweep fits the dev server's 10 per minute per-client limit; no test spends more than 4. A reviewer who drives one browser context by hand shares one address, and should keep to 10 scans a minute and 50 a day.
 
 ## Gotchas
 
